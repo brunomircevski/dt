@@ -11,6 +11,9 @@ public class Node
     /// <summary>Predicted class label (set only for leaf nodes).</summary>
     public string? Label { get; set; }
 
+    /// <summary>The majority class of the training samples that reached this node.</summary>
+    public string? MajorityLabel { get; set; }
+
     /// <summary>Child branches keyed by "&lt;=" or "&gt;".</summary>
     public Dictionary<string, Node> Children { get; set; } = new();
 

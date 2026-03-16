@@ -156,7 +156,8 @@ public static class C45ClassifierMulti
         var node = new Node
         {
             Attribute = ds.ColumnNames[bestAttr],
-            Threshold = bestThreshold
+            Threshold = bestThreshold,
+            MajorityLabel = MajorityClass(ds, rows)
         };
 
         // ── Build children ────────────────────────────────────────────────
@@ -215,6 +216,138 @@ public static class C45ClassifierMulti
         }
 
         return node;
+    }
+
+    /// <summary>
+    /// Prunes the tree using Reduced Error Pruning (REP) against a validation dataset.
+    /// Returns the new (possibly pruned) root.
+    /// </summary>
+    public static Node Prune(Node tree, Dataset valData)
+    {
+        var valRows = Enumerable.Range(0, valData.Rows.Count).ToArray();
+        return PruneNode(tree, valData, valRows);
+    }
+
+    private static Node PruneNode(Node node, Dataset valData, int[] valRows)
+    {
+        if (node.IsLeaf) return node;
+
+        // Route validation rows to children
+        var childRows = new Dictionary<string, List<int>>();
+        foreach (var kvp in node.Children)
+            childRows[kvp.Key] = new List<int>();
+
+        int attrIndex = Array.IndexOf(valData.ColumnNames, node.Attribute);
+
+        foreach (var r in valRows)
+        {
+            string value = valData.Rows[r][attrIndex];
+            string branch;
+            if (node.Threshold.HasValue)
+            {
+                double dValue = double.Parse(value, CultureInfo.InvariantCulture);
+                branch = dValue <= node.Threshold.Value ? "<=" : ">";
+            }
+            else
+            {
+                branch = value;
+            }
+
+            if (childRows.ContainsKey(branch))
+                childRows[branch].Add(r);
+        }
+
+        // Evaluate whether to prune children in parallel
+        bool fork = valRows.Length > ParallelChildThreshold;
+        var newChildren = new ConcurrentDictionary<string, Node>();
+
+        if (fork && node.Children.Count > 1)
+        {
+            if (node.Threshold.HasValue)
+            {
+                // Binary split
+                Node leftNode = null!, rightNode = null!;
+                var leftRows = childRows["<="].ToArray();
+                var rightRows = childRows[">"].ToArray();
+                var leftChild = node.Children["<="];
+                var rightChild = node.Children[">"];
+
+                Parallel.Invoke(
+                    () => leftNode = PruneNode(leftChild, valData, leftRows),
+                    () => rightNode = PruneNode(rightChild, valData, rightRows)
+                );
+
+                newChildren["<="] = leftNode;
+                newChildren[">"] = rightNode;
+            }
+            else
+            {
+                // N-way split
+                Parallel.ForEach(node.Children, kvp =>
+                {
+                    var cRows = childRows[kvp.Key].ToArray();
+                    newChildren[kvp.Key] = PruneNode(kvp.Value, valData, cRows);
+                });
+            }
+        }
+        else
+        {
+            // Sequential
+            foreach (var kvp in node.Children)
+            {
+                var cRows = childRows[kvp.Key].ToArray();
+                newChildren[kvp.Key] = PruneNode(kvp.Value, valData, cRows);
+            }
+        }
+
+        node.Children = new Dictionary<string, Node>(newChildren);
+
+        // Evaluate pruning this node
+        if (valRows.Length == 0) return node;
+
+        int correctWithSubtree = 0;
+        int correctPruned = 0;
+
+        foreach (var r in valRows)
+        {
+            var row = valData.Rows[r];
+            var actual = row[valData.ClassIndex];
+            var predicted = Predict(node, valData.ColumnNames, row);
+            
+            if (predicted == actual) correctWithSubtree++;
+            if (node.MajorityLabel == actual) correctPruned++;
+        }
+
+        if (correctPruned >= correctWithSubtree)
+        {
+            // Prune: turn into leaf
+            return new Node { Label = node.MajorityLabel };
+        }
+
+        return node;
+    }
+
+    /// <summary>
+    /// Prints statistics comparing the original (pre-counted) and pruned trees.
+    /// </summary>
+    public static void PrintPruneStatistics(int origNodes, int origLeaves, int origDepth, Node pruned)
+    {
+        int prunNodes = pruned.CountNodes();
+        int prunLeaves = pruned.CountLeaves();
+        int prunDepth = pruned.GetMaxDepth();
+
+        double reduction = origNodes == 0 ? 0 : (1.0 - (double)prunNodes / origNodes) * 100;
+
+        Console.WriteLine("Pruning Results:");
+        Console.WriteLine(new string('─', 40));
+        Console.WriteLine($"Original Nodes: {origNodes}");
+        Console.WriteLine($"Pruned Nodes:   {prunNodes} (-{reduction:F2}%)");
+        Console.WriteLine($"Original Leaves: {origLeaves}");
+        Console.WriteLine($"Pruned Leaves:   {prunLeaves}");
+        Console.WriteLine($"Original Depth: {origDepth}");
+        Console.WriteLine($"Pruned Depth:   {prunDepth}");
+        Console.WriteLine(new string('─', 40));
+        Console.WriteLine();
     }
 
     // ─── Gain ratio ────────────────────────────────────────────────────────
