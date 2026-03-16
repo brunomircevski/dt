@@ -11,9 +11,9 @@ Console.WriteLine($"Features: {trainData.FeatureCount}");
 Console.WriteLine();
 
 Console.WriteLine("Building tree...");
-var tree = C45Classifier.BuildTree(trainData);
+var tree = C45ClassifierMulti.BuildTree(trainData);
 
-C45Classifier.PrintStatistics(tree);
+C45ClassifierMulti.PrintStatistics(tree);
 
 Console.WriteLine("Evaluating tree...");
-C45Classifier.Evaluate(tree, testData);
+C45ClassifierMulti.Evaluate(tree, testData);

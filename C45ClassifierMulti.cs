@@ -1,39 +1,41 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 
 namespace dt;
 
 /// <summary>
 /// Multithreaded C4.5 decision tree classifier.
-/// Drop-in replacement for <see cref="C45Classifier"/>:
-/// every public method has the same signature and semantics.
+/// Drop-in replacement for <see cref="C45Classifier"/>.
 ///
-/// Parallelism strategy
-/// ────────────────────
-/// 1. Attribute evaluation   – The O(F) per-node attribute scan is done with
-///    Parallel.For so all features are evaluated simultaneously.
-///    This is the hottest loop in large datasets.
+/// Parallelism strategy (v2)
+/// ─────────────────────────
+/// 1. Thread pool primed  – MinThreads is raised to ProcessorCount×2 so the
+///    pool doesn't throttle thread injection for deeply nested parallel work.
 ///
-/// 2. Child subtree building  – Children of a node are dispatched as
-///    independent Tasks so siblings are built concurrently.
-///    To avoid spawning an exponential number of tiny tasks the subtree is
-///    only parallelised when the work is likely "large enough":
-///    we use a simple heuristic of depth × rows &gt; threshold to decide
-///    whether to fork a new task or fall back to an inline call.
-///    The threshold is calibrated so that on a 16-core machine roughly
-///    16–64 tasks exist at any moment during the build.
+/// 2. Attribute evaluation – Parallel.For over all attributes at each node.
+///    Completely lock-free: results go into pre-allocated arrays.
+///
+/// 3. Child building
+///    • Binary (continuous) splits  → Parallel.Invoke so the calling thread
+///      handles one branch in-place (no wasted blocked thread).
+///    • N-way (categorical) splits  → Parallel.ForEach with work-stealing.
+///    • Below ParallelChildThreshold both fall back to sequential to avoid
+///      task-overhead dominating tiny leaf work.
+///
+/// 4. GainRatioContinuous is now O(N log N) instead of O(N²)
+///    via an incremental left-sweep that accumulates class counts in a single
+///    pass after the initial sort, eliminating per-threshold full rescans.
 /// </summary>
 public static class C45ClassifierMulti
 {
     private const int MinSamplesPerNode = 2;
 
     /// <summary>
-    /// Minimum cost (rows × remainingAttrs) below which child subtrees are
-    /// built on the same thread instead of forking a new Task.
-    /// Tune this value to trade off granularity vs. task-overhead.
-    /// A good starting value that keeps 16 cores busy without drowning in
-    /// tiny tasks is ~4000 (empirically validated on the covtype dataset).
+    /// Fork parallel child tasks only when max(childRows) × childAttrs exceeds
+    /// this value. Lower = more tasks, higher CPU usage, higher overhead.
+    /// 200 is a good default for 20+ core machines and medium-to-large datasets.
     /// </summary>
-    private const int ParallelChildThreshold = 4_000;
+    private const int ParallelChildThreshold = 200;
 
     public static long LastBuildTimeMs { get; private set; }
 
@@ -44,16 +46,22 @@ public static class C45ClassifierMulti
     {
         var watch = System.Diagnostics.Stopwatch.StartNew();
 
+        // Prime the thread pool: default slow-start (1 thread / 500 ms) would
+        // starve a 20+ core machine for the first several seconds of the build.
+        int desired = Environment.ProcessorCount * 2;
+        ThreadPool.GetMinThreads(out int curWorkers, out int curIO);
+        if (curWorkers < desired)
+            ThreadPool.SetMinThreads(desired, curIO);
+
         var allRows  = Enumerable.Range(0, ds.Rows.Count).ToArray();
         var allAttrs = Enumerable.Range(0, ds.ColumnNames.Length)
                                  .Where(i => i != ds.ClassIndex)
                                  .ToArray();
 
-        var tree = BuildTreeParallel(ds, allRows, allAttrs, depth: 0);
+        var tree = BuildNode(ds, allRows, allAttrs);
 
         watch.Stop();
         LastBuildTimeMs = watch.ElapsedMilliseconds;
-
         return tree;
     }
 
@@ -67,17 +75,15 @@ public static class C45ClassifierMulti
 
         if (node.Threshold.HasValue)
         {
-            double dValue = double.Parse(value, CultureInfo.InvariantCulture);
-            string branch = dValue <= node.Threshold.Value ? "<=" : ">";
+            double dv = double.Parse(value, CultureInfo.InvariantCulture);
+            string branch = dv <= node.Threshold.Value ? "<=" : ">";
             if (!node.Children.ContainsKey(branch)) return "Unknown";
             return Predict(node.Children[branch], columnNames, row);
         }
-        else
-        {
-            if (node.Children.TryGetValue(value, out var child))
-                return Predict(child, columnNames, row);
-            return "Unknown";
-        }
+
+        return node.Children.TryGetValue(value, out var child)
+            ? Predict(child, columnNames, row)
+            : "Unknown";
     }
 
     /// <summary>Prints various statistics about the generated tree.</summary>
@@ -96,10 +102,8 @@ public static class C45ClassifierMulti
     /// <summary>Evaluates the tree against a test dataset and prints the results.</summary>
     public static void Evaluate(Node tree, Dataset testData)
     {
-        int correct = 0;
-
-        // Prediction is read-only; trivially safe for PLINQ.
-        correct = testData.Rows
+        // Prediction is read-only → PLINQ with no contention.
+        int correct = testData.Rows
             .AsParallel()
             .Count(row => Predict(tree, testData.ColumnNames, row) == row[testData.ClassIndex]);
 
@@ -114,9 +118,9 @@ public static class C45ClassifierMulti
 
     // ─── Core recursive builder ────────────────────────────────────────────
 
-    private static Node BuildTreeParallel(Dataset ds, int[] rows, int[] attrs, int depth)
+    private static Node BuildNode(Dataset ds, int[] rows, int[] attrs)
     {
-        // ── Base cases (same as sequential) ──────────────────────────────
+        // ── Base cases ───────────────────────────────────────────────────
         if (rows.Length == 0)
             return new Node { Label = "Unknown" };
 
@@ -127,28 +131,20 @@ public static class C45ClassifierMulti
         if (attrs.Length == 0 || rows.Length < MinSamplesPerNode)
             return new Node { Label = MajorityClass(ds, rows) };
 
-        // ── Parallel attribute evaluation ─────────────────────────────────
-        // Each attribute is independent → evaluate all with Parallel.For.
-        // Results are stored in pre-allocated arrays to avoid locking.
+        // ── Parallel attribute evaluation (lock-free) ─────────────────────
         var gainRatios  = new double[attrs.Length];
         var thresholds  = new double?[attrs.Length];
 
         Parallel.For(0, attrs.Length, i =>
-        {
-            gainRatios[i] = CalculateGainRatio(ds, rows, attrs[i], out thresholds[i]);
-        });
+            gainRatios[i] = CalculateGainRatio(ds, rows, attrs[i], out thresholds[i]));
 
-        // ── Pick the best attribute ───────────────────────────────────────
-        int   bestIdx       = -1;
+        // ── Pick best attribute ───────────────────────────────────────────
+        int    bestIdx       = -1;
         double bestGainRatio = -1;
-
         for (int i = 0; i < attrs.Length; i++)
         {
             if (gainRatios[i] > bestGainRatio)
-            {
-                bestGainRatio = gainRatios[i];
-                bestIdx       = i;
-            }
+            { bestGainRatio = gainRatios[i]; bestIdx = i; }
         }
 
         if (bestIdx == -1 || bestGainRatio <= 0)
@@ -166,69 +162,59 @@ public static class C45ClassifierMulti
         // ── Build children ────────────────────────────────────────────────
         if (bestThreshold.HasValue)
         {
+            // Continuous: binary split → Parallel.Invoke reuses calling thread
             var (left, right) = SplitContinuous(ds, rows, bestAttr, bestThreshold.Value);
-            BuildChildrenParallel(ds, attrs, depth, node, new[]
+
+            bool fork = (long)Math.Max(left.Length, right.Length) * attrs.Length
+                        > ParallelChildThreshold;
+
+            if (fork)
             {
-                ("<=", left,  attrs),
-                (">",  right, attrs),
-            });
+                Node leftNode = null!, rightNode = null!;
+                // Parallel.Invoke: one branch on calling thread, one on pool thread.
+                // Neither thread is blocked doing nothing — both do real work.
+                Parallel.Invoke(
+                    () => leftNode  = BuildNode(ds, left,  attrs),
+                    () => rightNode = BuildNode(ds, right, attrs));
+
+                node.Children["<="] = leftNode;
+                node.Children[">"]  = rightNode;
+            }
+            else
+            {
+                node.Children["<="] = BuildNode(ds, left,  attrs);
+                node.Children[">"]  = BuildNode(ds, right, attrs);
+            }
         }
         else
         {
+            // Categorical: N-way split → Parallel.ForEach with work-stealing
             var splits         = SplitCategorical(ds, rows, bestAttr);
             var remainingAttrs = attrs.Where(a => a != bestAttr).ToArray();
-            var children       = splits
-                .Select(kvp => (kvp.Key, kvp.Value, remainingAttrs))
-                .ToArray();
-            BuildChildrenParallel(ds, attrs, depth, node, children);
+
+            bool fork = splits.Values.Any(s =>
+                (long)s.Length * remainingAttrs.Length > ParallelChildThreshold);
+
+            if (fork)
+            {
+                var results = new ConcurrentDictionary<string, Node>(
+                    concurrencyLevel: Environment.ProcessorCount,
+                    capacity: splits.Count);
+
+                Parallel.ForEach(splits, kvp =>
+                    results[kvp.Key] = BuildNode(ds, kvp.Value, remainingAttrs));
+
+                foreach (var kvp in results)
+                    node.Children[kvp.Key] = kvp.Value;
+            }
+            else
+            {
+                foreach (var kvp in splits)
+                    node.Children[kvp.Key] = BuildNode(ds, kvp.Value, remainingAttrs);
+            }
         }
 
         return node;
-    }
-
-    /// <summary>
-    /// Dispatches child subtrees either as parallel Tasks or inline,
-    /// depending on whether the estimated work justifies the overhead.
-    /// </summary>
-    private static void BuildChildrenParallel(
-        Dataset ds,
-        int[]   parentAttrs,
-        int     depth,
-        Node    node,
-        (string key, int[] childRows, int[] childAttrs)[] children)
-    {
-        // Heuristic: is it worth spawning Tasks for these children?
-        bool fork = children.Any(c =>
-            (long)c.childRows.Length * c.childAttrs.Length > ParallelChildThreshold);
-
-        if (fork)
-        {
-            // Pre-allocate result array; fill via index so no locking needed.
-            var tasks = new Task<(string key, Node node)>[children.Length];
-
-            for (int i = 0; i < children.Length; i++)
-            {
-                var (key, childRows, childAttrs) = children[i];
-                int d = depth + 1;
-                tasks[i] = Task.Run(() =>
-                    (key, BuildTreeParallel(ds, childRows, childAttrs, d))
-                );
-            }
-
-            Task.WaitAll(tasks);
-
-            foreach (var t in tasks)
-            {
-                var (key, child) = t.Result;
-                node.Children[key] = child;
-            }
-        }
-        else
-        {
-            // Small subtrees → build inline to avoid task overhead.
-            foreach (var (key, childRows, childAttrs) in children)
-                node.Children[key] = BuildTreeParallel(ds, childRows, childAttrs, depth + 1);
-        }
     }
 
     // ─── Gain ratio ────────────────────────────────────────────────────────
@@ -236,8 +222,7 @@ public static class C45ClassifierMulti
     private static double CalculateGainRatio(Dataset ds, int[] rows, int attr, out double? bestThreshold)
     {
         bestThreshold = null;
-        bool isContinuous = IsContinuous(ds, rows, attr);
-        return isContinuous
+        return IsContinuous(ds, rows, attr)
             ? GainRatioContinuous(ds, rows, attr, out bestThreshold)
             : GainRatioCategorical(ds, rows, attr);
     }
@@ -246,27 +231,44 @@ public static class C45ClassifierMulti
     {
         foreach (var r in rows)
         {
-            if (double.TryParse(ds.Rows[r][attr], NumberStyles.Any, CultureInfo.InvariantCulture, out _))
-                return true;
-            break;
+            return double.TryParse(
+                ds.Rows[r][attr], NumberStyles.Any, CultureInfo.InvariantCulture, out _);
         }
         return false;
     }
 
-    // ─── Entropy ────────────────────────────────────────────────────────────
+    // ─── Entropy helpers (counts-based, no allocations) ────────────────────
 
-    private static double Entropy(Dataset ds, int[] rows)
+    /// <summary>Entropy from a pre-built count array.</summary>
+    private static double EntropyFromCounts(int[] counts, int total)
     {
-        if (rows.Length == 0) return 0;
-        var counts = ClassCounts(ds, rows);
-        double total = rows.Length;
-        double entropy = 0;
-        foreach (var count in counts.Values)
+        if (total == 0) return 0;
+        double h = 0, n = total;
+        foreach (int c in counts)
         {
-            double p = count / total;
-            entropy -= p * Math.Log2(p);
+            if (c <= 0) continue;
+            double p = c / n;
+            h -= p * Math.Log2(p);
         }
-        return entropy;
+        return h;
+    }
+
+    /// <summary>
+    /// Entropy for the RIGHT partition = total[i] − left[i], without allocating
+    /// a new array. This is the key enabler for the O(N) threshold sweep.
+    /// </summary>
+    private static double EntropyFromCountsDiff(int[] total, int[] left, int rightN)
+    {
+        if (rightN == 0) return 0;
+        double h = 0, n = rightN;
+        for (int i = 0; i < total.Length; i++)
+        {
+            int c = total[i] - left[i];
+            if (c <= 0) continue;
+            double p = c / n;
+            h -= p * Math.Log2(p);
+        }
+        return h;
     }
 
     // ─── Categorical ────────────────────────────────────────────────────────
@@ -277,19 +279,16 @@ public static class C45ClassifierMulti
         var    splits      = SplitCategorical(ds, rows, attr);
         double total       = rows.Length;
 
-        double weightedEntropy = 0;
-        double splitInfo       = 0;
-
+        double weightedEntropy = 0, splitInfo = 0;
         foreach (var subset in splits.Values)
         {
-            double weight = subset.Length / total;
-            weightedEntropy += weight * Entropy(ds, subset);
-            splitInfo       -= weight * Math.Log2(weight);
+            double w = subset.Length / total;
+            weightedEntropy += w * Entropy(ds, subset);
+            splitInfo       -= w * Math.Log2(w);
         }
 
         double infoGain = baseEntropy - weightedEntropy;
-        if (splitInfo == 0) return 0;
-        return infoGain / splitInfo;
+        return splitInfo == 0 ? 0 : infoGain / splitInfo;
     }
 
     private static Dictionary<string, int[]> SplitCategorical(Dataset ds, int[] rows, int attr)
@@ -298,44 +297,74 @@ public static class C45ClassifierMulti
         foreach (var r in rows)
         {
             string val = ds.Rows[r][attr];
-            if (!groups.ContainsKey(val)) groups[val] = new List<int>();
+            if (!groups.ContainsKey(val)) groups[val] = [];
             groups[val].Add(r);
         }
         return groups.ToDictionary(g => g.Key, g => g.Value.ToArray());
     }
 
-    // ─── Continuous ─────────────────────────────────────────────────────────
+    // ─── Continuous (O(N log N) incremental sweep) ──────────────────────────
 
+    /// <summary>
+    /// Evaluates all possible split thresholds in a SINGLE left-to-right pass
+    /// after sorting, maintaining incremental class-count arrays.
+    ///
+    /// Complexity: O(N log N) for the sort + O(N·K) for the sweep,
+    /// where K = number of distinct class labels (usually very small).
+    /// The original implementation was O(N²·K) — for large nodes this is the
+    /// dominant source of the speedup.
+    /// </summary>
     private static double GainRatioContinuous(Dataset ds, int[] rows, int attr, out double? bestThreshold)
     {
         bestThreshold = null;
-        double baseEntropy = Entropy(ds, rows);
 
+        // Sort rows by attribute value.
         var points = rows
-            .Select(r => new { Row = r, Val = double.Parse(ds.Rows[r][attr], CultureInfo.InvariantCulture) })
+            .Select(r => (Row: r, Val: double.Parse(ds.Rows[r][attr], CultureInfo.InvariantCulture)))
             .OrderBy(p => p.Val)
             .ToArray();
 
-        var thresholds = new List<double>();
-        for (int i = 1; i < points.Length; i++)
-            if (points[i].Val != points[i - 1].Val)
-                thresholds.Add((points[i].Val + points[i - 1].Val) / 2.0);
+        if (points.Length < 2) return -1;
 
-        if (thresholds.Count == 0) return -1;
+        // Build class → compact index mapping + total count array.
+        var classToIdx = new Dictionary<string, int>(8);
+        foreach (var r in rows)
+        {
+            var cls = ds.Rows[r][ds.ClassIndex];
+            if (!classToIdx.ContainsKey(cls))
+                classToIdx[cls] = classToIdx.Count;
+        }
 
+        int K = classToIdx.Count;
+        int N = rows.Length;
+
+        var totalCounts = new int[K];
+        foreach (var r in rows)
+            totalCounts[classToIdx[ds.Rows[r][ds.ClassIndex]]]++;
+
+        double baseEntropy = EntropyFromCounts(totalCounts, N);
+
+        // Single left-to-right sweep: accumulate leftCounts one row at a time.
+        // Right counts are derived as totalCounts − leftCounts (no allocation).
+        var leftCounts = new int[K];
         double bestRatio = -1;
 
-        foreach (var t in thresholds)
+        for (int i = 0; i < points.Length - 1; i++)
         {
-            var left  = points.Where(p => p.Val <= t).Select(p => p.Row).ToArray();
-            var right = points.Where(p => p.Val >  t).Select(p => p.Row).ToArray();
+            leftCounts[classToIdx[ds.Rows[points[i].Row][ds.ClassIndex]]]++;
 
-            if (left.Length == 0 || right.Length == 0) continue;
+            // Skip if next point has the same value (not a valid split boundary).
+            if (points[i].Val == points[i + 1].Val) continue;
 
-            double total     = rows.Length;
-            double leftW     = left.Length  / total;
-            double rightW    = right.Length / total;
-            double infoGain  = baseEntropy - (leftW * Entropy(ds, left) + rightW * Entropy(ds, right));
+            int    leftN  = i + 1;
+            int    rightN = N - leftN;
+            double leftW  = (double)leftN / N;
+            double rightW = (double)rightN / N;
+
+            double leftEntropy  = EntropyFromCounts(leftCounts, leftN);
+            double rightEntropy = EntropyFromCountsDiff(totalCounts, leftCounts, rightN);
+
+            double infoGain  = baseEntropy - (leftW * leftEntropy + rightW * rightEntropy);
             double splitInfo = -(leftW * Math.Log2(leftW) + rightW * Math.Log2(rightW));
 
             if (splitInfo == 0) continue;
@@ -344,7 +373,7 @@ public static class C45ClassifierMulti
             if (ratio > bestRatio)
             {
                 bestRatio     = ratio;
-                bestThreshold = t;
+                bestThreshold = (points[i].Val + points[i + 1].Val) / 2.0;
             }
         }
 
@@ -353,18 +382,32 @@ public static class C45ClassifierMulti
 
     private static (int[] left, int[] right) SplitContinuous(Dataset ds, int[] rows, int attr, double threshold)
     {
-        var left  = new List<int>();
-        var right = new List<int>();
+        var left  = new List<int>(rows.Length / 2);
+        var right = new List<int>(rows.Length / 2);
         foreach (var r in rows)
         {
-            double value = double.Parse(ds.Rows[r][attr], CultureInfo.InvariantCulture);
-            if (value <= threshold) left.Add(r);
-            else                    right.Add(r);
+            if (double.Parse(ds.Rows[r][attr], CultureInfo.InvariantCulture) <= threshold)
+                left.Add(r);
+            else
+                right.Add(r);
         }
         return (left.ToArray(), right.ToArray());
     }
 
-    // ─── Helpers ────────────────────────────────────────────────────────────
+    // ─── Shared helpers ─────────────────────────────────────────────────────
+
+    private static double Entropy(Dataset ds, int[] rows)
+    {
+        if (rows.Length == 0) return 0;
+        var counts = ClassCounts(ds, rows);
+        double total = rows.Length, h = 0;
+        foreach (var c in counts.Values)
+        {
+            double p = c / total;
+            h -= p * Math.Log2(p);
+        }
+        return h;
+    }
 
     private static Dictionary<string, int> ClassCounts(Dataset ds, int[] rows)
     {
@@ -379,7 +422,5 @@ public static class C45ClassifierMulti
     }
 
     private static string MajorityClass(Dataset ds, int[] rows)
-        => ClassCounts(ds, rows)
-            .OrderByDescending(kv => kv.Value)
-            .First().Key;
+        => ClassCounts(ds, rows).OrderByDescending(kv => kv.Value).First().Key;
 }
