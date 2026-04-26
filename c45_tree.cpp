@@ -262,7 +262,7 @@ std::unique_ptr<Node> C45Tree::buildNode(const std::vector<std::size_t>& rowIndi
 
     // Simple stopping rules to keep the example manageable.
     if (depth >= kMaxDepth || rowIndices.size() < kMinSamplesToSplit) {
-        return Node::createLeaf(dataset_->samples[rowIndices.front()].label);
+        return Node::createLeaf(getMajorityLabel(rowIndices));
     }
 
     const SplitResult split = findBestSplit(rowIndices);
@@ -311,6 +311,24 @@ bool C45Tree::allSameLabel(const std::vector<std::size_t>& rowIndices) const {
     }
 
     return true;
+}
+
+std::string C45Tree::getMajorityLabel(const std::vector<std::size_t>& rowIndices) const {
+    std::map<std::string, int> counts;
+    for (std::size_t rowIndex : rowIndices) {
+        counts[dataset_->samples[rowIndex].label]++;
+    }
+
+    std::string bestLabel;
+    int maxCount = -1;
+
+    for (const auto& [label, count] : counts) {
+        if (count > maxCount) {
+            maxCount = count;
+            bestLabel = label;
+        }
+    }
+    return bestLabel;
 }
 
 void C45Tree::printNode(
