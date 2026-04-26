@@ -56,5 +56,6 @@ private:
 
     std::unique_ptr<Node> buildNode(const std::vector<std::size_t>& rowIndices, int depth) const;
     bool allSameLabel(const std::vector<std::size_t>& rowIndices) const;
+    std::string C45Tree::getMajorityLabel(const std::vector<std::size_t>& rowIndices) const;
     void printNode(const Node* node, std::ostream& output, int depth, const std::string& edgeText) const;
 };
