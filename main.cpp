@@ -64,15 +64,25 @@ void runMathChecks(C45Tree& tree, const Dataset& dataset) {
 }
 
 void runPredictionChecks(const C45Tree& tree, const Dataset& dataset) {
-    std::cout << "Prediction checks:\n";
-    const std::vector<std::size_t> indicesToTest = {0, 50, 100};
-    for (std::size_t index : indicesToTest) {
+    std::cout << "Prediction summary:\n";
+
+    std::size_t correctPredictions = 0;
+    for (std::size_t index = 0; index < dataset.samples.size(); ++index) {
         const Sample& sample = dataset.samples[index];
         const std::string prediction = tree.predict(sample);
-        std::cout << "  sample " << index
-                  << " -> predicted: " << prediction
-                  << ", actual: " << sample.label << '\n';
+        if (prediction == sample.label) {
+            ++correctPredictions;
+        }
     }
+
+    const double accuracy = static_cast<double>(correctPredictions)
+        / static_cast<double>(dataset.samples.size());
+
+    std::cout << "  checked samples = " << dataset.samples.size() << '\n';
+    std::cout << "  correct predictions = " << correctPredictions << '\n';
+    std::cout << "  accuracy = "
+              << std::fixed << std::setprecision(4)
+              << accuracy * 100.0 << "%\n";
 }
 
 }  // namespace
@@ -97,7 +107,7 @@ int main() {
         // We can call methods on it with tree.fit(...), tree.print(...), etc.
         C45Tree tree;
         tree.fit(dataset);
-        runMathChecks(tree, dataset);
+        // runMathChecks(tree, dataset);
 
         // 3. Print the learned structure so we can inspect the splits.
         std::cout << "Learned tree:\n";
