@@ -11,10 +11,10 @@
 namespace {
 
 // These are simple stopping rules.
-// They are not the full advanced C4.5 pruning system.
-constexpr int kMaxDepth = 20;
-constexpr std::size_t kMinSamplesToSplit = 2;
-constexpr double kEpsilon = 1e-12;
+// Pre pruning conditions
+constexpr int kMaxDepth = 10; // Accuracy spada przy 6
+constexpr std::size_t kMinSamplesToSplit = 2; // Accuracy spada przy 3
+constexpr double kEpsilon = 1e-9; // Accuracy spada przy -1
 
 std::string indent(int depth) {
     return std::string(static_cast<std::size_t>(depth) * 2, ' ');
@@ -136,11 +136,6 @@ double C45Tree::splitInformation(
     const std::vector<std::size_t>& rowIndices,
     const std::vector<std::vector<std::size_t>>& partitions
 ) const {
-    // THEORY:
-    // C4.5 does not use only information gain.
-    // It divides gain by "split information" to get gain ratio.
-    //
-    // This helps avoid some biased splits.
 
     const double total = static_cast<double>(rowIndices.size());
     double result = 0.0;
@@ -168,6 +163,7 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t>& rowIndices) c
 
     SplitResult best;
 
+    // For each feature
     for (std::size_t featureIndex = 0; featureIndex < dataset_->featureNames.size(); ++featureIndex) {
         // Each pair stores:
         //   first  = feature value
@@ -187,6 +183,7 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t>& rowIndices) c
         // Sort by feature value so neighboring values can be inspected.
         std::sort(values.begin(), values.end());
 
+        // For each sample
         for (std::size_t i = 1; i < values.size(); ++i) {
             const double leftValue = values[i - 1].first;
             const double rightValue = values[i].first;
@@ -267,16 +264,8 @@ std::unique_ptr<Node> C45Tree::buildNode(const std::vector<std::size_t>& rowIndi
 
     const SplitResult split = findBestSplit(rowIndices);
     if (!split.valid || split.gainRatio <= kEpsilon) {
-        return Node::createLeaf(dataset_->samples[rowIndices.front()].label);
+        return Node::createLeaf(getMajorityLabel(rowIndices));
     }
-
-    // Create a decision node:
-    // "Is featureName <= threshold?"
-    std::unique_ptr<Node> node = Node::createDecision(
-        split.featureName,
-        split.featureIndex,
-        split.threshold
-    );
 
     std::vector<std::size_t> leftRows;
     std::vector<std::size_t> rightRows;
@@ -290,9 +279,18 @@ std::unique_ptr<Node> C45Tree::buildNode(const std::vector<std::size_t>& rowIndi
         }
     }
 
+    // Stop if split created empty group - no progress made
     if (leftRows.empty() || rightRows.empty()) {
-        return Node::createLeaf(dataset_->samples[rowIndices.front()].label);
+        return Node::createLeaf(getMajorityLabel(rowIndices));
     }
+
+    // Create a decision node:
+    // "Is featureName <= threshold?"
+    std::unique_ptr<Node> node = Node::createDecision(
+        split.featureName,
+        split.featureIndex,
+        split.threshold
+    );
 
     // Recursively build the two children.
     node->leftChild = buildNode(leftRows, depth + 1);
