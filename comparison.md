@@ -1,4 +1,4 @@
-## Python `scikit-learn` (`DecisionTreeClassifier`, CART + entropy)
+## Python `scikit-learn` (`DecisionTreeClassifier`)
 
 ```text
 
@@ -27,7 +27,7 @@ Prediction summary:
   accuracy = 100.0000%
 ```
 
-## Python `c4dot5-decision-tree` (C4.5-style)
+## Python `c4dot5-decision-tree` (default)
 
 ```text
 
@@ -75,7 +75,7 @@ Prediction summary:
   accuracy = 100.0000%
 ```
 
-## C++
+## My implementation C++
 
 ```text
 
