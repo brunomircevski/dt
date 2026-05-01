@@ -1,4 +1,4 @@
-## Python `scikit-learn` (`DecisionTreeClassifier`)
+## Python `scikit-learn` (`DecisionTreeClassifier`) (Weka J48 - to samo)
 
 ```text
 
@@ -27,26 +27,7 @@ Prediction summary:
   accuracy = 100.0000%
 ```
 
-## Python `c4dot5-decision-tree` (default)
-
-```text
-
-Learned tree:
-ROOT: if PetalLengthCm <= 1.900
-  yes: Leaf -> Iris-setosa
-  no: if PetalWidthCm <= 1.700
-    yes: if PetalLengthCm <= 5.300
-      yes: Leaf -> Iris-versicolor
-      no: Leaf -> Iris-virginica
-    no: Leaf -> Iris-virginica
-
-Prediction summary:
-  checked samples = 150
-  correct predictions = 146
-  accuracy = 97.3333%
-```
-
-## Python `c4dot5-decision-tree` (relaxed stop rule)
+## Python `c4dot5-decision-tree`
 
 ```text
 
