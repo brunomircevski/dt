@@ -9,20 +9,13 @@
 #include <utility>
 
 namespace {
-
-// These are simple stopping rules.
-// Pre pruning conditions
-constexpr int kMaxDepth = 10; // Accuracy spada przy 6
-constexpr std::size_t kMinSamplesToSplit = 2; // Accuracy spada przy 3
-constexpr double kEpsilon = 1e-9; // Accuracy spada przy -1
-
 std::string indent(int depth) {
     return std::string(static_cast<std::size_t>(depth) * 2, ' ');
 }
 
 }  // namespace
 
-void C45Tree::fit(const Dataset& dataset) {
+void C45Tree::fit(const Dataset& dataset, const TrainingOptions& options) {
     if (dataset.samples.empty()) {
         throw std::runtime_error("Cannot train on an empty dataset.");
     }
@@ -30,6 +23,7 @@ void C45Tree::fit(const Dataset& dataset) {
     // Save where the training data is.
     // We use a pointer so we do not copy the whole dataset.
     dataset_ = &dataset;
+    options_ = options;
 
     // At the start, the root sees all rows.
     std::vector<std::size_t> rowIndices(dataset.samples.size());
@@ -106,16 +100,64 @@ double C45Tree::entropy(const std::vector<std::size_t>& rowIndices) const {
     return result;
 }
 
+double C45Tree::giniIndex(const std::vector<std::size_t>& rowIndices) const {
+    // THEORY:
+    // Gini index is another impurity measure used by decision trees.
+    //
+    // If one class completely dominates the node:
+    // gini = 0
+    //
+    // If classes are mixed:
+    // gini becomes larger
+    //
+    // Formula:
+    // Gini(S) = 1 - sum(p^2)
+    //
+    // Intuition:
+    // If we pick one sample at random, p^2 measures how likely it is
+    // to belong to a specific class twice in a row.
+    // Summing those probabilities tells us how "pure" the node already is.
+
+    std::map<std::string, int> counts;
+    for (std::size_t rowIndex : rowIndices) {
+        counts[dataset_->samples[rowIndex].label]++;
+    }
+
+    const double total = static_cast<double>(rowIndices.size());
+    double sumOfSquaredProbabilities = 0.0;
+
+    for (const auto& entry : counts) {
+        const double probability = static_cast<double>(entry.second) / total;
+        sumOfSquaredProbabilities += probability * probability;
+    }
+
+    return 1.0 - sumOfSquaredProbabilities;
+}
+
+double C45Tree::impurity(const std::vector<std::size_t>& rowIndices) const {
+    // This wrapper lets the rest of the code ask for "the configured impurity"
+    // without caring whether training was set to entropy or Gini.
+    if (options_.impurityMeasure == ImpurityMeasure::Gini) {
+        return giniIndex(rowIndices);
+    }
+
+    return entropy(rowIndices);
+}
+
 double C45Tree::informationGain(
     const std::vector<std::size_t>& rowIndices,
     const std::vector<std::vector<std::size_t>>& partitions
 ) const {
     // THEORY:
-    // Information gain = entropy before split - entropy after split
+    // Information gain = impurity before split - impurity after split
     //
     // If the split makes the data much cleaner, gain is large.
+    //
+    // In classic C4.5 the impurity is entropy.
+    // Here we make that part configurable so the same tree code can also
+    // work with Gini index.
 
-    const double beforeSplit = entropy(rowIndices);
+    const double beforeSplit = impurity(rowIndices);
     const double total = static_cast<double>(rowIndices.size());
 
     double afterSplit = 0.0;
@@ -126,7 +168,7 @@ double C45Tree::informationGain(
         }
 
         const double weight = static_cast<double>(part.size()) / total;
-        afterSplit += weight * entropy(part);
+        afterSplit += weight * impurity(part);
     }
 
     return beforeSplit - afterSplit;
@@ -191,7 +233,7 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t>& rowIndices) c
             const std::string& rightLabel = values[i].second;
 
             // If values are equal, there is no room for a new threshold.
-            if (std::fabs(leftValue - rightValue) < kEpsilon) {
+            if (std::fabs(leftValue - rightValue) < options_.epsilon) {
                 continue;
             }
 
@@ -224,7 +266,7 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t>& rowIndices) c
             const double gain = informationGain(rowIndices, partitions);
             const double splitInfo = splitInformation(rowIndices, partitions);
 
-            if (splitInfo <= kEpsilon) {
+            if (splitInfo <= options_.epsilon) {
                 continue;
             }
 
@@ -258,12 +300,12 @@ std::unique_ptr<Node> C45Tree::buildNode(const std::vector<std::size_t>& rowIndi
     }
 
     // Simple stopping rules to keep the example manageable.
-    if (depth >= kMaxDepth || rowIndices.size() < kMinSamplesToSplit) {
+    if (depth >= options_.maxDepth || rowIndices.size() < options_.minSamplesToSplit) {
         return Node::createLeaf(getMajorityLabel(rowIndices));
     }
 
     const SplitResult split = findBestSplit(rowIndices);
-    if (!split.valid || split.gainRatio <= kEpsilon) {
+    if (!split.valid || split.gainRatio <= options_.epsilon) {
         return Node::createLeaf(getMajorityLabel(rowIndices));
     }
 
