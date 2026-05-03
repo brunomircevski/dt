@@ -4,6 +4,7 @@
 #include "node.h"
 
 #include <memory>
+#include <limits>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -21,6 +22,27 @@ struct TrainingOptions {
     // A node must contain at least this many samples before we even try
     // to split it into children.
     std::size_t minSamplesToSplit = 2;
+
+    // Minimum samples allowed in every child created by a split.
+    // "Is this node large enough to even consider splitting?"
+    std::size_t minSamplesPerLeaf = 0;
+
+    // If true, candidate thresholds are not placed exactly in the middle.
+    // Instead, we move the threshold toward the side with fewer nearby
+    // supporting samples and give more room to the side with more support.
+    //
+    // This is still the same kind of binary split:
+    // "Is feature <= threshold?"
+    // Only the threshold location changes.
+    bool useWeightedAverageThresholds = false;
+
+    // If true, run a simple post-pruning pass after the full tree is grown.
+    //
+    // The pruning rule is intentionally simple:
+    // if replacing a whole subtree with one majority-class leaf does not
+    // reduce accuracy on the training samples that reached that node,
+    // prune the subtree away.
+    bool usePostPruning = false;
 
     // Small tolerance used when comparing floating-point values.
     // It helps us avoid creating fake thresholds between almost equal numbers.
@@ -84,6 +106,11 @@ private:
     TrainingOptions options_;
 
     std::unique_ptr<Node> buildNode(const std::vector<std::size_t>& rowIndices, int depth) const;
+    void pruneTree(std::unique_ptr<Node>& node, const std::vector<std::size_t>& rowIndices) const;
+    std::size_t countCorrectPredictions(
+        const Node* node,
+        const std::vector<std::size_t>& rowIndices
+    ) const;
     bool allSameLabel(const std::vector<std::size_t>& rowIndices) const;
     std::string getMajorityLabel(const std::vector<std::size_t>& rowIndices) const;
     void printNode(const Node* node, std::ostream& output, int depth, const std::string& edgeText) const;

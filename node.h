@@ -32,6 +32,9 @@ public:
     // feature value > threshold
     std::unique_ptr<Node> rightChild;
 
+    // Store sample count for printing tree
+    std::size_t sampleCount = 0;
+
     // Constructor:
     // sets simple default values when we create a new node object.
     Node();
@@ -42,12 +45,16 @@ public:
     // C++ note:
     // std::unique_ptr is a smart pointer. It automatically deletes the object
     // when nobody owns it anymore, so we do not need to call delete manually.
-    static std::unique_ptr<Node> createLeaf(const std::string& label);
+    static std::unique_ptr<Node> createLeaf(
+        const std::string& label,
+        std::size_t sampleCount
+    );
 
     // Creates a decision node that asks one numeric question.
     static std::unique_ptr<Node> createDecision(
         const std::string& featureName,
         std::size_t featureIndex,
-        double threshold
+        double threshold,
+        std::size_t sampleCount
     );
 };
