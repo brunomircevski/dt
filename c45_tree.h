@@ -14,6 +14,17 @@ enum class ImpurityMeasure {
     Gini
 };
 
+enum class PruningMode {
+    // Keep every branch created during tree growth.
+    None,
+    // Replace a subtree with one majority-class leaf when the leaf is at least
+    // as accurate on the training samples that reached that subtree.
+    TrainingAccuracyPrune,
+    // Replace a subtree with one majority-class leaf when the leaf has
+    // no worse pessimistic error estimate than the whole subtree.
+    PessimisticErrorPrune
+};
+
 struct TrainingOptions {
     // Maximum recursion depth of the tree.
     // Larger values can fit training data more closely, but may overfit.
@@ -23,26 +34,13 @@ struct TrainingOptions {
     // to split it into children.
     std::size_t minSamplesToSplit = 2;
 
-    // Minimum samples allowed in every child created by a split.
-    // "Is this node large enough to even consider splitting?"
-    std::size_t minSamplesPerLeaf = 0;
+    // Each child created by a split must contain at least this many samples.
+    // This prevents very tiny leaves supported by only one or two rows.
+    std::size_t minSamplesPerLeaf = 1;
 
-    // If true, candidate thresholds are not placed exactly in the middle.
-    // Instead, we move the threshold toward the side with fewer nearby
-    // supporting samples and give more room to the side with more support.
-    //
-    // This is still the same kind of binary split:
-    // "Is feature <= threshold?"
-    // Only the threshold location changes.
-    bool useWeightedAverageThresholds = false;
-
-    // If true, run a simple post-pruning pass after the full tree is grown.
-    //
-    // The pruning rule is intentionally simple:
-    // if replacing a whole subtree with one majority-class leaf does not
-    // reduce accuracy on the training samples that reached that node,
-    // prune the subtree away.
-    bool usePostPruning = false;
+    // Selects whether the finished tree should be simplified after training.
+    // The enum above describes how each pruning method makes that decision.
+    PruningMode pruningMode = PruningMode::None;
 
     // Small tolerance used when comparing floating-point values.
     // It helps us avoid creating fake thresholds between almost equal numbers.
@@ -111,6 +109,7 @@ private:
         const Node* node,
         const std::vector<std::size_t>& rowIndices
     ) const;
+    std::size_t countLeafNodes(const Node* node) const;
     bool allSameLabel(const std::vector<std::size_t>& rowIndices) const;
     std::string getMajorityLabel(const std::vector<std::size_t>& rowIndices) const;
     void printNode(const Node* node, std::ostream& output, int depth, const std::string& edgeText) const;

@@ -60,17 +60,7 @@ int main() {
         TrainingOptions options;
         options.impurityMeasure = ImpurityMeasure::Entropy;
         options.minSamplesPerLeaf = 2;
-        options.usePostPruning = true;
-
-        // THEORY:
-        // Standard C4.5 puts a threshold exactly between two neighboring
-        // values where the class changes.
-        //
-        // Weighted average thresholds move that boundary a little when one
-        // side has stronger nearby support from samples of the same class.
-        //
-        // Post-pruning grows the tree first, then removes branches that do
-        // not justify their extra complexity.
+        options.pruningMode = PruningMode::PessimisticErrorPrune;
 
         tree.fit(dataset, options);
 

@@ -15,38 +15,19 @@ namespace
         return std::string(static_cast<std::size_t>(depth) * 2, ' ');
     }
 
-    std::size_t countSameLabelRunLeft(
-        const std::vector<std::pair<double, std::string>>& values,
-        std::size_t index
-    )
+    struct ScoredSplitCandidate
     {
-        const std::string& label = values[index].second;
-        std::size_t count = 1;
+        std::size_t featureIndex = 0;
+        std::string featureName;
+        double threshold = 0.0;
+        double informationGain = 0.0;
+        double splitInformation = 0.0;
+        double gainRatio = 0.0;
+    };
 
-        while (index > 0 && values[index - 1].second == label)
-        {
-            --index;
-            ++count;
-        }
-
-        return count;
-    }
-
-    std::size_t countSameLabelRunRight(
-        const std::vector<std::pair<double, std::string>>& values,
-        std::size_t index
-    )
+    bool areEffectivelyEqual(double left, double right, double epsilon)
     {
-        const std::string& label = values[index].second;
-        std::size_t count = 1;
-
-        while (index + 1 < values.size() && values[index + 1].second == label)
-        {
-            ++index;
-            ++count;
-        }
-
-        return count;
+        return std::fabs(left - right) <= epsilon;
     }
 
 } // namespace
@@ -76,7 +57,7 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
     // Post-pruning is a second phase:
     // first let the tree grow, then remove branches that do not improve
     // classification on the samples that reached them.
-    if (options_.usePostPruning)
+    if (options_.pruningMode != PruningMode::None)
     {
         pruneTree(root_, rowIndices);
     }
@@ -272,7 +253,11 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) c
     //
     // We try many candidate thresholds and keep the one with the best gain ratio.
 
-    SplitResult best;
+    // We first collect every valid threshold together with its scores.
+    // After that we apply the C4.5-style rule:
+    // keep only candidates with at least average information gain,
+    // then choose the one with the largest gain ratio.
+    std::vector<ScoredSplitCandidate> scoredCandidates;
 
     // For each feature
     for (std::size_t featureIndex = 0; featureIndex < dataset_->featureNames.size(); ++featureIndex)
@@ -308,33 +293,17 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) c
                 continue;
             }
 
-            // A useful candidate usually appears where the class changes.
-            if (leftLabel == rightLabel)
+            const bool classChanged = leftLabel != rightLabel;
+
+            // For numeric features we only test boundaries where the class
+            // changes between neighboring sorted samples.
+            if (!classChanged)
             {
                 continue;
             }
 
-            // Example:
-            // if values are 1.4 and 1.5, the classic midpoint is 1.45.
-            //
-            // Weighted average thresholds:
-            // We look at how many neighboring samples support the class on the
-            // left side and the class on the right side.
-            //
-            // If one side has a longer same-label run, we move the threshold
-            // slightly toward the weaker side. This gives more space to the
-            // side with stronger local evidence.
-            double threshold = (leftValue + rightValue) / 2.0;
-            if (options_.useWeightedAverageThresholds)
-            {
-                const std::size_t leftSupport = countSameLabelRunLeft(values, i - 1);
-                const std::size_t rightSupport = countSameLabelRunRight(values, i);
-
-                threshold = (
-                    leftValue * static_cast<double>(rightSupport)
-                    + rightValue * static_cast<double>(leftSupport)
-                ) / static_cast<double>(leftSupport + rightSupport);
-            }
+            // For example, values 1.4 and 1.5 produce the threshold 1.45.
+            const double threshold = (leftValue + rightValue) / 2.0;
 
             std::vector<std::size_t> leftRows;
             std::vector<std::size_t> rightRows;
@@ -376,20 +345,89 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) c
                 continue;
             }
 
-            const double ratio = gain / splitInfo;
-
-            if (!best.valid || ratio > best.gainRatio)
-            {
-                best.valid = true;
-                best.featureIndex = featureIndex;
-                best.featureName = dataset_->featureNames[featureIndex];
-                best.threshold = threshold;
-                best.informationGain = gain;
-                best.splitInformation = splitInfo;
-                best.gainRatio = ratio;
-            }
+            scoredCandidates.push_back(ScoredSplitCandidate{
+                featureIndex,
+                dataset_->featureNames[featureIndex],
+                threshold,
+                gain,
+                splitInfo,
+                gain / splitInfo
+            });
         }
     }
+
+    if (scoredCandidates.empty())
+    {
+        return SplitResult{};
+    }
+
+    double gainSum = 0.0;
+    std::size_t gainCount = 0;
+
+    for (const ScoredSplitCandidate& candidate : scoredCandidates)
+    {
+        if (candidate.informationGain > options_.epsilon)
+        {
+            gainSum += candidate.informationGain;
+            ++gainCount;
+        }
+    }
+
+    const double averageGain = gainCount == 0
+        ? 0.0
+        : gainSum / static_cast<double>(gainCount);
+
+    std::vector<const ScoredSplitCandidate*> selectableCandidates;
+    selectableCandidates.reserve(scoredCandidates.size());
+
+    // This mirrors the C4.5 idea of ignoring ratio comparisons for
+    // candidates whose information gain is too small to be competitive.
+    for (const ScoredSplitCandidate& candidate : scoredCandidates)
+    {
+        if (candidate.informationGain + options_.epsilon >= averageGain)
+        {
+            selectableCandidates.push_back(&candidate);
+        }
+    }
+
+    if (selectableCandidates.empty())
+    {
+        return SplitResult{};
+    }
+
+    const ScoredSplitCandidate* bestCandidate = selectableCandidates.front();
+
+    for (std::size_t index = 1; index < selectableCandidates.size(); ++index)
+    {
+        const ScoredSplitCandidate* candidate = selectableCandidates[index];
+
+        if (candidate->gainRatio > bestCandidate->gainRatio + options_.epsilon)
+        {
+            bestCandidate = candidate;
+            continue;
+        }
+
+        if (!areEffectivelyEqual(candidate->gainRatio, bestCandidate->gainRatio, options_.epsilon))
+        {
+            continue;
+        }
+
+        // If two candidates have the same gain ratio, prefer the one that
+        // achieves larger information gain before ratio normalization.
+        if (candidate->informationGain > bestCandidate->informationGain + options_.epsilon)
+        {
+            bestCandidate = candidate;
+        }
+    }
+
+    SplitResult best;
+    best.valid = true;
+    best.featureIndex = bestCandidate->featureIndex;
+    best.featureName = bestCandidate->featureName;
+    best.threshold = bestCandidate->threshold;
+    best.informationGain = bestCandidate->informationGain;
+    best.splitInformation = bestCandidate->splitInformation;
+    best.gainRatio = bestCandidate->gainRatio;
 
     return best;
 }
@@ -487,8 +525,8 @@ void C45Tree::pruneTree(
     }
 
     // Bottom-up pruning:
-    // first give the children a chance to simplify themselves,
-    // then judge whether this whole subtree is still worth keeping.
+    // simplify children first, then decide whether this node should keep
+    // its subtree or collapse into one majority-class leaf.
     pruneTree(node->leftChild, leftRows);
     pruneTree(node->rightChild, rightRows);
 
@@ -504,10 +542,31 @@ void C45Tree::pruneTree(
         }
     }
 
-    // Simple pruning rule:
-    // if the simpler leaf is at least as accurate as the full subtree
-    // on this node's training samples, keep the simpler model.
-    if (leafCorrect >= subtreeCorrect)
+    bool shouldPrune = false;
+
+    if (options_.pruningMode == PruningMode::TrainingAccuracyPrune)
+    {
+        // Compare the subtree and the replacement leaf on the same training
+        // samples that reached this node.
+        shouldPrune = leafCorrect >= subtreeCorrect;
+    }
+    else if (options_.pruningMode == PruningMode::PessimisticErrorPrune)
+    {
+        const double sampleCount = static_cast<double>(rowIndices.size());
+        const double subtreeErrors = sampleCount - static_cast<double>(subtreeCorrect);
+        const double leafErrors = sampleCount - static_cast<double>(leafCorrect);
+
+        // Penalize trees with many leaves by adding 0.5 estimated error per leaf.
+        // This makes a large subtree "pay" for its extra complexity.
+        const double estimatedSubtreeErrorRate =
+            (subtreeErrors + 0.5 * static_cast<double>(countLeafNodes(node.get())))
+            / sampleCount;
+        const double estimatedLeafErrorRate = (leafErrors + 0.5) / sampleCount;
+
+        shouldPrune = estimatedLeafErrorRate <= estimatedSubtreeErrorRate + options_.epsilon;
+    }
+
+    if (shouldPrune)
     {
         node = Node::createLeaf(majorityLabel, rowIndices.size());
     }
@@ -544,6 +603,21 @@ std::size_t C45Tree::countCorrectPredictions(
     }
 
     return correct;
+}
+
+std::size_t C45Tree::countLeafNodes(const Node* node) const
+{
+    if (!node)
+    {
+        return 0;
+    }
+
+    if (node->isLeaf)
+    {
+        return 1;
+    }
+
+    return countLeafNodes(node->leftChild.get()) + countLeafNodes(node->rightChild.get());
 }
 
 bool C45Tree::allSameLabel(const std::vector<std::size_t> &rowIndices) const

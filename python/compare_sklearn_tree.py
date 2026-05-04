@@ -43,18 +43,19 @@ def print_tree(model: DecisionTreeClassifier, feature_names):
         indent = "  " * depth
         left_child = tree.children_left[node_id]
         right_child = tree.children_right[node_id]
+        sample_count = int(tree.n_node_samples[node_id])
 
         if left_child == right_child:
             class_index = max(
                 range(len(class_names)),
                 key=lambda index: tree.value[node_id][0][index],
             )
-            print(f"{indent}{edge_text}: Leaf -> {class_names[class_index]}")
+            print(f"{indent}{edge_text} [n={sample_count}]: Leaf -> {class_names[class_index]}")
             return
 
         feature_name = feature_names[tree.feature[node_id]]
         threshold = tree.threshold[node_id]
-        print(f"{indent}{edge_text}: if {feature_name} <= {threshold:.3f}")
+        print(f"{indent}{edge_text} [n={sample_count}]: if {feature_name} <= {threshold:.3f}")
         visit(left_child, depth + 1, "yes")
         visit(right_child, depth + 1, "no")
 
@@ -77,7 +78,13 @@ def main():
     print("First sample:", *first_parts, f"label={first_label}")
     print()
 
-    model = DecisionTreeClassifier(criterion="entropy", random_state=0)
+    model = DecisionTreeClassifier(
+        criterion="entropy",
+        max_depth=10,
+        min_samples_split=2,
+        min_samples_leaf=2,
+        random_state=0,
+    )
     model.fit(features, labels)
 
     print("Learned tree:")
