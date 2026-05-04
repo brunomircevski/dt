@@ -32,16 +32,18 @@ def build_training_frame(csv_path: Path):
     return frame, attributes_map
 
 
-def print_tree(root_node):
-    def visit(node, depth: int, edge_text: str):
+def print_tree(root_node, frame):
+    def visit(node, current_frame, depth: int, edge_text: str):
         indent = "  " * depth
+        sample_count = len(current_frame)
 
         if hasattr(node, "get_class_name"):
-            print(f"{indent}{edge_text}: Leaf -> {node.get_class_name()}")
+            print(f"{indent}{edge_text} [n={sample_count}]: Leaf -> {node.get_class_name()}")
             return
 
+        feature_name = node.get_attribute()
         threshold = node._attributes.threshold
-        print(f"{indent}{edge_text}: if {node.get_attribute()} <= {threshold:.3f}")
+        print(f"{indent}{edge_text} [n={sample_count}]: if {feature_name} <= {threshold:.3f}")
 
         yes_child = None
         no_child = None
@@ -52,12 +54,15 @@ def print_tree(root_node):
             elif ">" in label:
                 no_child = child
 
-        if yes_child is not None:
-            visit(yes_child, depth + 1, "yes")
-        if no_child is not None:
-            visit(no_child, depth + 1, "no")
+        yes_frame = current_frame[current_frame[feature_name] <= threshold]
+        no_frame = current_frame[current_frame[feature_name] > threshold]
 
-    visit(root_node, 0, "ROOT")
+        if yes_child is not None:
+            visit(yes_child, yes_frame, depth + 1, "yes")
+        if no_child is not None:
+            visit(no_child, no_frame, depth + 1, "no")
+
+    visit(root_node, frame, 0, "ROOT")
 
 
 def main():
@@ -77,16 +82,11 @@ def main():
     print("First sample:", *first_parts, f"label={first_label}")
     print()
 
-    model = DecisionTreeClassifier(
-        attributes_map,
-        max_depth=20,
-        node_purity=1.0,
-        min_instances=2,
-    )
+    model = DecisionTreeClassifier(attributes_map)
     model.fit(frame)
 
     print("Learned tree:")
-    print_tree(model.get_root_node())
+    print_tree(model.get_root_node(), frame)
     print()
 
     feature_frame = frame.drop(columns=["target"])
