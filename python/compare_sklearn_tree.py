@@ -81,8 +81,7 @@ def main():
     model = DecisionTreeClassifier(
         criterion="entropy",
         max_depth=10,
-        min_samples_split=2,
-        min_samples_leaf=2,
+        ccp_alpha=0.04, #post pruning
         random_state=0,
     )
     model.fit(features, labels)

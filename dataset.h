@@ -21,4 +21,4 @@ struct Dataset {
     std::vector<Sample> samples;
 };
 
-Dataset loadIrisDataset(const std::string& filePath);
+Dataset loadDataset(const std::string& filePath);

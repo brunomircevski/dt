@@ -23,7 +23,7 @@ std::vector<std::string> splitCsvLine(const std::string& line) {
 
 }  // namespace
 
-Dataset loadIrisDataset(const std::string& filePath) {
+Dataset loadDataset(const std::string& filePath) {
     std::ifstream input(filePath);
     if (!input) {
         throw std::runtime_error("Could not open dataset file: " + filePath);
