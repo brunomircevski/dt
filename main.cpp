@@ -52,14 +52,14 @@ void runPredictionChecks(const C45Tree& tree, const Dataset& dataset) {
 int main() {
     try {
         // 1. Load the Iris dataset from disk.
-        const Dataset dataset = loadIrisDataset("datasets/iris.csv");
+        const Dataset dataset = loadDataset("datasets/diabetes.csv");
         printDatasetSummary(dataset);
 
         // 2. Train the decision tree.
         C45Tree tree;
         TrainingOptions options;
         options.impurityMeasure = ImpurityMeasure::Entropy;
-        options.minSamplesPerLeaf = 2;
+        options.minSamplesPerLeaf = 10;
         options.pruningMode = PruningMode::PessimisticErrorPrune;
 
         tree.fit(dataset, options);

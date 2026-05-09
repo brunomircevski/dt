@@ -82,7 +82,13 @@ def main():
     print("First sample:", *first_parts, f"label={first_label}")
     print()
 
-    model = DecisionTreeClassifier(attributes_map)
+    # Configuration for maximum tree growth
+    model = DecisionTreeClassifier(
+        attributes_map=attributes_map,
+        max_depth=15,        # Allow the tree to grow very deep
+        node_purity=1,      # Force splits until nodes are perfectly pure
+        min_instances=1       # Allow leaves with only a single sample
+    )
     model.fit(frame)
 
     print("Learned tree:")
