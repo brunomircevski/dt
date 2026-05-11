@@ -15,16 +15,6 @@ namespace
         return std::string(static_cast<std::size_t>(depth) * 2, ' ');
     }
 
-    struct ScoredSplitCandidate
-    {
-        std::size_t featureIndex = 0;
-        std::string featureName;
-        double threshold = 0.0;
-        double informationGain = 0.0;
-        double splitInformation = 0.0;
-        double gainRatio = 0.0;
-    };
-
     bool areEffectivelyEqual(double left, double right, double epsilon)
     {
         return std::fabs(left - right) <= epsilon;
@@ -59,7 +49,7 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
     // classification on the samples that reached them.
     if (options_.pruningMode != PruningMode::None)
     {
-        pruneTree(root_, rowIndices);
+        applySelectedPruning(rowIndices);
     }
 }
 
@@ -102,6 +92,32 @@ void C45Tree::print(std::ostream &output) const
     printNode(root_.get(), output, 0, "ROOT");
 }
 
+int C45Tree::treeDepth() const
+{
+    return computeTreeDepth(root_.get());
+}
+
+std::size_t C45Tree::nodeCount() const
+{
+    return countNodes(root_.get());
+}
+
+std::map<std::string, int> C45Tree::computeClassCounts(
+    const std::vector<std::size_t>& rowIndices
+) const
+{
+    // THEORY:
+    // Many later calculations need to know how many training rows of each
+    // class reached the current node. We compute those counts once here so
+    // helpers like entropy() and getMajorityLabel() can reuse the same idea.
+    std::map<std::string, int> counts;
+    for (std::size_t rowIndex : rowIndices)
+    {
+        counts[dataset_->samples[rowIndex].label]++;
+    }
+    return counts;
+}
+
 double C45Tree::entropy(const std::vector<std::size_t> &rowIndices) const
 {
     // THEORY:
@@ -115,11 +131,7 @@ double C45Tree::entropy(const std::vector<std::size_t> &rowIndices) const
     //
     // So a "good" split is one that creates children with lower entropy.
 
-    std::map<std::string, int> counts;
-    for (std::size_t rowIndex : rowIndices)
-    {
-        counts[dataset_->samples[rowIndex].label]++;
-    }
+    const std::map<std::string, int> counts = computeClassCounts(rowIndices);
 
     double result = 0.0;
     const double total = static_cast<double>(rowIndices.size());
@@ -159,11 +171,7 @@ double C45Tree::giniIndex(const std::vector<std::size_t> &rowIndices) const
     // to belong to a specific class twice in a row.
     // Summing those probabilities tells us how "pure" the node already is.
 
-    std::map<std::string, int> counts;
-    for (std::size_t rowIndex : rowIndices)
-    {
-        counts[dataset_->samples[rowIndex].label]++;
-    }
+    const std::map<std::string, int> counts = computeClassCounts(rowIndices);
 
     const double total = static_cast<double>(rowIndices.size());
     double sumOfSquaredProbabilities = 0.0;
@@ -243,148 +251,164 @@ double C45Tree::splitInformation(
     return result;
 }
 
-SplitResult C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
+C45Tree::PartitionedRows C45Tree::partitionRows(
+    const std::vector<std::size_t>& rowIndices,
+    std::size_t featureIndex,
+    double threshold
+) const
 {
     // THEORY:
-    // For the Iris dataset, every feature is numeric.
-    //
-    // That means every question looks like:
-    // "Is this feature <= some threshold?"
-    //
-    // We try many candidate thresholds and keep the one with the best gain ratio.
-
-    // We first collect every valid threshold together with its scores.
-    // After that we apply the C4.5-style rule:
-    // keep only candidates with at least average information gain,
-    // then choose the one with the largest gain ratio.
-    std::vector<ScoredSplitCandidate> scoredCandidates;
-
-    // For each feature
-    for (std::size_t featureIndex = 0; featureIndex < dataset_->featureNames.size(); ++featureIndex)
+    // A numeric binary tree node asks exactly one question:
+    // "Is feature <= threshold?"
+    // This helper executes that question for every row that reached the node
+    // and returns the two child groups.
+    PartitionedRows partitions;
+    for (std::size_t rowIndex : rowIndices)
     {
-        // Each pair stores:
-        //   first  = feature value
-        //   second = class label
-        //
-        // C++ note:
-        // std::pair is just a small object that holds two values together.
-        std::vector<std::pair<double, std::string>> values;
-
-        for (std::size_t rowIndex : rowIndices)
+        const double value = dataset_->samples[rowIndex].features[featureIndex];
+        if (value <= threshold)
         {
-            values.push_back({dataset_->samples[rowIndex].features[featureIndex],
-                              dataset_->samples[rowIndex].label});
+            partitions.leftRows.push_back(rowIndex);
+        }
+        else
+        {
+            partitions.rightRows.push_back(rowIndex);
+        }
+    }
+    return partitions;
+}
+
+std::vector<double> C45Tree::collectNumericThresholdCandidates(
+    const std::vector<std::size_t>& rowIndices,
+    std::size_t featureIndex
+) const
+{
+    // THEORY:
+    // For numeric C4.5 we sort the rows by one feature and only test
+    // thresholds between adjacent distinct values where the class label
+    // changes. That keeps the search small without missing useful binary
+    // thresholds.
+    std::vector<std::pair<double, std::string>> values;
+    values.reserve(rowIndices.size());
+
+    for (std::size_t rowIndex : rowIndices)
+    {
+        values.push_back({
+            dataset_->samples[rowIndex].features[featureIndex],
+            dataset_->samples[rowIndex].label
+        });
+    }
+
+    std::sort(values.begin(), values.end());
+
+    std::vector<double> thresholds;
+    for (std::size_t index = 1; index < values.size(); ++index)
+    {
+        const double leftValue = values[index - 1].first;
+        const double rightValue = values[index].first;
+        const std::string& leftLabel = values[index - 1].second;
+        const std::string& rightLabel = values[index].second;
+
+        if (std::fabs(leftValue - rightValue) < options_.epsilon)
+        {
+            continue;
         }
 
-        // Sort by feature value so neighboring values can be inspected.
-        std::sort(values.begin(), values.end());
-
-        // For each sample
-        for (std::size_t i = 1; i < values.size(); ++i)
+        if (leftLabel == rightLabel)
         {
-            const double leftValue = values[i - 1].first;
-            const double rightValue = values[i].first;
-            const std::string &leftLabel = values[i - 1].second;
-            const std::string &rightLabel = values[i].second;
+            continue;
+        }
 
-            // If values are equal, there is no room for a new threshold.
-            if (std::fabs(leftValue - rightValue) < options_.epsilon)
-            {
-                continue;
-            }
+        thresholds.push_back((leftValue + rightValue) / 2.0);
+    }
 
-            const bool classChanged = leftLabel != rightLabel;
+    return thresholds;
+}
 
-            // For numeric features we only test boundaries where the class
-            // changes between neighboring sorted samples.
-            if (!classChanged)
-            {
-                continue;
-            }
+SplitResult C45Tree::scoreSplit(
+    const std::vector<std::size_t>& rowIndices,
+    std::size_t featureIndex,
+    double threshold
+) const
+{
+    // THEORY:
+    // After proposing one threshold, we score it exactly the way C4.5 does
+    // for numeric binary tests:
+    //   information gain = entropy(parent) - weighted entropy(children)
+    //   split information = entropy of the split sizes
+    //   gain ratio = information gain / split information
+    SplitResult result;
+    result.featureIndex = featureIndex;
+    result.featureName = dataset_->featureNames[featureIndex];
+    result.threshold = threshold;
 
-            // For example, values 1.4 and 1.5 produce the threshold 1.45.
-            const double threshold = (leftValue + rightValue) / 2.0;
+    const PartitionedRows partitions = partitionRows(rowIndices, featureIndex, threshold);
+    if (partitions.leftRows.empty() || partitions.rightRows.empty())
+    {
+        return result;
+    }
 
-            std::vector<std::size_t> leftRows;
-            std::vector<std::size_t> rightRows;
-
-            for (std::size_t rowIndex : rowIndices)
-            {
-                const double value = dataset_->samples[rowIndex].features[featureIndex];
-                if (value <= threshold)
-                {
-                    leftRows.push_back(rowIndex);
-                }
-                else
-                {
-                    rightRows.push_back(rowIndex);
-                }
-            }
-
-            if (leftRows.empty() || rightRows.empty())
-            {
-                continue;
-            }
-
-            // "Minimum samples per leaf" says a split is only trustworthy if
-            // both children are supported by enough training examples.
-            if (options_.minSamplesPerLeaf != 0)
-            {
-                if (leftRows.size() < options_.minSamplesPerLeaf || rightRows.size() < options_.minSamplesPerLeaf)
-                {
-                    continue;
-                }
-            }
-
-            const std::vector<std::vector<std::size_t>> partitions = {leftRows, rightRows};
-            const double gain = informationGain(rowIndices, partitions);
-            const double splitInfo = splitInformation(rowIndices, partitions);
-
-            if (splitInfo <= options_.epsilon)
-            {
-                continue;
-            }
-
-            scoredCandidates.push_back(ScoredSplitCandidate{
-                featureIndex,
-                dataset_->featureNames[featureIndex],
-                threshold,
-                gain,
-                splitInfo,
-                gain / splitInfo
-            });
+    if (options_.minSamplesPerLeaf != 0)
+    {
+        if (partitions.leftRows.size() < options_.minSamplesPerLeaf ||
+            partitions.rightRows.size() < options_.minSamplesPerLeaf)
+        {
+            return result;
         }
     }
 
-    if (scoredCandidates.empty())
+    const std::vector<std::vector<std::size_t>> groups = {
+        partitions.leftRows,
+        partitions.rightRows
+    };
+    result.informationGain = informationGain(rowIndices, groups);
+    result.splitInformation = splitInformation(rowIndices, groups);
+
+    if (result.informationGain <= options_.epsilon ||
+        result.splitInformation <= options_.epsilon)
+    {
+        return result;
+    }
+
+    result.gainRatio = result.informationGain / result.splitInformation;
+    result.valid = true;
+    return result;
+}
+
+SplitResult C45Tree::chooseBestSplit(const std::vector<SplitResult>& candidates) const
+{
+    if (candidates.empty())
     {
         return SplitResult{};
     }
 
-    double gainSum = 0.0;
-    std::size_t gainCount = 0;
+    std::vector<const SplitResult*> selectableCandidates;
+    selectableCandidates.reserve(candidates.size());
 
-    for (const ScoredSplitCandidate& candidate : scoredCandidates)
+    if (options_.splitSelectionMode == SplitSelectionMode::MeanGainFiltered)
     {
-        if (candidate.informationGain > options_.epsilon)
+        // compare gain ratios only among candidates with at least average gain.
+        double gainSum = 0.0;
+        for (const SplitResult& candidate : candidates)
         {
             gainSum += candidate.informationGain;
-            ++gainCount;
+        }
+        const double averageGain = gainSum / static_cast<double>(candidates.size());
+
+        for (const SplitResult& candidate : candidates)
+        {
+            if (candidate.informationGain + options_.epsilon >= averageGain)
+            {
+                selectableCandidates.push_back(&candidate);
+            }
         }
     }
-
-    const double averageGain = gainCount == 0
-        ? 0.0
-        : gainSum / static_cast<double>(gainCount);
-
-    std::vector<const ScoredSplitCandidate*> selectableCandidates;
-    selectableCandidates.reserve(scoredCandidates.size());
-
-    // This mirrors the C4.5 idea of ignoring ratio comparisons for
-    // candidates whose information gain is too small to be competitive.
-    for (const ScoredSplitCandidate& candidate : scoredCandidates)
+    else
     {
-        if (candidate.informationGain + options_.epsilon >= averageGain)
+        // Classic C4.5-style simplified rule for this project:
+        // every candidate that has real positive information gain is eligible,
+        // and the final choice is made by gain ratio.
+        for (const SplitResult& candidate : candidates)
         {
             selectableCandidates.push_back(&candidate);
         }
@@ -395,11 +419,10 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) c
         return SplitResult{};
     }
 
-    const ScoredSplitCandidate* bestCandidate = selectableCandidates.front();
-
+    const SplitResult* bestCandidate = selectableCandidates.front();
     for (std::size_t index = 1; index < selectableCandidates.size(); ++index)
     {
-        const ScoredSplitCandidate* candidate = selectableCandidates[index];
+        const SplitResult* candidate = selectableCandidates[index];
 
         if (candidate->gainRatio > bestCandidate->gainRatio + options_.epsilon)
         {
@@ -412,24 +435,82 @@ SplitResult C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) c
             continue;
         }
 
-        // If two candidates have the same gain ratio, prefer the one that
-        // achieves larger information gain before ratio normalization.
         if (candidate->informationGain > bestCandidate->informationGain + options_.epsilon)
+        {
+            bestCandidate = candidate;
+            continue;
+        }
+
+        if (!areEffectivelyEqual(candidate->informationGain, bestCandidate->informationGain, options_.epsilon))
+        {
+            continue;
+        }
+
+        if (candidate->featureIndex < bestCandidate->featureIndex)
+        {
+            bestCandidate = candidate;
+            continue;
+        }
+
+        if (candidate->featureIndex == bestCandidate->featureIndex &&
+            candidate->threshold < bestCandidate->threshold - options_.epsilon)
         {
             bestCandidate = candidate;
         }
     }
 
-    SplitResult best;
-    best.valid = true;
-    best.featureIndex = bestCandidate->featureIndex;
-    best.featureName = bestCandidate->featureName;
-    best.threshold = bestCandidate->threshold;
-    best.informationGain = bestCandidate->informationGain;
-    best.splitInformation = bestCandidate->splitInformation;
-    best.gainRatio = bestCandidate->gainRatio;
+    return *bestCandidate;
+}
 
-    return best;
+SplitResult C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
+{
+    // THEORY:
+    // For numeric-only datasets, every internal node asks one binary question:
+    // "Is feature <= threshold?"
+    // We generate candidate thresholds, score them, then choose the best one
+    // using the configured split-selection policy.
+    std::vector<SplitResult> scoredCandidates;
+
+    for (std::size_t featureIndex = 0; featureIndex < dataset_->featureNames.size(); ++featureIndex)
+    {
+        const std::vector<double> thresholds =
+            collectNumericThresholdCandidates(rowIndices, featureIndex);
+
+        for (double threshold : thresholds)
+        {
+            SplitResult candidate = scoreSplit(rowIndices, featureIndex, threshold);
+            if (candidate.valid)
+            {
+                scoredCandidates.push_back(candidate);
+            }
+        }
+    }
+
+    return chooseBestSplit(scoredCandidates);
+}
+
+bool C45Tree::shouldStopGrowing(const std::vector<std::size_t>& rowIndices, int depth) const
+{
+    // THEORY:
+    // A decision tree stops growing when extra splits are no longer useful.
+    // For this numeric-only learning version we use simple, explicit rules:
+    // pure node, too few samples, or optional depth limit reached.
+    if (allSameLabel(rowIndices))
+    {
+        return true;
+    }
+
+    if (rowIndices.size() < options_.minSamplesToSplit)
+    {
+        return true;
+    }
+
+    if (options_.maxDepth >= 0 && depth >= options_.maxDepth)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 std::unique_ptr<Node> C45Tree::buildNode(const std::vector<std::size_t> &rowIndices, int depth) const
@@ -449,8 +530,7 @@ std::unique_ptr<Node> C45Tree::buildNode(const std::vector<std::size_t> &rowIndi
         );
     }
 
-    // Simple stopping rules to keep the example manageable.
-    if (depth >= options_.maxDepth || rowIndices.size() < options_.minSamplesToSplit)
+    if (shouldStopGrowing(rowIndices, depth))
     {
         return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
     }
@@ -461,24 +541,11 @@ std::unique_ptr<Node> C45Tree::buildNode(const std::vector<std::size_t> &rowIndi
         return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
     }
 
-    std::vector<std::size_t> leftRows;
-    std::vector<std::size_t> rightRows;
-
-    for (std::size_t rowIndex : rowIndices)
-    {
-        const double value = dataset_->samples[rowIndex].features[split.featureIndex];
-        if (value <= split.threshold)
-        {
-            leftRows.push_back(rowIndex);
-        }
-        else
-        {
-            rightRows.push_back(rowIndex);
-        }
-    }
+    const PartitionedRows partitions =
+        partitionRows(rowIndices, split.featureIndex, split.threshold);
 
     // Stop if split created empty group - no progress made
-    if (leftRows.empty() || rightRows.empty())
+    if (partitions.leftRows.empty() || partitions.rightRows.empty())
     {
         return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
     }
@@ -492,84 +559,10 @@ std::unique_ptr<Node> C45Tree::buildNode(const std::vector<std::size_t> &rowIndi
         rowIndices.size());
 
     // Recursively build the two children.
-    node->leftChild = buildNode(leftRows, depth + 1);
-    node->rightChild = buildNode(rightRows, depth + 1);
+    node->leftChild = buildNode(partitions.leftRows, depth + 1);
+    node->rightChild = buildNode(partitions.rightRows, depth + 1);
 
     return node;
-}
-
-void C45Tree::pruneTree(
-    std::unique_ptr<Node>& node,
-    const std::vector<std::size_t>& rowIndices
-) const
-{
-    if (!node || node->isLeaf)
-    {
-        return;
-    }
-
-    std::vector<std::size_t> leftRows;
-    std::vector<std::size_t> rightRows;
-
-    for (std::size_t rowIndex : rowIndices)
-    {
-        const double value = dataset_->samples[rowIndex].features[node->featureIndex];
-        if (value <= node->threshold)
-        {
-            leftRows.push_back(rowIndex);
-        }
-        else
-        {
-            rightRows.push_back(rowIndex);
-        }
-    }
-
-    // Bottom-up pruning:
-    // simplify children first, then decide whether this node should keep
-    // its subtree or collapse into one majority-class leaf.
-    pruneTree(node->leftChild, leftRows);
-    pruneTree(node->rightChild, rightRows);
-
-    const std::size_t subtreeCorrect = countCorrectPredictions(node.get(), rowIndices);
-    const std::string majorityLabel = getMajorityLabel(rowIndices);
-
-    std::size_t leafCorrect = 0;
-    for (std::size_t rowIndex : rowIndices)
-    {
-        if (dataset_->samples[rowIndex].label == majorityLabel)
-        {
-            ++leafCorrect;
-        }
-    }
-
-    bool shouldPrune = false;
-
-    if (options_.pruningMode == PruningMode::TrainingAccuracyPrune)
-    {
-        // Compare the subtree and the replacement leaf on the same training
-        // samples that reached this node.
-        shouldPrune = leafCorrect >= subtreeCorrect;
-    }
-    else if (options_.pruningMode == PruningMode::PessimisticErrorPrune)
-    {
-        const double sampleCount = static_cast<double>(rowIndices.size());
-        const double subtreeErrors = sampleCount - static_cast<double>(subtreeCorrect);
-        const double leafErrors = sampleCount - static_cast<double>(leafCorrect);
-
-        // Penalize trees with many leaves by adding 0.5 estimated error per leaf.
-        // This makes a large subtree "pay" for its extra complexity.
-        const double estimatedSubtreeErrorRate =
-            (subtreeErrors + 0.5 * static_cast<double>(countLeafNodes(node.get())))
-            / sampleCount;
-        const double estimatedLeafErrorRate = (leafErrors + 0.5) / sampleCount;
-
-        shouldPrune = estimatedLeafErrorRate <= estimatedSubtreeErrorRate + options_.epsilon;
-    }
-
-    if (shouldPrune)
-    {
-        node = Node::createLeaf(majorityLabel, rowIndices.size());
-    }
 }
 
 std::size_t C45Tree::countCorrectPredictions(
@@ -620,6 +613,34 @@ std::size_t C45Tree::countLeafNodes(const Node* node) const
     return countLeafNodes(node->leftChild.get()) + countLeafNodes(node->rightChild.get());
 }
 
+std::size_t C45Tree::countNodes(const Node* node) const
+{
+    if (!node)
+    {
+        return 0;
+    }
+
+    return 1 + countNodes(node->leftChild.get()) + countNodes(node->rightChild.get());
+}
+
+int C45Tree::computeTreeDepth(const Node* node) const
+{
+    // A leaf has depth 0. A decision node has depth 1 plus the deeper child.
+    if (!node)
+    {
+        return -1;
+    }
+
+    if (node->isLeaf)
+    {
+        return 0;
+    }
+
+    const int leftDepth = computeTreeDepth(node->leftChild.get());
+    const int rightDepth = computeTreeDepth(node->rightChild.get());
+    return 1 + std::max(leftDepth, rightDepth);
+}
+
 bool C45Tree::allSameLabel(const std::vector<std::size_t> &rowIndices) const
 {
     const std::string &firstLabel = dataset_->samples[rowIndices.front()].label;
@@ -637,11 +658,7 @@ bool C45Tree::allSameLabel(const std::vector<std::size_t> &rowIndices) const
 
 std::string C45Tree::getMajorityLabel(const std::vector<std::size_t> &rowIndices) const
 {
-    std::map<std::string, int> counts;
-    for (std::size_t rowIndex : rowIndices)
-    {
-        counts[dataset_->samples[rowIndex].label]++;
-    }
+    const std::map<std::string, int> counts = computeClassCounts(rowIndices);
 
     std::string bestLabel;
     int maxCount = -1;
