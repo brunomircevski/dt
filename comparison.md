@@ -156,5 +156,6 @@ Prediction summary:
 - TrainingAccuracyPrune Post pruning nie pogarsza wyniku, a upraszcza drzewo
 - PessimisticErrorPrune Post pruning lekko pogarsza wynik, a znacznie upraszcza drzewo
 - Zwiększanie MinSamplesPerLeaf likwiduje szum, upraszcza drzewo
-- Entropy i Gini tworzą te same drzewo
-- Wyniki nadal różne niż sckit-learning i weka
+- Entropy i Gini tworzą te same drzewo dla Iris, ale różne dla innych dataset, raz jeden lub drugi jest lepszy.
+- Wyniki nadal różne niż sckit-learning i weka.
+- Dla różnych dataset sprawdzają się lepiej inne parametry

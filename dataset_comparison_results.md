@@ -260,3 +260,69 @@ Prediction summary:
   correct predictions = 340
   accuracy = 99.4152%
 ```
+
+
+# Po zmianach
+```
+Classic
+
+Enthropy:
+  checked samples = 768
+  correct predictions = 768
+  tree depth = 76
+  node count = 361
+  accuracy = 100.0000%
+  
+Gini:
+  checked samples = 768
+  correct predictions = 768
+  tree depth = 81
+  node count = 387
+  accuracy = 100.0000%
+  
+Gini + PessimisticErrorPrune:
+  checked samples = 768
+  correct predictions = 748
+  tree depth = 81
+  node count = 305
+  accuracy = 97.3958%
+  
+Enthropy + PessimisticErrorPrune:
+  checked samples = 768
+  correct predictions = 747
+  tree depth = 76
+  node count = 275
+  accuracy = 97.2656%
+```
+
+```
+Custom MeanGainFiltered
+
+Enthorpy:
+  checked samples = 768
+  correct predictions = 768
+  tree depth = 55
+  node count = 363
+  accuracy = 100.0000%
+  
+Gini:
+  checked samples = 768
+  correct predictions = 768
+  tree depth = 46
+  node count = 361
+  accuracy = 100.0000%
+  
+Gini + PessimisticErrorPrune:
+  checked samples = 768
+  correct predictions = 747
+  tree depth = 46
+  node count = 275
+  accuracy = 97.2656%
+  
+Enthropy + PessimisticErrorPrune
+  checked samples = 768
+  correct predictions = 751
+  tree depth = 55
+  node count = 293
+  accuracy = 97.7865%
+```

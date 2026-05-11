@@ -26,7 +26,7 @@ void printDatasetSummary(const Dataset& dataset) {
 }
 
 void runPredictionChecks(const C45Tree& tree, const Dataset& dataset) {
-    std::cout << "Prediction summary:\n";
+    std::cout << "Summary:\n";
 
     std::size_t correctPredictions = 0;
     for (std::size_t index = 0; index < dataset.samples.size(); ++index) {
@@ -42,6 +42,8 @@ void runPredictionChecks(const C45Tree& tree, const Dataset& dataset) {
 
     std::cout << "  checked samples = " << dataset.samples.size() << '\n';
     std::cout << "  correct predictions = " << correctPredictions << '\n';
+    std::cout << "  tree depth = " << tree.treeDepth() << '\n';
+    std::cout << "  node count = " << tree.nodeCount() << '\n';
     std::cout << "  accuracy = "
               << std::fixed << std::setprecision(4)
               << accuracy * 100.0 << "%\n";
@@ -51,7 +53,7 @@ void runPredictionChecks(const C45Tree& tree, const Dataset& dataset) {
 
 int main() {
     try {
-        // 1. Load the Iris dataset from disk.
+        // 1. Load the dataset from disk.
         const Dataset dataset = loadDataset("datasets/diabetes.csv");
         printDatasetSummary(dataset);
 
@@ -59,8 +61,9 @@ int main() {
         C45Tree tree;
         TrainingOptions options;
         options.impurityMeasure = ImpurityMeasure::Entropy;
-        options.minSamplesPerLeaf = 10;
+        //options.minSamplesPerLeaf = 10;
         options.pruningMode = PruningMode::PessimisticErrorPrune;
+        options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
 
         tree.fit(dataset, options);
 

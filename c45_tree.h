@@ -3,6 +3,7 @@
 #include "dataset.h"
 #include "node.h"
 
+#include <map>
 #include <memory>
 #include <limits>
 #include <ostream>
@@ -10,8 +11,18 @@
 #include <vector>
 
 enum class ImpurityMeasure {
+    // Classic C4.5 uses entropy.
     Entropy,
+    // Gini is kept only as an experiment/comparison mode.
     Gini
+};
+
+enum class SplitSelectionMode {
+    // Closest simple numeric-only version of classic C4.5:
+    // ignore trivial gain, then choose the candidate with best gain ratio.
+    ClassicC45,
+    // only compare gain ratios among candidates with at least average gain.
+    MeanGainFiltered
 };
 
 enum class PruningMode {
@@ -22,13 +33,19 @@ enum class PruningMode {
     TrainingAccuracyPrune,
     // Replace a subtree with one majority-class leaf when the leaf has
     // no worse pessimistic error estimate than the whole subtree.
-    PessimisticErrorPrune
+    PessimisticErrorPrune,
+    // Reserved for a closer reproduction of classic C4.5 post-pruning.
+    // This learning milestone keeps it unimplemented on purpose.
+    C45PessimisticPrune
 };
 
 struct TrainingOptions {
     // Maximum recursion depth of the tree.
-    // Larger values can fit training data more closely, but may overfit.
-    int maxDepth = 10;
+    // Use -1 to mean "no fixed depth limit".
+    //
+    // In classic C4.5 a hard depth cap is not the main control knob,
+    // so the learning-friendly default is unlimited depth.
+    int maxDepth = -1;
 
     // A node must contain at least this many samples before we even try
     // to split it into children.
@@ -42,12 +59,20 @@ struct TrainingOptions {
     // The enum above describes how each pruning method makes that decision.
     PruningMode pruningMode = PruningMode::None;
 
+    // Controls how we choose among valid numeric split candidates.
+    // The default is the simpler, more faithful C4.5-style rule.
+    SplitSelectionMode splitSelectionMode = SplitSelectionMode::ClassicC45;
+
     // Small tolerance used when comparing floating-point values.
     // It helps us avoid creating fake thresholds between almost equal numbers.
     double epsilon = 1e-9;
 
-    // Entropy and Gini are two common ways to measure how mixed a node is.
-    // Lower impurity means a "cleaner" group of samples.
+    // Confidence factor used by the more C4.5-like pessimistic pruning mode.
+    // Smaller values make the pruning estimate more conservative.
+    double pruningConfidenceFactor = 0.25;
+
+    // Entropy is the C4.5 default and should stay the default here.
+    // Gini is available only as a non-C4.5 comparison mode.
     ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
 };
 
@@ -75,6 +100,8 @@ public:
     void fit(const Dataset& dataset, const TrainingOptions& options = TrainingOptions{});
     std::string predict(const Sample& sample) const;
     void print(std::ostream& output) const;
+    int treeDepth() const;
+    std::size_t nodeCount() const;
 
     // The next functions are public so they can be explored from main()
     // and studied separately.
@@ -92,6 +119,11 @@ public:
     SplitResult findBestSplit(const std::vector<std::size_t>& rowIndices) const;
 
 private:
+    struct PartitionedRows {
+        std::vector<std::size_t> leftRows;
+        std::vector<std::size_t> rightRows;
+    };
+
     // We only keep a pointer to the dataset. The tree does not own the dataset.
     // "const" means the tree promises not to modify it.
     const Dataset* dataset_ = nullptr;
@@ -103,13 +135,54 @@ private:
     // functions can use the same settings while the tree is being built.
     TrainingOptions options_;
 
+    std::map<std::string, int> computeClassCounts(
+        const std::vector<std::size_t>& rowIndices
+    ) const;
     std::unique_ptr<Node> buildNode(const std::vector<std::size_t>& rowIndices, int depth) const;
-    void pruneTree(std::unique_ptr<Node>& node, const std::vector<std::size_t>& rowIndices) const;
+    std::vector<double> collectNumericThresholdCandidates(
+        const std::vector<std::size_t>& rowIndices,
+        std::size_t featureIndex
+    ) const;
+    SplitResult scoreSplit(
+        const std::vector<std::size_t>& rowIndices,
+        std::size_t featureIndex,
+        double threshold
+    ) const;
+    SplitResult chooseBestSplit(const std::vector<SplitResult>& candidates) const;
+    bool shouldStopGrowing(const std::vector<std::size_t>& rowIndices, int depth) const;
+    PartitionedRows partitionRows(
+        const std::vector<std::size_t>& rowIndices,
+        std::size_t featureIndex,
+        double threshold
+    ) const;
+    void applySelectedPruning(const std::vector<std::size_t>& rowIndices);
+    void pruneWithTrainingAccuracy(
+        std::unique_ptr<Node>& node,
+        const std::vector<std::size_t>& rowIndices
+    );
+    void pruneWithPessimisticError(
+        std::unique_ptr<Node>& node,
+        const std::vector<std::size_t>& rowIndices
+    );
+    void pruneWithC45Pessimistic(
+        std::unique_ptr<Node>& node,
+        const std::vector<std::size_t>& rowIndices
+    );
+    double estimatePessimisticLeafErrorCount(
+        std::size_t observedErrors,
+        std::size_t sampleCount
+    ) const;
+    double estimateSubtreePessimisticErrorCount(
+        const Node* node,
+        const std::vector<std::size_t>& rowIndices
+    ) const;
     std::size_t countCorrectPredictions(
         const Node* node,
         const std::vector<std::size_t>& rowIndices
     ) const;
     std::size_t countLeafNodes(const Node* node) const;
+    std::size_t countNodes(const Node* node) const;
+    int computeTreeDepth(const Node* node) const;
     bool allSameLabel(const std::vector<std::size_t>& rowIndices) const;
     std::string getMajorityLabel(const std::vector<std::size_t>& rowIndices) const;
     void printNode(const Node* node, std::ostream& output, int depth, const std::string& edgeText) const;
