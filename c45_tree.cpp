@@ -570,7 +570,8 @@ C45Tree::buildNode(const std::vector<std::size_t> &rowIndices,
 	}
 
 	const SplitResult split = findBestSplit(rowIndices);
-	if (!split.valid || split.gainRatio <= options_.epsilon)
+	if (!split.valid ||
+		(options_.splitSelectionMode != SplitSelectionMode::MaxGain && split.gainRatio <= options_.epsilon))
 	{
 		return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
 	}

@@ -1,5 +1,6 @@
 #include "c45_tree.h"
 #include "dataset.h"
+#include "tree_visualization.h"
 
 #include <iomanip>
 #include <iostream>
@@ -72,7 +73,7 @@ int main() {
     // options.pruningMode = PruningMode::C45PessimisticPrune;
 
     options.minSamplesPerLeaf = 10;
-    options.maxDepth = 15;
+    options.maxDepth = 10;
 
     tree.fit(dataset, options);
 
@@ -80,6 +81,8 @@ int main() {
     std::cout << "Learned tree:\n";
     tree.print(std::cout);
     std::cout << '\n';
+
+    generateTreeSvg(tree, "tree.svg");
 
     // 4. Check accuarcy
     runPredictionChecks(tree, dataset);
