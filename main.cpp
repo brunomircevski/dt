@@ -60,8 +60,8 @@ int main() {
         // 2. Train the decision tree.
         C45Tree tree;
         TrainingOptions options;
-        options.impurityMeasure = ImpurityMeasure::Entropy;
-        //options.minSamplesPerLeaf = 10;
+        options.impurityMeasure = ImpurityMeasure::Gini;
+        options.minSamplesPerLeaf = 10;
         options.pruningMode = PruningMode::PessimisticErrorPrune;
         options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
 

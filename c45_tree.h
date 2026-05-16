@@ -19,23 +19,23 @@ enum class ImpurityMeasure {
 
 enum class SplitSelectionMode {
     // Closest simple numeric-only version of classic C4.5:
-    // ignore trivial gain, then choose the candidate with best gain ratio.
+    // Dodatni informationGain i największy gainRatio
     ClassicC45,
-    // only compare gain ratios among candidates with at least average gain.
+    // Liczy średni informationGain, odrzuca te, poniżej średniej, wybiera największy gainRatio.
     MeanGainFiltered
 };
 
 enum class PruningMode {
-    // Keep every branch created during tree growth.
+    // Bez przycinania: zostawia całe drzewo jak urosło.
     None,
-    // Replace a subtree with one majority-class leaf when the leaf is at least
-    // as accurate on the training samples that reached that subtree.
+    // Zamienia poddrzewo na liść klasy większościowej,
+    // jeśli taki liść ma na treningu nie gorszą trafność niż poddrzewo.
     TrainingAccuracyPrune,
-    // Replace a subtree with one majority-class leaf when the leaf has
-    // no worse pessimistic error estimate than the whole subtree.
+    // Zamienia poddrzewo na liść klasy większościowej,
+    // jeśli pessymistyczny błąd liścia nie jest gorszy niż poddrzewa.
     PessimisticErrorPrune,
-    // Reserved for a closer reproduction of classic C4.5 post-pruning.
-    // This learning milestone keeps it unimplemented on purpose.
+    // Pessymistyczne przycinanie bardziej w stylu C4.5:
+    // porównuje liść vs sumę błędów wszystkich liści w poddrzewie.
     C45PessimisticPrune
 };
 
