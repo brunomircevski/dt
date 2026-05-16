@@ -160,12 +160,6 @@ void C45Tree::applySelectedPruning(const std::vector<std::size_t>& rowIndices)
         return;
     }
 
-    if (options_.pruningMode == PruningMode::TrainingAccuracyPrune)
-    {
-        pruneWithTrainingAccuracy(root_, rowIndices);
-        return;
-    }
-
     if (options_.pruningMode == PruningMode::PessimisticErrorPrune)
     {
         pruneWithPessimisticError(root_, rowIndices);
@@ -175,5 +169,17 @@ void C45Tree::applySelectedPruning(const std::vector<std::size_t>& rowIndices)
     if (options_.pruningMode == PruningMode::C45PessimisticPrune)
     {
         pruneWithC45Pessimistic(root_, rowIndices);
+        return;
+    }
+
+    if (options_.pruningMode == PruningMode::CostComplexityPrune)
+    {
+        pruneWithCostComplexity(root_, rowIndices);
+        return;
+    }
+
+    if (options_.pruningMode == PruningMode::ReducedErrorPrune)
+    {
+        pruneWithReducedError(root_, rowIndices);
     }
 }

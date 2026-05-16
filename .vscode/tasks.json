@@ -1,0 +1,38 @@
+{
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "Build tree",
+            "command": "/usr/bin/g++",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-std=c++17",
+                "-g",
+                "-I.",
+                "main.cpp",
+                "c45_tree.cpp",
+                "dataset.cpp",
+                "node.cpp",
+                "pruning/cart_prune_cost_complexity.cpp",
+                "pruning/cart_prune_reduced_error.cpp",
+                "pruning/c45_prune_c45_pessimistic.cpp",
+                "pruning/c45_prune_common.cpp",
+                "pruning/c45_prune_pessimistic_error.cpp",
+                "-o",
+                "${workspaceFolder}/tree"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "Build the full decision tree project."
+        }
+    ],
+    "version": "2.0.0"
+}
