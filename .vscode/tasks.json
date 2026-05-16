@@ -13,6 +13,7 @@
                 "c45_tree.cpp",
                 "dataset.cpp",
                 "node.cpp",
+                "tree_visualization.cpp",
                 "pruning/cart_prune_cost_complexity.cpp",
                 "pruning/cart_prune_reduced_error.cpp",
                 "pruning/c45_prune_c45_pessimistic.cpp",

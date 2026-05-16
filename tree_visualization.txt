@@ -1,0 +1,91 @@
+ROOT [n=768]: if Glucose <= 143.500
+  yes [n=592]: if Age <= 28.500
+    yes [n=319]: if BMI <= 30.300
+      yes [n=161]: if Glucose <= 121.000
+        yes [n=132]: if DiabetesPedigreeFunction <= 0.672
+          yes [n=118]: if SkinThickness <= 5.000
+            yes [n=31]: if Age <= 22.500
+              yes [n=11]: Leaf -> 0
+              no [n=20]: Leaf -> 0
+            no [n=87]: Leaf -> 0
+          no [n=14]: Leaf -> 0
+        no [n=29]: if Insulin <= 117.500
+          yes [n=16]: Leaf -> 0
+          no [n=13]: Leaf -> 0
+      no [n=158]: if Glucose <= 130.000
+        yes [n=139]: if BloodPressure <= 53.000
+          yes [n=14]: Leaf -> 0
+          no [n=125]: if DiabetesPedigreeFunction <= 0.500
+            yes [n=77]: if BloodPressure <= 69.000
+              yes [n=35]: Leaf -> 0
+              no [n=42]: if Insulin <= 36.500
+                yes [n=16]: Leaf -> 0
+                no [n=26]: if SkinThickness <= 35.000
+                  yes [n=16]: Leaf -> 0
+                  no [n=10]: Leaf -> 0
+            no [n=48]: if BloodPressure <= 69.000
+              yes [n=21]: if SkinThickness <= 31.000
+                yes [n=10]: Leaf -> 0
+                no [n=11]: Leaf -> 1
+              no [n=27]: if SkinThickness <= 25.500
+                yes [n=10]: Leaf -> 0
+                no [n=17]: Leaf -> 0
+        no [n=19]: Leaf -> 1
+    no [n=273]: if BMI <= 27.350
+      yes [n=61]: if BloodPressure <= 60.500
+        yes [n=12]: Leaf -> 0
+        no [n=49]: if Age <= 51.500
+          yes [n=31]: Leaf -> 0
+          no [n=18]: Leaf -> 0
+      no [n=212]: if Glucose <= 107.500
+        yes [n=88]: if DiabetesPedigreeFunction <= 0.635
+          yes [n=67]: if SkinThickness <= 36.500
+            yes [n=53]: if BMI <= 34.700
+              yes [n=36]: if Glucose <= 93.500
+                yes [n=19]: Leaf -> 0
+                no [n=17]: Leaf -> 0
+              no [n=17]: Leaf -> 0
+            no [n=14]: Leaf -> 0
+          no [n=21]: if Age <= 37.000
+            yes [n=10]: Leaf -> 0
+            no [n=11]: Leaf -> 1
+        no [n=124]: if DiabetesPedigreeFunction <= 0.528
+          yes [n=80]: if BloodPressure <= 73.000
+            yes [n=33]: if Age <= 34.500
+              yes [n=13]: Leaf -> 0
+              no [n=20]: if BloodPressure <= 67.000
+                yes [n=10]: Leaf -> 1
+                no [n=10]: Leaf -> 1
+            no [n=47]: if Insulin <= 126.000
+              yes [n=37]: if BloodPressure <= 84.500
+                yes [n=20]: if SkinThickness <= 7.500
+                  yes [n=10]: Leaf -> 0
+                  no [n=10]: Leaf -> 0
+                no [n=17]: Leaf -> 0
+              no [n=10]: Leaf -> 1
+          no [n=44]: if DiabetesPedigreeFunction <= 0.944
+            yes [n=31]: if DiabetesPedigreeFunction <= 0.673
+              yes [n=14]: Leaf -> 1
+              no [n=17]: Leaf -> 1
+            no [n=13]: Leaf -> 1
+  no [n=176]: if Glucose <= 154.500
+    yes [n=54]: if DiabetesPedigreeFunction <= 0.332
+      yes [n=18]: Leaf -> 0
+      no [n=36]: if Age <= 30.500
+        yes [n=13]: Leaf -> 0
+        no [n=23]: if Glucose <= 149.500
+          yes [n=12]: Leaf -> 1
+          no [n=11]: Leaf -> 1
+    no [n=122]: if BMI <= 29.850
+      yes [n=22]: if BMI <= 25.850
+        yes [n=11]: Leaf -> 1
+        no [n=11]: Leaf -> 0
+      no [n=100]: if Insulin <= 357.500
+        yes [n=84]: if Age <= 44.500
+          yes [n=62]: if DiabetesPedigreeFunction <= 0.306
+            yes [n=18]: Leaf -> 1
+            no [n=44]: Leaf -> 1
+          no [n=22]: if SkinThickness <= 25.000
+            yes [n=10]: Leaf -> 1
+            no [n=12]: Leaf -> 1
+        no [n=16]: Leaf -> 1
