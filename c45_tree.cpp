@@ -20,6 +20,48 @@ namespace
 		return std::fabs(left - right) <= epsilon;
 	}
 
+	// Helper to determine if candidate 'lhs' is better than candidate 'rhs' under Classic C4.5 split selection rules.
+	// Primary metric: higher gainRatio.
+	// Secondary tie-breakers: higher informationGain, lower featureIndex, lower threshold.
+	bool isBetterC45(const SplitResult &lhs, const SplitResult &rhs, double epsilon)
+	{
+		// 1. Primary check: Prefer the split with a significantly higher Gain Ratio.
+		if (lhs.gainRatio > rhs.gainRatio + epsilon) return true;
+		if (rhs.gainRatio > lhs.gainRatio + epsilon) return false;
+
+		// 2. First tie-breaker: Prefer the split with a significantly higher Information Gain.
+		if (lhs.informationGain > rhs.informationGain + epsilon) return true;
+		if (rhs.informationGain > lhs.informationGain + epsilon) return false;
+
+		// 3. Second tie-breaker: Prefer the feature that appears earlier in the dataset.
+		if (lhs.featureIndex != rhs.featureIndex)
+		{
+			return lhs.featureIndex < rhs.featureIndex;
+		}
+
+		// 4. Third tie-breaker: Prefer the lower threshold value to keep splits conservative.
+		return lhs.threshold < rhs.threshold - epsilon;
+	}
+
+	// Helper to determine if candidate 'lhs' is better than candidate 'rhs' under CART/MaxGain split selection rules.
+	// Primary metric: higher informationGain.
+	// Secondary tie-breakers: lower featureIndex, lower threshold.
+	bool isBetterMaxGain(const SplitResult &lhs, const SplitResult &rhs, double epsilon)
+	{
+		// 1. Primary check: Prefer the split with a significantly higher Information/Gini Gain.
+		if (lhs.informationGain > rhs.informationGain + epsilon) return true;
+		if (rhs.informationGain > lhs.informationGain + epsilon) return false;
+
+		// 2. First tie-breaker: Prefer the feature that appears earlier in the dataset.
+		if (lhs.featureIndex != rhs.featureIndex)
+		{
+			return lhs.featureIndex < rhs.featureIndex;
+		}
+
+		// 3. Second tie-breaker: Prefer the lower threshold value to keep splits conservative.
+		return lhs.threshold < rhs.threshold - epsilon;
+	}
+
 } // namespace
 
 void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
@@ -378,119 +420,44 @@ C45Tree::chooseBestSplit(const std::vector<SplitResult> &candidates) const
 		return SplitResult{};
 	}
 
-	std::vector<const SplitResult *> selectableCandidates;
-	selectableCandidates.reserve(candidates.size());
-
-	if (options_.splitSelectionMode == SplitSelectionMode::MeanGainFiltered)
+	// 1. MaxGain (CART style): Pure maximization of Information Gain or Gini index.
+	if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
 	{
-		// compare gain ratios only among candidates with at least average gain.
-		double gainSum = 0.0;
-		for (const SplitResult &candidate : candidates)
-		{
-			gainSum += candidate.informationGain;
-		}
-		const double averageGain = gainSum / static_cast<double>(candidates.size());
-
-		for (const SplitResult &candidate : candidates)
-		{
-			if (candidate.informationGain + options_.epsilon >= averageGain)
-			{
-				selectableCandidates.push_back(&candidate);
-			}
-		}
-	}
-	else if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
-	{
-		// Pure maximization of gain (Gini or Information Gain).
 		const SplitResult *bestCandidate = &candidates.front();
 		for (std::size_t index = 1; index < candidates.size(); ++index)
 		{
-			const SplitResult *candidate = &candidates[index];
-			if (candidate->informationGain >
-				bestCandidate->informationGain + options_.epsilon)
+			if (isBetterMaxGain(candidates[index], *bestCandidate, options_.epsilon))
 			{
-				bestCandidate = candidate;
-			}
-			//Jeśli są takie same wybierz mniejszy index lub niższy threshold
-			else if (areEffectivelyEqual(candidate->informationGain,
-										 bestCandidate->informationGain,
-										 options_.epsilon))
-			{
-				if (candidate->featureIndex < bestCandidate->featureIndex)
-				{
-					bestCandidate = candidate;
-				}
-				else if (candidate->featureIndex == bestCandidate->featureIndex &&
-						 candidate->threshold <
-							 bestCandidate->threshold - options_.epsilon)
-				{
-					bestCandidate = candidate;
-				}
+				bestCandidate = &candidates[index];
 			}
 		}
 		return *bestCandidate;
 	}
-	else if (options_.splitSelectionMode == SplitSelectionMode::ClassicC45)
+
+	// 2. MeanGainFiltered (C4.5 style): Filter candidates below average information gain,
+	// then choose the one with the highest Gain Ratio.
+	double gainSum = 0.0;
+	for (const SplitResult &candidate : candidates)
 	{
-		// Classic C4.5-style simplified rule for this project:
-		// every candidate that has real positive information gain is eligible,
-		// and the final choice is made by gain ratio.
-		for (const SplitResult &candidate : candidates)
+		gainSum += candidate.informationGain;
+	}
+	const double averageGain = gainSum / static_cast<double>(candidates.size());
+
+	const SplitResult *bestCandidate = nullptr;
+	for (const SplitResult &candidate : candidates)
+	{
+		if (candidate.informationGain + options_.epsilon < averageGain)
 		{
-			selectableCandidates.push_back(&candidate);
+			continue;
+		}
+
+		if (!bestCandidate || isBetterC45(candidate, *bestCandidate, options_.epsilon))
+		{
+			bestCandidate = &candidate;
 		}
 	}
 
-	if (selectableCandidates.empty())
-	{
-		return SplitResult{};
-	}
-
-	const SplitResult *bestCandidate = selectableCandidates.front();
-	for (std::size_t index = 1; index < selectableCandidates.size(); ++index)
-	{
-		const SplitResult *candidate = selectableCandidates[index];
-
-		if (candidate->gainRatio > bestCandidate->gainRatio + options_.epsilon)
-		{
-			bestCandidate = candidate;
-			continue;
-		}
-
-		if (!areEffectivelyEqual(candidate->gainRatio, bestCandidate->gainRatio,
-								 options_.epsilon))
-		{
-			continue;
-		}
-
-		if (candidate->informationGain >
-			bestCandidate->informationGain + options_.epsilon)
-		{
-			bestCandidate = candidate;
-			continue;
-		}
-
-		if (!areEffectivelyEqual(candidate->informationGain,
-								 bestCandidate->informationGain,
-								 options_.epsilon))
-		{
-			continue;
-		}
-
-		if (candidate->featureIndex < bestCandidate->featureIndex)
-		{
-			bestCandidate = candidate;
-			continue;
-		}
-
-		if (candidate->featureIndex == bestCandidate->featureIndex &&
-			candidate->threshold < bestCandidate->threshold - options_.epsilon)
-		{
-			bestCandidate = candidate;
-		}
-	}
-
-	return *bestCandidate;
+	return bestCandidate ? *bestCandidate : SplitResult{};
 }
 
 SplitResult

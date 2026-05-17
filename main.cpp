@@ -63,17 +63,17 @@ int main() {
     TrainingOptions options;
 
     // Dla CART
-    options.impurityMeasure = ImpurityMeasure::Gini;
-    options.splitSelectionMode = SplitSelectionMode::MaxGain;
-    options.pruningMode = PruningMode::None;
+    // options.impurityMeasure = ImpurityMeasure::Gini;
+    // options.splitSelectionMode = SplitSelectionMode::MaxGain;
+    // options.pruningMode = PruningMode::PessimisticErrorPrune;
 
     // Dla C.45
-    // options.impurityMeasure = ImpurityMeasure::Entropy;
-    // options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
-    // options.pruningMode = PruningMode::C45PessimisticPrune;
+    options.impurityMeasure = ImpurityMeasure::Entropy;
+    options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
+    // options.pruningMode = PruningMode::PessimisticErrorPrune;
 
     options.minSamplesPerLeaf = 10;
-    options.maxDepth = 10;
+    options.maxDepth = 100;
 
     tree.fit(dataset, options);
 

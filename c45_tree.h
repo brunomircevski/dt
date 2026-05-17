@@ -18,8 +18,6 @@ enum class ImpurityMeasure {
 };
 
 enum class SplitSelectionMode {
-  // Classic C4.5: uses information gain and gain ratio.
-  ClassicC45,
   // C4.5 variant: filters candidates with below-average gain.
   MeanGainFiltered,
   // CART style: purely maximizes information/Gini gain.
@@ -46,7 +44,7 @@ struct TrainingOptions {
   // KONFIGURACJA DLA ALGORYTMÓW:
   // CART: impurityMeasure=Gini, splitSelectionMode=MaxGain,
   // pruningMode=CostComplexityPrune C4.5: impurityMeasure=Entropy,
-  // splitSelectionMode=ClassicC45, pruningMode=C45PessimisticPrune
+  // splitSelectionMode=MeanGainFiltered, pruningMode=C45PessimisticPrune
 
   // Maksymalna głębokość drzewa. Zapobiega zbytniemu skomplikowaniu modelu.
   int maxDepth = -1;
@@ -63,7 +61,7 @@ struct TrainingOptions {
   PruningMode pruningMode = PruningMode::None;
 
   // Kryterium wyboru najlepszego podziału spośród kandydatów.
-  SplitSelectionMode splitSelectionMode = SplitSelectionMode::ClassicC45;
+  SplitSelectionMode splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
 
   // Tolerancja dla porównań zmiennoprzecinkowych (double).
   // Zapobiega tworzeniu sztucznych progów dla prawie identycznych wartości.
