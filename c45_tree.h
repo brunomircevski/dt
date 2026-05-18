@@ -25,61 +25,50 @@ enum class SplitSelectionMode {
 };
 
 enum class PruningMode {
-  // Bez przycinania: zostawia całe drzewo jak urosło.
   None,
-  // Zamienia poddrzewo na liść klasy większościowej,
-  // jeśli pessymistyczny błąd liścia nie jest gorszy niż poddrzewa.
-  PessimisticErrorPrune,
-  // Pessymistyczne przycinanie bardziej w stylu C4.5:
-  // porównuje liść vs sumę błędów wszystkich liści w poddrzewie.
-  C45PessimisticPrune,
-  // CART: Minimal Cost-Complexity Pruning (używa ccpAlpha).
-  CostComplexityPrune,
-  // Lightweight: Reduced Error Pruning (używa trafności
-  // treningowej/walidacyjnej).
-  ReducedErrorPrune
+  // C4.5 pessimistic pruning: compares a replacement leaf's estimated error
+  // with the sum of estimated errors of all leaves in the subtree (uses pruningConfidenceFactor).
+  PessimisticError,
+  // CART: Minimal Cost-Complexity Pruning (uses ccpAlpha).
+  CostComplexity
 };
 
 struct TrainingOptions {
-  // KONFIGURACJA DLA ALGORYTMÓW:
-  // CART: impurityMeasure=Gini, splitSelectionMode=MaxGain,
-  // pruningMode=CostComplexityPrune C4.5: impurityMeasure=Entropy,
-  // splitSelectionMode=MeanGainFiltered, pruningMode=C45PessimisticPrune
+  // TYPICAL ALGORITHM CONFIGURATIONS:
+  // CART: impurityMeasure=Gini, splitSelectionMode=MaxGain, pruningMode=CostComplexity
+  // C4.5: impurityMeasure=Entropy, splitSelectionMode=MeanGainFiltered, pruningMode=PessimisticError
 
-  // Maksymalna głębokość drzewa. Zapobiega zbytniemu skomplikowaniu modelu.
+  // Maximum depth of the tree. Prevents the model from becoming overly complex.
   int maxDepth = -1;
 
-  // Minimalna liczba próbek w węźle, aby podjąć próbę podziału.
-  // Chroni przed dzieleniem małych grup (szumu).
+  // Minimum number of samples in a node to attempt a split.
+  // Prevents splitting small groups that may represent noise.
   std::size_t minSamplesToSplit = 2;
 
-  // Minimalna liczba próbek wymagana w każdym nowym liściu po podziale.
-  // Gwarantuje statystyczną istotność liści.
+  // Minimum number of samples required in each new leaf after a split.
+  // Guarantees statistical significance of the resulting leaves.
   std::size_t minSamplesPerLeaf = 1;
 
-  // Wybiera metodę upraszczania (przycinania) drzewa po fazie wzrostu.
+  // Selects the method for simplifying (pruning) the tree after the growing phase.
   PruningMode pruningMode = PruningMode::None;
 
-  // Kryterium wyboru najlepszego podziału spośród kandydatów.
+  // Criterion for selecting the best split among candidates.
   SplitSelectionMode splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
 
-  // Tolerancja dla porównań zmiennoprzecinkowych (double).
-  // Zapobiega tworzeniu sztucznych progów dla prawie identycznych wartości.
+  // Tolerance for floating-point comparisons (double).
+  // Prevents creating artificial thresholds for nearly identical values.
   double epsilon = 1e-9;
 
-  // Współczynnik ufności dla pesymistycznego przycinania C4.5 (PEP).
-  // Mniejsze wartości = silniejsze, bardziej agresywne przycinanie. Przykład:
-  // 0.1.
-  double pruningConfidenceFactor = 0.25;
+  // Confidence factor for C4.5 pessimistic pruning (PEP).
+  // Smaller values result in stronger, more aggressive pruning.
+  double pruningConfidenceFactor = 0.03;
 
-  // Parametr złożoności dla przycinania Cost-Complexity (CART).
-  // Kara za każdy dodatkowy liść; większa wartość = mniejsze drzewo. Przykład:
-  // 0.01.
-  double ccpAlpha = 0.01;
+  // Complexity parameter for Cost-Complexity Pruning (CART).
+  // Penalty for each additional leaf; larger values lead to smaller trees (e.g., 0.01).
+  double ccpAlpha = 0.5;
 
-  // Metoda mierzenia "nieczystości" węzła (Entropia dla C4.5, Gini dla CART).
-  // Podstawa oceny jakości podziału. Przykład: impurityMeasure =
-  // ImpurityMeasure::Gini.
+  // Impurity measure method (Entropy for C4.5, Gini for CART).
+  // Used to evaluate split quality (e.g., ImpurityMeasure::Gini).
   ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
 };
 
@@ -157,14 +146,10 @@ private:
                                 std::size_t featureIndex,
                                 double threshold) const;
   void applySelectedPruning(const std::vector<std::size_t> &rowIndices);
-  void pruneWithPessimisticError(std::unique_ptr<Node> &node,
-                                 const std::vector<std::size_t> &rowIndices);
-  void pruneWithC45Pessimistic(std::unique_ptr<Node> &node,
-                               const std::vector<std::size_t> &rowIndices);
-  void pruneWithCostComplexity(std::unique_ptr<Node> &node,
-                               const std::vector<std::size_t> &rowIndices);
-  void pruneWithReducedError(std::unique_ptr<Node> &node,
+  void prunePessimisticError(std::unique_ptr<Node> &node,
                              const std::vector<std::size_t> &rowIndices);
+  void pruneCostComplexity(std::unique_ptr<Node> &node,
+                           const std::vector<std::size_t> &rowIndices);
   double estimatePessimisticLeafErrorCount(std::size_t observedErrors,
                                            std::size_t sampleCount) const;
   double estimateSubtreePessimisticErrorCount(

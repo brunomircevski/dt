@@ -699,3 +699,22 @@ void C45Tree::printNode(const Node *node, std::ostream &output, int depth,
 		printNode(node->rightChild.get(), output, depth + 1, "no");
 	}
 }
+
+void C45Tree::applySelectedPruning(const std::vector<std::size_t>& rowIndices)
+{
+	if (!root_)
+	{
+		return;
+	}
+
+	if (options_.pruningMode == PruningMode::PessimisticError)
+	{
+		prunePessimisticError(root_, rowIndices);
+		return;
+	}
+
+	if (options_.pruningMode == PruningMode::CostComplexity)
+	{
+		pruneCostComplexity(root_, rowIndices);
+	}
+}

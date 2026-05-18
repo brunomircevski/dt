@@ -79,22 +79,49 @@ def main():
     print()
 
     model = DecisionTreeClassifier(
-        criterion="entropy",
+        #criterion="entropy",
         max_depth=10,
-        ccp_alpha=0.04, #post pruning
-        random_state=0,
+        ccp_alpha=0.01, #post pruning
+        random_state=4,
     )
     model.fit(features, labels)
-
-    print("Learned tree:")
-    print_tree(model, feature_names)
-    print()
 
     predictions = model.predict(features)
     correct_predictions = sum(
         1 for prediction, actual in zip(predictions, labels) if prediction == actual
     )
     accuracy = correct_predictions / len(labels)
+
+    print("Learned tree:")
+    import io
+    import contextlib
+    f = io.StringIO()
+    with contextlib.redirect_stdout(f):
+        print_tree(model, feature_names)
+    tree_text = f.getvalue()
+    print(tree_text, end="")
+    print()
+
+    # Generate tree in SVG format
+    import sys
+    sys.path.append(str(Path(__file__).resolve().parent))
+    try:
+        from render_tree_svg import parse_tree, assign_positions, render_svg, MARGIN_X
+        root_layout = parse_tree(tree_text.splitlines())
+        
+        meta_lines_data = [
+            f"checked samples = {len(labels)}",
+            f"correct predictions = {correct_predictions}",
+            f"accuracy = {accuracy * 100.0:.4f}%"
+        ]
+        
+        assign_positions(root_layout, depth=0, next_leaf_x=[MARGIN_X + 260])
+        svg_content = render_svg(root_layout, meta_lines=meta_lines_data)
+        svg_path = Path(__file__).resolve().parent.parent / "python_sckitlearning.svg"
+        with open(svg_path, "w", encoding="utf-8") as svg_file:
+            svg_file.write(svg_content)
+    except Exception as e:
+        print(f"Error generating SVG: {e}")
 
     print("Prediction summary:")
     print(f"  checked samples = {len(labels)}")

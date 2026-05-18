@@ -127,13 +127,13 @@ def node_label(node: LayoutNode) -> list[str]:
     return [f"{node.feature_name} <= {node.threshold:.3f}", f"n={node.sample_count}"]
 
 
-def render_svg(root: LayoutNode) -> str:
+def render_svg(root: LayoutNode, meta_lines: list[str] = None, option_lines: list[str] = None) -> str:
     edges: list[tuple[LayoutNode, LayoutNode]] = []
     nodes: list[LayoutNode] = []
     gather_edges(root, edges)
     gather_nodes(root, nodes)
 
-    width = int(math.ceil(root.subtree_right - root.subtree_left + 2 * MARGIN_X + BOX_WIDTH))
+    width = int(math.ceil(root.subtree_right + MARGIN_X + BOX_WIDTH))
     height = int(math.ceil(max(node.y for node in nodes) + BOX_HEIGHT + MARGIN_Y))
 
     svg_parts = [
@@ -146,6 +146,9 @@ def render_svg(root: LayoutNode) -> str:
         ".leaf { fill: #fefae0; stroke: #bc6c25; stroke-width: 2; }",
         ".node-title { font-size: 12px; font-weight: 700; }",
         ".node-meta { font-size: 11px; }",
+        ".card-bg { fill: #ffffff; fill-opacity: 0.92; stroke: #cbd5e1; stroke-width: 1.5; }",
+        ".card-header { font-size: 11px; font-weight: 800; fill: #475569; letter-spacing: 0.5px; }",
+        ".card-item { font-size: 10px; fill: #334155; }",
         "</style>",
         f'<rect x="0" y="0" width="{width}" height="{height}" fill="#f8f9fa" />',
     ]
@@ -178,6 +181,37 @@ def render_svg(root: LayoutNode) -> str:
             f'<text class="node-meta" x="{center_x:.1f}" y="{node.y + 41:.1f}" text-anchor="middle">{escape(meta)}</text>'
         )
 
+    if (meta_lines and len(meta_lines) > 0) or (option_lines and len(option_lines) > 0):
+        padding = 12
+        line_height = 15
+        current_y = padding + 10
+        card_content = []
+
+        if meta_lines:
+            card_content.append(f'<text class="card-header" x="{padding}" y="{current_y}">EVALUATION METRICS</text>')
+            current_y += 6
+            for line in meta_lines:
+                current_y += line_height
+                card_content.append(f'<text class="card-item" x="{padding + 6}" y="{current_y}">• {escape(line)}</text>')
+            current_y += 22
+
+        if option_lines:
+            card_content.append(f'<text class="card-header" x="{padding}" y="{current_y}">TRAINING OPTIONS</text>')
+            current_y += 6
+            for line in option_lines:
+                current_y += line_height
+                card_content.append(f'<text class="card-item" x="{padding + 6}" y="{current_y}">• {escape(line)}</text>')
+            current_y += 12
+
+        card_height = current_y - 12 + padding
+        card_width = 250
+
+        svg_parts.append(f'<g transform="translate(15, 15)">')
+        svg_parts.append(f'  <rect class="card-bg" x="0" y="0" width="{card_width}" height="{card_height}" rx="8" />')
+        for item in card_content:
+            svg_parts.append(f'  {item}')
+        svg_parts.append(f'</g>')
+
     svg_parts.append("</svg>")
     return "\n".join(svg_parts)
 
@@ -189,10 +223,26 @@ def main() -> int:
 
     input_path, output_path = sys.argv[1], sys.argv[2]
     with open(input_path, "r", encoding="utf-8") as input_file:
-        root = parse_tree(input_file.read().splitlines())
+        lines = input_file.read().splitlines()
 
-    assign_positions(root, depth=0, next_leaf_x=[MARGIN_X])
-    svg = render_svg(root)
+    meta_lines = []
+    option_lines = []
+    tree_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("META:"):
+            meta_lines.append(stripped[5:].strip())
+        elif stripped.startswith("OPTION:"):
+            option_lines.append(stripped[7:].strip())
+        else:
+            tree_lines.append(line)
+
+    root = parse_tree(tree_lines)
+
+    has_card = bool(meta_lines or option_lines)
+    start_x = MARGIN_X + 260 if has_card else MARGIN_X
+    assign_positions(root, depth=0, next_leaf_x=[start_x])
+    svg = render_svg(root, meta_lines, option_lines)
 
     with open(output_path, "w", encoding="utf-8") as output_file:
         output_file.write(svg)
