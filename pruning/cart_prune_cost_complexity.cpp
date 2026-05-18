@@ -2,7 +2,7 @@
 
 
 
-void C45Tree::pruneWithCostComplexity(
+void C45Tree::pruneCostComplexity(
     std::unique_ptr<Node>& node,
     const std::vector<std::size_t>& rowIndices
 )
@@ -15,8 +15,8 @@ void C45Tree::pruneWithCostComplexity(
     const PartitionedRows partitions =
         partitionRows(rowIndices, node->featureIndex, node->threshold);
 
-    pruneWithCostComplexity(node->leftChild, partitions.leftRows);
-    pruneWithCostComplexity(node->rightChild, partitions.rightRows);
+    pruneCostComplexity(node->leftChild, partitions.leftRows);
+    pruneCostComplexity(node->rightChild, partitions.rightRows);
 
     // After children are pruned, check if this node should also be pruned.
     if (node->isLeaf)

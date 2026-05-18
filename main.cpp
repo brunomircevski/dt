@@ -8,25 +8,6 @@
 
 namespace {
 
-void printDatasetSummary(const Dataset &dataset) {
-  std::cout << "Loaded samples: " << dataset.samples.size() << '\n';
-  std::cout << "Features:";
-  for (const std::string &featureName : dataset.featureNames) {
-    std::cout << ' ' << featureName;
-  }
-  std::cout << "\n\n";
-
-  if (!dataset.samples.empty()) {
-    const Sample &firstSample = dataset.samples.front();
-    std::cout << "First sample: ";
-    for (std::size_t index = 0; index < firstSample.features.size(); ++index) {
-      std::cout << dataset.featureNames[index] << '='
-                << firstSample.features[index] << ' ';
-    }
-    std::cout << "label=" << firstSample.label << "\n\n";
-  }
-}
-
 void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
   std::cout << "Summary:\n";
 
@@ -55,25 +36,27 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
 int main() {
   try {
     // 1. Load the dataset from disk.
-    const Dataset dataset = loadDataset("datasets/diabetes.csv");
+    const Dataset dataset = loadDataset("datasets/iris.csv");
     printDatasetSummary(dataset);
 
     // 2. Train the decision tree.
     C45Tree tree;
     TrainingOptions options;
 
-    // Dla CART
+    // CART
     // options.impurityMeasure = ImpurityMeasure::Gini;
     // options.splitSelectionMode = SplitSelectionMode::MaxGain;
-    // options.pruningMode = PruningMode::PessimisticErrorPrune;
+    // options.pruningMode = PruningMode::CostComplexity;
+    // options.ccpAlpha = 0.5;
 
-    // Dla C.45
+    // C.45
     options.impurityMeasure = ImpurityMeasure::Entropy;
     options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
-    // options.pruningMode = PruningMode::PessimisticErrorPrune;
+    options.pruningMode = PruningMode::PessimisticError;
+    options.pruningConfidenceFactor = 0.01;
 
-    options.minSamplesPerLeaf = 10;
-    options.maxDepth = 100;
+    // options.minSamplesPerLeaf = 5;
+    // options.maxDepth = 100;
 
     tree.fit(dataset, options);
 
@@ -82,7 +65,7 @@ int main() {
     tree.print(std::cout);
     std::cout << '\n';
 
-    generateTreeSvg(tree, "tree.svg");
+    generateTreeSvg(tree, "tree.svg", options, dataset);
 
     // 4. Check accuarcy
     runPredictionChecks(tree, dataset);

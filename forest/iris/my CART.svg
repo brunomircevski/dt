@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1250" height="656" viewBox="0 0 1250 656">
+<style>
+text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
+.edge { stroke: #6c7a89; stroke-width: 2; fill: none; }
+.edge-label { font-size: 12px; font-weight: 700; fill: #415a77; }
+.decision { fill: #e0fbfc; stroke: #1d3557; stroke-width: 2; }
+.leaf { fill: #fefae0; stroke: #bc6c25; stroke-width: 2; }
+.node-title { font-size: 12px; font-weight: 700; }
+.node-meta { font-size: 11px; }
+.card-bg { fill: #ffffff; fill-opacity: 0.92; stroke: #cbd5e1; stroke-width: 1.5; }
+.card-header { font-size: 11px; font-weight: 800; fill: #475569; letter-spacing: 0.5px; }
+.card-item { font-size: 10px; fill: #334155; }
+</style>
+<rect x="0" y="0" width="1250" height="656" fill="#f8f9fa" />
+<line class="edge" x1="648.1" y1="96.0" x2="375.0" y2="170.0" />
+<text class="edge-label" x="511.6" y="125.0" text-anchor="middle">yes</text>
+<line class="edge" x1="648.1" y1="96.0" x2="921.2" y2="170.0" />
+<text class="edge-label" x="784.7" y="125.0" text-anchor="middle">no</text>
+<line class="edge" x1="921.2" y1="226.0" x2="707.5" y2="300.0" />
+<text class="edge-label" x="814.4" y="255.0" text-anchor="middle">yes</text>
+<line class="edge" x1="707.5" y1="356.0" x2="565.0" y2="430.0" />
+<text class="edge-label" x="636.2" y="385.0" text-anchor="middle">yes</text>
+<line class="edge" x1="707.5" y1="356.0" x2="850.0" y2="430.0" />
+<text class="edge-label" x="778.8" y="385.0" text-anchor="middle">no</text>
+<line class="edge" x1="850.0" y1="486.0" x2="755.0" y2="560.0" />
+<text class="edge-label" x="802.5" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="850.0" y1="486.0" x2="945.0" y2="560.0" />
+<text class="edge-label" x="897.5" y="515.0" text-anchor="middle">no</text>
+<line class="edge" x1="921.2" y1="226.0" x2="1135.0" y2="300.0" />
+<text class="edge-label" x="1028.1" y="255.0" text-anchor="middle">no</text>
+<rect class="decision" x="573.1" y="40.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="648.1" y="63.0" text-anchor="middle">PetalLengthCm &lt;= 2.450</text>
+<text class="node-meta" x="648.1" y="81.0" text-anchor="middle">n=150</text>
+<rect class="leaf" x="300.0" y="170.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="375.0" y="193.0" text-anchor="middle">Leaf: Iris-setosa</text>
+<text class="node-meta" x="375.0" y="211.0" text-anchor="middle">n=50</text>
+<rect class="decision" x="846.2" y="170.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="921.2" y="193.0" text-anchor="middle">PetalWidthCm &lt;= 1.750</text>
+<text class="node-meta" x="921.2" y="211.0" text-anchor="middle">n=100</text>
+<rect class="decision" x="632.5" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="707.5" y="323.0" text-anchor="middle">PetalLengthCm &lt;= 5.050</text>
+<text class="node-meta" x="707.5" y="341.0" text-anchor="middle">n=54</text>
+<rect class="leaf" x="490.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="565.0" y="453.0" text-anchor="middle">Leaf: Iris-versicolor</text>
+<text class="node-meta" x="565.0" y="471.0" text-anchor="middle">n=50</text>
+<rect class="decision" x="775.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="850.0" y="453.0" text-anchor="middle">SepalLengthCm &lt;= 6.050</text>
+<text class="node-meta" x="850.0" y="471.0" text-anchor="middle">n=4</text>
+<rect class="leaf" x="680.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="755.0" y="583.0" text-anchor="middle">Leaf: Iris-versicolor</text>
+<text class="node-meta" x="755.0" y="601.0" text-anchor="middle">n=1</text>
+<rect class="leaf" x="870.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="945.0" y="583.0" text-anchor="middle">Leaf: Iris-virginica</text>
+<text class="node-meta" x="945.0" y="601.0" text-anchor="middle">n=3</text>
+<rect class="leaf" x="1060.0" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1135.0" y="323.0" text-anchor="middle">Leaf: Iris-virginica</text>
+<text class="node-meta" x="1135.0" y="341.0" text-anchor="middle">n=46</text>
+<g transform="translate(15, 15)">
+  <rect class="card-bg" x="0" y="0" width="250" height="233" rx="8" />
+  <text class="card-header" x="12" y="22">EVALUATION METRICS</text>
+  <text class="card-item" x="18" y="43">• checked samples = 150</text>
+  <text class="card-item" x="18" y="58">• correct predictions = 147</text>
+  <text class="card-item" x="18" y="73">• accuracy = 98.0000%</text>
+  <text class="card-header" x="12" y="95">TRAINING OPTIONS</text>
+  <text class="card-item" x="18" y="116">• impurityMeasure = Gini</text>
+  <text class="card-item" x="18" y="131">• splitSelectionMode = MaxGain</text>
+  <text class="card-item" x="18" y="146">• pruningMode = CostComplexity</text>
+  <text class="card-item" x="18" y="161">• maxDepth = -1</text>
+  <text class="card-item" x="18" y="176">• minSamplesToSplit = 2</text>
+  <text class="card-item" x="18" y="191">• minSamplesPerLeaf = 1</text>
+  <text class="card-item" x="18" y="206">• pruningConfidenceFactor = 0.0300</text>
+  <text class="card-item" x="18" y="221">• ccpAlpha = 0.5000</text>
+</g>
+</svg>

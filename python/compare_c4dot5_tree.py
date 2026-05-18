@@ -85,15 +85,11 @@ def main():
     # Configuration for maximum tree growth
     model = DecisionTreeClassifier(
         attributes_map=attributes_map,
-        max_depth=15,        # Allow the tree to grow very deep
-        node_purity=1,      # Force splits until nodes are perfectly pure
-        min_instances=1       # Allow leaves with only a single sample
+        max_depth=100,
+        node_purity=0.95,
+        min_instances=3
     )
     model.fit(frame)
-
-    print("Learned tree:")
-    print_tree(model.get_root_node(), frame)
-    print()
 
     feature_frame = frame.drop(columns=["target"])
     predictions = model.predict(feature_frame)
@@ -102,6 +98,37 @@ def main():
         1 for prediction, actual in zip(predictions, actual_labels) if prediction == actual
     )
     accuracy = correct_predictions / len(actual_labels)
+
+    print("Learned tree:")
+    import io
+    import contextlib
+    f = io.StringIO()
+    with contextlib.redirect_stdout(f):
+        print_tree(model.get_root_node(), frame)
+    tree_text = f.getvalue()
+    print(tree_text, end="")
+    print()
+
+    # Generate tree in SVG format
+    import sys
+    sys.path.append(str(Path(__file__).resolve().parent))
+    try:
+        from render_tree_svg import parse_tree, assign_positions, render_svg, MARGIN_X
+        root_layout = parse_tree(tree_text.splitlines())
+        
+        meta_lines_data = [
+            f"checked samples = {len(actual_labels)}",
+            f"correct predictions = {correct_predictions}",
+            f"accuracy = {accuracy * 100.0:.4f}%"
+        ]
+        
+        assign_positions(root_layout, depth=0, next_leaf_x=[MARGIN_X + 260])
+        svg_content = render_svg(root_layout, meta_lines=meta_lines_data)
+        svg_path = Path(__file__).resolve().parent.parent / "python_c45.svg"
+        with open(svg_path, "w", encoding="utf-8") as svg_file:
+            svg_file.write(svg_content)
+    except Exception as e:
+        print(f"Error generating SVG: {e}")
 
     print("Prediction summary:")
     print(f"  checked samples = {len(actual_labels)}")
