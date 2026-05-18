@@ -1,38 +1,68 @@
 #!/usr/bin/env python3
 
 import csv
+import re
+import sys
 from pathlib import Path
 
 try:
     from sklearn.tree import DecisionTreeClassifier
+    import pandas as pd
+    import numpy as np
 except ModuleNotFoundError:
-    print("Missing dependency: scikit-learn")
-    print("Install it with: python3 -m pip install scikit-learn")
+    print("Missing dependency: pandas, numpy, or scikit-learn")
+    print("Install it with: pip install pandas numpy scikit-learn")
     raise SystemExit(1)
 
 
-def load_iris_csv(csv_path: Path):
-    with csv_path.open(newline="", encoding="utf-8") as handle:
-        reader = csv.reader(handle)
-        header = next(reader)
-        feature_names = header[1:-1]
+def load_any_dataset(csv_path: Path):
+    df = pd.read_csv(csv_path)
 
-        rows = []
-        features = []
-        labels = []
+    # 1. Determine target column
+    target_candidates = ["Species", "Outcome", "species"]
+    target_col = None
+    for candidate in target_candidates:
+        if candidate in df.columns:
+            target_col = candidate
+            break
+    if target_col is None:
+        target_col = df.columns[-1]
 
-        for raw_row in reader:
-            if not raw_row:
-                continue
+    # 2. Drop Id column if exists
+    if "Id" in df.columns:
+        df = df.drop(columns=["Id"])
 
-            row_features = [float(value) for value in raw_row[1:-1]]
-            row_label = raw_row[-1]
+    # 3. Drop NA/missing rows
+    df = df.replace(["NA", "na", "?", "N/A"], np.nan)
+    df = df.dropna()
 
-            rows.append((row_features, row_label))
-            features.append(row_features)
-            labels.append(row_label)
+    # 4. Filter only numeric features and the target
+    feature_cols = []
+    for col in df.columns:
+        if col == target_col:
+            continue
+        try:
+            pd.to_numeric(df[col])
+            feature_cols.append(col)
+        except ValueError:
+            continue
 
-    return feature_names, rows, features, labels
+    df = df[feature_cols + [target_col]].copy()
+
+    for col in feature_cols:
+        df[col] = pd.to_numeric(df[col])
+
+    df[target_col] = df[target_col].astype(str)
+
+    feature_names = feature_cols
+    labels = df[target_col].tolist()
+    features = df[feature_names].values.tolist()
+    rows = list(zip(features, labels))
+
+    frame = df.rename(columns={target_col: "target"})
+    attributes_map = {col: "continuous" for col in feature_names}
+
+    return feature_names, rows, features, labels, frame, attributes_map
 
 
 def print_tree(model: DecisionTreeClassifier, feature_names):
@@ -44,12 +74,8 @@ def print_tree(model: DecisionTreeClassifier, feature_names):
         left_child = tree.children_left[node_id]
         right_child = tree.children_right[node_id]
         sample_count = int(tree.n_node_samples[node_id])
-
         if left_child == right_child:
-            class_index = max(
-                range(len(class_names)),
-                key=lambda index: tree.value[node_id][0][index],
-            )
+            class_index = np.argmax(tree.value[node_id][0])
             print(f"{indent}{edge_text} [n={sample_count}]: Leaf -> {class_names[class_index]}")
             return
 
@@ -63,8 +89,11 @@ def print_tree(model: DecisionTreeClassifier, feature_names):
 
 
 def main():
-    csv_path = Path(__file__).resolve().parent.parent / "datasets" / "iris.csv"
-    feature_names, rows, features, labels = load_iris_csv(csv_path)
+    # Set the dataset path directly here:
+    csv_path = Path(__file__).resolve().parent.parent / "datasets" / "diabetes.csv"
+
+    print(f"Loading dataset: {csv_path.name}")
+    feature_names, rows, features, labels, frame, attributes_map = load_any_dataset(csv_path)
 
     print(f"Loaded samples: {len(rows)}")
     print("Features:", *feature_names)
@@ -78,10 +107,10 @@ def main():
     print("First sample:", *first_parts, f"label={first_label}")
     print()
 
+    # Match training complexity as needed
     model = DecisionTreeClassifier(
-        #criterion="entropy",
-        max_depth=10,
-        ccp_alpha=0.01, #post pruning
+        #max_depth=10,
+        ccp_alpha=0.005,
         random_state=4,
     )
     model.fit(features, labels)
@@ -103,7 +132,6 @@ def main():
     print()
 
     # Generate tree in SVG format
-    import sys
     sys.path.append(str(Path(__file__).resolve().parent))
     try:
         from render_tree_svg import parse_tree, assign_positions, render_svg, MARGIN_X
@@ -112,6 +140,8 @@ def main():
         meta_lines_data = [
             f"checked samples = {len(labels)}",
             f"correct predictions = {correct_predictions}",
+            f"tree depth = {model.get_depth()}",
+            f"node count = {model.tree_.node_count}",
             f"accuracy = {accuracy * 100.0:.4f}%"
         ]
         
@@ -126,9 +156,11 @@ def main():
     print("Prediction summary:")
     print(f"  checked samples = {len(labels)}")
     print(f"  correct predictions = {correct_predictions}")
+    print(f"  tree depth = {model.get_depth()}")
+    print(f"  node count = {model.tree_.node_count}")
     print(f"  accuracy = {accuracy * 100.0:.4f}%")
     print("  example predictions:")
-    for sample_index in (0, 50, 100):
+    for sample_index in (0, min(50, len(labels) - 1), min(100, len(labels) - 1)):
         prediction = predictions[sample_index]
         actual = labels[sample_index]
         print(f"    sample {sample_index} -> predicted: {prediction}, actual: {actual}")
