@@ -36,27 +36,27 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
 int main() {
   try {
     // 1. Load the dataset from disk.
-    const Dataset dataset = loadDataset("datasets/iris.csv");
+    const Dataset dataset = loadDataset("datasets/diabetes.csv");
     printDatasetSummary(dataset);
 
     // 2. Train the decision tree.
     C45Tree tree;
     TrainingOptions options;
 
-    // CART
+    // --- CART Configuration ---
     // options.impurityMeasure = ImpurityMeasure::Gini;
     // options.splitSelectionMode = SplitSelectionMode::MaxGain;
     // options.pruningMode = PruningMode::CostComplexity;
-    // options.ccpAlpha = 0.5;
+    // options.ccpAlpha = 1;
+    // options.maxDepth = 5;
 
-    // C.45
+    // --- C.45 Configuration ---
     options.impurityMeasure = ImpurityMeasure::Entropy;
     options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
     options.pruningMode = PruningMode::PessimisticError;
-    options.pruningConfidenceFactor = 0.01;
+    options.pruningConfidenceFactor = 0.0001;
 
-    // options.minSamplesPerLeaf = 5;
-    // options.maxDepth = 100;
+    // options.minSamplesPerLeaf = 1;
 
     tree.fit(dataset, options);
 

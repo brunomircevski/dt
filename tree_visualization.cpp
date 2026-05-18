@@ -71,6 +71,8 @@ void generateTreeSvg(const C45Tree &tree, const std::string &svgPath,
   // Print metadata
   printedTree << "META: checked samples = " << dataset.samples.size() << "\n";
   printedTree << "META: correct predictions = " << correctPredictions << "\n";
+  printedTree << "META: tree depth = " << tree.treeDepth() << "\n";
+  printedTree << "META: node count = " << tree.nodeCount() << "\n";
   
   std::ostringstream accStr;
   accStr << std::fixed << std::setprecision(4) << accuracy;

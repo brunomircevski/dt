@@ -464,11 +464,11 @@ SplitResult
 C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
 {
 	// THEORY:
-	// For numeric-only datasets, every internal node asks one binary question:
-	// "Is feature <= threshold?"
-	// We generate candidate thresholds, score them, then choose the best one
-	// using the configured split-selection policy.
-	std::vector<SplitResult> scoredCandidates;
+	// To match standard C4.5 and CART algorithms, we evaluate candidates
+	// on a feature level first. For each feature, we select the single best
+	// threshold candidate. Then, we pass these feature-level best candidates
+	// to chooseBestSplit to apply global filtering (C4.5) and final selection.
+	std::vector<SplitResult> featureBestCandidates;
 
 	for (std::size_t featureIndex = 0;
 		 featureIndex < dataset_->featureNames.size(); ++featureIndex)
@@ -476,17 +476,38 @@ C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
 		const std::vector<double> thresholds =
 			collectNumericThresholdCandidates(rowIndices, featureIndex);
 
+		SplitResult bestForFeature;
+		bestForFeature.valid = false;
+
 		for (double threshold : thresholds)
 		{
 			SplitResult candidate = scoreSplit(rowIndices, featureIndex, threshold);
 			if (candidate.valid)
 			{
-				scoredCandidates.push_back(candidate);
+				if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
+				{
+					if (!bestForFeature.valid || isBetterMaxGain(candidate, bestForFeature, options_.epsilon))
+					{
+						bestForFeature = candidate;
+					}
+				}
+				else
+				{
+					if (!bestForFeature.valid || isBetterC45(candidate, bestForFeature, options_.epsilon))
+					{
+						bestForFeature = candidate;
+					}
+				}
 			}
+		}
+
+		if (bestForFeature.valid)
+		{
+			featureBestCandidates.push_back(bestForFeature);
 		}
 	}
 
-	return chooseBestSplit(scoredCandidates);
+	return chooseBestSplit(featureBestCandidates);
 }
 
 bool C45Tree::shouldStopGrowing(const std::vector<std::size_t> &rowIndices,
