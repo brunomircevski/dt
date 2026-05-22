@@ -1,7 +1,5 @@
 #include "c45_tree.h"
 
-
-
 void C45Tree::pruneCostComplexity(
     std::unique_ptr<Node>& node,
     const std::vector<std::size_t>& rowIndices
@@ -37,6 +35,7 @@ void C45Tree::pruneCostComplexity(
     const std::size_t errorsInSubtree = rowIndices.size() - countCorrectPredictions(node.get(), rowIndices);
     const std::size_t leavesInSubtree = countLeafNodes(node.get());
 
+    // Single-pass bottom-up check at each node:
     // Cost(T) = MisclassificationError(T) + alpha * |Leaves(T)|
     const double costAsLeaf = static_cast<double>(errorsAsLeaf) + options_.ccpAlpha;
     const double costAsSubtree = static_cast<double>(errorsInSubtree) + options_.ccpAlpha * static_cast<double>(leavesInSubtree);

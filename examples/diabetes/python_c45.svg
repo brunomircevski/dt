@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1630" height="916" viewBox="0 0 1630 916">
+<style>
+text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
+.edge { stroke: #6c7a89; stroke-width: 2; fill: none; }
+.edge-label { font-size: 12px; font-weight: 700; fill: #415a77; }
+.decision { fill: #e0fbfc; stroke: #1d3557; stroke-width: 2; }
+.leaf { fill: #fefae0; stroke: #bc6c25; stroke-width: 2; }
+.node-title { font-size: 12px; font-weight: 700; }
+.node-meta { font-size: 11px; }
+.card-bg { fill: #ffffff; fill-opacity: 0.92; stroke: #cbd5e1; stroke-width: 1.5; }
+.card-header { font-size: 11px; font-weight: 800; fill: #475569; letter-spacing: 0.5px; }
+.card-item { font-size: 10px; fill: #334155; }
+</style>
+<rect x="0" y="0" width="1630" height="916" fill="#f8f9fa" />
+<line class="edge" x1="1114.2" y1="96.0" x2="713.4" y2="170.0" />
+<text class="edge-label" x="913.8" y="125.0" text-anchor="middle">yes</text>
+<line class="edge" x1="713.4" y1="226.0" x2="375.0" y2="300.0" />
+<text class="edge-label" x="544.2" y="255.0" text-anchor="middle">yes</text>
+<line class="edge" x1="713.4" y1="226.0" x2="1051.9" y2="300.0" />
+<text class="edge-label" x="882.7" y="255.0" text-anchor="middle">no</text>
+<line class="edge" x1="1051.9" y1="356.0" x2="778.8" y2="430.0" />
+<text class="edge-label" x="915.3" y="385.0" text-anchor="middle">yes</text>
+<line class="edge" x1="778.8" y1="486.0" x2="565.0" y2="560.0" />
+<text class="edge-label" x="671.9" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="778.8" y1="486.0" x2="992.5" y2="560.0" />
+<text class="edge-label" x="885.6" y="515.0" text-anchor="middle">no</text>
+<line class="edge" x1="992.5" y1="616.0" x2="850.0" y2="690.0" />
+<text class="edge-label" x="921.2" y="645.0" text-anchor="middle">yes</text>
+<line class="edge" x1="850.0" y1="746.0" x2="755.0" y2="820.0" />
+<text class="edge-label" x="802.5" y="775.0" text-anchor="middle">yes</text>
+<line class="edge" x1="850.0" y1="746.0" x2="945.0" y2="820.0" />
+<text class="edge-label" x="897.5" y="775.0" text-anchor="middle">no</text>
+<line class="edge" x1="992.5" y1="616.0" x2="1135.0" y2="690.0" />
+<text class="edge-label" x="1063.8" y="645.0" text-anchor="middle">no</text>
+<line class="edge" x1="1051.9" y1="356.0" x2="1325.0" y2="430.0" />
+<text class="edge-label" x="1188.4" y="385.0" text-anchor="middle">no</text>
+<line class="edge" x1="1114.2" y1="96.0" x2="1515.0" y2="170.0" />
+<text class="edge-label" x="1314.6" y="125.0" text-anchor="middle">no</text>
+<rect class="decision" x="1039.2" y="40.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1114.2" y="63.0" text-anchor="middle">Glucose &lt;= 166.000</text>
+<text class="node-meta" x="1114.2" y="81.0" text-anchor="middle">n=768</text>
+<rect class="decision" x="638.4" y="170.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="713.4" y="193.0" text-anchor="middle">Glucose &lt;= 154.000</text>
+<text class="node-meta" x="713.4" y="211.0" text-anchor="middle">n=689</text>
+<rect class="leaf" x="300.0" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="375.0" y="323.0" text-anchor="middle">Leaf: 0</text>
+<text class="node-meta" x="375.0" y="341.0" text-anchor="middle">n=646</text>
+<rect class="decision" x="976.9" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1051.9" y="323.0" text-anchor="middle">Insulin &lt;= 540.000</text>
+<text class="node-meta" x="1051.9" y="341.0" text-anchor="middle">n=43</text>
+<rect class="decision" x="703.8" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="778.8" y="453.0" text-anchor="middle">DiabetesPedigreeFunction &lt;= 0.141</text>
+<text class="node-meta" x="778.8" y="471.0" text-anchor="middle">n=41</text>
+<rect class="leaf" x="490.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="565.0" y="583.0" text-anchor="middle">Leaf: 0</text>
+<text class="node-meta" x="565.0" y="601.0" text-anchor="middle">n=2</text>
+<rect class="decision" x="917.5" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="992.5" y="583.0" text-anchor="middle">Age &lt;= 53.000</text>
+<text class="node-meta" x="992.5" y="601.0" text-anchor="middle">n=39</text>
+<rect class="decision" x="775.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="850.0" y="713.0" text-anchor="middle">SkinThickness &lt;= 42.000</text>
+<text class="node-meta" x="850.0" y="731.0" text-anchor="middle">n=34</text>
+<rect class="leaf" x="680.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="755.0" y="843.0" text-anchor="middle">Leaf: 1</text>
+<text class="node-meta" x="755.0" y="861.0" text-anchor="middle">n=31</text>
+<rect class="leaf" x="870.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="945.0" y="843.0" text-anchor="middle">Leaf: 0</text>
+<text class="node-meta" x="945.0" y="861.0" text-anchor="middle">n=3</text>
+<rect class="leaf" x="1060.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1135.0" y="713.0" text-anchor="middle">Leaf: 0</text>
+<text class="node-meta" x="1135.0" y="731.0" text-anchor="middle">n=5</text>
+<rect class="leaf" x="1250.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1325.0" y="453.0" text-anchor="middle">Leaf: 0</text>
+<text class="node-meta" x="1325.0" y="471.0" text-anchor="middle">n=2</text>
+<rect class="leaf" x="1440.0" y="170.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1515.0" y="193.0" text-anchor="middle">Leaf: 1</text>
+<text class="node-meta" x="1515.0" y="211.0" text-anchor="middle">n=79</text>
+<g transform="translate(15, 15)">
+  <rect class="card-bg" x="0" y="0" width="250" height="125" rx="8" />
+  <text class="card-header" x="12" y="22">EVALUATION METRICS</text>
+  <text class="card-item" x="18" y="43">• checked samples = 768</text>
+  <text class="card-item" x="18" y="58">• correct predictions = 582</text>
+  <text class="card-item" x="18" y="73">• tree depth = 6</text>
+  <text class="card-item" x="18" y="88">• node count = 13</text>
+  <text class="card-item" x="18" y="103">• accuracy = 75.7812%</text>
+</g>
+</svg>

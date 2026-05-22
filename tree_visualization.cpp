@@ -85,6 +85,9 @@ void generateTreeSvg(const C45Tree &tree, const std::string &svgPath,
   printedTree << "OPTION: maxDepth = " << options.maxDepth << "\n";
   printedTree << "OPTION: minSamplesToSplit = " << options.minSamplesToSplit << "\n";
   printedTree << "OPTION: minSamplesPerLeaf = " << options.minSamplesPerLeaf << "\n";
+  printedTree << "OPTION: maxThreadCount = " << options.maxThreadCount << "\n";
+  printedTree << "OPTION: minCandidatesToParallelize = "
+              << options.minCandidatesToParallelize << "\n";
   
   std::ostringstream factorStr;
   factorStr << std::fixed << std::setprecision(4) << options.pruningConfidenceFactor;

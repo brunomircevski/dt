@@ -70,6 +70,12 @@ struct TrainingOptions {
   // Impurity measure method (Entropy for C4.5, Gini for CART).
   // Used to evaluate split quality (e.g., ImpurityMeasure::Gini).
   ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
+
+  // 0 or 1 = single-threaded split search. N > 1 = parallel candidate evaluation.
+  int maxThreadCount = 1;
+
+  // Parallel split search only runs when the candidate count is at least this value.
+  std::size_t minCandidatesToParallelize = 32;
 };
 
 struct SplitResult {
@@ -93,12 +99,20 @@ struct SplitResult {
 
 class C45Tree {
 public:
+  C45Tree();
+  ~C45Tree();
+
+  C45Tree(const C45Tree &) = delete;
+  C45Tree &operator=(const C45Tree &) = delete;
+
   void fit(const Dataset &dataset,
            const TrainingOptions &options = TrainingOptions{});
   std::string predict(const Sample &sample) const;
   void print(std::ostream &output) const;
   int treeDepth() const;
   std::size_t nodeCount() const;
+  double buildTimeSeconds() const;
+  double pruneTimeSeconds() const;
 
   // The next functions are public so they can be explored from main()
   // and studied separately.
@@ -114,6 +128,7 @@ public:
   SplitResult findBestSplit(const std::vector<std::size_t> &rowIndices) const;
 
 private:
+  class SplitThreadPool;
   struct PartitionedRows {
     std::vector<std::size_t> leftRows;
     std::vector<std::size_t> rightRows;
@@ -129,6 +144,16 @@ private:
   // The last training call stores its configuration here so all helper
   // functions can use the same settings while the tree is being built.
   TrainingOptions options_;
+
+  double buildTimeSeconds_ = 0.0;
+  double pruneTimeSeconds_ = 0.0;
+
+  mutable std::unique_ptr<SplitThreadPool> splitThreadPool_;
+
+  int effectiveSplitThreadCount() const;
+  bool shouldParallelizeSplitSearch(std::size_t candidateCount) const;
+  SplitResult
+  reduceBestPerFeature(const std::vector<SplitResult> &scoredCandidates) const;
 
   std::map<std::string, int>
   computeClassCounts(const std::vector<std::size_t> &rowIndices) const;
