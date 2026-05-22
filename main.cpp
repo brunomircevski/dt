@@ -29,6 +29,10 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
   std::cout << "  node count = " << tree.nodeCount() << '\n';
   std::cout << "  accuracy = " << std::fixed << std::setprecision(4)
             << accuracy * 100.0 << "%\n";
+  std::cout << "  build time = " << std::fixed << std::setprecision(4)
+            << tree.buildTimeSeconds() * 1000.0 << " ms\n";
+  std::cout << "  prune time = " << std::fixed << std::setprecision(4)
+            << tree.pruneTimeSeconds() * 1000.0 << " ms\n";
 }
 
 } // namespace
@@ -36,7 +40,7 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
 int main() {
   try {
     // 1. Load the dataset from disk.
-    const Dataset dataset = loadDataset("datasets/diabetes.csv");
+    const Dataset dataset = loadDataset("datasets/covertype_10x_smaller.csv");
     printDatasetSummary(dataset);
 
     // 2. Train the decision tree.
@@ -44,17 +48,19 @@ int main() {
     TrainingOptions options;
 
     // --- CART Configuration ---
-    // options.impurityMeasure = ImpurityMeasure::Gini;
-    // options.splitSelectionMode = SplitSelectionMode::MaxGain;
-    // options.pruningMode = PruningMode::CostComplexity;
-    // options.ccpAlpha = 1;
-    // options.maxDepth = 5;
+    options.impurityMeasure = ImpurityMeasure::Gini;
+    options.splitSelectionMode = SplitSelectionMode::MaxGain;
+    options.pruningMode = PruningMode::CostComplexity;
+    options.ccpAlpha = 10;
+    options.maxDepth = 5;
+    options.minCandidatesToParallelize = 32;
+    options.maxThreadCount = 28;
 
     // --- C.45 Configuration ---
-    options.impurityMeasure = ImpurityMeasure::Entropy;
-    options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
-    options.pruningMode = PruningMode::PessimisticError;
-    options.pruningConfidenceFactor = 0.0001;
+    // options.impurityMeasure = ImpurityMeasure::Entropy;
+    // options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
+    // options.pruningMode = PruningMode::PessimisticError;
+    // options.pruningConfidenceFactor = 0.0001;
 
     // options.minSamplesPerLeaf = 1;
 

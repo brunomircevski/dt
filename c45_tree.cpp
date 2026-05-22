@@ -1,11 +1,18 @@
 #include "c45_tree.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
+#include <condition_variable>
+#include <functional>
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <mutex>
+#include <queue>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace
@@ -20,9 +27,9 @@ namespace
 		return std::fabs(left - right) <= epsilon;
 	}
 
-	// Helper to determine if candidate 'lhs' is better than candidate 'rhs' under Classic C4.5 split selection rules.
-	// Primary metric: higher gainRatio.
-	// Secondary tie-breakers: higher informationGain, lower featureIndex, lower threshold.
+	// When two splits look equally good on paper, we need fixed tie-breakers so the
+	// tree is always the same (important for debugging and for parallel vs serial).
+	// C4.5 order: gain ratio → information gain → earlier feature column → lower threshold.
 	bool isBetterC45(const SplitResult &lhs, const SplitResult &rhs, double epsilon)
 	{
 		// 1. Primary check: Prefer the split with a significantly higher Gain Ratio.
@@ -43,9 +50,7 @@ namespace
 		return lhs.threshold < rhs.threshold - epsilon;
 	}
 
-	// Helper to determine if candidate 'lhs' is better than candidate 'rhs' under CART/MaxGain split selection rules.
-	// Primary metric: higher informationGain.
-	// Secondary tie-breakers: lower featureIndex, lower threshold.
+	// CART order: information gain (or Gini gain) → earlier feature → lower threshold.
 	bool isBetterMaxGain(const SplitResult &lhs, const SplitResult &rhs, double epsilon)
 	{
 		// 1. Primary check: Prefer the split with a significantly higher Information/Gini Gain.
@@ -62,7 +67,148 @@ namespace
 		return lhs.threshold < rhs.threshold - epsilon;
 	}
 
+	// One possible question at a node: "Is feature X <= threshold?"
+	// We collect many of these, score them, then pick the winner.
+	struct SplitCandidateSpec
+	{
+		std::size_t featureIndex = 0;
+		double threshold = 0.0;
+	};
+
 } // namespace
+
+// Thread pool reused for the whole fit() call.
+// Why a pool? Creating OS threads inside every findBestSplit() would be very slow.
+// Workers sit in a loop, take tasks from a queue, and run them.
+class C45Tree::SplitThreadPool
+{
+public:
+	explicit SplitThreadPool(std::size_t threadCount)
+	{
+		if (threadCount == 0)
+		{
+			threadCount = 1;
+		}
+
+		workers_.reserve(threadCount);
+		for (std::size_t index = 0; index < threadCount; ++index)
+		{
+			workers_.emplace_back([this]() { workerLoop(); });
+		}
+	}
+
+	~SplitThreadPool()
+	{
+		{
+			std::lock_guard<std::mutex> lock(mutex_);
+			stop_ = true;
+		}
+		taskCv_.notify_all();
+		for (std::thread &worker : workers_)
+		{
+			if (worker.joinable())
+			{
+				worker.join();
+			}
+		}
+	}
+
+	SplitThreadPool(const SplitThreadPool &) = delete;
+	SplitThreadPool &operator=(const SplitThreadPool &) = delete;
+
+	// Run work(0), work(1), ... work(count-1) on several threads.
+	// Each worker grabs the next index from a shared counter until all are done.
+	// The caller blocks until every worker finishes (so findBestSplit can safely
+	// read scoredCandidates after this returns).
+	void parallel_for(std::size_t count,
+					  const std::function<void(std::size_t)> &work)
+	{
+		if (count == 0)
+		{
+			return;
+		}
+
+		if (workers_.empty())
+		{
+			for (std::size_t index = 0; index < count; ++index)
+			{
+				work(index);
+			}
+			return;
+		}
+
+		std::atomic<std::size_t> nextIndex{0};
+		const std::size_t workersToUse = std::min(workers_.size(), count);
+		std::atomic<std::size_t> activeWorkers{workersToUse};
+
+		for (std::size_t workerIndex = 0; workerIndex < workersToUse; ++workerIndex)
+		{
+			enqueue([&]() {
+				while (true)
+				{
+					const std::size_t index =
+						nextIndex.fetch_add(1, std::memory_order_relaxed);
+					if (index >= count)
+					{
+						break;
+					}
+					work(index);
+				}
+
+				if (activeWorkers.fetch_sub(1, std::memory_order_acq_rel) == 1)
+				{
+					std::lock_guard<std::mutex> lock(doneMutex_);
+					doneCv_.notify_one();
+				}
+			});
+		}
+
+		std::unique_lock<std::mutex> lock(doneMutex_);
+		doneCv_.wait(lock, [&]() { return activeWorkers.load() == 0; });
+	}
+
+private:
+	// Each OS thread runs this forever until the pool is destroyed.
+	void workerLoop()
+	{
+		while (true)
+		{
+			std::function<void()> task;
+			{
+				std::unique_lock<std::mutex> lock(mutex_);
+				taskCv_.wait(lock, [&]() { return stop_ || !tasks_.empty(); });
+				if (stop_ && tasks_.empty())
+				{
+					return;
+				}
+				task = std::move(tasks_.front());
+				tasks_.pop();
+			}
+			task();
+		}
+	}
+
+	void enqueue(std::function<void()> task)
+	{
+		{
+			std::lock_guard<std::mutex> lock(mutex_);
+			tasks_.push(std::move(task));
+		}
+		taskCv_.notify_one();
+	}
+
+	std::vector<std::thread> workers_;
+	std::queue<std::function<void()>> tasks_;
+	std::mutex mutex_;
+	std::condition_variable taskCv_;
+	bool stop_ = false;
+	std::mutex doneMutex_;
+	std::condition_variable doneCv_;
+};
+
+C45Tree::C45Tree() = default;
+
+C45Tree::~C45Tree() = default;
 
 void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 {
@@ -71,12 +217,22 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 		throw std::runtime_error("Cannot train on an empty dataset.");
 	}
 
-	// Save where the training data is.
-	// We use a pointer so we do not copy the whole dataset.
+	// Remember the dataset and options for the whole training run.
+	// We store a pointer so we never copy thousands of rows into the tree object.
 	dataset_ = &dataset;
 	options_ = options;
 
-	// At the start, the root sees all rows.
+	// Start worker threads only if the user asked for parallelism.
+	// They are torn down at the end of fit() so we do not keep threads alive after training.
+	splitThreadPool_.reset();
+	if (options_.maxThreadCount > 1)
+	{
+		splitThreadPool_ = std::make_unique<SplitThreadPool>(
+			static_cast<std::size_t>(effectiveSplitThreadCount()));
+	}
+
+	// rowIndices lists which training rows "belong" to the current node.
+	// At the root, that is every row: 0, 1, 2, ..., n-1.
 	std::vector<std::size_t> rowIndices(dataset.samples.size());
 	for (std::size_t i = 0; i < rowIndices.size(); ++i)
 	{
@@ -84,15 +240,26 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 	}
 
 	// Build the whole tree recursively.
+	const auto buildStart = std::chrono::steady_clock::now();
 	root_ = buildNode(rowIndices, 0);
+	buildTimeSeconds_ = std::chrono::duration<double>(
+							std::chrono::steady_clock::now() - buildStart)
+							.count();
 
 	// Post-pruning is a second phase:
 	// first let the tree grow, then remove branches that do not improve
 	// classification on the samples that reached them.
+	pruneTimeSeconds_ = 0.0;
 	if (options_.pruningMode != PruningMode::None)
 	{
+		const auto pruneStart = std::chrono::steady_clock::now();
 		applySelectedPruning(rowIndices);
+		pruneTimeSeconds_ = std::chrono::duration<double>(
+								std::chrono::steady_clock::now() - pruneStart)
+								.count();
 	}
+
+	splitThreadPool_.reset();
 }
 
 std::string C45Tree::predict(const Sample &sample) const
@@ -102,8 +269,8 @@ std::string C45Tree::predict(const Sample &sample) const
 		throw std::runtime_error("Cannot predict before training.");
 	}
 
-	// Start at the root and keep answering the node's question until
-	// we reach a leaf.
+	// Prediction is just walking the tree: at each decision node, go left or right
+	// until we hit a leaf; the leaf's label is our answer. No threading needed here.
 	const Node *current = root_.get();
 
 	while (!current->isLeaf)
@@ -137,6 +304,10 @@ void C45Tree::print(std::ostream &output) const
 int C45Tree::treeDepth() const { return computeTreeDepth(root_.get()); }
 
 std::size_t C45Tree::nodeCount() const { return countNodes(root_.get()); }
+
+double C45Tree::buildTimeSeconds() const { return buildTimeSeconds_; }
+
+double C45Tree::pruneTimeSeconds() const { return pruneTimeSeconds_; }
 
 std::map<std::string, int>
 C45Tree::computeClassCounts(const std::vector<std::size_t> &rowIndices) const
@@ -268,6 +439,9 @@ double C45Tree::splitInformation(
 	const std::vector<std::size_t> &rowIndices,
 	const std::vector<std::vector<std::size_t>> &partitions) const
 {
+	// C4.5 only: measures how "balanced" the split sizes are (entropy of child sizes).
+	// Gain ratio = information gain / split information, so we prefer splits that are
+	// both informative AND not wildly uneven (e.g. 99% of rows on one side).
 
 	const double total = static_cast<double>(rowIndices.size());
 	double result = 0.0;
@@ -392,13 +566,14 @@ SplitResult C45Tree::scoreSplit(const std::vector<std::size_t> &rowIndices,
 
 	if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
 	{
-		// For pure gain mode (CART), we don't need split information.
+		// CART only cares about impurity drop (Gini or entropy, depending on options).
 		result.splitInformation = 0.0;
 		result.gainRatio = 0.0;
 		result.valid = (result.informationGain > options_.epsilon);
 		return result;
 	}
 
+	// C4.5: also compute gain ratio; invalid if gain or split info is effectively zero.
 	result.splitInformation = splitInformation(rowIndices, groups);
 
 	if (result.informationGain <= options_.epsilon ||
@@ -415,12 +590,14 @@ SplitResult C45Tree::scoreSplit(const std::vector<std::size_t> &rowIndices,
 SplitResult
 C45Tree::chooseBestSplit(const std::vector<SplitResult> &candidates) const
 {
+	// Input: at most one best candidate per feature (already filtered by reduceBestPerFeature).
+	// Output: the single split we will actually use at this node.
 	if (candidates.empty())
 	{
 		return SplitResult{};
 	}
 
-	// 1. MaxGain (CART style): Pure maximization of Information Gain or Gini index.
+	// CART: pick the feature winner with highest information gain (or Gini gain).
 	if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
 	{
 		const SplitResult *bestCandidate = &candidates.front();
@@ -434,8 +611,7 @@ C45Tree::chooseBestSplit(const std::vector<SplitResult> &candidates) const
 		return *bestCandidate;
 	}
 
-	// 2. MeanGainFiltered (C4.5 style): Filter candidates below average information gain,
-	// then choose the one with the highest Gain Ratio.
+	// C4.5: ignore features whose gain is below average, then pick highest gain ratio.
 	double gainSum = 0.0;
 	for (const SplitResult &candidate : candidates)
 	{
@@ -460,54 +636,135 @@ C45Tree::chooseBestSplit(const std::vector<SplitResult> &candidates) const
 	return bestCandidate ? *bestCandidate : SplitResult{};
 }
 
-SplitResult
-C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
+int C45Tree::effectiveSplitThreadCount() const
 {
-	// THEORY:
-	// To match standard C4.5 and CART algorithms, we evaluate candidates
-	// on a feature level first. For each feature, we select the single best
-	// threshold candidate. Then, we pass these feature-level best candidates
-	// to chooseBestSplit to apply global filtering (C4.5) and final selection.
-	std::vector<SplitResult> featureBestCandidates;
-
-	for (std::size_t featureIndex = 0;
-		 featureIndex < dataset_->featureNames.size(); ++featureIndex)
+	if (options_.maxThreadCount <= 1)
 	{
-		const std::vector<double> thresholds =
-			collectNumericThresholdCandidates(rowIndices, featureIndex);
+		return 1;
+	}
 
-		SplitResult bestForFeature;
-		bestForFeature.valid = false;
+	int threadCount = options_.maxThreadCount;
+	const unsigned hardwareThreads = std::thread::hardware_concurrency();
+	if (hardwareThreads > 0 &&
+		threadCount > static_cast<int>(hardwareThreads))
+	{
+		threadCount = static_cast<int>(hardwareThreads);
+	}
 
-		for (double threshold : thresholds)
+	return threadCount;
+}
+
+bool C45Tree::shouldParallelizeSplitSearch(std::size_t candidateCount) const
+{
+	// On tiny nodes there may be only a few thresholds to try — threading costs more than it saves.
+	return splitThreadPool_ != nullptr &&
+		   candidateCount >= options_.minCandidatesToParallelize;
+}
+
+SplitResult C45Tree::reduceBestPerFeature(
+	const std::vector<SplitResult> &scoredCandidates) const
+{
+	// We scored every (feature, threshold) pair. C4.5/CART first pick the best threshold
+	// per feature, then chooseBestSplit picks the best feature among those.
+	const std::size_t featureCount = dataset_->featureNames.size();
+	std::vector<SplitResult> bestPerFeature(featureCount);
+	std::vector<bool> hasBestPerFeature(featureCount, false);
+
+	for (const SplitResult &candidate : scoredCandidates)
+	{
+		if (!candidate.valid)
 		{
-			SplitResult candidate = scoreSplit(rowIndices, featureIndex, threshold);
-			if (candidate.valid)
-			{
-				if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
-				{
-					if (!bestForFeature.valid || isBetterMaxGain(candidate, bestForFeature, options_.epsilon))
-					{
-						bestForFeature = candidate;
-					}
-				}
-				else
-				{
-					if (!bestForFeature.valid || isBetterC45(candidate, bestForFeature, options_.epsilon))
-					{
-						bestForFeature = candidate;
-					}
-				}
-			}
+			continue;
 		}
 
-		if (bestForFeature.valid)
+		const std::size_t featureIndex = candidate.featureIndex;
+		if (!hasBestPerFeature[featureIndex])
 		{
-			featureBestCandidates.push_back(bestForFeature);
+			bestPerFeature[featureIndex] = candidate;
+			hasBestPerFeature[featureIndex] = true;
+			continue;
+		}
+
+		SplitResult &bestForFeature = bestPerFeature[featureIndex];
+		if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
+		{
+			if (isBetterMaxGain(candidate, bestForFeature, options_.epsilon))
+			{
+				bestForFeature = candidate;
+			}
+		}
+		else if (isBetterC45(candidate, bestForFeature, options_.epsilon))
+		{
+			bestForFeature = candidate;
+		}
+	}
+
+	std::vector<SplitResult> featureBestCandidates;
+	featureBestCandidates.reserve(featureCount);
+	for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
+	{
+		if (hasBestPerFeature[featureIndex])
+		{
+			featureBestCandidates.push_back(bestPerFeature[featureIndex]);
 		}
 	}
 
 	return chooseBestSplit(featureBestCandidates);
+}
+
+SplitResult
+C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
+{
+	// This function answers: "What is the best split for the rows at this node?"
+	//
+	// Steps:
+	//   1. List every (feature, threshold) we want to try.
+	//   2. Score each one (partition rows + impurity) — parallel if enough candidates.
+	//   3. Keep the best threshold per feature.
+	//   4. chooseBestSplit picks the overall winner (C4.5 or CART rules).
+	std::vector<SplitCandidateSpec> candidates;
+	const std::size_t featureCount = dataset_->featureNames.size();
+	candidates.reserve(featureCount * 8);
+
+	for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
+	{
+		const std::vector<double> thresholds =
+			collectNumericThresholdCandidates(rowIndices, featureIndex);
+		for (double threshold : thresholds)
+		{
+			candidates.push_back({featureIndex, threshold});
+		}
+	}
+
+	if (candidates.empty())
+	{
+		return SplitResult{};
+	}
+
+	// Define job to score a candidate
+	std::vector<SplitResult> scoredCandidates(candidates.size());
+	const auto evaluateCandidate = [&](std::size_t candidateIndex) {
+		const SplitCandidateSpec &candidate = candidates[candidateIndex];
+		scoredCandidates[candidateIndex] =
+			scoreSplit(rowIndices, candidate.featureIndex, candidate.threshold);
+	};
+
+	// Parallelize the scoring of the candidates
+	if (shouldParallelizeSplitSearch(candidates.size()))
+	{
+		splitThreadPool_->parallel_for(candidates.size(), evaluateCandidate);
+	}
+	else
+	{
+		// Same math as parallel path; easier to debug with maxThreadCount = 1.
+		for (std::size_t candidateIndex = 0; candidateIndex < candidates.size();
+			 ++candidateIndex)
+		{
+			evaluateCandidate(candidateIndex);
+		}
+	}
+
+	return reduceBestPerFeature(scoredCandidates);
 }
 
 bool C45Tree::shouldStopGrowing(const std::vector<std::size_t> &rowIndices,
@@ -557,29 +814,30 @@ C45Tree::buildNode(const std::vector<std::size_t> &rowIndices,
 		return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
 	}
 
+	// Ask every feature/threshold combination which split is best here.
 	const SplitResult split = findBestSplit(rowIndices);
 	if (!split.valid ||
 		(options_.splitSelectionMode != SplitSelectionMode::MaxGain && split.gainRatio <= options_.epsilon))
 	{
+		// No split beats a simple majority-vote leaf — stop growing this branch.
 		return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
 	}
 
+	// We only partition once, using the winning split (not during every candidate test).
 	const PartitionedRows partitions =
 		partitionRows(rowIndices, split.featureIndex, split.threshold);
 
-	// Stop if split created empty group - no progress made
 	if (partitions.leftRows.empty() || partitions.rightRows.empty())
 	{
 		return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
 	}
 
-	// Create a decision node:
-	// "Is featureName <= threshold?"
+	// Internal node: walk left if feature <= threshold, else right.
 	std::unique_ptr<Node> node =
 		Node::createDecision(split.featureName, split.featureIndex,
 							 split.threshold, rowIndices.size());
 
-	// Recursively build the two children.
+	// Same buildNode logic on smaller row sets — classic divide and conquer.
 	node->leftChild = buildNode(partitions.leftRows, depth + 1);
 	node->rightChild = buildNode(partitions.rightRows, depth + 1);
 
@@ -589,6 +847,7 @@ C45Tree::buildNode(const std::vector<std::size_t> &rowIndices,
 std::size_t C45Tree::countCorrectPredictions(
 	const Node *node, const std::vector<std::size_t> &rowIndices) const
 {
+	// Used by CART cost-complexity pruning: how many rows does this subtree classify correctly?
 	std::size_t correct = 0;
 
 	for (std::size_t rowIndex : rowIndices)
@@ -723,6 +982,8 @@ void C45Tree::printNode(const Node *node, std::ostream &output, int depth,
 
 void C45Tree::applySelectedPruning(const std::vector<std::size_t>& rowIndices)
 {
+	// Pruning runs after the tree is fully grown.
+	// Implementation lives in pruning/*.cpp — we only dispatch here.
 	if (!root_)
 	{
 		return;
