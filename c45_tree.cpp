@@ -228,7 +228,7 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 	if (options_.maxThreadCount > 1)
 	{
 		splitThreadPool_ = std::make_unique<SplitThreadPool>(
-			static_cast<std::size_t>(effectiveSplitThreadCount()));
+			static_cast<std::size_t>(options_.maxThreadCount));
 	}
 
 	// rowIndices lists which training rows "belong" to the current node.
@@ -636,24 +636,6 @@ C45Tree::chooseBestSplit(const std::vector<SplitResult> &candidates) const
 	return bestCandidate ? *bestCandidate : SplitResult{};
 }
 
-int C45Tree::effectiveSplitThreadCount() const
-{
-	if (options_.maxThreadCount <= 1)
-	{
-		return 1;
-	}
-
-	int threadCount = options_.maxThreadCount;
-	const unsigned hardwareThreads = std::thread::hardware_concurrency();
-	if (hardwareThreads > 0 &&
-		threadCount > static_cast<int>(hardwareThreads))
-	{
-		threadCount = static_cast<int>(hardwareThreads);
-	}
-
-	return threadCount;
-}
-
 bool C45Tree::shouldParallelizeSplitSearch(std::size_t candidateCount) const
 {
 	// On tiny nodes there may be only a few thresholds to try — threading costs more than it saves.
@@ -741,7 +723,7 @@ C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
 		return SplitResult{};
 	}
 
-	// Define job to score a candidate
+	// Define job to score a candidate in lambda function
 	std::vector<SplitResult> scoredCandidates(candidates.size());
 	const auto evaluateCandidate = [&](std::size_t candidateIndex) {
 		const SplitCandidateSpec &candidate = candidates[candidateIndex];

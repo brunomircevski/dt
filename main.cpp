@@ -40,7 +40,7 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
 int main() {
   try {
     // 1. Load the dataset from disk.
-    const Dataset dataset = loadDataset("datasets/covertype_10x_smaller.csv");
+    const Dataset dataset = loadDataset("datasets/covertype_100x_smaller.csv");
     printDatasetSummary(dataset);
 
     // 2. Train the decision tree.
@@ -52,8 +52,8 @@ int main() {
     options.splitSelectionMode = SplitSelectionMode::MaxGain;
     options.pruningMode = PruningMode::CostComplexity;
     options.ccpAlpha = 10;
-    options.maxDepth = 5;
-    options.minCandidatesToParallelize = 32;
+    options.maxDepth = 10;
+    options.minCandidatesToParallelize = 128;
     options.maxThreadCount = 28;
 
     // --- C.45 Configuration ---
