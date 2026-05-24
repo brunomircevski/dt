@@ -7,7 +7,6 @@
 #include <condition_variable>
 #include <functional>
 #include <iomanip>
-#include <limits>
 #include <map>
 #include <mutex>
 #include <queue>
@@ -72,8 +71,31 @@ namespace
 	struct SplitCandidateSpec
 	{
 		std::size_t featureIndex = 0;
-		double threshold = 0.0;
+		std::size_t thresholdIndex = 0;  // index into SortedFeatureView::thresholds
 	};
+
+	// Right-child histogram: total counts minus left prefix counts.
+	std::map<std::string, int> subtractClassCounts(
+		const std::map<std::string, int> &total,
+		const std::map<std::string, int> &subset)
+	{
+		std::map<std::string, int> result = total;
+		for (const auto &[label, count] : subset)
+		{
+			auto iterator = result.find(label);
+			if (iterator == result.end())
+			{
+				continue;
+			}
+
+			iterator->second -= count;
+			if (iterator->second == 0)
+			{
+				result.erase(iterator);
+			}
+		}
+		return result;
+	}
 
 } // namespace
 
@@ -119,7 +141,7 @@ public:
 	// Run work(0), work(1), ... work(count-1) on several threads.
 	// Each worker grabs the next index from a shared counter until all are done.
 	// The caller blocks until every worker finishes (so findBestSplit can safely
-	// read scoredCandidates after this returns).
+	// read featureViews after this returns).
 	void parallel_for(std::size_t count,
 					  const std::function<void(std::size_t)> &work)
 	{
@@ -222,8 +244,7 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 	dataset_ = &dataset;
 	options_ = options;
 
-	// Start worker threads only if the user asked for parallelism.
-	// They are torn down at the end of fit() so we do not keep threads alive after training.
+	// Thread pool parallelizes buildSortedFeatureView across features (see findBestSplit).
 	splitThreadPool_.reset();
 	if (options_.maxThreadCount > 1)
 	{
@@ -464,11 +485,8 @@ C45Tree::PartitionedRows
 C45Tree::partitionRows(const std::vector<std::size_t> &rowIndices,
 					   std::size_t featureIndex, double threshold) const
 {
-	// THEORY:
-	// A numeric binary tree node asks exactly one question:
-	// "Is feature <= threshold?"
-	// This helper executes that question for every row that reached the node
-	// and returns the two child groups.
+	// Used only after the winning split is chosen (buildNode), not while scoring candidates.
+	// Question: "Is feature <= threshold?"
 	PartitionedRows partitions;
 	for (std::size_t rowIndex : rowIndices)
 	{
@@ -485,96 +503,162 @@ C45Tree::partitionRows(const std::vector<std::size_t> &rowIndices,
 	return partitions;
 }
 
-std::vector<double> C45Tree::collectNumericThresholdCandidates(
-	const std::vector<std::size_t> &rowIndices,
-	std::size_t featureIndex) const
+// Same formulas as entropy()/giniIndex(), but from a pre-built histogram.
+double C45Tree::impurityFromClassCounts(const std::map<std::string, int> &counts,
+										std::size_t total) const
 {
-	// THEORY:
-	// For numeric C4.5 we sort the rows by one feature and only test
-	// thresholds between adjacent distinct values where the class label
-	// changes. That keeps the search small without missing useful binary
-	// thresholds.
-	std::vector<std::pair<double, std::string>> values;
-	values.reserve(rowIndices.size());
+	if (total == 0)
+	{
+		return 0.0;
+	}
+
+	const double totalDouble = static_cast<double>(total);
+
+	if (options_.impurityMeasure == ImpurityMeasure::Gini)
+	{
+		double sumOfSquaredProbabilities = 0.0;
+		for (const auto &entry : counts)
+		{
+			const double probability =
+				static_cast<double>(entry.second) / totalDouble;
+			sumOfSquaredProbabilities += probability * probability;
+		}
+		return 1.0 - sumOfSquaredProbabilities;
+	}
+
+	// Entropy formula: -sum(p * log2(p))
+	double result = 0.0;
+	for (const auto &entry : counts)
+	{
+		const double probability = static_cast<double>(entry.second) / totalDouble;
+		if (probability > 0.0)
+		{
+			result -= probability * std::log2(probability);
+		}
+	}
+	return result;
+}
+
+// Build a reusable sorted view for one feature at the current node.
+// Thresholds are only placed between adjacent values with different labels.
+C45Tree::SortedFeatureView C45Tree::buildSortedFeatureView(
+	const std::vector<std::size_t> &rowIndices, std::size_t featureIndex) const
+{
+	SortedFeatureView view;
+	view.featureIndex = featureIndex;
+	view.totalRows = rowIndices.size();
+	view.rows.reserve(rowIndices.size());
 
 	for (std::size_t rowIndex : rowIndices)
 	{
-		values.push_back({dataset_->samples[rowIndex].features[featureIndex],
-						  dataset_->samples[rowIndex].label});
+		const Sample &sample = dataset_->samples[rowIndex];
+		view.rows.push_back(
+			{rowIndex, sample.features[featureIndex], sample.label});
 	}
 
-	std::sort(values.begin(), values.end());
+	// Same order as the old pair<double,string> sort: value, then label.
+	std::sort(view.rows.begin(), view.rows.end(),
+			  [](const SortedFeatureRow &left, const SortedFeatureRow &right) {
+				  if (left.value < right.value)
+				  {
+					  return true;
+				  }
+				  if (right.value < left.value)
+				  {
+					  return false;
+				  }
+				  return left.label < right.label;
+			  });
 
-	std::vector<double> thresholds;
-	for (std::size_t index = 1; index < values.size(); ++index)
+	// prefixClassCounts[k] = histogram of the first k sorted rows.
+	view.prefixClassCounts.resize(view.rows.size() + 1);
+	for (std::size_t index = 0; index < view.rows.size(); ++index)
 	{
-		const double leftValue = values[index - 1].first;
-		const double rightValue = values[index].first;
-		const std::string &leftLabel = values[index - 1].second;
-		const std::string &rightLabel = values[index].second;
+		view.prefixClassCounts[index + 1] = view.prefixClassCounts[index];
+		view.prefixClassCounts[index + 1][view.rows[index].label]++;
+	}
+
+	view.parentImpurity =
+		impurityFromClassCounts(view.prefixClassCounts.back(), view.totalRows);
+
+	// Candidate threshold between rows[index-1] and rows[index].
+	for (std::size_t index = 1; index < view.rows.size(); ++index)
+	{
+		const double leftValue = view.rows[index - 1].value;
+		const double rightValue = view.rows[index].value;
 
 		if (std::fabs(leftValue - rightValue) < options_.epsilon)
 		{
 			continue;
 		}
 
-		if (leftLabel == rightLabel)
+		if (view.rows[index - 1].label == view.rows[index].label)
 		{
 			continue;
 		}
 
-		thresholds.push_back((leftValue + rightValue) / 2.0);
+		view.thresholds.push_back((leftValue + rightValue) / 2.0);
+		// All sorted rows before index fall on the left side of this cut.
+		view.leftSizes.push_back(index);
 	}
 
-	return thresholds;
+	return view;
 }
 
-SplitResult C45Tree::scoreSplit(const std::vector<std::size_t> &rowIndices,
-								std::size_t featureIndex,
-								double threshold) const
+// Evaluate one candidate split without scanning rowIndices again.
+SplitResult C45Tree::scoreSplitFromSorted(const SortedFeatureView &view,
+										  std::size_t thresholdIndex) const
 {
-	// THEORY:
-	// After proposing one threshold, we score it exactly the way C4.5 does
-	// for numeric binary tests:
-	//   information gain = entropy(parent) - weighted entropy(children)
-	//   split information = entropy of the split sizes
-	//   gain ratio = information gain / split information
 	SplitResult result;
-	result.featureIndex = featureIndex;
-	result.featureName = dataset_->featureNames[featureIndex];
-	result.threshold = threshold;
+	result.featureIndex = view.featureIndex;
+	result.featureName = dataset_->featureNames[view.featureIndex];
+	result.threshold = view.thresholds[thresholdIndex];
 
-	const PartitionedRows partitions =
-		partitionRows(rowIndices, featureIndex, threshold);
-	if (partitions.leftRows.empty() || partitions.rightRows.empty())
+	const std::size_t leftSize = view.leftSizes[thresholdIndex];
+	const std::size_t rightSize = view.totalRows - leftSize;
+	if (leftSize == 0 || rightSize == 0)
 	{
 		return result;
 	}
 
 	if (options_.minSamplesPerLeaf != 0)
 	{
-		if (partitions.leftRows.size() < options_.minSamplesPerLeaf ||
-			partitions.rightRows.size() < options_.minSamplesPerLeaf)
+		if (leftSize < options_.minSamplesPerLeaf ||
+			rightSize < options_.minSamplesPerLeaf)
 		{
 			return result;
 		}
 	}
 
-	const std::vector<std::vector<std::size_t>> groups = {partitions.leftRows,
-														  partitions.rightRows};
-	result.informationGain = informationGain(rowIndices, groups);
+	// O(1) child histograms from prefix sums (no row scan).
+	const std::map<std::string, int> &leftCounts = view.prefixClassCounts[leftSize];
+	const std::map<std::string, int> rightCounts =
+		subtractClassCounts(view.prefixClassCounts.back(), leftCounts);
+
+	const double leftImpurity = impurityFromClassCounts(leftCounts, leftSize);
+	const double rightImpurity = impurityFromClassCounts(rightCounts, rightSize);
+	const double totalDouble = static_cast<double>(view.totalRows);
+	// Weighted impurity of the two children.
+	const double afterSplit =
+		(static_cast<double>(leftSize) / totalDouble) * leftImpurity +
+		(static_cast<double>(rightSize) / totalDouble) * rightImpurity;
+
+	result.informationGain = view.parentImpurity - afterSplit;
 
 	if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
 	{
-		// CART only cares about impurity drop (Gini or entropy, depending on options).
 		result.splitInformation = 0.0;
 		result.gainRatio = 0.0;
 		result.valid = (result.informationGain > options_.epsilon);
 		return result;
 	}
 
-	// C4.5: also compute gain ratio; invalid if gain or split info is effectively zero.
-	result.splitInformation = splitInformation(rowIndices, groups);
+	// C4.5: entropy of child sizes (used for gain ratio).
+	const double leftProbability = static_cast<double>(leftSize) / totalDouble;
+	const double rightProbability = static_cast<double>(rightSize) / totalDouble;
+	result.splitInformation =
+		-leftProbability * std::log2(leftProbability) -
+		rightProbability * std::log2(rightProbability);
 
 	if (result.informationGain <= options_.epsilon ||
 		result.splitInformation <= options_.epsilon)
@@ -636,11 +720,10 @@ C45Tree::chooseBestSplit(const std::vector<SplitResult> &candidates) const
 	return bestCandidate ? *bestCandidate : SplitResult{};
 }
 
-bool C45Tree::shouldParallelizeSplitSearch(std::size_t candidateCount) const
+bool C45Tree::shouldParallelizeFeatureViews(std::size_t featureCount) const
 {
-	// On tiny nodes there may be only a few thresholds to try — threading costs more than it saves.
 	return splitThreadPool_ != nullptr &&
-		   candidateCount >= options_.minCandidatesToParallelize;
+		   featureCount >= options_.minFeaturesToParallelize;
 }
 
 SplitResult C45Tree::reduceBestPerFeature(
@@ -700,21 +783,44 @@ C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
 	// This function answers: "What is the best split for the rows at this node?"
 	//
 	// Steps:
-	//   1. List every (feature, threshold) we want to try.
-	//   2. Score each one (partition rows + impurity) — parallel if enough candidates.
+	//   1. Sort rows once per feature (parallel over features when enabled).
+	//   2. Score each threshold from prefix counts (single-threaded; cheap).
 	//   3. Keep the best threshold per feature.
 	//   4. chooseBestSplit picks the overall winner (C4.5 or CART rules).
-	std::vector<SplitCandidateSpec> candidates;
 	const std::size_t featureCount = dataset_->featureNames.size();
-	candidates.reserve(featureCount * 8);
+	std::vector<SortedFeatureView> featureViews(featureCount);
 
+	const auto buildFeatureView = [&](std::size_t featureIndex) {
+		featureViews[featureIndex] =
+			buildSortedFeatureView(rowIndices, featureIndex);
+	};
+
+	if (shouldParallelizeFeatureViews(featureCount))
+	{
+		splitThreadPool_->parallel_for(featureCount, buildFeatureView);
+	}
+	else
+	{
+		for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
+		{
+			buildFeatureView(featureIndex);
+		}
+	}
+
+	std::vector<SplitCandidateSpec> candidates;
+	candidates.reserve(featureCount * 8);
 	for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
 	{
-		const std::vector<double> thresholds =
-			collectNumericThresholdCandidates(rowIndices, featureIndex);
-		for (double threshold : thresholds)
+		const SortedFeatureView &view = featureViews[featureIndex];
+		if (view.thresholds.empty())
 		{
-			candidates.push_back({featureIndex, threshold});
+			continue;
+		}
+
+		for (std::size_t thresholdIndex = 0; thresholdIndex < view.thresholds.size();
+			 ++thresholdIndex)
+		{
+			candidates.push_back({featureIndex, thresholdIndex});
 		}
 	}
 
@@ -723,27 +829,12 @@ C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
 		return SplitResult{};
 	}
 
-	// Define job to score a candidate in lambda function
 	std::vector<SplitResult> scoredCandidates(candidates.size());
-	const auto evaluateCandidate = [&](std::size_t candidateIndex) {
+	for (std::size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex)
+	{
 		const SplitCandidateSpec &candidate = candidates[candidateIndex];
-		scoredCandidates[candidateIndex] =
-			scoreSplit(rowIndices, candidate.featureIndex, candidate.threshold);
-	};
-
-	// Parallelize the scoring of the candidates
-	if (shouldParallelizeSplitSearch(candidates.size()))
-	{
-		splitThreadPool_->parallel_for(candidates.size(), evaluateCandidate);
-	}
-	else
-	{
-		// Same math as parallel path; easier to debug with maxThreadCount = 1.
-		for (std::size_t candidateIndex = 0; candidateIndex < candidates.size();
-			 ++candidateIndex)
-		{
-			evaluateCandidate(candidateIndex);
-		}
+		scoredCandidates[candidateIndex] = scoreSplitFromSorted(
+			featureViews[candidate.featureIndex], candidate.thresholdIndex);
 	}
 
 	return reduceBestPerFeature(scoredCandidates);

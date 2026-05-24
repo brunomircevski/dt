@@ -1,21 +1,17 @@
+// Temporary benchmark entry point (compiled only by benchmark_comparison.py).
 #include "c45_tree.h"
 #include "dataset.h"
-#include "tree_visualization.h"
 
 #include <iomanip>
 #include <iostream>
-#include <vector>
+#include <string>
 
 namespace {
 
-void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
-  std::cout << "Summary:\n";
-
+void printSummary(const C45Tree &tree, const Dataset &dataset) {
   std::size_t correctPredictions = 0;
-  for (std::size_t index = 0; index < dataset.samples.size(); ++index) {
-    const Sample &sample = dataset.samples[index];
-    const std::string prediction = tree.predict(sample);
-    if (prediction == sample.label) {
+  for (const Sample &sample : dataset.samples) {
+    if (tree.predict(sample) == sample.label) {
       ++correctPredictions;
     }
   }
@@ -23,6 +19,7 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
   const double accuracy = static_cast<double>(correctPredictions) /
                           static_cast<double>(dataset.samples.size());
 
+  std::cout << "Summary:\n";
   std::cout << "  checked samples = " << dataset.samples.size() << '\n';
   std::cout << "  correct predictions = " << correctPredictions << '\n';
   std::cout << "  tree depth = " << tree.treeDepth() << '\n';
@@ -37,44 +34,36 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
 
 } // namespace
 
-int main() {
+int main(int argc, char *argv[]) {
   try {
-    // 1. Load the dataset from disk.
-    const Dataset dataset = loadDataset("datasets/covertype_10x_smaller.csv");
-    printDatasetSummary(dataset);
+    if (argc < 2) {
+      std::cerr << "usage: tree_benchmark <cart|c45>\n";
+      return 1;
+    }
 
-    // 2. Train the decision tree.
+    const std::string mode = argv[1];
+    const Dataset dataset = loadDataset("datasets/covertype_10x_smaller.csv");
+
     C45Tree tree;
     TrainingOptions options;
-
-    // --- CART Configuration ---
-    options.impurityMeasure = ImpurityMeasure::Gini;
-    options.splitSelectionMode = SplitSelectionMode::MaxGain;
     options.pruningMode = PruningMode::None;
-    options.ccpAlpha = 20;
     options.maxDepth = 5;
     options.minFeaturesToParallelize = 3;
     options.maxThreadCount = 28;
 
-    // --- C.45 Configuration ---
-    // options.impurityMeasure = ImpurityMeasure::Entropy;
-    // options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
-    // options.pruningMode = PruningMode::PessimisticError;
-    options.pruningConfidenceFactor = 0.0001;
-
-    // options.minSamplesPerLeaf = 1;
+    if (mode == "cart") {
+      options.impurityMeasure = ImpurityMeasure::Gini;
+      options.splitSelectionMode = SplitSelectionMode::MaxGain;
+    } else if (mode == "c45") {
+      options.impurityMeasure = ImpurityMeasure::Entropy;
+      options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
+    } else {
+      std::cerr << "Unknown mode: " << mode << '\n';
+      return 1;
+    }
 
     tree.fit(dataset, options);
-
-    // 3. Print tree
-    std::cout << "Learned tree:\n";
-    tree.print(std::cout);
-    std::cout << '\n';
-
-    generateTreeSvg(tree, "tree.svg", options, dataset);
-
-    // 4. Check accuarcy
-    runPredictionChecks(tree, dataset);
+    printSummary(tree, dataset);
   } catch (const std::exception &exception) {
     std::cerr << "Error: " << exception.what() << '\n';
     return 1;
