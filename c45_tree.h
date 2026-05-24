@@ -71,11 +71,11 @@ struct TrainingOptions {
   // Used to evaluate split quality (e.g., ImpurityMeasure::Gini).
   ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
 
-  // 0 or 1 = single-threaded split search. N > 1 = parallel candidate evaluation.
+  // 0 or 1 = single-threaded feature sorting. N > 1 = parallel buildSortedFeatureView.
   int maxThreadCount = 1;
 
-  // Parallel split search only runs when the candidate count is at least this value.
-  std::size_t minCandidatesToParallelize = 32;
+  // Parallel feature sorting only runs when the dataset has at least this many features.
+  std::size_t minFeaturesToParallelize = 4;
 };
 
 struct SplitResult {
@@ -150,20 +150,42 @@ private:
 
   mutable std::unique_ptr<SplitThreadPool> splitThreadPool_;
 
-  int effectiveSplitThreadCount() const;
-  bool shouldParallelizeSplitSearch(std::size_t candidateCount) const;
+  bool shouldParallelizeFeatureViews(std::size_t featureCount) const;
   SplitResult
   reduceBestPerFeature(const std::vector<SplitResult> &scoredCandidates) const;
 
+  // One training row sorted by a single feature value at the current node.
+  struct SortedFeatureRow {
+    std::size_t rowIndex = 0;
+    double value = 0.0;
+    std::string label;
+  };
+
+  // Per-feature cache for split search: sort once, score many thresholds cheaply.
+  struct SortedFeatureView {
+    std::size_t featureIndex = 0;
+    std::vector<SortedFeatureRow> rows;  // sorted by value, then label (legacy order)
+    std::vector<double> thresholds;      // candidate cut points
+    std::vector<std::size_t> leftSizes;  // rows[0..leftSize-1] go left for each threshold
+    // prefixClassCounts[i] = class histogram of rows[0..i-1]
+    std::vector<std::map<std::string, int>> prefixClassCounts;
+    double parentImpurity = 0.0;  // impurity before any split on this feature
+    std::size_t totalRows = 0;
+  };
+
   std::map<std::string, int>
   computeClassCounts(const std::vector<std::size_t> &rowIndices) const;
+  // Entropy or Gini from a class histogram (no row scan).
+  double impurityFromClassCounts(const std::map<std::string, int> &counts,
+                                 std::size_t total) const;
+  // Sort rows by one feature and precompute thresholds + prefix class counts.
+  SortedFeatureView buildSortedFeatureView(
+      const std::vector<std::size_t> &rowIndices, std::size_t featureIndex) const;
+  // Score one threshold using the sorted view (no partitionRows).
+  SplitResult scoreSplitFromSorted(const SortedFeatureView &view,
+                                   std::size_t thresholdIndex) const;
   std::unique_ptr<Node> buildNode(const std::vector<std::size_t> &rowIndices,
                                   int depth) const;
-  std::vector<double>
-  collectNumericThresholdCandidates(const std::vector<std::size_t> &rowIndices,
-                                    std::size_t featureIndex) const;
-  SplitResult scoreSplit(const std::vector<std::size_t> &rowIndices,
-                         std::size_t featureIndex, double threshold) const;
   SplitResult chooseBestSplit(const std::vector<SplitResult> &candidates) const;
   bool shouldStopGrowing(const std::vector<std::size_t> &rowIndices,
                          int depth) const;
