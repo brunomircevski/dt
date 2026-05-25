@@ -40,7 +40,7 @@ enum class PruningMode {
   CostComplexity
 };
 
-enum class GleamsMode {
+enum class ParallelMode {
   Serial,  // recursive buildNode + sequential findBestSplit
   VDa,     // async per-feature sort/score pipeline in findBestSplit
   Ta,      // async node expansion (no workers blocking on children)
@@ -86,7 +86,7 @@ struct TrainingOptions {
   ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
 
   // GLEAMS parallelism mode (see wielowątkowość.md).
-  GleamsMode gleamsMode = GleamsMode::Serial;
+  ParallelMode gleamsMode = ParallelMode::Serial;
 
   // Thread count for vdExecutor and taExecutor (when gleamsMode uses them).
   int maxThreadCount = 1;

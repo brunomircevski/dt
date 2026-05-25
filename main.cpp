@@ -48,7 +48,7 @@ int main() {
     TrainingOptions options;
 
     options.maxDepth = 5;
-    options.gleamsMode = GleamsMode::VDTa;
+    options.gleamsMode = ParallelMode::VDTa;
     options.minFeaturesToParallelize = 4;
     options.minRowsToParallelize = 16;
     options.maxThreadCount = 28;
