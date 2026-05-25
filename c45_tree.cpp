@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <map>
 #include <mutex>
+#include <future>
 #include <queue>
 #include <stdexcept>
 #include <thread>
@@ -66,14 +67,6 @@ namespace
 		return lhs.threshold < rhs.threshold - epsilon;
 	}
 
-	// One possible question at a node: "Is feature X <= threshold?"
-	// We collect many of these, score them, then pick the winner.
-	struct SplitCandidateSpec
-	{
-		std::size_t featureIndex = 0;
-		std::size_t thresholdIndex = 0;  // index into SortedFeatureView::thresholds
-	};
-
 	// Right-child histogram: total counts minus left prefix counts.
 	std::map<std::string, int> subtractClassCounts(
 		const std::map<std::string, int> &total,
@@ -99,135 +92,6 @@ namespace
 
 } // namespace
 
-// Thread pool reused for the whole fit() call.
-// Why a pool? Creating OS threads inside every findBestSplit() would be very slow.
-// Workers sit in a loop, take tasks from a queue, and run them.
-class C45Tree::SplitThreadPool
-{
-public:
-	explicit SplitThreadPool(std::size_t threadCount)
-	{
-		if (threadCount == 0)
-		{
-			threadCount = 1;
-		}
-
-		workers_.reserve(threadCount);
-		for (std::size_t index = 0; index < threadCount; ++index)
-		{
-			workers_.emplace_back([this]() { workerLoop(); });
-		}
-	}
-
-	~SplitThreadPool()
-	{
-		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			stop_ = true;
-		}
-		taskCv_.notify_all();
-		for (std::thread &worker : workers_)
-		{
-			if (worker.joinable())
-			{
-				worker.join();
-			}
-		}
-	}
-
-	SplitThreadPool(const SplitThreadPool &) = delete;
-	SplitThreadPool &operator=(const SplitThreadPool &) = delete;
-
-	// Run work(0), work(1), ... work(count-1) on several threads.
-	// Each worker grabs the next index from a shared counter until all are done.
-	// The caller blocks until every worker finishes (so findBestSplit can safely
-	// read featureViews after this returns).
-	void parallel_for(std::size_t count,
-					  const std::function<void(std::size_t)> &work)
-	{
-		if (count == 0)
-		{
-			return;
-		}
-
-		if (workers_.empty())
-		{
-			for (std::size_t index = 0; index < count; ++index)
-			{
-				work(index);
-			}
-			return;
-		}
-
-		std::atomic<std::size_t> nextIndex{0};
-		const std::size_t workersToUse = std::min(workers_.size(), count);
-		std::atomic<std::size_t> activeWorkers{workersToUse};
-
-		for (std::size_t workerIndex = 0; workerIndex < workersToUse; ++workerIndex)
-		{
-			enqueue([&]() {
-				while (true)
-				{
-					const std::size_t index =
-						nextIndex.fetch_add(1, std::memory_order_relaxed);
-					if (index >= count)
-					{
-						break;
-					}
-					work(index);
-				}
-
-				if (activeWorkers.fetch_sub(1, std::memory_order_acq_rel) == 1)
-				{
-					std::lock_guard<std::mutex> lock(doneMutex_);
-					doneCv_.notify_one();
-				}
-			});
-		}
-
-		std::unique_lock<std::mutex> lock(doneMutex_);
-		doneCv_.wait(lock, [&]() { return activeWorkers.load() == 0; });
-	}
-
-private:
-	// Each OS thread runs this forever until the pool is destroyed.
-	void workerLoop()
-	{
-		while (true)
-		{
-			std::function<void()> task;
-			{
-				std::unique_lock<std::mutex> lock(mutex_);
-				taskCv_.wait(lock, [&]() { return stop_ || !tasks_.empty(); });
-				if (stop_ && tasks_.empty())
-				{
-					return;
-				}
-				task = std::move(tasks_.front());
-				tasks_.pop();
-			}
-			task();
-		}
-	}
-
-	void enqueue(std::function<void()> task)
-	{
-		{
-			std::lock_guard<std::mutex> lock(mutex_);
-			tasks_.push(std::move(task));
-		}
-		taskCv_.notify_one();
-	}
-
-	std::vector<std::thread> workers_;
-	std::queue<std::function<void()>> tasks_;
-	std::mutex mutex_;
-	std::condition_variable taskCv_;
-	bool stop_ = false;
-	std::mutex doneMutex_;
-	std::condition_variable doneCv_;
-};
-
 C45Tree::C45Tree() = default;
 
 C45Tree::~C45Tree() = default;
@@ -244,12 +108,20 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 	dataset_ = &dataset;
 	options_ = options;
 
-	// Thread pool parallelizes buildSortedFeatureView across features (see findBestSplit).
-	splitThreadPool_.reset();
-	if (options_.maxThreadCount > 1)
+	fitContext_ = std::make_unique<FitContext>();
+	const std::size_t threadCount =
+		static_cast<std::size_t>(std::max(options_.maxThreadCount, 1));
+	const bool needsVd = options_.gleamsMode == GleamsMode::VDa ||
+						 options_.gleamsMode == GleamsMode::VDTa;
+	const bool needsTa = options_.gleamsMode == GleamsMode::Ta ||
+						 options_.gleamsMode == GleamsMode::VDTa;
+	if (needsVd)
 	{
-		splitThreadPool_ = std::make_unique<SplitThreadPool>(
-			static_cast<std::size_t>(options_.maxThreadCount));
+		fitContext_->vdExecutor = std::make_unique<TaskExecutor>(threadCount);
+	}
+	if (needsTa)
+	{
+		fitContext_->taExecutor = std::make_unique<TaskExecutor>(threadCount);
 	}
 
 	// rowIndices lists which training rows "belong" to the current node.
@@ -260,9 +132,31 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 		rowIndices[i] = i;
 	}
 
-	// Build the whole tree recursively.
 	const auto buildStart = std::chrono::steady_clock::now();
-	root_ = buildNode(rowIndices, 0);
+	if (usesAsyncTreeBuilding())
+	{
+		auto rootPromise = std::make_shared<std::promise<std::unique_ptr<Node>>>();
+		std::future<std::unique_ptr<Node>> rootFuture = rootPromise->get_future();
+		auto onComplete = wrapNodeOnComplete(
+			[rootPromise](std::unique_ptr<Node> node) mutable {
+				rootPromise->set_value(std::move(node));
+			});
+
+		const RowIndexList rootRows =
+			std::make_shared<std::vector<std::size_t>>(std::move(rowIndices));
+		fitContext_->pendingNodeTasks.fetch_add(1, std::memory_order_relaxed);
+		fitContext_->taExecutor->submit([this, rootRows,
+										 onComplete = std::move(onComplete)]() mutable {
+			expandNodeAsync({rootRows, 0, std::move(onComplete)});
+		});
+
+		waitForAllNodeTasks();
+		root_ = rootFuture.get();
+	}
+	else
+	{
+		root_ = buildNode(rowIndices, 0);
+	}
 	buildTimeSeconds_ = std::chrono::duration<double>(
 							std::chrono::steady_clock::now() - buildStart)
 							.count();
@@ -280,7 +174,7 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 								.count();
 	}
 
-	splitThreadPool_.reset();
+	fitContext_.reset();
 }
 
 std::string C45Tree::predict(const Sample &sample) const
@@ -720,10 +614,90 @@ C45Tree::chooseBestSplit(const std::vector<SplitResult> &candidates) const
 	return bestCandidate ? *bestCandidate : SplitResult{};
 }
 
-bool C45Tree::shouldParallelizeFeatureViews(std::size_t featureCount) const
+bool C45Tree::usesVerticalParallelism() const
 {
-	return splitThreadPool_ != nullptr &&
+	return fitContext_ != nullptr && fitContext_->vdExecutor != nullptr;
+}
+
+bool C45Tree::usesAsyncTreeBuilding() const
+{
+	return fitContext_ != nullptr && fitContext_->taExecutor != nullptr;
+}
+
+bool C45Tree::shouldParallelizeVD(std::size_t featureCount) const
+{
+	return usesVerticalParallelism() &&
 		   featureCount >= options_.minFeaturesToParallelize;
+}
+
+bool C45Tree::shouldParallelizeTa(std::size_t rowCount) const
+{
+	return usesAsyncTreeBuilding() &&
+		   rowCount >= options_.minRowsToParallelize;
+}
+
+void C45Tree::notifyNodeTaskFinished() const
+{
+	if (fitContext_->pendingNodeTasks.fetch_sub(1, std::memory_order_acq_rel) == 1)
+	{
+		std::lock_guard<std::mutex> lock(fitContext_->completionMutex);
+		fitContext_->completionCv.notify_all();
+	}
+}
+
+void C45Tree::waitForAllNodeTasks() const
+{
+	std::unique_lock<std::mutex> lock(fitContext_->completionMutex);
+	fitContext_->completionCv.wait(lock, [this]() {
+		return fitContext_->pendingNodeTasks.load(std::memory_order_acquire) == 0;
+	});
+}
+
+std::function<void(std::unique_ptr<Node>)> C45Tree::wrapNodeOnComplete(
+	std::function<void(std::unique_ptr<Node>)> userCallback) const
+{
+	return [this, userCallback = std::move(userCallback)](std::unique_ptr<Node> node) mutable {
+		userCallback(std::move(node));
+		notifyNodeTaskFinished();
+	};
+}
+
+SplitResult C45Tree::scoreAllThresholdsForFeature(const SortedFeatureView &view) const
+{
+	SplitResult bestForFeature;
+	bool hasBest = false;
+
+	for (std::size_t thresholdIndex = 0; thresholdIndex < view.thresholds.size();
+		 ++thresholdIndex)
+	{
+		const SplitResult candidate =
+			scoreSplitFromSorted(view, thresholdIndex);
+		if (!candidate.valid)
+		{
+			continue;
+		}
+
+		if (!hasBest)
+		{
+			bestForFeature = candidate;
+			hasBest = true;
+			continue;
+		}
+
+		if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
+		{
+			if (isBetterMaxGain(candidate, bestForFeature, options_.epsilon))
+			{
+				bestForFeature = candidate;
+			}
+		}
+		else if (isBetterC45(candidate, bestForFeature, options_.epsilon))
+		{
+			bestForFeature = candidate;
+		}
+	}
+
+	return bestForFeature;
 }
 
 SplitResult C45Tree::reduceBestPerFeature(
@@ -780,64 +754,58 @@ SplitResult C45Tree::reduceBestPerFeature(
 SplitResult
 C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
 {
-	// This function answers: "What is the best split for the rows at this node?"
-	//
-	// Steps:
-	//   1. Sort rows once per feature (parallel over features when enabled).
-	//   2. Score each threshold from prefix counts (single-threaded; cheap).
-	//   3. Keep the best threshold per feature.
-	//   4. chooseBestSplit picks the overall winner (C4.5 or CART rules).
 	const std::size_t featureCount = dataset_->featureNames.size();
-	std::vector<SortedFeatureView> featureViews(featureCount);
-
-	const auto buildFeatureView = [&](std::size_t featureIndex) {
-		featureViews[featureIndex] =
-			buildSortedFeatureView(rowIndices, featureIndex);
-	};
-
-	if (shouldParallelizeFeatureViews(featureCount))
-	{
-		splitThreadPool_->parallel_for(featureCount, buildFeatureView);
-	}
-	else
-	{
-		for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
-		{
-			buildFeatureView(featureIndex);
-		}
-	}
-
-	std::vector<SplitCandidateSpec> candidates;
-	candidates.reserve(featureCount * 8);
-	for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
-	{
-		const SortedFeatureView &view = featureViews[featureIndex];
-		if (view.thresholds.empty())
-		{
-			continue;
-		}
-
-		for (std::size_t thresholdIndex = 0; thresholdIndex < view.thresholds.size();
-			 ++thresholdIndex)
-		{
-			candidates.push_back({featureIndex, thresholdIndex});
-		}
-	}
-
-	if (candidates.empty())
+	if (featureCount == 0)
 	{
 		return SplitResult{};
 	}
 
-	std::vector<SplitResult> scoredCandidates(candidates.size());
-	for (std::size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex)
+	if (shouldParallelizeVD(featureCount))
 	{
-		const SplitCandidateSpec &candidate = candidates[candidateIndex];
-		scoredCandidates[candidateIndex] = scoreSplitFromSorted(
-			featureViews[candidate.featureIndex], candidate.thresholdIndex);
+		// VDa: one shared row list; each worker sorts + scores its feature (no busy-poll).
+		const RowIndexList rows =
+			std::make_shared<std::vector<std::size_t>>(rowIndices);
+		std::vector<std::future<SplitResult>> futures(featureCount);
+		for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
+		{
+			futures[featureIndex] = fitContext_->vdExecutor->submit(
+				[this, rows, featureIndex]() {
+					const SortedFeatureView view =
+						buildSortedFeatureView(*rows, featureIndex);
+					return scoreAllThresholdsForFeature(view);
+				});
+		}
+
+		std::vector<SplitResult> featureBestCandidates;
+		featureBestCandidates.reserve(featureCount);
+		for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
+		{
+			const SplitResult bestForFeature = futures[featureIndex].get();
+			if (bestForFeature.valid)
+			{
+				featureBestCandidates.push_back(bestForFeature);
+			}
+		}
+
+		return chooseBestSplit(featureBestCandidates);
 	}
 
-	return reduceBestPerFeature(scoredCandidates);
+	// Serial / Ta: one feature at a time (sort + score).
+	std::vector<SplitResult> featureBestCandidates;
+	featureBestCandidates.reserve(featureCount);
+
+	for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
+	{
+		const SortedFeatureView view =
+			buildSortedFeatureView(rowIndices, featureIndex);
+		const SplitResult bestForFeature = scoreAllThresholdsForFeature(view);
+		if (bestForFeature.valid)
+		{
+			featureBestCandidates.push_back(bestForFeature);
+		}
+	}
+
+	return chooseBestSplit(featureBestCandidates);
 }
 
 bool C45Tree::shouldStopGrowing(const std::vector<std::size_t> &rowIndices,
@@ -865,56 +833,138 @@ bool C45Tree::shouldStopGrowing(const std::vector<std::size_t> &rowIndices,
 	return false;
 }
 
-std::unique_ptr<Node>
-C45Tree::buildNode(const std::vector<std::size_t> &rowIndices,
-				   int depth) const
+bool C45Tree::isSplitRejected(const SplitResult &split) const
 {
-	// THEORY:
-	// Building the tree is recursive.
-	//
-	// That means the function calls itself on smaller and smaller groups.
-	// Each call builds one node.
+	return !split.valid ||
+		   (options_.splitSelectionMode != SplitSelectionMode::MaxGain &&
+			split.gainRatio <= options_.epsilon);
+}
 
-	// If all rows already belong to one class, we are done.
+C45Tree::NodeExpandResult
+C45Tree::expandOneNode(const std::vector<std::size_t> &rowIndices,
+					   int depth) const
+{
 	if (allSameLabel(rowIndices))
 	{
-		return Node::createLeaf(dataset_->samples[rowIndices.front()].label,
-								rowIndices.size());
+		return {Node::createLeaf(dataset_->samples[rowIndices.front()].label,
+								 rowIndices.size()),
+				{}};
 	}
 
 	if (shouldStopGrowing(rowIndices, depth))
 	{
-		return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
+		return {Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size()),
+				{}};
 	}
 
-	// Ask every feature/threshold combination which split is best here.
 	const SplitResult split = findBestSplit(rowIndices);
-	if (!split.valid ||
-		(options_.splitSelectionMode != SplitSelectionMode::MaxGain && split.gainRatio <= options_.epsilon))
+	if (isSplitRejected(split))
 	{
-		// No split beats a simple majority-vote leaf — stop growing this branch.
-		return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
+		return {Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size()),
+				{}};
 	}
 
-	// We only partition once, using the winning split (not during every candidate test).
-	const PartitionedRows partitions =
+	PartitionedRows partitions =
 		partitionRows(rowIndices, split.featureIndex, split.threshold);
 
 	if (partitions.leftRows.empty() || partitions.rightRows.empty())
 	{
-		return Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size());
+		return {Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size()),
+				{}};
 	}
 
-	// Internal node: walk left if feature <= threshold, else right.
-	std::unique_ptr<Node> node =
-		Node::createDecision(split.featureName, split.featureIndex,
-							 split.threshold, rowIndices.size());
+	return {Node::createDecision(split.featureName, split.featureIndex, split.threshold,
+							   rowIndices.size()),
+			std::move(partitions)};
+}
 
-	// Same buildNode logic on smaller row sets — classic divide and conquer.
-	node->leftChild = buildNode(partitions.leftRows, depth + 1);
-	node->rightChild = buildNode(partitions.rightRows, depth + 1);
+std::unique_ptr<Node>
+C45Tree::buildNode(const std::vector<std::size_t> &rowIndices,
+				   int depth) const
+{
+	NodeExpandResult expanded = expandOneNode(rowIndices, depth);
+	if (expanded.node->isLeaf)
+	{
+		return std::move(expanded.node);
+	}
 
-	return node;
+	expanded.node->leftChild =
+		buildNode(expanded.partitions.leftRows, depth + 1);
+	expanded.node->rightChild =
+		buildNode(expanded.partitions.rightRows, depth + 1);
+	return std::move(expanded.node);
+}
+
+void C45Tree::scheduleAsyncChildren(
+	std::unique_ptr<Node> parent, PartitionedRows partitions, int depth,
+	std::function<void(std::unique_ptr<Node>)> onComplete) const
+{
+	auto parentHolder =
+		std::make_shared<std::unique_ptr<Node>>(std::move(parent));
+	auto pendingChildren = std::make_shared<std::atomic<int>>(2);
+	auto childMutex = std::make_shared<std::mutex>();
+
+	const auto attachChild =
+		[parentHolder, pendingChildren, childMutex,
+		 onComplete](bool isLeft) {
+			return [parentHolder, pendingChildren, childMutex, onComplete,
+					isLeft](std::unique_ptr<Node> child) {
+				{
+					std::lock_guard<std::mutex> lock(*childMutex);
+					if (isLeft)
+					{
+						(*parentHolder)->leftChild = std::move(child);
+					}
+					else
+					{
+						(*parentHolder)->rightChild = std::move(child);
+					}
+				}
+
+				if (pendingChildren->fetch_sub(1, std::memory_order_acq_rel) == 1)
+				{
+					onComplete(std::move(*parentHolder));
+				}
+			};
+		};
+
+	const auto submitChild = [&](std::vector<std::size_t> childRows, bool isLeft) {
+		const RowIndexList childRowsShared =
+			std::make_shared<std::vector<std::size_t>>(std::move(childRows));
+		fitContext_->pendingNodeTasks.fetch_add(1, std::memory_order_relaxed);
+		fitContext_->taExecutor->submit(
+			[this, childRowsShared, depth, isLeft,
+			 childOnComplete = wrapNodeOnComplete(attachChild(isLeft))]() mutable {
+				expandNodeAsync(
+					{childRowsShared, depth + 1, std::move(childOnComplete)});
+			});
+	};
+
+	submitChild(std::move(partitions.leftRows), true);
+	submitChild(std::move(partitions.rightRows), false);
+}
+
+void C45Tree::expandNodeAsync(NodeBuildJob job) const
+{
+	const RowIndexList &rowIndices = job.rowIndices;
+	const int depth = job.depth;
+	std::function<void(std::unique_ptr<Node>)> onComplete = std::move(job.onComplete);
+
+	if (!shouldParallelizeTa(rowIndices->size()))
+	{
+		onComplete(buildNode(*rowIndices, depth));
+		return;
+	}
+
+	NodeExpandResult expanded = expandOneNode(*rowIndices, depth);
+	if (expanded.node->isLeaf)
+	{
+		onComplete(std::move(expanded.node));
+		return;
+	}
+
+	scheduleAsyncChildren(std::move(expanded.node), std::move(expanded.partitions),
+						  depth, std::move(onComplete));
 }
 
 std::size_t C45Tree::countCorrectPredictions(

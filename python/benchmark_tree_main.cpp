@@ -48,7 +48,9 @@ int main(int argc, char *argv[]) {
     TrainingOptions options;
     options.pruningMode = PruningMode::None;
     options.maxDepth = 5;
+    options.gleamsMode = GleamsMode::VDTa;
     options.minFeaturesToParallelize = 3;
+    options.minRowsToParallelize = 32;
     options.maxThreadCount = 28;
 
     if (mode == "cart") {

@@ -2,10 +2,15 @@
 
 #include "dataset.h"
 #include "node.h"
+#include "task_executor.h"
 
+#include <atomic>
+#include <condition_variable>
+#include <functional>
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -31,6 +36,13 @@ enum class PruningMode {
   PessimisticError,
   // CART: Minimal Cost-Complexity Pruning (uses ccpAlpha).
   CostComplexity
+};
+
+enum class GleamsMode {
+  Serial,  // recursive buildNode + sequential findBestSplit
+  VDa,     // async per-feature sort/score pipeline in findBestSplit
+  Ta,      // async node expansion (no workers blocking on children)
+  VDTa     // both VD and Ta (separate executors to avoid deadlock)
 };
 
 struct TrainingOptions {
@@ -71,11 +83,17 @@ struct TrainingOptions {
   // Used to evaluate split quality (e.g., ImpurityMeasure::Gini).
   ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
 
-  // 0 or 1 = single-threaded feature sorting. N > 1 = parallel buildSortedFeatureView.
+  // GLEAMS parallelism mode (see wielowątkowość.md).
+  GleamsMode gleamsMode = GleamsMode::Serial;
+
+  // Thread count for vdExecutor and taExecutor (when gleamsMode uses them).
   int maxThreadCount = 1;
 
-  // Parallel feature sorting only runs when the dataset has at least this many features.
+  // VD pipeline only runs when the dataset has at least this many features.
   std::size_t minFeaturesToParallelize = 4;
+
+  // Ta/VDTa async node tasks only when a node has at least this many rows.
+  std::size_t minRowsToParallelize = 32;
 };
 
 struct SplitResult {
@@ -128,10 +146,31 @@ public:
   SplitResult findBestSplit(const std::vector<std::size_t> &rowIndices) const;
 
 private:
-  class SplitThreadPool;
+  struct FitContext {
+    std::unique_ptr<TaskExecutor> vdExecutor;
+    std::unique_ptr<TaskExecutor> taExecutor;
+    std::atomic<std::size_t> pendingNodeTasks{0};
+    std::mutex completionMutex;
+    std::condition_variable completionCv;
+  };
+
   struct PartitionedRows {
     std::vector<std::size_t> leftRows;
     std::vector<std::size_t> rightRows;
+  };
+
+  using RowIndexList = std::shared_ptr<const std::vector<std::size_t>>;
+
+  struct NodeBuildJob {
+    RowIndexList rowIndices;
+    int depth = 0;
+    std::function<void(std::unique_ptr<Node>)> onComplete;
+  };
+
+  // Result of growing one node: leaf, or decision node + row sets for children.
+  struct NodeExpandResult {
+    std::unique_ptr<Node> node;
+    PartitionedRows partitions;
   };
 
   // We only keep a pointer to the dataset. The tree does not own the dataset.
@@ -148,9 +187,17 @@ private:
   double buildTimeSeconds_ = 0.0;
   double pruneTimeSeconds_ = 0.0;
 
-  mutable std::unique_ptr<SplitThreadPool> splitThreadPool_;
+  mutable std::unique_ptr<FitContext> fitContext_;
 
-  bool shouldParallelizeFeatureViews(std::size_t featureCount) const;
+  bool usesVerticalParallelism() const;
+  bool usesAsyncTreeBuilding() const;
+  bool shouldParallelizeVD(std::size_t featureCount) const;
+  bool shouldParallelizeTa(std::size_t rowCount) const;
+  void waitForAllNodeTasks() const;
+  void notifyNodeTaskFinished() const;
+  std::function<void(std::unique_ptr<Node>)>
+  wrapNodeOnComplete(std::function<void(std::unique_ptr<Node>)> userCallback) const;
+
   SplitResult
   reduceBestPerFeature(const std::vector<SplitResult> &scoredCandidates) const;
 
@@ -184,8 +231,16 @@ private:
   // Score one threshold using the sorted view (no partitionRows).
   SplitResult scoreSplitFromSorted(const SortedFeatureView &view,
                                    std::size_t thresholdIndex) const;
+  SplitResult scoreAllThresholdsForFeature(const SortedFeatureView &view) const;
+  NodeExpandResult expandOneNode(const std::vector<std::size_t> &rowIndices,
+                                 int depth) const;
   std::unique_ptr<Node> buildNode(const std::vector<std::size_t> &rowIndices,
                                   int depth) const;
+  void expandNodeAsync(NodeBuildJob job) const;
+  void scheduleAsyncChildren(std::unique_ptr<Node> parent,
+                             PartitionedRows partitions, int depth,
+                             std::function<void(std::unique_ptr<Node>)> onComplete) const;
+  bool isSplitRejected(const SplitResult &split) const;
   SplitResult chooseBestSplit(const std::vector<SplitResult> &candidates) const;
   bool shouldStopGrowing(const std::vector<std::size_t> &rowIndices,
                          int depth) const;

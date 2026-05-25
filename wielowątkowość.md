@@ -1,47 +1,86 @@
-# Wielowątkowość w `C45Tree`
+# Wielowątkowość w `C45Tree` (GLEAMS)
 
-## Stan aktualny: **VD-GLEAMS** (Vertical Data Parallelism)
+Tryb wybiera się przez `TrainingOptions::gleamsMode` (`Serial`, `VDa`, `Ta`, `VDTa`). Równoległość nie włącza się już automatycznie przy `maxThreadCount > 1`.
 
-Zrównoleglenie **po cechach (kolumnach)** przy wyszukiwaniu splitu w jednym węźle. Budowa drzewa (`buildNode`), ocena progów i pruning pozostają sekwencyjne.
+## Tryby
 
-## Jak to działa
+| `gleamsMode` | Budowa drzewa | `findBestSplit` | Executory |
+|--------------|---------------|-----------------|-----------|
+| **Serial** | rekurencyjny `buildNode` (DFS) | sekwencyjnie po cechach | brak |
+| **VDa** | `buildNode` (DFS) | pipeline VD (futures per cecha) | `vdExecutor` |
+| **Ta** | `expandNodeAsync` (callbacki, bez czekania na dzieci) | sekwencyjnie | `taExecutor` |
+| **VDTa** | `expandNodeAsync` | pipeline VD | **oba** (`vdExecutor` + `taExecutor`) |
 
-W każdym węźle `findBestSplit` musi ocenić wszystkie cechy. Dla każdej cechy `buildSortedFeatureView` sortuje wiersze węzła i buduje listę progów (koszt ~O(n log n)) — to dominująca praca.
+## Dwie pule (`TaskExecutor`)
 
-**VD:** te sortowania uruchamiane są równolegle — `SplitThreadPool::parallel_for` po `featureIndex`, każdy wątek zapisuje do `featureViews[i]`. Po zakończeniu (wywołujący czeka) sekwencyjnie oceniane są progi (`scoreSplitFromSorted`), wybierany jest najlepszy split, a `buildNode` rekurencyjnie idzie w lewo/prawo jednym wątkiem.
+W **VDTa** worker `taExecutor` woła `findBestSplit` z pipeline VD. Jedna wspólna pula mogłaby zablokować się (worker Ta czeka na VD na tej samej kolejce). Dlatego są **osobne** executory o tym samym `maxThreadCount`.
 
-```
-fit()
-  buildNode()                         ← 1 wątek (DFS)
-    findBestSplit()
-      parallel: buildSortedFeatureView × F   ← VD (pula wątków)
-      sekwencyjnie: scoreSplitFromSorted, wybór splitu
-    partitionRows (1×)
-  pruning                             ← 1 wątek
-```
+Pliki: `task_executor.h`, `task_executor.cpp` — kontrakt `submit()` / `std::future` (docelowo ten sam interfejs pod CUDA).
 
-Pula `SplitThreadPool` żyje przez całe `fit()` (`c45_tree.cpp`). Równoległość na progach była wcześniej testowana i **usunięta** — po optymalizacji prefix sums nie dawała zysku.
+## VDa — pipeline w `findBestSplit`
 
----
+1. Jedna współdzielona lista wierszy (`shared_ptr`) na węzeł — bez kopiowania indeksów per cecha.
+2. Dla każdej cechy: `vdExecutor->submit` → sort + `scoreAllThresholdsForFeature` w tym samym workerze.
+3. Główny wątek: `future::get()` per cecha (blokada, bez busy-poll) → `chooseBestSplit`.
+
+**Determinizm** jak w Serial (wynik per cecha zapisany po indeksie, tie-breakery po wartościach).
+
+Próg VD: `minFeaturesToParallelize` (domyślnie 4).
+
+## Budowa węzła — `expandOneNode`
+
+Wspólna logika dla wszystkich trybów: liść / stop / `findBestSplit` / `partitionRows` → liść albo węzeł decyzyjny + partycje.
+
+- **Serial / VDa:** `buildNode` → `expandOneNode`, potem rekurencyjnie `buildNode` na dzieciach.
+- **Ta / VDTa:** `expandNodeAsync` → `expandOneNode`, potem `scheduleAsyncChildren` (submit na `taExecutor`).
+- Małe węzły w Ta: fallback do `buildNode` (sync).
+
+## Ta / VDTa — `expandNodeAsync`
+
+- Zadanie węzła **nie czeka** na dzieci na puli Ta; dzieci podpinane callbackami (`pending` + mutex).
+- `fit()` czeka na `pendingNodeTasks == 0` i `future` korzenia.
+- Małe węzły (`rowIndices.size() < minRowsToParallelize`, domyślnie 32): `expandNodeSync` (= `buildNode`) — mniejszy narzut.
+- Build release: `-O2` w `.vscode/tasks.json`.
 
 ## Konfiguracja
 
 | Opcja | Znaczenie |
 |-------|-----------|
-| `maxThreadCount` | Liczba wątków (1 = bez równoległości) |
-| `minFeaturesToParallelize` | Min. liczba cech, by włączyć VD (domyślnie 4) |
+| `gleamsMode` | Serial / VDa / Ta / VDTa |
+| `maxThreadCount` | Wątki w `vdExecutor` i/lub `taExecutor` |
+| `minFeaturesToParallelize` | Min. liczba cech dla VD |
+| `minRowsToParallelize` | Min. liczba wierszy w węźle dla Ta |
 
-Ustawienia w `c45_tree.h`, `main.cpp` (np. 28 wątków, próg 3 cech).
+## Diagram (VDTa)
 
----
+```
+fit()
+  taExecutor: expandNodeAsync(root)
+    findBestSplit()  ──► vdExecutor: buildSortedFeatureView × F
+                       koordynator: score gdy future ready
+    partitionRows (1×)
+    taExecutor: expandNodeAsync(left), expandNodeAsync(right)  // bez latch na dzieciach
+  wait: pendingNodeTasks == 0, root future
+  pruning (1 wątek)
+```
 
-## Wyniki (Covertype, 58 101 próbek, CART, `maxDepth = 5`)
+## Weryfikacja
 
-| Wątki | Czas budowy | Model |
-|-------|-------------|--------|
-| 1 | ~22 s | depth 5, 45 węzłów, acc. 71,05% |
-| 28 | ~3,8 s | **identyczny** |
+Ten sam dataset i opcje CART — dla wszystkich czterech `gleamsMode` oczekiwana **identyczna** głębokość, liczba węzłów i accuracy; różny czas budowy.
 
-Przyspieszenie ~5,8× przy tej samej strukturze drzewa. Sort `(value, label)` zapewnia determinizm przy remisach wartości.
+Przykład (Covertype, `maxDepth = 5`, `maxThreadCount = 28`):
 
-Optymalizacja algorytmu (bez wątków): `SortedFeatureView` + prefix sums — sort raz na cechę, `partitionRows` tylko po wybranym splicie (~38 s → ~22 s na 1 wątku).
+```bash
+g++ -std=c++17 -O2 -pthread -I. main.cpp c45_tree.cpp task_executor.cpp dataset.cpp node.cpp tree_visualization.cpp pruning/*.cpp -o tree
+./tree   # ustaw gleamsMode w main.cpp lub benchmark
+```
+
+## Wyniki testów (czas budowy)
+
+Konfiguracja wspólna: CART (Gini, `MaxGain`), `maxThreadCount = 28`, `-O2`, `minFeaturesToParallelize = 4`, `minRowsToParallelize = 32`. Metryka: `build time` [s].
+
+| Dataset | `maxDepth` | Serial [s] | Ta [s] | VDa [s] | VDTa [s] |
+|---------|------------|------------|--------|---------|----------|
+| `covertype_10x_smaller.csv` | 35 | 9.0 | 3.8 | 1.8 | 1.4 |
+| `covertype.csv` | 5 | 38.8 | 32.3 | 10.2 | 10.3 |
+| `covertype.csv` | 46 | 110.9 | 45.7 | 22.8 | 20.8 |
