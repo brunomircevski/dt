@@ -47,7 +47,7 @@ int main() {
     C45Tree tree;
     TrainingOptions options;
 
-    options.maxDepth = 50;
+    options.maxDepth = 5;
     options.gleamsMode = GleamsMode::VDTa;
     options.minFeaturesToParallelize = 4;
     options.minRowsToParallelize = 16;
@@ -57,7 +57,7 @@ int main() {
     options.impurityMeasure = ImpurityMeasure::Gini;
     options.splitSelectionMode = SplitSelectionMode::MaxGain;
     options.pruningMode = PruningMode::None;
-    options.ccpAlpha = 20;
+    options.ccpAlpha = 2100;
 
     // --- C.45 Configuration ---
     // options.impurityMeasure = ImpurityMeasure::Entropy;

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-import csv
-import re
+import contextlib
+import io
 import sys
+import time
 from pathlib import Path
 
 try:
@@ -138,7 +139,9 @@ def main():
         max_depth=100,
         node_purity=0.95
     )
+    build_start = time.perf_counter()
     model.fit(frame)
+    build_time_seconds = time.perf_counter() - build_start
 
     feature_frame = frame.drop(columns=["target"])
     predictions = model.predict(feature_frame)
@@ -149,8 +152,6 @@ def main():
     accuracy = correct_predictions / len(actual_labels)
 
     print("Learned tree:")
-    import io
-    import contextlib
     f = io.StringIO()
     with contextlib.redirect_stdout(f):
         print_tree(model.get_root_node(), frame)
@@ -181,17 +182,14 @@ def main():
             svg_file.write(svg_content)
     except Exception as e:
         print(f"Error generating SVG: {e}")
-    print("Prediction summary:")
+    print("Summary:")
     print(f"  checked samples = {len(actual_labels)}")
     print(f"  correct predictions = {correct_predictions}")
     print(f"  tree depth = {tree_depth}")
     print(f"  node count = {node_count}")
     print(f"  accuracy = {accuracy * 100.0:.4f}%")
-    print("  example predictions:")
-    for sample_index in (0, min(50, len(actual_labels) - 1), min(100, len(actual_labels) - 1)):
-        prediction = predictions[sample_index]
-        actual = actual_labels[sample_index]
-        print(f"    sample {sample_index} -> predicted: {prediction}, actual: {actual}")
+    print(f"  build time = {build_time_seconds * 1000.0:.4f} ms")
+    print("  prune time = 0.0000 ms")
 
 
 if __name__ == "__main__":

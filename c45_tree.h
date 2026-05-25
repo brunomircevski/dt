@@ -7,9 +7,11 @@
 #include <atomic>
 #include <condition_variable>
 #include <functional>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <memory>
+#include <unordered_map>
 #include <mutex>
 #include <ostream>
 #include <string>
@@ -113,6 +115,9 @@ struct SplitResult {
   double informationGain = 0.0;
   double splitInformation = 0.0;
   double gainRatio = 0.0;
+
+  // Rows on the left side of the winning threshold (for fast partition).
+  std::size_t leftRowCount = 0;
 };
 
 class C45Tree {
@@ -205,33 +210,46 @@ private:
   struct SortedFeatureRow {
     std::size_t rowIndex = 0;
     double value = 0.0;
-    std::string label;
+    std::uint16_t classId = 0;
   };
 
-  // Per-feature cache for split search: sort once, score many thresholds cheaply.
+  // Per-feature cache for split search: sort once, score thresholds in one sweep.
   struct SortedFeatureView {
     std::size_t featureIndex = 0;
-    std::vector<SortedFeatureRow> rows;  // sorted by value, then label (legacy order)
-    std::vector<double> thresholds;      // candidate cut points
-    std::vector<std::size_t> leftSizes;  // rows[0..leftSize-1] go left for each threshold
-    // prefixClassCounts[i] = class histogram of rows[0..i-1]
-    std::vector<std::map<std::string, int>> prefixClassCounts;
-    double parentImpurity = 0.0;  // impurity before any split on this feature
+    std::vector<SortedFeatureRow> rows;
     std::size_t totalRows = 0;
   };
 
-  std::map<std::string, int>
-  computeClassCounts(const std::vector<std::size_t> &rowIndices) const;
-  // Entropy or Gini from a class histogram (no row scan).
-  double impurityFromClassCounts(const std::map<std::string, int> &counts,
-                                 std::size_t total) const;
-  // Sort rows by one feature and precompute thresholds + prefix class counts.
+  std::vector<std::string> classLabels_;
+  std::unordered_map<std::string, std::uint16_t> labelToClassId_;
+  std::uint16_t numClasses_ = 0;
+
+  void buildClassMapping(const Dataset &dataset);
+  std::uint16_t classIdForRow(std::size_t rowIndex) const;
+  std::vector<std::uint32_t>
+  computeClassCountsArray(const std::vector<std::size_t> &rowIndices) const;
+  double impurityFromCounts(const std::vector<std::uint32_t> &counts,
+                            std::size_t total) const;
+  SplitResult scoreCandidateFromCounts(const SortedFeatureView &view,
+                                       const std::vector<std::uint32_t> &totalCounts,
+                                       double parentImpurity,
+                                       const std::vector<std::uint32_t> &leftCounts,
+                                       const std::vector<std::uint32_t> &rightCounts,
+                                       std::size_t leftSize, double threshold) const;
   SortedFeatureView buildSortedFeatureView(
       const std::vector<std::size_t> &rowIndices, std::size_t featureIndex) const;
-  // Score one threshold using the sorted view (no partitionRows).
-  SplitResult scoreSplitFromSorted(const SortedFeatureView &view,
-                                   std::size_t thresholdIndex) const;
   SplitResult scoreAllThresholdsForFeature(const SortedFeatureView &view) const;
+  PartitionedRows partitionFromSortedView(const SortedFeatureView &view,
+                                            std::size_t leftSize) const;
+
+  struct SplitSearchResult {
+    SplitResult split;
+    SortedFeatureView view;
+    bool hasView = false;
+  };
+
+  SplitSearchResult findBestSplitAtNode(
+      const std::vector<std::size_t> &rowIndices) const;
   NodeExpandResult expandOneNode(const std::vector<std::size_t> &rowIndices,
                                  int depth) const;
   std::unique_ptr<Node> buildNode(const std::vector<std::size_t> &rowIndices,

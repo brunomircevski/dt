@@ -39,7 +39,7 @@ Wspólna logika dla wszystkich trybów: liść / stop / `findBestSplit` / `parti
 
 - Zadanie węzła **nie czeka** na dzieci na puli Ta; dzieci podpinane callbackami (`pending` + mutex).
 - `fit()` czeka na `pendingNodeTasks == 0` i `future` korzenia.
-- Małe węzły (`rowIndices.size() < minRowsToParallelize`, domyślnie 32): `expandNodeSync` (= `buildNode`) — mniejszy narzut.
+- Małe węzły (`rowIndices.size() < minRowsToParallelize`, domyślnie 32): fallback do `buildNode` — mniejszy narzut.
 - Build release: `-O2` w `.vscode/tasks.json`.
 
 ## Konfiguracja
@@ -72,15 +72,38 @@ Przykład (Covertype, `maxDepth = 5`, `maxThreadCount = 28`):
 
 ```bash
 g++ -std=c++17 -O2 -pthread -I. main.cpp c45_tree.cpp task_executor.cpp dataset.cpp node.cpp tree_visualization.cpp pruning/*.cpp -o tree
-./tree   # ustaw gleamsMode w main.cpp lub benchmark
+./tree   # ustaw gleamsMode w main.cpp
+
+g++ -std=c++17 -O2 -pthread -I. benchmark_gleams.cpp c45_tree.cpp task_executor.cpp dataset.cpp node.cpp pruning/*.cpp -o benchmark_gleams
+./benchmark_gleams   # wszystkie tryby × maxDepth 5 i 50
 ```
 
 ## Wyniki testów (czas budowy)
 
 Konfiguracja wspólna: CART (Gini, `MaxGain`), `maxThreadCount = 28`, `-O2`, `minFeaturesToParallelize = 4`, `minRowsToParallelize = 32`. Metryka: `build time` [s].
 
+### Wcześniejsze pomiary (przed refaktorem `expandOneNode`)
+
 | Dataset | `maxDepth` | Serial [s] | Ta [s] | VDa [s] | VDTa [s] |
 |---------|------------|------------|--------|---------|----------|
 | `covertype_10x_smaller.csv` | 35 | 9.0 | 3.8 | 1.8 | 1.4 |
 | `covertype.csv` | 5 | 38.8 | 32.3 | 10.2 | 10.3 |
 | `covertype.csv` | 46 | 110.9 | 45.7 | 22.8 | 20.8 |
+
+### `covertype.csv` — ponowne pomiary (po `expandOneNode`, `-O2`)
+
+
+| `maxDepth` (ustawione) | głębokość drzewa | Serial [s] | Ta [s] | VDa [s] | VDTa [s] |
+|------------------------|------------------|------------|--------|---------|----------|
+| 5 | 5 | 6.4 | 4.2 | 1.2 | 1.2 |
+| 50 | 46 | 18.1 | 6.9 | 4.0 | 2.9 |
+
+### Porównanie z scikit-learn (`covertype.csv`, bez pruning)
+
+Wspólny model: `maxDepth = 5`, 63 węzły, accuracy ~70,3% (CART / Gini, bez przycinania).
+
+| Implementacja | Czas budowy [s] |
+|---------------|-----------------|
+| scikit-learn (`compare_sklearn_tree.py`) | 2.4 |
+| C++ CART Serial | 6.4 |
+| C++ CART VDTa | 1.3 |
