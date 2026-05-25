@@ -110,8 +110,8 @@ def main():
 
     # Match training complexity as needed
     model = DecisionTreeClassifier(
-        max_depth=5,
-        ccp_alpha=0,
+        max_depth=4,
+        ccp_alpha=0.0057,
         random_state=0
     )
     build_start = time.perf_counter()

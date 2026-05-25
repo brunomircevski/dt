@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="4670" height="916" viewBox="0 0 4670 916">
+<style>
+text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
+.edge { stroke: #6c7a89; stroke-width: 2; fill: none; }
+.edge-label { font-size: 12px; font-weight: 700; fill: #415a77; }
+.decision { fill: #e0fbfc; stroke: #1d3557; stroke-width: 2; }
+.leaf { fill: #fefae0; stroke: #bc6c25; stroke-width: 2; }
+.node-title { font-size: 12px; font-weight: 700; }
+.node-meta { font-size: 11px; }
+.card-bg { fill: #ffffff; fill-opacity: 0.92; stroke: #cbd5e1; stroke-width: 1.5; }
+.card-header { font-size: 11px; font-weight: 800; fill: #475569; letter-spacing: 0.5px; }
+.card-item { font-size: 10px; fill: #334155; }
+</style>
+<rect x="0" y="0" width="4670" height="916" fill="#f8f9fa" />
+<line class="edge" x1="2180.0" y1="96.0" x2="933.1" y2="170.0" />
+<text class="edge-label" x="1556.6" y="125.0" text-anchor="middle">yes</text>
+<line class="edge" x1="933.1" y1="226.0" x2="517.5" y2="300.0" />
+<text class="edge-label" x="725.3" y="255.0" text-anchor="middle">yes</text>
+<line class="edge" x1="517.5" y1="356.0" x2="375.0" y2="430.0" />
+<text class="edge-label" x="446.2" y="385.0" text-anchor="middle">yes</text>
+<line class="edge" x1="517.5" y1="356.0" x2="660.0" y2="430.0" />
+<text class="edge-label" x="588.8" y="385.0" text-anchor="middle">no</text>
+<line class="edge" x1="660.0" y1="486.0" x2="565.0" y2="560.0" />
+<text class="edge-label" x="612.5" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="660.0" y1="486.0" x2="755.0" y2="560.0" />
+<text class="edge-label" x="707.5" y="515.0" text-anchor="middle">no</text>
+<line class="edge" x1="933.1" y1="226.0" x2="1348.8" y2="300.0" />
+<text class="edge-label" x="1140.9" y="255.0" text-anchor="middle">no</text>
+<line class="edge" x1="1348.8" y1="356.0" x2="1182.5" y2="430.0" />
+<text class="edge-label" x="1265.6" y="385.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1182.5" y1="486.0" x2="1040.0" y2="560.0" />
+<text class="edge-label" x="1111.2" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1040.0" y1="616.0" x2="945.0" y2="690.0" />
+<text class="edge-label" x="992.5" y="645.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1040.0" y1="616.0" x2="1135.0" y2="690.0" />
+<text class="edge-label" x="1087.5" y="645.0" text-anchor="middle">no</text>
+<line class="edge" x1="1182.5" y1="486.0" x2="1325.0" y2="560.0" />
+<text class="edge-label" x="1253.8" y="515.0" text-anchor="middle">no</text>
+<line class="edge" x1="1348.8" y1="356.0" x2="1515.0" y2="430.0" />
+<text class="edge-label" x="1431.9" y="385.0" text-anchor="middle">no</text>
+<line class="edge" x1="2180.0" y1="96.0" x2="3426.9" y2="170.0" />
+<text class="edge-label" x="2803.4" y="125.0" text-anchor="middle">no</text>
+<line class="edge" x1="3426.9" y1="226.0" x2="2738.1" y2="300.0" />
+<text class="edge-label" x="3082.5" y="255.0" text-anchor="middle">yes</text>
+<line class="edge" x1="2738.1" y1="356.0" x2="2227.5" y2="430.0" />
+<text class="edge-label" x="2482.8" y="385.0" text-anchor="middle">yes</text>
+<line class="edge" x1="2227.5" y1="486.0" x2="1942.5" y2="560.0" />
+<text class="edge-label" x="2085.0" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1942.5" y1="616.0" x2="1800.0" y2="690.0" />
+<text class="edge-label" x="1871.2" y="645.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1800.0" y1="746.0" x2="1705.0" y2="820.0" />
+<text class="edge-label" x="1752.5" y="775.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1800.0" y1="746.0" x2="1895.0" y2="820.0" />
+<text class="edge-label" x="1847.5" y="775.0" text-anchor="middle">no</text>
+<line class="edge" x1="1942.5" y1="616.0" x2="2085.0" y2="690.0" />
+<text class="edge-label" x="2013.8" y="645.0" text-anchor="middle">no</text>
+<line class="edge" x1="2227.5" y1="486.0" x2="2512.5" y2="560.0" />
+<text class="edge-label" x="2370.0" y="515.0" text-anchor="middle">no</text>
+<line class="edge" x1="2512.5" y1="616.0" x2="2370.0" y2="690.0" />
+<text class="edge-label" x="2441.2" y="645.0" text-anchor="middle">yes</text>
+<line class="edge" x1="2370.0" y1="746.0" x2="2275.0" y2="820.0" />
+<text class="edge-label" x="2322.5" y="775.0" text-anchor="middle">yes</text>
+<line class="edge" x1="2370.0" y1="746.0" x2="2465.0" y2="820.0" />
+<text class="edge-label" x="2417.5" y="775.0" text-anchor="middle">no</text>
+<line class="edge" x1="2512.5" y1="616.0" x2="2655.0" y2="690.0" />
+<text class="edge-label" x="2583.8" y="645.0" text-anchor="middle">no</text>
+<line class="edge" x1="2738.1" y1="356.0" x2="3248.8" y2="430.0" />
+<text class="edge-label" x="2993.4" y="385.0" text-anchor="middle">no</text>
+<line class="edge" x1="3248.8" y1="486.0" x2="3082.5" y2="560.0" />
+<text class="edge-label" x="3165.6" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="3082.5" y1="616.0" x2="2940.0" y2="690.0" />
+<text class="edge-label" x="3011.2" y="645.0" text-anchor="middle">yes</text>
+<line class="edge" x1="2940.0" y1="746.0" x2="2845.0" y2="820.0" />
+<text class="edge-label" x="2892.5" y="775.0" text-anchor="middle">yes</text>
+<line class="edge" x1="2940.0" y1="746.0" x2="3035.0" y2="820.0" />
+<text class="edge-label" x="2987.5" y="775.0" text-anchor="middle">no</text>
+<line class="edge" x1="3082.5" y1="616.0" x2="3225.0" y2="690.0" />
+<text class="edge-label" x="3153.8" y="645.0" text-anchor="middle">no</text>
+<line class="edge" x1="3248.8" y1="486.0" x2="3415.0" y2="560.0" />
+<text class="edge-label" x="3331.9" y="515.0" text-anchor="middle">no</text>
+<line class="edge" x1="3426.9" y1="226.0" x2="4115.6" y2="300.0" />
+<text class="edge-label" x="3771.2" y="255.0" text-anchor="middle">no</text>
+<line class="edge" x1="4115.6" y1="356.0" x2="3771.2" y2="430.0" />
+<text class="edge-label" x="3943.4" y="385.0" text-anchor="middle">yes</text>
+<line class="edge" x1="3771.2" y1="486.0" x2="3605.0" y2="560.0" />
+<text class="edge-label" x="3688.1" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="3771.2" y1="486.0" x2="3937.5" y2="560.0" />
+<text class="edge-label" x="3854.4" y="515.0" text-anchor="middle">no</text>
+<line class="edge" x1="3937.5" y1="616.0" x2="3795.0" y2="690.0" />
+<text class="edge-label" x="3866.2" y="645.0" text-anchor="middle">yes</text>
+<line class="edge" x1="3937.5" y1="616.0" x2="4080.0" y2="690.0" />
+<text class="edge-label" x="4008.8" y="645.0" text-anchor="middle">no</text>
+<line class="edge" x1="4080.0" y1="746.0" x2="3985.0" y2="820.0" />
+<text class="edge-label" x="4032.5" y="775.0" text-anchor="middle">yes</text>
+<line class="edge" x1="4080.0" y1="746.0" x2="4175.0" y2="820.0" />
+<text class="edge-label" x="4127.5" y="775.0" text-anchor="middle">no</text>
+<line class="edge" x1="4115.6" y1="356.0" x2="4460.0" y2="430.0" />
+<text class="edge-label" x="4287.8" y="385.0" text-anchor="middle">no</text>
+<line class="edge" x1="4460.0" y1="486.0" x2="4365.0" y2="560.0" />
+<text class="edge-label" x="4412.5" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="4460.0" y1="486.0" x2="4555.0" y2="560.0" />
+<text class="edge-label" x="4507.5" y="515.0" text-anchor="middle">no</text>
+<rect class="decision" x="2105.0" y="40.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2180.0" y="63.0" text-anchor="middle">Elevation &lt;= 2465.000</text>
+<text class="node-meta" x="2180.0" y="81.0" text-anchor="middle">n=5810</text>
+<rect class="decision" x="858.1" y="170.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="933.1" y="193.0" text-anchor="middle">Soil_Type_3 &lt;= 0.000</text>
+<text class="node-meta" x="933.1" y="211.0" text-anchor="middle">n=365</text>
+<rect class="decision" x="442.5" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="517.5" y="323.0" text-anchor="middle">Soil_Type_14 &lt;= 0.000</text>
+<text class="node-meta" x="517.5" y="341.0" text-anchor="middle">n=339</text>
+<rect class="leaf" x="300.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="375.0" y="453.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="375.0" y="471.0" text-anchor="middle">n=333</text>
+<rect class="decision" x="585.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="660.0" y="453.0" text-anchor="middle">Elevation &lt;= 2260.000</text>
+<text class="node-meta" x="660.0" y="471.0" text-anchor="middle">n=6</text>
+<rect class="leaf" x="490.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="565.0" y="583.0" text-anchor="middle">Leaf: Cottonwood_Willow</text>
+<text class="node-meta" x="565.0" y="601.0" text-anchor="middle">n=2</text>
+<rect class="leaf" x="680.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="755.0" y="583.0" text-anchor="middle">Leaf: Douglas_Fir</text>
+<text class="node-meta" x="755.0" y="601.0" text-anchor="middle">n=4</text>
+<rect class="decision" x="1273.8" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1348.8" y="323.0" text-anchor="middle">Elevation &lt;= 2384.000</text>
+<text class="node-meta" x="1348.8" y="341.0" text-anchor="middle">n=26</text>
+<rect class="decision" x="1107.5" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1182.5" y="453.0" text-anchor="middle">Elevation &lt;= 2330.000</text>
+<text class="node-meta" x="1182.5" y="471.0" text-anchor="middle">n=23</text>
+<rect class="decision" x="965.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1040.0" y="583.0" text-anchor="middle">Horizontal_Distance_To_Roadways &lt;= 1329.000</text>
+<text class="node-meta" x="1040.0" y="601.0" text-anchor="middle">n=18</text>
+<rect class="leaf" x="870.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="945.0" y="713.0" text-anchor="middle">Leaf: Cottonwood_Willow</text>
+<text class="node-meta" x="945.0" y="731.0" text-anchor="middle">n=15</text>
+<rect class="leaf" x="1060.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1135.0" y="713.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="1135.0" y="731.0" text-anchor="middle">n=3</text>
+<rect class="leaf" x="1250.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1325.0" y="583.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="1325.0" y="601.0" text-anchor="middle">n=5</text>
+<rect class="leaf" x="1440.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1515.0" y="453.0" text-anchor="middle">Leaf: Douglas_Fir</text>
+<text class="node-meta" x="1515.0" y="471.0" text-anchor="middle">n=3</text>
+<rect class="decision" x="3351.9" y="170.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3426.9" y="193.0" text-anchor="middle">Soil_Type_4 &lt;= 0.000</text>
+<text class="node-meta" x="3426.9" y="211.0" text-anchor="middle">n=5445</text>
+<rect class="decision" x="2663.1" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2738.1" y="323.0" text-anchor="middle">Soil_Type_2 &lt;= 0.000</text>
+<text class="node-meta" x="2738.1" y="341.0" text-anchor="middle">n=5351</text>
+<rect class="decision" x="2152.5" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2227.5" y="453.0" text-anchor="middle">Wilderness_Area_4 &lt;= 0.000</text>
+<text class="node-meta" x="2227.5" y="471.0" text-anchor="middle">n=5302</text>
+<rect class="decision" x="1867.5" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1942.5" y="583.0" text-anchor="middle">Soil_Type_39 &lt;= 0.000</text>
+<text class="node-meta" x="1942.5" y="601.0" text-anchor="middle">n=5252</text>
+<rect class="decision" x="1725.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1800.0" y="713.0" text-anchor="middle">Elevation &lt;= 3671.000</text>
+<text class="node-meta" x="1800.0" y="731.0" text-anchor="middle">n=5126</text>
+<rect class="leaf" x="1630.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1705.0" y="843.0" text-anchor="middle">Leaf: Lodgepole_Pine</text>
+<text class="node-meta" x="1705.0" y="861.0" text-anchor="middle">n=5116</text>
+<rect class="leaf" x="1820.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1895.0" y="843.0" text-anchor="middle">Leaf: Krummholz</text>
+<text class="node-meta" x="1895.0" y="861.0" text-anchor="middle">n=10</text>
+<rect class="leaf" x="2010.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2085.0" y="713.0" text-anchor="middle">Leaf: Spruce_Fir</text>
+<text class="node-meta" x="2085.0" y="731.0" text-anchor="middle">n=126</text>
+<rect class="decision" x="2437.5" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2512.5" y="583.0" text-anchor="middle">Horizontal_Distance_To_Roadways &lt;= 1308.000</text>
+<text class="node-meta" x="2512.5" y="601.0" text-anchor="middle">n=50</text>
+<rect class="decision" x="2295.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2370.0" y="713.0" text-anchor="middle">Horizontal_Distance_To_Fire_Points &lt;= 1191.000</text>
+<text class="node-meta" x="2370.0" y="731.0" text-anchor="middle">n=48</text>
+<rect class="leaf" x="2200.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2275.0" y="843.0" text-anchor="middle">Leaf: Lodgepole_Pine</text>
+<text class="node-meta" x="2275.0" y="861.0" text-anchor="middle">n=33</text>
+<rect class="leaf" x="2390.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2465.0" y="843.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="2465.0" y="861.0" text-anchor="middle">n=15</text>
+<rect class="leaf" x="2580.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2655.0" y="713.0" text-anchor="middle">Leaf: Douglas_Fir</text>
+<text class="node-meta" x="2655.0" y="731.0" text-anchor="middle">n=2</text>
+<rect class="decision" x="3173.8" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3248.8" y="453.0" text-anchor="middle">Aspect &lt;= 317.000</text>
+<text class="node-meta" x="3248.8" y="471.0" text-anchor="middle">n=49</text>
+<rect class="decision" x="3007.5" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3082.5" y="583.0" text-anchor="middle">Aspect &lt;= 284.000</text>
+<text class="node-meta" x="3082.5" y="601.0" text-anchor="middle">n=47</text>
+<rect class="decision" x="2865.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2940.0" y="713.0" text-anchor="middle">Horizontal_Distance_To_Roadways &lt;= 2473.000</text>
+<text class="node-meta" x="2940.0" y="731.0" text-anchor="middle">n=44</text>
+<rect class="leaf" x="2770.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="2845.0" y="843.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="2845.0" y="861.0" text-anchor="middle">n=41</text>
+<rect class="leaf" x="2960.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3035.0" y="843.0" text-anchor="middle">Leaf: Lodgepole_Pine</text>
+<text class="node-meta" x="3035.0" y="861.0" text-anchor="middle">n=3</text>
+<rect class="leaf" x="3150.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3225.0" y="713.0" text-anchor="middle">Leaf: Lodgepole_Pine</text>
+<text class="node-meta" x="3225.0" y="731.0" text-anchor="middle">n=3</text>
+<rect class="leaf" x="3340.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3415.0" y="583.0" text-anchor="middle">Leaf: Douglas_Fir</text>
+<text class="node-meta" x="3415.0" y="601.0" text-anchor="middle">n=2</text>
+<rect class="decision" x="4040.6" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="4115.6" y="323.0" text-anchor="middle">Elevation &lt;= 2864.000</text>
+<text class="node-meta" x="4115.6" y="341.0" text-anchor="middle">n=94</text>
+<rect class="decision" x="3696.2" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3771.2" y="453.0" text-anchor="middle">Elevation &lt;= 2675.000</text>
+<text class="node-meta" x="3771.2" y="471.0" text-anchor="middle">n=85</text>
+<rect class="leaf" x="3530.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3605.0" y="583.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="3605.0" y="601.0" text-anchor="middle">n=52</text>
+<rect class="decision" x="3862.5" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3937.5" y="583.0" text-anchor="middle">Slope &lt;= 17.000</text>
+<text class="node-meta" x="3937.5" y="601.0" text-anchor="middle">n=33</text>
+<rect class="leaf" x="3720.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3795.0" y="713.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="3795.0" y="731.0" text-anchor="middle">n=8</text>
+<rect class="decision" x="4005.0" y="690.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="4080.0" y="713.0" text-anchor="middle">Hillshade_Noon &lt;= 242.000</text>
+<text class="node-meta" x="4080.0" y="731.0" text-anchor="middle">n=25</text>
+<rect class="leaf" x="3910.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="3985.0" y="843.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="3985.0" y="861.0" text-anchor="middle">n=7</text>
+<rect class="leaf" x="4100.0" y="820.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="4175.0" y="843.0" text-anchor="middle">Leaf: Lodgepole_Pine</text>
+<text class="node-meta" x="4175.0" y="861.0" text-anchor="middle">n=18</text>
+<rect class="decision" x="4385.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="4460.0" y="453.0" text-anchor="middle">Aspect &lt;= 177.000</text>
+<text class="node-meta" x="4460.0" y="471.0" text-anchor="middle">n=9</text>
+<rect class="leaf" x="4290.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="4365.0" y="583.0" text-anchor="middle">Leaf: Krummholz</text>
+<text class="node-meta" x="4365.0" y="601.0" text-anchor="middle">n=2</text>
+<rect class="leaf" x="4480.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="4555.0" y="583.0" text-anchor="middle">Leaf: Lodgepole_Pine</text>
+<text class="node-meta" x="4555.0" y="601.0" text-anchor="middle">n=7</text>
+<g transform="translate(15, 15)">
+  <rect class="card-bg" x="0" y="0" width="250" height="125" rx="8" />
+  <text class="card-header" x="12" y="22">EVALUATION METRICS</text>
+  <text class="card-item" x="18" y="43">• checked samples = 5810</text>
+  <text class="card-item" x="18" y="58">• correct predictions = 3239</text>
+  <text class="card-item" x="18" y="73">• tree depth = 6</text>
+  <text class="card-item" x="18" y="88">• node count = 45</text>
+  <text class="card-item" x="18" y="103">• accuracy = 55.7487%</text>
+</g>
+</svg>

@@ -89,10 +89,10 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 	fitContext_ = std::make_unique<FitContext>();
 	const std::size_t threadCount =
 		static_cast<std::size_t>(std::max(options_.maxThreadCount, 1));
-	const bool needsVd = options_.gleamsMode == ParallelMode::VDa ||
-						 options_.gleamsMode == ParallelMode::VDTa;
-	const bool needsTa = options_.gleamsMode == ParallelMode::Ta ||
-						 options_.gleamsMode == ParallelMode::VDTa;
+	const bool needsVd = options_.parallelMode == ParallelMode::VDa ||
+						 options_.parallelMode == ParallelMode::VDTa;
+	const bool needsTa = options_.parallelMode == ParallelMode::Ta ||
+						 options_.parallelMode == ParallelMode::VDTa;
 	if (needsVd)
 	{
 		fitContext_->vdExecutor = std::make_unique<TaskExecutor>(threadCount);
