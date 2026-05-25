@@ -48,12 +48,12 @@ std::string pruningModeToString(PruningMode mode) {
   return "Unknown";
 }
 
-std::string gleamsModeToString(GleamsMode mode) {
+std::string gleamsModeToString(ParallelMode mode) {
   switch (mode) {
-    case GleamsMode::Serial: return "Serial";
-    case GleamsMode::VDa: return "VDa";
-    case GleamsMode::Ta: return "Ta";
-    case GleamsMode::VDTa: return "VDTa";
+    case ParallelMode::Serial: return "Serial";
+    case ParallelMode::VDa: return "VDa";
+    case ParallelMode::Ta: return "Ta";
+    case ParallelMode::VDTa: return "VDTa";
   }
   return "Unknown";
 }
