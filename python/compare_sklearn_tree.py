@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-import csv
-import re
+import contextlib
+import io
 import sys
+import time
 from pathlib import Path
 
 try:
@@ -90,7 +91,7 @@ def print_tree(model: DecisionTreeClassifier, feature_names):
 
 def main():
     # Set the dataset path directly here:
-    csv_path = Path(__file__).resolve().parent.parent / "datasets" / "diabetes.csv"
+    csv_path = Path(__file__).resolve().parent.parent / "datasets" / "covertype.csv"
 
     print(f"Loading dataset: {csv_path.name}")
     feature_names, rows, features, labels, frame, attributes_map = load_any_dataset(csv_path)
@@ -109,11 +110,13 @@ def main():
 
     # Match training complexity as needed
     model = DecisionTreeClassifier(
-        #max_depth=10,
-        ccp_alpha=0.005,
-        random_state=4,
+        max_depth=5,
+        ccp_alpha=0,
+        random_state=0
     )
+    build_start = time.perf_counter()
     model.fit(features, labels)
+    build_time_seconds = time.perf_counter() - build_start
 
     predictions = model.predict(features)
     correct_predictions = sum(
@@ -122,8 +125,6 @@ def main():
     accuracy = correct_predictions / len(labels)
 
     print("Learned tree:")
-    import io
-    import contextlib
     f = io.StringIO()
     with contextlib.redirect_stdout(f):
         print_tree(model, feature_names)
@@ -153,17 +154,14 @@ def main():
     except Exception as e:
         print(f"Error generating SVG: {e}")
 
-    print("Prediction summary:")
+    print("Summary:")
     print(f"  checked samples = {len(labels)}")
     print(f"  correct predictions = {correct_predictions}")
     print(f"  tree depth = {model.get_depth()}")
     print(f"  node count = {model.tree_.node_count}")
     print(f"  accuracy = {accuracy * 100.0:.4f}%")
-    print("  example predictions:")
-    for sample_index in (0, min(50, len(labels) - 1), min(100, len(labels) - 1)):
-        prediction = predictions[sample_index]
-        actual = labels[sample_index]
-        print(f"    sample {sample_index} -> predicted: {prediction}, actual: {actual}")
+    print(f"  build time = {build_time_seconds * 1000.0:.4f} ms")
+    print("  prune time = 0.0000 ms")
 
 
 if __name__ == "__main__":

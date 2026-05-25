@@ -296,14 +296,14 @@ text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
 <text class="node-title" x="5125.0" y="713.0" text-anchor="middle">Leaf: Krummholz</text>
 <text class="node-meta" x="5125.0" y="731.0" text-anchor="middle">n=4004</text>
 <rect class="decision" x="5335.0" y="560.0" width="150" height="56" rx="14" ry="14" />
-<text class="node-title" x="5410.0" y="583.0" text-anchor="middle">Wilderness_Area_1 &lt;= 0.500</text>
+<text class="node-title" x="5410.0" y="583.0" text-anchor="middle">Wilderness_Area_2 &lt;= 0.500</text>
 <text class="node-meta" x="5410.0" y="601.0" text-anchor="middle">n=10875</text>
 <rect class="leaf" x="5240.0" y="690.0" width="150" height="56" rx="14" ry="14" />
 <text class="node-title" x="5315.0" y="713.0" text-anchor="middle">Leaf: Spruce_Fir</text>
-<text class="node-meta" x="5315.0" y="731.0" text-anchor="middle">n=4814</text>
+<text class="node-meta" x="5315.0" y="731.0" text-anchor="middle">n=6061</text>
 <rect class="leaf" x="5430.0" y="690.0" width="150" height="56" rx="14" ry="14" />
 <text class="node-title" x="5505.0" y="713.0" text-anchor="middle">Leaf: Spruce_Fir</text>
-<text class="node-meta" x="5505.0" y="731.0" text-anchor="middle">n=6061</text>
+<text class="node-meta" x="5505.0" y="731.0" text-anchor="middle">n=4814</text>
 <rect class="decision" x="5905.0" y="430.0" width="150" height="56" rx="14" ry="14" />
 <text class="node-title" x="5980.0" y="453.0" text-anchor="middle">Soil_Type_32 &lt;= 0.500</text>
 <text class="node-meta" x="5980.0" y="471.0" text-anchor="middle">n=17520</text>
@@ -317,34 +317,21 @@ text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
 <text class="node-title" x="5885.0" y="713.0" text-anchor="middle">Leaf: Krummholz</text>
 <text class="node-meta" x="5885.0" y="731.0" text-anchor="middle">n=9110</text>
 <rect class="decision" x="6095.0" y="560.0" width="150" height="56" rx="14" ry="14" />
-<text class="node-title" x="6170.0" y="583.0" text-anchor="middle">Horizontal_Distance_To_Roadways &lt;= 948.000</text>
+<text class="node-title" x="6170.0" y="583.0" text-anchor="middle">Horizontal_Distance_To_Roadways &lt;= 939.500</text>
 <text class="node-meta" x="6170.0" y="601.0" text-anchor="middle">n=4741</text>
 <rect class="leaf" x="6000.0" y="690.0" width="150" height="56" rx="14" ry="14" />
 <text class="node-title" x="6075.0" y="713.0" text-anchor="middle">Leaf: Krummholz</text>
-<text class="node-meta" x="6075.0" y="731.0" text-anchor="middle">n=405</text>
+<text class="node-meta" x="6075.0" y="731.0" text-anchor="middle">n=389</text>
 <rect class="leaf" x="6190.0" y="690.0" width="150" height="56" rx="14" ry="14" />
 <text class="node-title" x="6265.0" y="713.0" text-anchor="middle">Leaf: Spruce_Fir</text>
-<text class="node-meta" x="6265.0" y="731.0" text-anchor="middle">n=4336</text>
+<text class="node-meta" x="6265.0" y="731.0" text-anchor="middle">n=4352</text>
 <g transform="translate(15, 15)">
-  <rect class="card-bg" x="0" y="0" width="250" height="323" rx="8" />
+  <rect class="card-bg" x="0" y="0" width="250" height="125" rx="8" />
   <text class="card-header" x="12" y="22">EVALUATION METRICS</text>
   <text class="card-item" x="18" y="43">• checked samples = 581012</text>
-  <text class="card-item" x="18" y="58">• correct predictions = 408541</text>
+  <text class="card-item" x="18" y="58">• correct predictions = 408544</text>
   <text class="card-item" x="18" y="73">• tree depth = 5</text>
   <text class="card-item" x="18" y="88">• node count = 63</text>
-  <text class="card-item" x="18" y="103">• accuracy = 70.3154%</text>
-  <text class="card-header" x="12" y="125">TRAINING OPTIONS</text>
-  <text class="card-item" x="18" y="146">• impurityMeasure = Gini</text>
-  <text class="card-item" x="18" y="161">• splitSelectionMode = MaxGain</text>
-  <text class="card-item" x="18" y="176">• pruningMode = None</text>
-  <text class="card-item" x="18" y="191">• maxDepth = 5</text>
-  <text class="card-item" x="18" y="206">• minSamplesToSplit = 2</text>
-  <text class="card-item" x="18" y="221">• minSamplesPerLeaf = 1</text>
-  <text class="card-item" x="18" y="236">• gleamsMode = VDTa</text>
-  <text class="card-item" x="18" y="251">• maxThreadCount = 28</text>
-  <text class="card-item" x="18" y="266">• minFeaturesToParallelize = 4</text>
-  <text class="card-item" x="18" y="281">• minRowsToParallelize = 16</text>
-  <text class="card-item" x="18" y="296">• pruningConfidenceFactor = 0.0001</text>
-  <text class="card-item" x="18" y="311">• ccpAlpha = 2100.0000</text>
+  <text class="card-item" x="18" y="103">• accuracy = 70.3159%</text>
 </g>
 </svg>

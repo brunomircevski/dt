@@ -67,29 +67,6 @@ namespace
 		return lhs.threshold < rhs.threshold - epsilon;
 	}
 
-	// Right-child histogram: total counts minus left prefix counts.
-	std::map<std::string, int> subtractClassCounts(
-		const std::map<std::string, int> &total,
-		const std::map<std::string, int> &subset)
-	{
-		std::map<std::string, int> result = total;
-		for (const auto &[label, count] : subset)
-		{
-			auto iterator = result.find(label);
-			if (iterator == result.end())
-			{
-				continue;
-			}
-
-			iterator->second -= count;
-			if (iterator->second == 0)
-			{
-				result.erase(iterator);
-			}
-		}
-		return result;
-	}
-
 } // namespace
 
 C45Tree::C45Tree() = default;
@@ -107,6 +84,7 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 	// We store a pointer so we never copy thousands of rows into the tree object.
 	dataset_ = &dataset;
 	options_ = options;
+	buildClassMapping(dataset);
 
 	fitContext_ = std::make_unique<FitContext>();
 	const std::size_t threadCount =
@@ -142,8 +120,9 @@ void C45Tree::fit(const Dataset &dataset, const TrainingOptions &options)
 				rootPromise->set_value(std::move(node));
 			});
 
+		// Copy — rowIndices must stay valid for applySelectedPruning after the build.
 		const RowIndexList rootRows =
-			std::make_shared<std::vector<std::size_t>>(std::move(rowIndices));
+			std::make_shared<std::vector<std::size_t>>(rowIndices);
 		fitContext_->pendingNodeTasks.fetch_add(1, std::memory_order_relaxed);
 		fitContext_->taExecutor->submit([this, rootRows,
 										 onComplete = std::move(onComplete)]() mutable {
@@ -224,17 +203,44 @@ double C45Tree::buildTimeSeconds() const { return buildTimeSeconds_; }
 
 double C45Tree::pruneTimeSeconds() const { return pruneTimeSeconds_; }
 
-std::map<std::string, int>
-C45Tree::computeClassCounts(const std::vector<std::size_t> &rowIndices) const
+void C45Tree::buildClassMapping(const Dataset &dataset)
 {
-	// THEORY:
-	// Many later calculations need to know how many training rows of each
-	// class reached the current node. We compute those counts once here so
-	// helpers like entropy() and getMajorityLabel() can reuse the same idea.
-	std::map<std::string, int> counts;
+	classLabels_.clear();
+	labelToClassId_.clear();
+	numClasses_ = 0;
+
+	std::vector<std::string> uniqueLabels;
+	uniqueLabels.reserve(16);
+	for (const Sample &sample : dataset.samples)
+	{
+		if (std::find(uniqueLabels.begin(), uniqueLabels.end(), sample.label) ==
+			uniqueLabels.end())
+		{
+			uniqueLabels.push_back(sample.label);
+		}
+	}
+
+	std::sort(uniqueLabels.begin(), uniqueLabels.end());
+	classLabels_ = uniqueLabels;
+	numClasses_ = static_cast<std::uint16_t>(classLabels_.size());
+	for (std::uint16_t classIndex = 0; classIndex < numClasses_; ++classIndex)
+	{
+		labelToClassId_[classLabels_[classIndex]] = classIndex;
+	}
+}
+
+std::uint16_t C45Tree::classIdForRow(std::size_t rowIndex) const
+{
+	return labelToClassId_.at(dataset_->samples[rowIndex].label);
+}
+
+std::vector<std::uint32_t> C45Tree::computeClassCountsArray(
+	const std::vector<std::size_t> &rowIndices) const
+{
+	std::vector<std::uint32_t> counts(numClasses_, 0);
 	for (std::size_t rowIndex : rowIndices)
 	{
-		counts[dataset_->samples[rowIndex].label]++;
+		++counts[classIdForRow(rowIndex)];
 	}
 	return counts;
 }
@@ -252,22 +258,20 @@ double C45Tree::entropy(const std::vector<std::size_t> &rowIndices) const
 	//
 	// So a "good" split is one that creates children with lower entropy.
 
-	const std::map<std::string, int> counts = computeClassCounts(rowIndices);
+	const std::vector<std::uint32_t> counts = computeClassCountsArray(rowIndices);
 
 	double result = 0.0;
 	const double total = static_cast<double>(rowIndices.size());
 
-	for (const auto &entry : counts)
+	for (std::uint32_t count : counts)
 	{
-		const double probability = static_cast<double>(entry.second) / total;
-
-		// log2 is the base-2 logarithm.
-		// The formula is:
-		// H(S) = -sum(p * log2(p))
-		if (probability > 0.0)
+		if (count == 0)
 		{
-			result -= probability * std::log2(probability);
+			continue;
 		}
+
+		const double probability = static_cast<double>(count) / total;
+		result -= probability * std::log2(probability);
 	}
 
 	return result;
@@ -292,14 +296,19 @@ double C45Tree::giniIndex(const std::vector<std::size_t> &rowIndices) const
 	// to belong to a specific class twice in a row.
 	// Summing those probabilities tells us how "pure" the node already is.
 
-	const std::map<std::string, int> counts = computeClassCounts(rowIndices);
+	const std::vector<std::uint32_t> counts = computeClassCountsArray(rowIndices);
 
 	const double total = static_cast<double>(rowIndices.size());
 	double sumOfSquaredProbabilities = 0.0;
 
-	for (const auto &entry : counts)
+	for (std::uint32_t count : counts)
 	{
-		const double probability = static_cast<double>(entry.second) / total;
+		if (count == 0)
+		{
+			continue;
+		}
+
+		const double probability = static_cast<double>(count) / total;
 		sumOfSquaredProbabilities += probability * probability;
 	}
 
@@ -397,9 +406,8 @@ C45Tree::partitionRows(const std::vector<std::size_t> &rowIndices,
 	return partitions;
 }
 
-// Same formulas as entropy()/giniIndex(), but from a pre-built histogram.
-double C45Tree::impurityFromClassCounts(const std::map<std::string, int> &counts,
-										std::size_t total) const
+double C45Tree::impurityFromCounts(const std::vector<std::uint32_t> &counts,
+								   std::size_t total) const
 {
 	if (total == 0)
 	{
@@ -411,24 +419,29 @@ double C45Tree::impurityFromClassCounts(const std::map<std::string, int> &counts
 	if (options_.impurityMeasure == ImpurityMeasure::Gini)
 	{
 		double sumOfSquaredProbabilities = 0.0;
-		for (const auto &entry : counts)
+		for (std::uint32_t count : counts)
 		{
-			const double probability =
-				static_cast<double>(entry.second) / totalDouble;
+			if (count == 0)
+			{
+				continue;
+			}
+
+			const double probability = static_cast<double>(count) / totalDouble;
 			sumOfSquaredProbabilities += probability * probability;
 		}
 		return 1.0 - sumOfSquaredProbabilities;
 	}
 
-	// Entropy formula: -sum(p * log2(p))
 	double result = 0.0;
-	for (const auto &entry : counts)
+	for (std::uint32_t count : counts)
 	{
-		const double probability = static_cast<double>(entry.second) / totalDouble;
-		if (probability > 0.0)
+		if (count == 0)
 		{
-			result -= probability * std::log2(probability);
+			continue;
 		}
+
+		const double probability = static_cast<double>(count) / totalDouble;
+		result -= probability * std::log2(probability);
 	}
 	return result;
 }
@@ -447,10 +460,9 @@ C45Tree::SortedFeatureView C45Tree::buildSortedFeatureView(
 	{
 		const Sample &sample = dataset_->samples[rowIndex];
 		view.rows.push_back(
-			{rowIndex, sample.features[featureIndex], sample.label});
+			{rowIndex, sample.features[featureIndex], classIdForRow(rowIndex)});
 	}
 
-	// Same order as the old pair<double,string> sort: value, then label.
 	std::sort(view.rows.begin(), view.rows.end(),
 			  [](const SortedFeatureRow &left, const SortedFeatureRow &right) {
 				  if (left.value < right.value)
@@ -461,54 +473,25 @@ C45Tree::SortedFeatureView C45Tree::buildSortedFeatureView(
 				  {
 					  return false;
 				  }
-				  return left.label < right.label;
+				  return left.classId < right.classId;
 			  });
-
-	// prefixClassCounts[k] = histogram of the first k sorted rows.
-	view.prefixClassCounts.resize(view.rows.size() + 1);
-	for (std::size_t index = 0; index < view.rows.size(); ++index)
-	{
-		view.prefixClassCounts[index + 1] = view.prefixClassCounts[index];
-		view.prefixClassCounts[index + 1][view.rows[index].label]++;
-	}
-
-	view.parentImpurity =
-		impurityFromClassCounts(view.prefixClassCounts.back(), view.totalRows);
-
-	// Candidate threshold between rows[index-1] and rows[index].
-	for (std::size_t index = 1; index < view.rows.size(); ++index)
-	{
-		const double leftValue = view.rows[index - 1].value;
-		const double rightValue = view.rows[index].value;
-
-		if (std::fabs(leftValue - rightValue) < options_.epsilon)
-		{
-			continue;
-		}
-
-		if (view.rows[index - 1].label == view.rows[index].label)
-		{
-			continue;
-		}
-
-		view.thresholds.push_back((leftValue + rightValue) / 2.0);
-		// All sorted rows before index fall on the left side of this cut.
-		view.leftSizes.push_back(index);
-	}
 
 	return view;
 }
 
-// Evaluate one candidate split without scanning rowIndices again.
-SplitResult C45Tree::scoreSplitFromSorted(const SortedFeatureView &view,
-										  std::size_t thresholdIndex) const
+SplitResult C45Tree::scoreCandidateFromCounts(
+	const SortedFeatureView &view, const std::vector<std::uint32_t> &totalCounts,
+	double parentImpurity, const std::vector<std::uint32_t> &leftCounts,
+	const std::vector<std::uint32_t> &rightCounts, std::size_t leftSize,
+	double threshold) const
 {
+	(void)totalCounts;
 	SplitResult result;
 	result.featureIndex = view.featureIndex;
 	result.featureName = dataset_->featureNames[view.featureIndex];
-	result.threshold = view.thresholds[thresholdIndex];
+	result.threshold = threshold;
+	result.leftRowCount = leftSize;
 
-	const std::size_t leftSize = view.leftSizes[thresholdIndex];
 	const std::size_t rightSize = view.totalRows - leftSize;
 	if (leftSize == 0 || rightSize == 0)
 	{
@@ -524,20 +507,14 @@ SplitResult C45Tree::scoreSplitFromSorted(const SortedFeatureView &view,
 		}
 	}
 
-	// O(1) child histograms from prefix sums (no row scan).
-	const std::map<std::string, int> &leftCounts = view.prefixClassCounts[leftSize];
-	const std::map<std::string, int> rightCounts =
-		subtractClassCounts(view.prefixClassCounts.back(), leftCounts);
-
-	const double leftImpurity = impurityFromClassCounts(leftCounts, leftSize);
-	const double rightImpurity = impurityFromClassCounts(rightCounts, rightSize);
+	const double leftImpurity = impurityFromCounts(leftCounts, leftSize);
+	const double rightImpurity = impurityFromCounts(rightCounts, rightSize);
 	const double totalDouble = static_cast<double>(view.totalRows);
-	// Weighted impurity of the two children.
 	const double afterSplit =
 		(static_cast<double>(leftSize) / totalDouble) * leftImpurity +
 		(static_cast<double>(rightSize) / totalDouble) * rightImpurity;
 
-	result.informationGain = view.parentImpurity - afterSplit;
+	result.informationGain = parentImpurity - afterSplit;
 
 	if (options_.splitSelectionMode == SplitSelectionMode::MaxGain)
 	{
@@ -547,7 +524,6 @@ SplitResult C45Tree::scoreSplitFromSorted(const SortedFeatureView &view,
 		return result;
 	}
 
-	// C4.5: entropy of child sizes (used for gain ratio).
 	const double leftProbability = static_cast<double>(leftSize) / totalDouble;
 	const double rightProbability = static_cast<double>(rightSize) / totalDouble;
 	result.splitInformation =
@@ -563,6 +539,27 @@ SplitResult C45Tree::scoreSplitFromSorted(const SortedFeatureView &view,
 	result.gainRatio = result.informationGain / result.splitInformation;
 	result.valid = true;
 	return result;
+}
+
+C45Tree::PartitionedRows
+C45Tree::partitionFromSortedView(const SortedFeatureView &view,
+								 std::size_t leftSize) const
+{
+	PartitionedRows partitions;
+	partitions.leftRows.reserve(leftSize);
+	partitions.rightRows.reserve(view.rows.size() - leftSize);
+
+	for (std::size_t index = 0; index < leftSize; ++index)
+	{
+		partitions.leftRows.push_back(view.rows[index].rowIndex);
+	}
+
+	for (std::size_t index = leftSize; index < view.rows.size(); ++index)
+	{
+		partitions.rightRows.push_back(view.rows[index].rowIndex);
+	}
+
+	return partitions;
 }
 
 SplitResult
@@ -664,14 +661,45 @@ std::function<void(std::unique_ptr<Node>)> C45Tree::wrapNodeOnComplete(
 
 SplitResult C45Tree::scoreAllThresholdsForFeature(const SortedFeatureView &view) const
 {
+	std::vector<std::uint32_t> totalCounts(numClasses_, 0);
+	for (const SortedFeatureRow &row : view.rows)
+	{
+		++totalCounts[row.classId];
+	}
+
+	const double parentImpurity = impurityFromCounts(totalCounts, view.totalRows);
+	std::vector<std::uint32_t> leftCounts(numClasses_, 0);
+	std::vector<std::uint32_t> rightCounts(numClasses_, 0);
+
 	SplitResult bestForFeature;
 	bool hasBest = false;
 
-	for (std::size_t thresholdIndex = 0; thresholdIndex < view.thresholds.size();
-		 ++thresholdIndex)
+	for (std::size_t index = 1; index < view.rows.size(); ++index)
 	{
-		const SplitResult candidate =
-			scoreSplitFromSorted(view, thresholdIndex);
+		const SortedFeatureRow &previousRow = view.rows[index - 1];
+		const SortedFeatureRow &currentRow = view.rows[index];
+		leftCounts[previousRow.classId]++;
+
+		if (std::fabs(previousRow.value - currentRow.value) < options_.epsilon)
+		{
+			continue;
+		}
+
+		if (previousRow.classId == currentRow.classId)
+		{
+			continue;
+		}
+
+		for (std::uint16_t classIndex = 0; classIndex < numClasses_; ++classIndex)
+		{
+			rightCounts[classIndex] =
+				totalCounts[classIndex] - leftCounts[classIndex];
+		}
+
+		const double threshold = (previousRow.value + currentRow.value) / 2.0;
+		const SplitResult candidate = scoreCandidateFromCounts(
+			view, totalCounts, parentImpurity, leftCounts, rightCounts, index,
+			threshold);
 		if (!candidate.valid)
 		{
 			continue;
@@ -751,61 +779,92 @@ SplitResult C45Tree::reduceBestPerFeature(
 	return chooseBestSplit(featureBestCandidates);
 }
 
-SplitResult
-C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
+C45Tree::SplitSearchResult
+C45Tree::findBestSplitAtNode(const std::vector<std::size_t> &rowIndices) const
 {
 	const std::size_t featureCount = dataset_->featureNames.size();
 	if (featureCount == 0)
 	{
-		return SplitResult{};
+		return {};
 	}
+
+	std::vector<SplitSearchResult> featureResults;
+	featureResults.reserve(featureCount);
 
 	if (shouldParallelizeVD(featureCount))
 	{
-		// VDa: one shared row list; each worker sorts + scores its feature (no busy-poll).
 		const RowIndexList rows =
 			std::make_shared<std::vector<std::size_t>>(rowIndices);
-		std::vector<std::future<SplitResult>> futures(featureCount);
+		std::vector<std::future<SplitSearchResult>> futures(featureCount);
 		for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
 		{
 			futures[featureIndex] = fitContext_->vdExecutor->submit(
 				[this, rows, featureIndex]() {
-					const SortedFeatureView view =
-						buildSortedFeatureView(*rows, featureIndex);
-					return scoreAllThresholdsForFeature(view);
+					SplitSearchResult result;
+					result.view = buildSortedFeatureView(*rows, featureIndex);
+					result.split = scoreAllThresholdsForFeature(result.view);
+					result.hasView = result.split.valid;
+					return result;
 				});
 		}
 
-		std::vector<SplitResult> featureBestCandidates;
-		featureBestCandidates.reserve(featureCount);
 		for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
 		{
-			const SplitResult bestForFeature = futures[featureIndex].get();
-			if (bestForFeature.valid)
-			{
-				featureBestCandidates.push_back(bestForFeature);
-			}
+			featureResults.push_back(futures[featureIndex].get());
 		}
-
-		return chooseBestSplit(featureBestCandidates);
+	}
+	else
+	{
+		for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
+		{
+			SplitSearchResult result;
+			result.view = buildSortedFeatureView(rowIndices, featureIndex);
+			result.split = scoreAllThresholdsForFeature(result.view);
+			result.hasView = result.split.valid;
+			featureResults.push_back(std::move(result));
+		}
 	}
 
-	// Serial / Ta: one feature at a time (sort + score).
 	std::vector<SplitResult> featureBestCandidates;
 	featureBestCandidates.reserve(featureCount);
-
-	for (std::size_t featureIndex = 0; featureIndex < featureCount; ++featureIndex)
+	for (const SplitSearchResult &result : featureResults)
 	{
-		const SortedFeatureView view =
-			buildSortedFeatureView(rowIndices, featureIndex);
-		const SplitResult bestForFeature = scoreAllThresholdsForFeature(view);
-		if (bestForFeature.valid)
+		if (result.split.valid)
 		{
-			featureBestCandidates.push_back(bestForFeature);
+			featureBestCandidates.push_back(result.split);
 		}
 	}
 
-	return chooseBestSplit(featureBestCandidates);
+	SplitSearchResult bestSearch;
+	bestSearch.split = chooseBestSplit(featureBestCandidates);
+	if (!bestSearch.split.valid)
+	{
+		return bestSearch;
+	}
+
+	for (SplitSearchResult &result : featureResults)
+	{
+		if (result.split.valid &&
+			result.split.featureIndex == bestSearch.split.featureIndex &&
+			areEffectivelyEqual(result.split.threshold, bestSearch.split.threshold,
+								options_.epsilon))
+		{
+			bestSearch.view = std::move(result.view);
+			bestSearch.hasView = result.hasView;
+			return bestSearch;
+		}
+	}
+
+	bestSearch.view =
+		buildSortedFeatureView(rowIndices, bestSearch.split.featureIndex);
+	bestSearch.hasView = true;
+	return bestSearch;
+}
+
+SplitResult
+C45Tree::findBestSplit(const std::vector<std::size_t> &rowIndices) const
+{
+	return findBestSplitAtNode(rowIndices).split;
 }
 
 bool C45Tree::shouldStopGrowing(const std::vector<std::size_t> &rowIndices,
@@ -857,15 +916,25 @@ C45Tree::expandOneNode(const std::vector<std::size_t> &rowIndices,
 				{}};
 	}
 
-	const SplitResult split = findBestSplit(rowIndices);
+	const SplitSearchResult search = findBestSplitAtNode(rowIndices);
+	const SplitResult &split = search.split;
 	if (isSplitRejected(split))
 	{
 		return {Node::createLeaf(getMajorityLabel(rowIndices), rowIndices.size()),
 				{}};
 	}
 
-	PartitionedRows partitions =
-		partitionRows(rowIndices, split.featureIndex, split.threshold);
+	PartitionedRows partitions;
+	if (search.hasView && split.leftRowCount > 0 &&
+		split.leftRowCount < rowIndices.size())
+	{
+		partitions = partitionFromSortedView(search.view, split.leftRowCount);
+	}
+	else
+	{
+		partitions =
+			partitionRows(rowIndices, split.featureIndex, split.threshold);
+	}
 
 	if (partitions.leftRows.empty() || partitions.rightRows.empty())
 	{
@@ -1062,20 +1131,20 @@ bool C45Tree::allSameLabel(const std::vector<std::size_t> &rowIndices) const
 std::string
 C45Tree::getMajorityLabel(const std::vector<std::size_t> &rowIndices) const
 {
-	const std::map<std::string, int> counts = computeClassCounts(rowIndices);
+	const std::vector<std::uint32_t> counts = computeClassCountsArray(rowIndices);
 
-	std::string bestLabel;
-	int maxCount = -1;
+	std::uint16_t bestClassId = 0;
+	std::uint32_t maxCount = 0;
 
-	for (const auto &[label, count] : counts)
+	for (std::uint16_t classIndex = 0; classIndex < numClasses_; ++classIndex)
 	{
-		if (count > maxCount)
+		if (counts[classIndex] > maxCount)
 		{
-			maxCount = count;
-			bestLabel = label;
+			maxCount = counts[classIndex];
+			bestClassId = classIndex;
 		}
 	}
-	return bestLabel;
+	return classLabels_[bestClassId];
 }
 
 void C45Tree::printNode(const Node *node, std::ostream &output, int depth,
