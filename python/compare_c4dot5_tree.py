@@ -116,7 +116,7 @@ def compute_python_c45_stats(node):
 
 def main():
     # Set the dataset path directly here:
-    csv_path = Path(__file__).resolve().parent.parent / "datasets" / "diabetes.csv"
+    csv_path = Path(__file__).resolve().parent.parent / "datasets" / "covertype_100x_smaller.csv"
 
     print(f"Loading dataset: {csv_path.name}")
     feature_names, rows, features, labels, frame, attributes_map = load_any_dataset(csv_path)
@@ -136,8 +136,8 @@ def main():
     # Configuration for maximum tree growth
     model = DecisionTreeClassifier(
         attributes_map=attributes_map,
-        max_depth=100,
-        node_purity=0.95
+        max_depth=6,
+        node_purity=0.8
     )
     build_start = time.perf_counter()
     model.fit(frame)

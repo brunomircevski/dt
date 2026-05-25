@@ -48,7 +48,7 @@ std::string pruningModeToString(PruningMode mode) {
   return "Unknown";
 }
 
-std::string gleamsModeToString(ParallelMode mode) {
+std::string parallelModeToString(ParallelMode mode) {
   switch (mode) {
     case ParallelMode::Serial: return "Serial";
     case ParallelMode::VDa: return "VDa";
@@ -95,7 +95,8 @@ void generateTreeSvg(const C45Tree &tree, const std::string &svgPath,
   printedTree << "OPTION: maxDepth = " << options.maxDepth << "\n";
   printedTree << "OPTION: minSamplesToSplit = " << options.minSamplesToSplit << "\n";
   printedTree << "OPTION: minSamplesPerLeaf = " << options.minSamplesPerLeaf << "\n";
-  printedTree << "OPTION: gleamsMode = " << gleamsModeToString(options.gleamsMode) << "\n";
+  printedTree << "OPTION: parallelMode = "
+              << parallelModeToString(options.parallelMode) << "\n";
   printedTree << "OPTION: maxThreadCount = " << options.maxThreadCount << "\n";
   printedTree << "OPTION: minFeaturesToParallelize = "
               << options.minFeaturesToParallelize << "\n";

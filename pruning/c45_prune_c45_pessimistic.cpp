@@ -6,9 +6,10 @@
 
 namespace
 {
-    double clampProbability(double value)
+    double clampConfidenceFactor(double value)
     {
-        return std::max(0.0, std::min(1.0, value));
+        // C4.5 / Weka J48: CF is in (0, 0.5]; values above 0.5 disable pessimistic inflation.
+        return std::max(0.0, std::min(0.5, value));
     }
 
     double inverseStandardNormalCdf(double probability)
@@ -69,6 +70,43 @@ namespace
         return -(((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) /
                 ((((d1 * q + d2) * q + d3) * q + d4) * q + 1.0);
     }
+
+    // Weka J48 / C4.5: extra predicted errors beyond the observed count e.
+    double addErrs(double sampleCount, double observedErrors, double confidenceFactor)
+    {
+        if (confidenceFactor > 0.5)
+        {
+            return 0.0;
+        }
+
+        if (observedErrors < 1.0)
+        {
+            const double base =
+                sampleCount * (1.0 - std::pow(confidenceFactor, 1.0 / sampleCount));
+            if (observedErrors == 0.0)
+            {
+                return base;
+            }
+
+            return base + observedErrors * (addErrs(sampleCount, 1.0, confidenceFactor) - base);
+        }
+
+        if (observedErrors + 0.5 >= sampleCount)
+        {
+            return std::max(sampleCount - observedErrors, 0.0);
+        }
+
+        const double z = inverseStandardNormalCdf(1.0 - confidenceFactor);
+        const double errorRate = (observedErrors + 0.5) / sampleCount;
+        const double zSquared = z * z;
+        const double upperBoundRate =
+            (errorRate + zSquared / (2.0 * sampleCount) +
+             z * std::sqrt((errorRate / sampleCount) - (errorRate * errorRate / sampleCount) +
+                           (zSquared / (4.0 * sampleCount * sampleCount)))) /
+            (1.0 + zSquared / sampleCount);
+
+        return std::max(upperBoundRate * sampleCount - observedErrors, 0.0);
+    }
 }
 
 double C45Tree::estimatePessimisticLeafErrorCount(
@@ -81,26 +119,12 @@ double C45Tree::estimatePessimisticLeafErrorCount(
         return 0.0;
     }
 
-    const double confidenceFactor = clampProbability(options_.pruningConfidenceFactor);
-    const double upperTailProbability = 1.0 - confidenceFactor;
-    const double z = inverseStandardNormalCdf(upperTailProbability);
-
+    const double confidenceFactor = clampConfidenceFactor(options_.pruningConfidenceFactor);
     const double sampleCountDouble = static_cast<double>(sampleCount);
-    const double errorRate =
-        static_cast<double>(observedErrors) / sampleCountDouble;
-    const double zSquared = z * z;
+    const double observedErrorsDouble = static_cast<double>(observedErrors);
 
-    const double numeratorCenter =
-        errorRate + zSquared / (2.0 * sampleCountDouble);
-    const double numeratorMargin =
-        z * std::sqrt(
-            (errorRate * (1.0 - errorRate) / sampleCountDouble) +
-            (zSquared / (4.0 * sampleCountDouble * sampleCountDouble)));
-    const double denominator = 1.0 + zSquared / sampleCountDouble;
-    const double upperBoundRate =
-        (numeratorCenter + numeratorMargin) / denominator;
-
-    return clampProbability(upperBoundRate) * sampleCountDouble;
+    return observedErrorsDouble +
+           addErrs(sampleCountDouble, observedErrorsDouble, confidenceFactor);
 }
 
 double C45Tree::estimateSubtreePessimisticErrorCount(
@@ -167,9 +191,6 @@ void C45Tree::prunePessimisticError(
     const double estimatedSubtreeErrors =
         estimateSubtreePessimisticErrorCount(node.get(), rowIndices);
 
-    // This mode is closer to the spirit of C4.5:
-    // compare the pessimistic error estimate of a replacement leaf against
-    // the summed pessimistic estimates of all leaves in the subtree.
     if (estimatedLeafErrors <= estimatedSubtreeErrors + options_.epsilon)
     {
         node = Node::createLeaf(majorityLabel, rowIndices.size());

@@ -73,9 +73,10 @@ struct TrainingOptions {
   // Prevents creating artificial thresholds for nearly identical values.
   double epsilon = 1e-9;
 
-  // Confidence factor for C4.5 pessimistic pruning (PEP).
-  // Smaller values result in stronger, more aggressive pruning.
-  double pruningConfidenceFactor = 0.03;
+  // C4.5 pessimistic pruning confidence (CF), same as J48 -C. Default 0.25.
+  // Lower CF → more conservative error estimates → less pruning.
+  // Higher CF (up to 0.5) → more aggressive pruning. Values above 0.5 are clamped.
+  double pruningConfidenceFactor = 0.25;
 
   // Complexity parameter for Cost-Complexity Pruning (CART).
   // Penalty for each additional leaf; larger values lead to smaller trees (e.g., 0.01).
@@ -86,9 +87,9 @@ struct TrainingOptions {
   ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
 
   // GLEAMS parallelism mode (see wielowątkowość.md).
-  ParallelMode gleamsMode = ParallelMode::Serial;
+  ParallelMode parallelMode = ParallelMode::Serial;
 
-  // Thread count for vdExecutor and taExecutor (when gleamsMode uses them).
+  // Thread count for vdExecutor and taExecutor (when parallelMode uses them).
   int maxThreadCount = 1;
 
   // VD pipeline only runs when the dataset has at least this many features.

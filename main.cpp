@@ -40,30 +40,30 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
 int main() {
   try {
     // 1. Load the dataset from disk.
-    const Dataset dataset = loadDataset("datasets/covertype.csv");
+    const Dataset dataset = loadDataset("datasets/covertype_100x_smaller.csv");
     printDatasetSummary(dataset);
 
     // 2. Train the decision tree.
     C45Tree tree;
     TrainingOptions options;
 
-    options.maxDepth = 5;
-    options.gleamsMode = ParallelMode::VDTa;
+    options.maxDepth = 6;
+    options.parallelMode = ParallelMode::VDTa;
     options.minFeaturesToParallelize = 4;
     options.minRowsToParallelize = 16;
     options.maxThreadCount = 28;
 
     // --- CART Configuration ---
-    options.impurityMeasure = ImpurityMeasure::Gini;
-    options.splitSelectionMode = SplitSelectionMode::MaxGain;
-    options.pruningMode = PruningMode::None;
-    options.ccpAlpha = 2100;
+    // options.impurityMeasure = ImpurityMeasure::Gini;
+    // options.splitSelectionMode = SplitSelectionMode::MaxGain;
+    // options.pruningMode = PruningMode::CostComplexity;
+    options.ccpAlpha = 2000;
 
     // --- C.45 Configuration ---
-    // options.impurityMeasure = ImpurityMeasure::Entropy;
-    // options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
-    // options.pruningMode = PruningMode::PessimisticError;
-    options.pruningConfidenceFactor = 0.0001;
+    options.impurityMeasure = ImpurityMeasure::Entropy;
+    options.splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
+    options.pruningMode = PruningMode::PessimisticError;
+    options.pruningConfidenceFactor = 0.0005;
 
     // options.minSamplesPerLeaf = 1;
 

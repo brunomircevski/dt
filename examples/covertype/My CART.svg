@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1820" height="656" viewBox="0 0 1820 656">
+<style>
+text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
+.edge { stroke: #6c7a89; stroke-width: 2; fill: none; }
+.edge-label { font-size: 12px; font-weight: 700; fill: #415a77; }
+.decision { fill: #e0fbfc; stroke: #1d3557; stroke-width: 2; }
+.leaf { fill: #fefae0; stroke: #bc6c25; stroke-width: 2; }
+.node-title { font-size: 12px; font-weight: 700; }
+.node-meta { font-size: 11px; }
+.card-bg { fill: #ffffff; fill-opacity: 0.92; stroke: #cbd5e1; stroke-width: 1.5; }
+.card-header { font-size: 11px; font-weight: 800; fill: #475569; letter-spacing: 0.5px; }
+.card-item { font-size: 10px; fill: #334155; }
+</style>
+<rect x="0" y="0" width="1820" height="656" fill="#f8f9fa" />
+<line class="edge" x1="826.2" y1="96.0" x2="470.0" y2="170.0" />
+<text class="edge-label" x="648.1" y="125.0" text-anchor="middle">yes</text>
+<line class="edge" x1="470.0" y1="226.0" x2="375.0" y2="300.0" />
+<text class="edge-label" x="422.5" y="255.0" text-anchor="middle">yes</text>
+<line class="edge" x1="470.0" y1="226.0" x2="565.0" y2="300.0" />
+<text class="edge-label" x="517.5" y="255.0" text-anchor="middle">no</text>
+<line class="edge" x1="826.2" y1="96.0" x2="1182.5" y2="170.0" />
+<text class="edge-label" x="1004.4" y="125.0" text-anchor="middle">no</text>
+<line class="edge" x1="1182.5" y1="226.0" x2="897.5" y2="300.0" />
+<text class="edge-label" x="1040.0" y="255.0" text-anchor="middle">yes</text>
+<line class="edge" x1="897.5" y1="356.0" x2="755.0" y2="430.0" />
+<text class="edge-label" x="826.2" y="385.0" text-anchor="middle">yes</text>
+<line class="edge" x1="897.5" y1="356.0" x2="1040.0" y2="430.0" />
+<text class="edge-label" x="968.8" y="385.0" text-anchor="middle">no</text>
+<line class="edge" x1="1040.0" y1="486.0" x2="945.0" y2="560.0" />
+<text class="edge-label" x="992.5" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1040.0" y1="486.0" x2="1135.0" y2="560.0" />
+<text class="edge-label" x="1087.5" y="515.0" text-anchor="middle">no</text>
+<line class="edge" x1="1182.5" y1="226.0" x2="1467.5" y2="300.0" />
+<text class="edge-label" x="1325.0" y="255.0" text-anchor="middle">no</text>
+<line class="edge" x1="1467.5" y1="356.0" x2="1325.0" y2="430.0" />
+<text class="edge-label" x="1396.2" y="385.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1467.5" y1="356.0" x2="1610.0" y2="430.0" />
+<text class="edge-label" x="1538.8" y="385.0" text-anchor="middle">no</text>
+<line class="edge" x1="1610.0" y1="486.0" x2="1515.0" y2="560.0" />
+<text class="edge-label" x="1562.5" y="515.0" text-anchor="middle">yes</text>
+<line class="edge" x1="1610.0" y1="486.0" x2="1705.0" y2="560.0" />
+<text class="edge-label" x="1657.5" y="515.0" text-anchor="middle">no</text>
+<rect class="decision" x="751.2" y="40.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="826.2" y="63.0" text-anchor="middle">Elevation &lt;= 3044.500</text>
+<text class="node-meta" x="826.2" y="81.0" text-anchor="middle">n=581012</text>
+<rect class="decision" x="395.0" y="170.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="470.0" y="193.0" text-anchor="middle">Elevation &lt;= 2510.500</text>
+<text class="node-meta" x="470.0" y="211.0" text-anchor="middle">n=336915</text>
+<rect class="leaf" x="300.0" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="375.0" y="323.0" text-anchor="middle">Leaf: Ponderosa_Pine</text>
+<text class="node-meta" x="375.0" y="341.0" text-anchor="middle">n=42801</text>
+<rect class="leaf" x="490.0" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="565.0" y="323.0" text-anchor="middle">Leaf: Lodgepole_Pine</text>
+<text class="node-meta" x="565.0" y="341.0" text-anchor="middle">n=294114</text>
+<rect class="decision" x="1107.5" y="170.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1182.5" y="193.0" text-anchor="middle">Elevation &lt;= 3318.500</text>
+<text class="node-meta" x="1182.5" y="211.0" text-anchor="middle">n=244097</text>
+<rect class="decision" x="822.5" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="897.5" y="323.0" text-anchor="middle">Hillshade_Noon &lt;= 239.500</text>
+<text class="node-meta" x="897.5" y="341.0" text-anchor="middle">n=209255</text>
+<rect class="leaf" x="680.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="755.0" y="453.0" text-anchor="middle">Leaf: Spruce_Fir</text>
+<text class="node-meta" x="755.0" y="471.0" text-anchor="middle">n=159438</text>
+<rect class="decision" x="965.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1040.0" y="453.0" text-anchor="middle">Horizontal_Distance_To_Hydrology &lt;= 330.500</text>
+<text class="node-meta" x="1040.0" y="471.0" text-anchor="middle">n=49817</text>
+<rect class="leaf" x="870.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="945.0" y="583.0" text-anchor="middle">Leaf: Spruce_Fir</text>
+<text class="node-meta" x="945.0" y="601.0" text-anchor="middle">n=28196</text>
+<rect class="leaf" x="1060.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1135.0" y="583.0" text-anchor="middle">Leaf: Lodgepole_Pine</text>
+<text class="node-meta" x="1135.0" y="601.0" text-anchor="middle">n=21621</text>
+<rect class="decision" x="1392.5" y="300.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1467.5" y="323.0" text-anchor="middle">Wilderness_Area_3 &lt;= 0.500</text>
+<text class="node-meta" x="1467.5" y="341.0" text-anchor="middle">n=34842</text>
+<rect class="leaf" x="1250.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1325.0" y="453.0" text-anchor="middle">Leaf: Spruce_Fir</text>
+<text class="node-meta" x="1325.0" y="471.0" text-anchor="middle">n=17322</text>
+<rect class="decision" x="1535.0" y="430.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1610.0" y="453.0" text-anchor="middle">Soil_Type_32 &lt;= 0.500</text>
+<text class="node-meta" x="1610.0" y="471.0" text-anchor="middle">n=17520</text>
+<rect class="leaf" x="1440.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1515.0" y="583.0" text-anchor="middle">Leaf: Krummholz</text>
+<text class="node-meta" x="1515.0" y="601.0" text-anchor="middle">n=12779</text>
+<rect class="leaf" x="1630.0" y="560.0" width="150" height="56" rx="14" ry="14" />
+<text class="node-title" x="1705.0" y="583.0" text-anchor="middle">Leaf: Spruce_Fir</text>
+<text class="node-meta" x="1705.0" y="601.0" text-anchor="middle">n=4741</text>
+<g transform="translate(15, 15)">
+  <rect class="card-bg" x="0" y="0" width="250" height="323" rx="8" />
+  <text class="card-header" x="12" y="22">EVALUATION METRICS</text>
+  <text class="card-item" x="18" y="43">• checked samples = 581012</text>
+  <text class="card-item" x="18" y="58">• correct predictions = 400492</text>
+  <text class="card-item" x="18" y="73">• tree depth = 4</text>
+  <text class="card-item" x="18" y="88">• node count = 15</text>
+  <text class="card-item" x="18" y="103">• accuracy = 68.9301%</text>
+  <text class="card-header" x="12" y="125">TRAINING OPTIONS</text>
+  <text class="card-item" x="18" y="146">• impurityMeasure = Gini</text>
+  <text class="card-item" x="18" y="161">• splitSelectionMode = MaxGain</text>
+  <text class="card-item" x="18" y="176">• pruningMode = CostComplexity</text>
+  <text class="card-item" x="18" y="191">• maxDepth = 10</text>
+  <text class="card-item" x="18" y="206">• minSamplesToSplit = 2</text>
+  <text class="card-item" x="18" y="221">• minSamplesPerLeaf = 1</text>
+  <text class="card-item" x="18" y="236">• gleamsMode = VDTa</text>
+  <text class="card-item" x="18" y="251">• maxThreadCount = 28</text>
+  <text class="card-item" x="18" y="266">• minFeaturesToParallelize = 4</text>
+  <text class="card-item" x="18" y="281">• minRowsToParallelize = 16</text>
+  <text class="card-item" x="18" y="296">• pruningConfidenceFactor = 0.0001</text>
+  <text class="card-item" x="18" y="311">• ccpAlpha = 2000.0000</text>
+</g>
+</svg>
