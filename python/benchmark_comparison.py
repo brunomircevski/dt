@@ -31,6 +31,7 @@ COMPILE_COMMAND = [
     str(ROOT),
     str(PYTHON_DIR / "benchmark_tree_main.cpp"),
     str(ROOT / "c45_tree.cpp"),
+    str(ROOT / "task_executor.cpp"),
     str(ROOT / "dataset.cpp"),
     str(ROOT / "node.cpp"),
     str(ROOT / "pruning" / "cart_prune_cost_complexity.cpp"),

@@ -40,21 +40,24 @@ void runPredictionChecks(const C45Tree &tree, const Dataset &dataset) {
 int main() {
   try {
     // 1. Load the dataset from disk.
-    const Dataset dataset = loadDataset("datasets/covertype_10x_smaller.csv");
+    const Dataset dataset = loadDataset("datasets/covertype.csv");
     printDatasetSummary(dataset);
 
     // 2. Train the decision tree.
     C45Tree tree;
     TrainingOptions options;
 
+    options.maxDepth = 50;
+    options.gleamsMode = GleamsMode::VDTa;
+    options.minFeaturesToParallelize = 4;
+    options.minRowsToParallelize = 16;
+    options.maxThreadCount = 28;
+
     // --- CART Configuration ---
     options.impurityMeasure = ImpurityMeasure::Gini;
     options.splitSelectionMode = SplitSelectionMode::MaxGain;
     options.pruningMode = PruningMode::None;
     options.ccpAlpha = 20;
-    options.maxDepth = 5;
-    options.minFeaturesToParallelize = 3;
-    options.maxThreadCount = 28;
 
     // --- C.45 Configuration ---
     // options.impurityMeasure = ImpurityMeasure::Entropy;

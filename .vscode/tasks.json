@@ -7,11 +7,12 @@
             "args": [
                 "-fdiagnostics-color=always",
                 "-std=c++17",
-                "-g",
+                "-O2",
                 "-pthread",
                 "-I.",
                 "main.cpp",
                 "c45_tree.cpp",
+                "task_executor.cpp",
                 "dataset.cpp",
                 "node.cpp",
                 "tree_visualization.cpp",

@@ -48,6 +48,16 @@ std::string pruningModeToString(PruningMode mode) {
   return "Unknown";
 }
 
+std::string gleamsModeToString(GleamsMode mode) {
+  switch (mode) {
+    case GleamsMode::Serial: return "Serial";
+    case GleamsMode::VDa: return "VDa";
+    case GleamsMode::Ta: return "Ta";
+    case GleamsMode::VDTa: return "VDTa";
+  }
+  return "Unknown";
+}
+
 } // namespace
 
 void generateTreeSvg(const C45Tree &tree, const std::string &svgPath,
@@ -85,9 +95,12 @@ void generateTreeSvg(const C45Tree &tree, const std::string &svgPath,
   printedTree << "OPTION: maxDepth = " << options.maxDepth << "\n";
   printedTree << "OPTION: minSamplesToSplit = " << options.minSamplesToSplit << "\n";
   printedTree << "OPTION: minSamplesPerLeaf = " << options.minSamplesPerLeaf << "\n";
+  printedTree << "OPTION: gleamsMode = " << gleamsModeToString(options.gleamsMode) << "\n";
   printedTree << "OPTION: maxThreadCount = " << options.maxThreadCount << "\n";
   printedTree << "OPTION: minFeaturesToParallelize = "
               << options.minFeaturesToParallelize << "\n";
+  printedTree << "OPTION: minRowsToParallelize = "
+              << options.minRowsToParallelize << "\n";
   
   std::ostringstream factorStr;
   factorStr << std::fixed << std::setprecision(4) << options.pruningConfidenceFactor;
