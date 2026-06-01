@@ -1,109 +1,57 @@
-# Wielowątkowość w `C45Tree` (GLEAMS)
+# Wielowątkowość w `TreeParallel`
 
-Tryb wybiera się przez `TrainingOptions::gleamsMode` (`Serial`, `VDa`, `Ta`, `VDTa`). Równoległość nie włącza się już automatycznie przy `maxThreadCount > 1`.
+`TreeParallel` zawsze używa dwóch poziomów równoległości:
 
-## Tryby
+- `nodeExecutor` buduje niezależne poddrzewa równolegle.
+- `attributeExecutor` szuka najlepszego podziału równolegle po cechach.
 
-| `gleamsMode` | Budowa drzewa | `findBestSplit` | Executory |
-|--------------|---------------|-----------------|-----------|
-| **Serial** | rekurencyjny `buildNode` (DFS) | sekwencyjnie po cechach | brak |
-| **VDa** | `buildNode` (DFS) | pipeline VD (futures per cecha) | `vdExecutor` |
-| **Ta** | `expandNodeAsync` (callbacki, bez czekania na dzieci) | sekwencyjnie | `taExecutor` |
-| **VDTa** | `expandNodeAsync` | pipeline VD | **oba** (`vdExecutor` + `taExecutor`) |
+Jeśli potrzebna jest wersja jednowątkowa, użyj `TreeSerial`.
 
 ## Dwie pule (`TaskExecutor`)
 
-W **VDTa** worker `taExecutor` woła `findBestSplit` z pipeline VD. Jedna wspólna pula mogłaby zablokować się (worker Ta czeka na VD na tej samej kolejce). Dlatego są **osobne** executory o tym samym `maxThreadCount`.
+Wątek z `nodeExecutor` woła `findBestSplitAtNode`, które używa `attributeExecutor`. Jedna wspólna pula mogłaby się zakleszczyć (wątek Node czeka na Attribute na tej samej kolejce). Dlatego są **osobne** executory o tym samym `maxThreadCount`.
 
-Pliki: `task_executor.h`, `task_executor.cpp` — kontrakt `submit()` / `std::future` (docelowo ten sam interfejs pod CUDA).
+Pliki: `task_executor.h`, `task_executor.cpp`.
 
-## VDa — pipeline w `findBestSplit`
+## Attribute — równoległość po cechach
 
-1. Jedna współdzielona lista wierszy (`shared_ptr`) na węzeł — bez kopiowania indeksów per cecha.
-2. Dla każdej cechy: `vdExecutor->submit` → sort + `scoreAllThresholdsForFeature` w tym samym workerze.
-3. Główny wątek: `future::get()` per cecha (blokada, bez busy-poll) → `chooseBestSplit`.
+W `findBestSplitAtNode`:
 
-**Determinizm** jak w Serial (wynik per cecha zapisany po indeksie, tie-breakery po wartościach).
+1. Współdzielona lista wierszy (`shared_ptr`) na węzeł.
+2. Dla każdej cechy: `attributeExecutor->submit` → sort + `scoreAllThresholdsForFeature`.
+3. Wątek koordynujący: `future::get()` → `chooseBestSplit`.
 
-Próg VD: `minFeaturesToParallelize` (domyślnie 4).
+Próg: `minFeaturesToParallelize` (domyślnie 4).
 
-## Budowa węzła — `expandOneNode`
+## Node — równoległość po węzłach
 
-Wspólna logika dla wszystkich trybów: liść / stop / `findBestSplit` / `partitionRows` → liść albo węzeł decyzyjny + partycje.
-
-- **Serial / VDa:** `buildNode` → `expandOneNode`, potem rekurencyjnie `buildNode` na dzieciach.
-- **Ta / VDTa:** `expandNodeAsync` → `expandOneNode`, potem `scheduleAsyncChildren` (submit na `taExecutor`).
-- Małe węzły w Ta: fallback do `buildNode` (sync).
-
-## Ta / VDTa — `expandNodeAsync`
-
-- Zadanie węzła **nie czeka** na dzieci na puli Ta; dzieci podpinane callbackami (`pending` + mutex).
-- `fit()` czeka na `pendingNodeTasks == 0` i `future` korzenia.
-- Małe węzły (`rowIndices.size() < minRowsToParallelize`, domyślnie 32): fallback do `buildNode` — mniejszy narzut.
-- Build release: `-O2` w `.vscode/tasks.json`.
+- `growTreeWithNodeParallelism` → `expandNodeAsync` na korzeniu.
+- Dzieci lewe/prawe jako osobne joby na `nodeExecutor` (`scheduleAsyncChildren`).
+- `fit()` czeka: `pendingNodeJobs == 0` i `future` korzenia.
+- Mały węzeł (`rowCount < minRowsToParallelize`): fallback do `buildNode` na bieżącym wątku.
 
 ## Konfiguracja
 
 | Opcja | Znaczenie |
 |-------|-----------|
-| `gleamsMode` | Serial / VDa / Ta / VDTa |
-| `maxThreadCount` | Wątki w `vdExecutor` i/lub `taExecutor` |
-| `minFeaturesToParallelize` | Min. liczba cech dla VD |
-| `minRowsToParallelize` | Min. liczba wierszy w węźle dla Ta |
+| `maxThreadCount` | Wątki w `attributeExecutor` i/lub `nodeExecutor` |
+| `minFeaturesToParallelize` | Min. liczba cech dla Attribute |
+| `minRowsToParallelize` | Min. liczba wierszy w węźle dla Node |
 
-## Diagram (VDTa)
+## Diagram
 
 ```
 fit()
-  taExecutor: expandNodeAsync(root)
-    findBestSplit()  ──► vdExecutor: buildSortedFeatureView × F
-                       koordynator: score gdy future ready
-    partitionRows (1×)
-    taExecutor: expandNodeAsync(left), expandNodeAsync(right)  // bez latch na dzieciach
-  wait: pendingNodeTasks == 0, root future
-  pruning (1 wątek)
+  nodeExecutor: expandNodeAsync(root)
+    findBestSplitAtNode  ──► attributeExecutor: jedna cecha × F
+    partitionRows
+    nodeExecutor: expandNodeAsync(left), expandNodeAsync(right)
+  wait: pendingNodeJobs == 0, root future
+  prune (wspólne, 1 wątek)
 ```
 
-## Weryfikacja
-
-Ten sam dataset i opcje CART — dla wszystkich czterech `gleamsMode` oczekiwana **identyczna** głębokość, liczba węzłów i accuracy; różny czas budowy.
-
-Przykład (Covertype, `maxDepth = 5`, `maxThreadCount = 28`):
+## Kompilacja
 
 ```bash
-g++ -std=c++17 -O2 -pthread -I. main.cpp c45_tree.cpp task_executor.cpp dataset.cpp node.cpp tree_visualization.cpp pruning/*.cpp -o tree
-./tree   # ustaw gleamsMode w main.cpp
-
-g++ -std=c++17 -O2 -pthread -I. benchmark_gleams.cpp c45_tree.cpp task_executor.cpp dataset.cpp node.cpp pruning/*.cpp -o benchmark_gleams
-./benchmark_gleams   # wszystkie tryby × maxDepth 5 i 50
+g++ -std=c++17 -O2 -pthread -I. main.cpp tree_base.cpp tree_parallel.cpp tree_serial.cpp tree_cuda.cpp task_executor.cpp dataset.cpp node.cpp pruning/pruning.cpp -o tree
 ```
-
-## Wyniki testów (czas budowy)
-
-Konfiguracja wspólna: CART (Gini, `MaxGain`), `maxThreadCount = 28`, `-O2`, `minFeaturesToParallelize = 4`, `minRowsToParallelize = 32`. Metryka: `build time` [s].
-
-### Wcześniejsze pomiary (przed refaktorem `expandOneNode`)
-
-| Dataset | `maxDepth` | Serial [s] | Ta [s] | VDa [s] | VDTa [s] |
-|---------|------------|------------|--------|---------|----------|
-| `covertype_10x_smaller.csv` | 35 | 9.0 | 3.8 | 1.8 | 1.4 |
-| `covertype.csv` | 5 | 38.8 | 32.3 | 10.2 | 10.3 |
-| `covertype.csv` | 46 | 110.9 | 45.7 | 22.8 | 20.8 |
-
-### `covertype.csv` — ponowne pomiary (po `expandOneNode`, `-O2`)
-
-
-| `maxDepth` (ustawione) | głębokość drzewa | Serial [s] | Ta [s] | VDa [s] | VDTa [s] |
-|------------------------|------------------|------------|--------|---------|----------|
-| 5 | 5 | 6.4 | 4.2 | 1.2 | 1.2 |
-| 50 | 46 | 18.1 | 6.9 | 4.0 | 2.9 |
-
-### Porównanie z scikit-learn (`covertype.csv`, bez pruning)
-
-Wspólny model: `maxDepth = 5`, 63 węzły, accuracy ~70,3% (CART / Gini, bez przycinania).
-
-| Implementacja | Czas budowy [s] |
-|---------------|-----------------|
-| scikit-learn (`compare_sklearn_tree.py`) | 2.4 |
-| C++ CART Serial | 6.4 |
-| C++ CART VDTa | 1.3 |
