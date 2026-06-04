@@ -9846,7 +9846,7 @@ text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
 <text class="node-title" x="187145.0" y="843.0" text-anchor="middle">Leaf: background</text>
 <text class="node-meta" x="187145.0" y="861.0" text-anchor="middle">n=3</text>
 <g transform="translate(15, 15)">
-  <rect class="card-bg" x="0" y="0" width="250" height="323" rx="8" />
+  <rect class="card-bg" x="0" y="0" width="250" height="383" rx="8" />
   <text class="card-header" x="12" y="22">EVALUATION METRICS</text>
   <text class="card-item" x="18" y="43">• checked samples = 5000000</text>
   <text class="card-item" x="18" y="58">• correct predictions = 3959396</text>
@@ -9864,7 +9864,11 @@ text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
   <text class="card-item" x="18" y="251">• maxNodeThreadCount = 8</text>
   <text class="card-item" x="18" y="266">• minFeaturesToParallelize = 4</text>
   <text class="card-item" x="18" y="281">• minRowsToParallelize = 32</text>
-  <text class="card-item" x="18" y="296">• pruningConfidenceFactor = 0.2500</text>
-  <text class="card-item" x="18" y="311">• ccpAlpha = 1000.0000</text>
+  <text class="card-item" x="18" y="296">• cudaRowsPerTile = 32768</text>
+  <text class="card-item" x="18" y="311">• cudaMaxTilesPerFeature = 128</text>
+  <text class="card-item" x="18" y="326">• cudaScoreThreadsPerBlock = 256</text>
+  <text class="card-item" x="18" y="341">• cudaGatherBlockSize = 256</text>
+  <text class="card-item" x="18" y="356">• pruningConfidenceFactor = 0.2500</text>
+  <text class="card-item" x="18" y="371">• ccpAlpha = 1000.0000</text>
 </g>
 </svg>

@@ -8,6 +8,7 @@
 
 int main() {
   try {
+    std::cout << "Loading dataset...\n";
     const Dataset dataset = loadDataset("datasets/supersymmetry.csv");
     printDatasetSummary(dataset);
 
@@ -18,6 +19,12 @@ int main() {
     options.minRowsToParallelize = 32;
     options.maxFeatureThreadCount = 20;
     options.maxNodeThreadCount = 8;
+
+    // TreeCuda only (ignored by TreeSerial / TreeParallel).
+    // options.cudaRowsPerTile = 16384;
+    // options.cudaMaxTilesPerFeature = 256;
+    // options.cudaScoreThreadsPerBlock = 256;
+    // options.cudaGatherBlockSize = 256;
 
     // --- CART Configuration ---
     options.impurityMeasure = ImpurityMeasure::Gini;
@@ -34,10 +41,9 @@ int main() {
     // Switch backend: TreeSerial, TreeParallel, or TreeCuda.
     TreeCuda tree;
 
-    tree.fit(dataset, options);
+    std::cout << "Fitting tree...\n";
 
-    std::cout << "Learned tree:\n";
-    std::cout << '\n';
+    tree.fit(dataset, options);
 
     generateTreeSvg(tree, "tree.svg", options, dataset);
     printSummary(tree, dataset);

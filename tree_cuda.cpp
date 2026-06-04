@@ -5,11 +5,28 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+namespace {
+
+void validateCudaLaunchOptions(TrainingOptions &options) {
+  options.cudaRowsPerTile =
+      std::clamp(options.cudaRowsPerTile, std::size_t{1024},
+                 std::size_t{1 << 20});
+  options.cudaMaxTilesPerFeature =
+      std::clamp(options.cudaMaxTilesPerFeature, 1, 512);
+  options.cudaScoreThreadsPerBlock =
+      std::clamp(options.cudaScoreThreadsPerBlock, 32, 1024);
+  options.cudaGatherBlockSize =
+      std::clamp(options.cudaGatherBlockSize, 32, 1024);
+}
+
+} // namespace
 
 // =============================================================================
 // GPU split search
@@ -369,8 +386,6 @@ __global__ void scoreSplitsKernel(const GpuValue *values,
 //   D. reduceTilesKernel   : combine each feature's tile winners into one best.
 // =============================================================================
 
-constexpr int kMaxTiles = 128; // upper bound on tiles per feature
-
 // A: per-tile class histogram. Grid = (tile, feature).
 __global__ void tileHistogramKernel(const std::uint32_t *rowIds,
                                     const std::uint16_t *classIds,
@@ -583,6 +598,7 @@ struct TreeCuda::CudaState {
   std::uint32_t *d_featureTotals = nullptr;  // [feature][class]
   GpuSplitCandidate *d_blockBest = nullptr;  // [feature][tile]
 
+  int maxTilesPerFeature = 128; // from TrainingOptions::cudaMaxTilesPerFeature
   std::size_t scratchCapacity = 0; // current featureCount*nodeRows capacity
 };
 
@@ -616,12 +632,14 @@ TreeCuda::~TreeCuda() { releaseCudaState(); }
 
 void TreeCuda::fit(const Dataset &dataset, const TrainingOptions &options) {
   prepareFit(dataset, options);
+  validateCudaLaunchOptions(options_);
 
   cuda_ = new CudaState();
   CudaState &gpu = *cuda_;
   gpu.totalRows = dataset.samples.size();
   gpu.featureCount = dataset.featureNames.size();
   gpu.numClasses = numClasses_;
+  gpu.maxTilesPerFeature = options_.cudaMaxTilesPerFeature;
   if (gpu.numClasses > kMaxGpuClasses) {
     throw std::runtime_error("TreeCuda supports at most 64 classes.");
   }
@@ -652,13 +670,13 @@ void TreeCuda::fit(const Dataset &dataset, const TrainingOptions &options) {
                         gpu.featureCount * sizeof(GpuSplitCandidate)));
 
   // Small fixed buffers for the multi-block (large-node) scan path.
-  CUDA_CHECK(cudaMalloc(&gpu.d_tileHist, gpu.featureCount * kMaxTiles *
-                                             gpu.numClasses *
-                                             sizeof(std::uint32_t)));
+  CUDA_CHECK(cudaMalloc(&gpu.d_tileHist,
+                        gpu.featureCount * gpu.maxTilesPerFeature *
+                            gpu.numClasses * sizeof(std::uint32_t)));
   CUDA_CHECK(cudaMalloc(&gpu.d_featureTotals,
                         gpu.featureCount * gpu.numClasses *
                             sizeof(std::uint32_t)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_blockBest, gpu.featureCount * kMaxTiles *
+  CUDA_CHECK(cudaMalloc(&gpu.d_blockBest, gpu.featureCount * gpu.maxTilesPerFeature *
                                               sizeof(GpuSplitCandidate)));
 
   const std::vector<std::size_t> rowIndices = makeRootRowIndices();
@@ -724,7 +742,7 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
 
   // 1) Gather this node's (value, rowId) pairs into dense, feature-major scratch.
   const std::size_t workItems = featureCount * nodeRows;
-  const int blockSize = 256;
+  const int blockSize = options_.cudaGatherBlockSize;
   const int gridSize = static_cast<int>((workItems + blockSize - 1) / blockSize);
   gatherNodeFeaturesKernel<<<gridSize, blockSize>>>(
       gpu.d_currentRows, gpu.d_features, nodeRows, gpu.totalRows, featureCount,
@@ -781,13 +799,14 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
   // Decide how many tiles (blocks) per feature. Small nodes use one block per
   // feature (numTiles == 1); large nodes are split into tiles so all SMs stay
   // busy. ~32k rows per tile keeps each block well-fed.
-  const std::size_t rowsPerTile = 32768;
+  const std::size_t rowsPerTile = options_.cudaRowsPerTile;
+  const int maxTiles = cuda_->maxTilesPerFeature;
   int numTiles = static_cast<int>((nodeRows + rowsPerTile - 1) / rowsPerTile);
   if (numTiles < 1) numTiles = 1;
-  if (numTiles > kMaxTiles) numTiles = kMaxTiles;
+  if (numTiles > maxTiles) numTiles = maxTiles;
 
   // Threads per block, capped so each thread still gets a non-trivial chunk.
-  int scoreThreads = 256;
+  int scoreThreads = options_.cudaScoreThreadsPerBlock;
   const std::size_t perBlockRows =
       (nodeRows + static_cast<std::size_t>(numTiles) - 1) / numTiles;
   while (scoreThreads > 1 &&
