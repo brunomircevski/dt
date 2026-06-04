@@ -7,20 +7,20 @@
 
 int main() {
   try {
-    const Dataset dataset = loadDataset("datasets/covertype.csv");
+    const Dataset dataset = loadDataset("datasets/supersymmetry.csv");
     printDatasetSummary(dataset);
 
     TrainingOptions options;
 
-    options.maxDepth = 5;
+    options.maxDepth = 10;
     options.minFeaturesToParallelize = 4;
-    options.minRowsToParallelize = 16;
-    options.maxThreadCount = 28;
+    options.minRowsToParallelize = 32;
+    options.maxThreadCount = 20;
 
     // --- CART Configuration ---
     options.impurityMeasure = ImpurityMeasure::Gini;
     options.splitSelectionMode = SplitSelectionMode::MaxGain;
-    options.pruningMode = PruningMode::CostComplexity;
+    options.pruningMode = PruningMode::None;
     options.ccpAlpha = 1000;
 
     // --- C4.5 Configuration ---
