@@ -1,15 +1,18 @@
 {
+    "version": "2.0.0",
     "tasks": [
         {
-            "type": "cppbuild",
             "label": "Build tree",
-            "command": "/usr/bin/g++",
+            "type": "shell",
+            "command": "/opt/cuda/bin/nvcc",
             "args": [
-                "-fdiagnostics-color=always",
-                "-std=c++17",
+                "-std=c++20",
                 "-O2",
-                "-pthread",
+                "-arch=native",
+                "-x",
+                "cu",
                 "-I.",
+                "-I/usr/include/cccl",
                 "main.cpp",
                 "tree_base.cpp",
                 "tree_parallel.cpp",
@@ -32,8 +35,36 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "detail": "Build the full decision tree project."
+            "detail": "Build with nvcc (CUDA + Thrust). Required for tree_cuda.cpp."
+        },
+        {
+            "label": "Build tree (CPU only)",
+            "type": "shell",
+            "command": "/usr/bin/g++",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-std=c++20",
+                "-O2",
+                "-pthread",
+                "-I.",
+                "main.cpp",
+                "tree_base.cpp",
+                "tree_parallel.cpp",
+                "tree_serial.cpp",
+                "task_executor.cpp",
+                "dataset.cpp",
+                "node.cpp",
+                "pruning/pruning.cpp",
+                "-o",
+                "${workspaceFolder}/tree_cpu"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "g++ build without tree_cuda.cpp (use TreeSerial/TreeParallel in main)."
         }
-    ],
-    "version": "2.0.0"
+    ]
 }
