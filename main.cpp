@@ -7,7 +7,7 @@
 
 int main() {
   try {
-    const Dataset dataset = loadDataset("datasets/supersymmetry.csv");
+    const Dataset dataset = loadDataset("datasets/supersymmetry_5x_smaller.csv");
     printDatasetSummary(dataset);
 
     TrainingOptions options;
@@ -15,7 +15,8 @@ int main() {
     options.maxDepth = 10;
     options.minFeaturesToParallelize = 4;
     options.minRowsToParallelize = 32;
-    options.maxThreadCount = 20;
+    options.maxFeatureThreadCount = 20;
+    options.maxNodeThreadCount = 8;
 
     // --- CART Configuration ---
     options.impurityMeasure = ImpurityMeasure::Gini;

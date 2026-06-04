@@ -11,13 +11,16 @@ void TreeParallel::setupParallelExecutors() {
   // - featureExecutor: score each feature at the same node in parallel
   // - nodeExecutor: build one child subtree while the current thread builds the
   // other
-  const std::size_t threadCount =
-      static_cast<std::size_t>(std::max(options_.maxThreadCount, 1));
-  fitContext_->featureExecutor = std::make_unique<TaskExecutor>(threadCount);
-  fitContext_->nodeExecutor = std::make_unique<TaskExecutor>(threadCount);
+  const std::size_t featureThreadCount =
+      static_cast<std::size_t>(std::max(options_.maxFeatureThreadCount, 1));
+  const std::size_t nodeThreadCount =
+      static_cast<std::size_t>(std::max(options_.maxNodeThreadCount, 1));
+  fitContext_->featureExecutor =
+      std::make_unique<TaskExecutor>(featureThreadCount);
+  fitContext_->nodeExecutor = std::make_unique<TaskExecutor>(nodeThreadCount);
   // Leave at least one worker free so a thread waiting on future.get() does not
   // deadlock.
-  fitContext_->maxNodeTasks = threadCount > 1 ? threadCount - 1 : 0;
+  fitContext_->maxNodeTasks = nodeThreadCount > 1 ? nodeThreadCount - 1 : 0;
   fitContext_->activeNodeTasks.store(0, std::memory_order_relaxed);
 }
 

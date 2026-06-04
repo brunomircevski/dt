@@ -9316,7 +9316,7 @@ text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
 <text class="node-title" x="177075.0" y="1363.0" text-anchor="middle">Leaf: signal</text>
 <text class="node-meta" x="177075.0" y="1381.0" text-anchor="middle">n=233</text>
 <g transform="translate(15, 15)">
-  <rect class="card-bg" x="0" y="0" width="250" height="308" rx="8" />
+  <rect class="card-bg" x="0" y="0" width="250" height="323" rx="8" />
   <text class="card-header" x="12" y="22">EVALUATION METRICS</text>
   <text class="card-item" x="18" y="43">• checked samples = 1000000</text>
   <text class="card-item" x="18" y="58">• correct predictions = 794764</text>
@@ -9330,10 +9330,11 @@ text { font-family: 'DejaVu Sans Mono', monospace; fill: #14213d; }
   <text class="card-item" x="18" y="191">• maxDepth = 10</text>
   <text class="card-item" x="18" y="206">• minSamplesToSplit = 2</text>
   <text class="card-item" x="18" y="221">• minSamplesPerLeaf = 1</text>
-  <text class="card-item" x="18" y="236">• maxThreadCount = 20</text>
-  <text class="card-item" x="18" y="251">• minFeaturesToParallelize = 4</text>
-  <text class="card-item" x="18" y="266">• minRowsToParallelize = 32</text>
-  <text class="card-item" x="18" y="281">• pruningConfidenceFactor = 0.2500</text>
-  <text class="card-item" x="18" y="296">• ccpAlpha = 1000.0000</text>
+  <text class="card-item" x="18" y="236">• maxFeatureThreadCount = 20</text>
+  <text class="card-item" x="18" y="251">• maxNodeThreadCount = 8</text>
+  <text class="card-item" x="18" y="266">• minFeaturesToParallelize = 4</text>
+  <text class="card-item" x="18" y="281">• minRowsToParallelize = 32</text>
+  <text class="card-item" x="18" y="296">• pruningConfidenceFactor = 0.2500</text>
+  <text class="card-item" x="18" y="311">• ccpAlpha = 1000.0000</text>
 </g>
 </svg>

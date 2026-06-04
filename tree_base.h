@@ -47,7 +47,8 @@ struct TrainingOptions {
   double ccpAlpha = 0.5;
   ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
 
-  int maxThreadCount = 1;
+  int maxFeatureThreadCount = 4;
+  int maxNodeThreadCount = 4;
   std::size_t minFeaturesToParallelize = 4;
   std::size_t minRowsToParallelize = 32;
 };
