@@ -51,6 +51,13 @@ struct TrainingOptions {
   int maxNodeThreadCount = 4;
   std::size_t minFeaturesToParallelize = 4;
   std::size_t minRowsToParallelize = 32;
+
+  // TreeCuda launch tuning (ignored by TreeSerial / TreeParallel).
+  // Lower cudaRowsPerTile or raise cudaMaxTilesPerFeature on GPUs with many SMs.
+  std::size_t cudaRowsPerTile = 32768;
+  int cudaMaxTilesPerFeature = 128;
+  int cudaScoreThreadsPerBlock = 256;
+  int cudaGatherBlockSize = 256;
 };
 
 class TreeBase {

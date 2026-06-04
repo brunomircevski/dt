@@ -237,7 +237,23 @@ ties it can produce slightly different (but equally accurate) trees.
 
 ---
 
-## 9. Building it
+## 9. Tuning knobs (`TrainingOptions`, CUDA-prefixed)
+
+`TreeCuda` reads these fields from `TrainingOptions` (ignored by CPU backends).
+They are clamped once at the start of `fit()`:
+
+| Field | Default | Meaning |
+|-------|---------|---------|
+| `cudaRowsPerTile` | 32768 | Rows per tile on large nodes (smaller → more GPU blocks). |
+| `cudaMaxTilesPerFeature` | 128 | Max tiles per feature; also sizes tile buffers allocated on GPU. |
+| `cudaScoreThreadsPerBlock` | 256 | Threads per block in the split-scan kernels. |
+| `cudaGatherBlockSize` | 256 | Threads per block in the gather kernel. |
+
+Example in `main.cpp` (uncomment to override defaults).
+
+---
+
+## 10. Building it
 
 The GPU code must be compiled with NVIDIA's compiler, `nvcc` (a normal C++
 compiler does not understand `__global__`, `<<<...>>>`, or the CUB headers).

@@ -1,34 +1,39 @@
 # Wielowątkowość w `TreeParallel`
 
-`TreeParallel` zawsze używa dwóch poziomów równoległości:
+`TreeParallel` używa dwóch poziomów równoległości:
 
-- `nodeExecutor` buduje niezależne poddrzewa równolegle.
-- `attributeExecutor` szuka najlepszego podziału równolegle po cechach.
+- `nodeExecutor` — buduje poddrzewa równolegle (lewe dziecko w puli, prawe na bieżącym wątku).
+- `featureExecutor` — w jednym węźle szuka najlepszego podziału równolegle po cechach.
 
-Jeśli potrzebna jest wersja jednowątkowa, użyj `TreeSerial`.
+Wersja jednowątkowa: `TreeSerial`.
 
 ## Dwie pule (`TaskExecutor`)
 
-Wątek z `nodeExecutor` woła `findBestSplitAtNode`, które używa `featureExecutor`. Jedna wspólna pula mogłaby się zakleszczyć (wątek Node czeka na Feature na tej samej kolejce). Dlatego są **osobne** executory z osobnymi limitami `maxFeatureThreadCount` i `maxNodeThreadCount`.
+Wątek z `nodeExecutor` woła `expandOneNode` → `findBestSplitAtNode`, które korzysta z `featureExecutor`. Jedna wspólna pula mogłaby się zakleszczyć (wątek node czeka na wynik feature na tej samej kolejce). Dlatego są **osobne** executory z limitami `maxFeatureThreadCount` i `maxNodeThreadCount`.
 
 Pliki: `task_executor.h`, `task_executor.cpp`.
 
-## Attribute — równoległość po cechach
+## Feature — równoległość po cechach
 
-W `findBestSplitAtNode`:
+W `findBestSplitAtNode` (`tree_parallel.cpp`):
 
-1. Współdzielona lista wierszy (`shared_ptr`) na węzeł.
-2. Dla każdej cechy: `attributeExecutor->submit` → sort + `scoreAllThresholdsForFeature`.
-3. Wątek koordynujący: `future::get()` → `chooseBestSplit`.
+1. Współdzielona lista wierszy (`shared_ptr`) na węzeł (tylko gdy włączona równoległość).
+2. Dla każdej cechy: `featureExecutor->submit` → `evaluateFeatureSplit` (sort w `buildSortedFeatureView` + `scoreAllThresholdsForFeature`).
+3. Wątek koordynujący: `future::get()` dla każdej cechy → `reduceBestSplitSearch` (wewnątrz `chooseBestSplit` po najlepszej cesze).
 
-Próg: `minFeaturesToParallelize` (domyślnie 4).
+Próg: `minFeaturesToParallelize` (domyślnie 4, `featureCount >=` próg). Poniżej — pętla sekwencyjna po cechach.
 
 ## Node — równoległość po węzłach
 
-- `growTreeWithNodeParallelism` → `expandNodeAsync` na korzeniu.
-- Dzieci lewe/prawe jako osobne joby na `nodeExecutor` (`scheduleAsyncChildren`).
-- `fit()` czeka: `pendingNodeJobs == 0` i `future` korzenia.
-- Mały węzeł (`rowCount < minRowsToParallelize`): fallback do `buildNode` na bieżącym wątku.
+Główna ścieżka: `fit()` → `buildNodeParallel(rowIndices, 0)` (synchronicznie, bez osobnego „future korzenia”).
+
+W `buildNodeParallel`:
+
+1. `expandOneNode` — liść albo węzeł decyzyjny + partycje wierszy.
+2. Jeśli `rowCount < minRowsToParallelize` **lub** `tryStartNodeTask()` nie przejmie slotu: oba dzieci rekurencyjnie na **bieżącym** wątku (`buildNodeParallel`, nie `buildNode`).
+3. W przeciwnym razie: **lewe** poddrzewo → `nodeExecutor->submit`, **prawe** → `buildNodeParallel` na bieżącym wątku, potem `leftJob.get()`.
+
+Limit równoległych zadań node: `maxNodeTasks = max(0, maxNodeThreadCount - 1)` — zostaje co najmniej jeden worker wolny, żeby uniknąć zakleszczenia przy `future::get()`. Licznik: `activeNodeTasks` (`tryStartNodeTask` / `finishNodeTask` w jobie lewego dziecka).
 
 ## Konfiguracja
 
@@ -36,23 +41,39 @@ Próg: `minFeaturesToParallelize` (domyślnie 4).
 |-------|-----------|
 | `maxFeatureThreadCount` | Wątki w `featureExecutor` (równoległe cechy w węźle) |
 | `maxNodeThreadCount` | Wątki w `nodeExecutor` (równoległe poddrzewa) |
-| `minFeaturesToParallelize` | Min. liczba cech dla Attribute |
-| `minRowsToParallelize` | Min. liczba wierszy w węźle dla Node |
+| `minFeaturesToParallelize` | Min. liczba cech, by włączyć równoległość feature |
+| `minRowsToParallelize` | Min. liczba wierszy w węźle, by rozważyć równoległość node |
+
+Domyślne wartości w `TrainingOptions` (`tree_base.h`): 4 / 4 / 4 / 32. W `main.cpp` często ustawiane są wyższe limity wątków.
 
 ## Diagram
 
 ```
 fit()
-  nodeExecutor: expandNodeAsync(root)
-    findBestSplitAtNode  ──► attributeExecutor: jedna cecha × F
-    partitionRows
-    nodeExecutor: expandNodeAsync(left), expandNodeAsync(right)
-  wait: pendingNodeJobs == 0, root future
-  prune (wspólne, 1 wątek)
+  setupParallelExecutors()  → featureExecutor, nodeExecutor, maxNodeTasks
+  buildNodeParallel(root)
+    expandOneNode
+      findBestSplitAtNode ──► featureExecutor: evaluateFeatureSplit × F
+      partitionRows / partitionFromSortedView
+    [dużo wierszy + wolny slot]
+      nodeExecutor: buildNodeParallel(left)
+      bieżący wątek: buildNodeParallel(right)
+      leftJob.get()
+    [mały węzeł lub brak slotu]
+      buildNodeParallel(left), buildNodeParallel(right) — ten sam wątek
+  fitContext_.reset()   // pule zniszczone
+  finalizeFit() → prune (jeden wątek)
 ```
 
 ## Kompilacja
 
+`TreeParallel` nie wymaga CUDA. Build CPU (jak zadanie „Build tree (CPU only)” w `.vscode/tasks.json`):
+
 ```bash
-g++ -std=c++17 -O2 -pthread -I. main.cpp tree_base.cpp tree_parallel.cpp tree_serial.cpp tree_cuda.cpp task_executor.cpp dataset.cpp node.cpp pruning/pruning.cpp -o tree
+g++ -std=c++20 -O2 -pthread -I. \
+  main.cpp tree_base.cpp tree_parallel.cpp tree_serial.cpp \
+  task_executor.cpp dataset.cpp node.cpp pruning/pruning.cpp \
+  -o tree_cpu
 ```
+
+Pełny build z `TreeCuda` — `build_cuda.sh` / nvcc (zawiera też `tree_parallel.cpp`).
