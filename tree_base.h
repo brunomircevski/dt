@@ -186,5 +186,5 @@ protected:
   static bool isBetterMaxGain(const SplitResult &lhs, const SplitResult &rhs,
                               double epsilon);
 
-  void runPruning(const TrainingOptions &options);
+  friend void pruneTree(TreeBase &tree, const TrainingOptions &options);
 };
