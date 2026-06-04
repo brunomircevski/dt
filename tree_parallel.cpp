@@ -78,9 +78,9 @@ TreeParallel::buildNodeParallel(const std::vector<std::size_t> &rowIndices,
             finishNodeTask();
             return child;
           });
-
+          
   expanded.node->rightChild = buildNodeParallel(rightRows, depth + 1);
-  expanded.node->leftChild = leftJob.get();
+  expanded.node->leftChild = leftJob.get(); // pauses until thread is finished
   return std::move(expanded.node);
 }
 

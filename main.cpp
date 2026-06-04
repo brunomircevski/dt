@@ -1,4 +1,5 @@
 #include "dataset.h"
+#include "tree_cuda.h"
 #include "tree_parallel.h"
 #include "tree_serial.h"
 #include "tree_visualization.h"
@@ -7,7 +8,7 @@
 
 int main() {
   try {
-    const Dataset dataset = loadDataset("datasets/supersymmetry_5x_smaller.csv");
+    const Dataset dataset = loadDataset("datasets/supersymmetry.csv");
     printDatasetSummary(dataset);
 
     TrainingOptions options;
@@ -31,7 +32,7 @@ int main() {
     // options.pruningConfidenceFactor = 0.0005;
 
     // Switch backend: TreeSerial, TreeParallel, or TreeCuda.
-    TreeParallel tree;
+    TreeCuda tree;
 
     tree.fit(dataset, options);
 
