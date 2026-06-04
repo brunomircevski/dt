@@ -9,7 +9,7 @@ Jeśli potrzebna jest wersja jednowątkowa, użyj `TreeSerial`.
 
 ## Dwie pule (`TaskExecutor`)
 
-Wątek z `nodeExecutor` woła `findBestSplitAtNode`, które używa `attributeExecutor`. Jedna wspólna pula mogłaby się zakleszczyć (wątek Node czeka na Attribute na tej samej kolejce). Dlatego są **osobne** executory o tym samym `maxThreadCount`.
+Wątek z `nodeExecutor` woła `findBestSplitAtNode`, które używa `featureExecutor`. Jedna wspólna pula mogłaby się zakleszczyć (wątek Node czeka na Feature na tej samej kolejce). Dlatego są **osobne** executory z osobnymi limitami `maxFeatureThreadCount` i `maxNodeThreadCount`.
 
 Pliki: `task_executor.h`, `task_executor.cpp`.
 
@@ -34,7 +34,8 @@ Próg: `minFeaturesToParallelize` (domyślnie 4).
 
 | Opcja | Znaczenie |
 |-------|-----------|
-| `maxThreadCount` | Wątki w `attributeExecutor` i/lub `nodeExecutor` |
+| `maxFeatureThreadCount` | Wątki w `featureExecutor` (równoległe cechy w węźle) |
+| `maxNodeThreadCount` | Wątki w `nodeExecutor` (równoległe poddrzewa) |
 | `minFeaturesToParallelize` | Min. liczba cech dla Attribute |
 | `minRowsToParallelize` | Min. liczba wierszy w węźle dla Node |
 
