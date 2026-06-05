@@ -24,7 +24,7 @@ TreeSerial::SplitSearchResult TreeSerial::findBestSplitAtNode(
   return reduceBestSplitSearch(std::move(featureResults), rowIndices);
 }
 
-void TreeSerial::fit(const Dataset &dataset, const TrainingOptions &options) {
+void TreeSerial::fit(const Dataset &dataset, const Options &options) {
   // Shared setup: store the dataset, copy options, and build fast label lookup.
   prepareFit(dataset, options);
 

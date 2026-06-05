@@ -56,7 +56,7 @@ bool TreeBase::isBetterMaxGain(const SplitResult &lhs, const SplitResult &rhs,
 }
 
 void TreeBase::prepareFit(const Dataset &dataset,
-                          const TrainingOptions &options) {
+                          const Options &options) {
   // Common setup for all backends.
   // the same data pointer, options, and label mapping before training starts.
   if (dataset.samples.empty()) {
@@ -80,7 +80,7 @@ void TreeBase::finishBuildTimer(BuildTimePoint start) {
           .count();
 }
 
-void TreeBase::finalizeFit(const TrainingOptions &options) { prune(options); }
+void TreeBase::finalizeFit(const Options &options) { prune(options); }
 
 std::vector<std::size_t> TreeBase::makeRootRowIndices() const {
   // The tree stores row numbers, not copies of samples. This keeps splits
@@ -103,7 +103,7 @@ std::string TreeBase::predict(const Sample &sample) const {
   const Node *current = root_.get();
 
   while (!current->isLeaf) {
-    const double value = sample.features[current->featureIndex];
+    const float value = sample.features[current->featureIndex];
 
     if (value <= current->threshold) {
       current = current->leftChild.get();
@@ -305,7 +305,7 @@ TreeBase::partitionRows(const std::vector<std::size_t> &rowIndices,
   // Question at each decision node: "Is feature <= threshold?"
   PartitionedRows partitions;
   for (std::size_t rowIndex : rowIndices) {
-    const double value = dataset_->samples[rowIndex].features[featureIndex];
+    const float value = dataset_->samples[rowIndex].features[featureIndex];
     if (value <= threshold) {
       partitions.leftRows.push_back(rowIndex);
     } else {
@@ -852,7 +852,7 @@ void TreeBase::printNode(const Node *node, std::ostream &output, int depth,
   }
 }
 
-void TreeBase::prune(const TrainingOptions &options) {
+void TreeBase::prune(const Options &options) {
   pruneTree(*this, options);
 }
 

@@ -14,7 +14,7 @@
 
 namespace {
 
-void validateCudaLaunchOptions(TrainingOptions &options) {
+void validateCudaLaunchOptions(Options &options) {
   options.cudaRowsPerTile =
       std::clamp(options.cudaRowsPerTile, std::size_t{1024},
                  std::size_t{1 << 20});
@@ -33,11 +33,6 @@ void validateCudaLaunchOptions(TrainingOptions &options) {
 // -----------------------------------------------------------------------------
 // The CPU still drives the recursion (see TreeBase::buildNode). For each node it
 // asks the GPU one question: "given these rows, what is the best split?"
-//
-// The old version was slow because, per node, it launched ~160 tiny GPU
-// operations (a sort + several Thrust passes + a host copy PER feature) and then
-// scanned all rows with a SINGLE GPU thread (<<<1,1>>>). Launch overhead and a
-// serial scan dominated everything.
 //
 // This version does the whole node with only a few launches:
 //   1. gather      : copy this node's (value, rowId) pairs into scratch          (1 kernel)
@@ -90,14 +85,8 @@ struct GpuSplitCandidate {
 // Class counts live in small per-thread arrays, so we cap the number of classes.
 constexpr std::uint16_t kMaxGpuClasses = 64;
 
-// Feature values are stored on the GPU as 32-bit floats instead of 64-bit
-// doubles. This halves the two largest memory consumers (the uploaded feature
-// matrix and the per-node value scratch) and makes the radix sort ~2x faster
-// (32-bit keys = 4 radix passes instead of 8). For datasets like SUSY whose
-// features are already float-precision measurements this does not change the
-// resulting tree in any meaningful way; thresholds are still returned as
-// doubles. If you ever need bit-exact agreement with the CPU backend, change
-// this alias back to double.
+// Same type as Sample::features in the dataset. Keeps host packing and GPU
+// storage aligned; thresholds and impurity scores still use double for math.
 using GpuValue = float;
 
 // Impurity (entropy or Gini) of a node described purely by its class counts.
@@ -216,6 +205,60 @@ __device__ GpuSplitCandidate deviceScoreCandidate(
   return result;
 }
 
+// Sweep a sorted range and score every useful threshold in it.
+//
+// `leftCounts` must already contain the class histogram of all rows before
+// `begin`. As the loop moves forward, row i is added to the left side, so the
+// split tested at position i means:
+//
+//   rows [0, i)       go left
+//   rows [i, nodeRows) go right
+//
+// The caller decides how the sorted feature is divided among threads/tiles; this
+// helper only contains the decision-tree math. Keeping it shared makes the
+// single-block and tiled kernels much easier to compare.
+__device__ __forceinline__ GpuSplitCandidate scanSortedThresholds(
+    std::size_t featureIndex, const GpuValue *values,
+    const std::uint32_t *rowIds, const std::uint16_t *classIds,
+    std::size_t nodeRows, std::size_t begin, std::size_t end,
+    const std::uint32_t *totalCounts, double parentImpurity,
+    std::uint32_t *leftCounts, const GpuTrainConfig &config) {
+  GpuSplitCandidate best; // invalid until a real split is found.
+
+  for (std::size_t i = begin; i < end; ++i) {
+    if (i >= 1) {
+      const std::uint16_t previousClass = classIds[rowIds[i - 1]];
+      const std::uint16_t currentClass = classIds[rowIds[i]];
+      const double previousValue = static_cast<double>(values[i - 1]);
+      const double currentValue = static_cast<double>(values[i]);
+
+      // Only gaps between different values can create a legal threshold.
+      // If the adjacent classes are equal, moving the boundary here cannot
+      // improve purity, so skip that work too.
+      if (currentClass != previousClass &&
+          fabs(previousValue - currentValue) >= config.epsilon) {
+        std::uint32_t rightCounts[kMaxGpuClasses];
+        for (std::uint16_t k = 0; k < config.numClasses; ++k) {
+          rightCounts[k] = totalCounts[k] - leftCounts[k];
+        }
+
+        const double threshold = (previousValue + currentValue) / 2.0;
+        const GpuSplitCandidate candidate = deviceScoreCandidate(
+            featureIndex, nodeRows, parentImpurity, leftCounts, rightCounts, i,
+            threshold, config);
+        if (candidate.valid && deviceIsBetter(candidate, best, config)) {
+          best = candidate;
+        }
+      }
+    }
+
+    // After testing the boundary before row i, row i moves to the left child.
+    leftCounts[classIds[rowIds[i]]]++;
+  }
+
+  return best;
+}
+
 // -----------------------------------------------------------------------------
 // Kernel 1: gather this node's rows into dense, feature-major scratch arrays.
 // Each thread handles one (feature, localRow) pair and writes the feature value
@@ -328,31 +371,9 @@ __global__ void scoreSplitsKernel(const GpuValue *values,
     left[k] = hist[k];
   }
 
-  GpuSplitCandidate best; // invalid until a real split is found.
-  for (std::size_t i = chunkBegin; i < chunkEnd; ++i) {
-    if (i >= 1) {
-      const std::uint16_t previousClass = classIds[ids[i - 1]];
-      const std::uint16_t currentClass = classIds[ids[i]];
-      const double previousValue = v[i - 1];
-      const double currentValue = v[i];
-      // Identical values can't be separated; equal neighbours can't help purity.
-      if (currentClass != previousClass &&
-          fabs(previousValue - currentValue) >= config.epsilon) {
-        std::uint32_t right[kMaxGpuClasses];
-        for (std::uint16_t k = 0; k < numClasses; ++k) {
-          right[k] = sTotal[k] - left[k];
-        }
-        const double threshold = (previousValue + currentValue) / 2.0;
-        const GpuSplitCandidate candidate =
-            deviceScoreCandidate(feature, nodeRows, sParentImpurity, left, right,
-                                 i, threshold, config);
-        if (candidate.valid && deviceIsBetter(candidate, best, config)) {
-          best = candidate;
-        }
-      }
-    }
-    left[classIds[ids[i]]]++; // row i now belongs to the left side.
-  }
+  const GpuSplitCandidate best =
+      scanSortedThresholds(feature, v, ids, classIds, nodeRows, chunkBegin,
+                           chunkEnd, sTotal, sParentImpurity, left, config);
 
   // Reduce per-thread bests into the feature's overall best.
   sBest[tid] = best;
@@ -510,30 +531,9 @@ __global__ void tileScanKernel(const GpuValue *values,
     left[k] = prefix[k] + hist[k];
   }
 
-  GpuSplitCandidate best;
-  for (std::size_t i = chunkBegin; i < chunkEnd; ++i) {
-    if (i >= 1) {
-      const std::uint16_t previousClass = classIds[ids[i - 1]];
-      const std::uint16_t currentClass = classIds[ids[i]];
-      const double previousValue = v[i - 1];
-      const double currentValue = v[i];
-      if (currentClass != previousClass &&
-          fabs(previousValue - currentValue) >= config.epsilon) {
-        std::uint32_t right[kMaxGpuClasses];
-        for (std::uint16_t k = 0; k < numClasses; ++k) {
-          right[k] = sTotal[k] - left[k];
-        }
-        const double threshold = (previousValue + currentValue) / 2.0;
-        const GpuSplitCandidate candidate =
-            deviceScoreCandidate(feature, nodeRows, sParentImpurity, left, right,
-                                 i, threshold, config);
-        if (candidate.valid && deviceIsBetter(candidate, best, config)) {
-          best = candidate;
-        }
-      }
-    }
-    left[classIds[ids[i]]]++;
-  }
+  const GpuSplitCandidate best =
+      scanSortedThresholds(feature, v, ids, classIds, nodeRows, chunkBegin,
+                           chunkEnd, sTotal, sParentImpurity, left, config);
 
   sBest[tid] = best;
   __syncthreads();
@@ -572,9 +572,65 @@ struct SegmentOffset {
   }
 };
 
+GpuTrainConfig makeGpuTrainConfig(const Options &options,
+                                  std::uint16_t numClasses) {
+  GpuTrainConfig config;
+  config.impurityMeasure =
+      options.impurityMeasure == ImpurityMeasure::Gini ? 1 : 0;
+  config.splitSelectionMode =
+      options.splitSelectionMode == SplitSelectionMode::MaxGain ? 1 : 0;
+  config.epsilon = options.epsilon;
+  config.minSamplesPerLeaf = options.minSamplesPerLeaf;
+  config.numClasses = numClasses;
+  return config;
+}
+
+struct SplitScanLaunch {
+  int numTiles = 1;
+  std::size_t tileSize = 0;
+  int threadsPerBlock = 1;
+  std::size_t sharedBytesPerScanBlock = 0;
+  std::size_t sharedBytesForSingleBlock = 0;
+};
+
+SplitScanLaunch makeSplitScanLaunch(std::size_t nodeRows,
+                                     std::uint16_t numClasses,
+                                     const Options &options,
+                                     int maxTilesPerFeature) {
+  SplitScanLaunch launch;
+
+  // Small nodes use one block per feature. Large nodes are split into tiles so
+  // more SMs can work on the same feature at once.
+  launch.numTiles =
+      static_cast<int>((nodeRows + options.cudaRowsPerTile - 1) /
+                       options.cudaRowsPerTile);
+  launch.numTiles = std::clamp(launch.numTiles, 1, maxTilesPerFeature);
+  launch.tileSize =
+      (nodeRows + static_cast<std::size_t>(launch.numTiles) - 1) /
+      static_cast<std::size_t>(launch.numTiles);
+
+  // Do not launch more threads than useful rows in a tile; otherwise many
+  // threads would own empty chunks and only add reduction overhead.
+  launch.threadsPerBlock = options.cudaScoreThreadsPerBlock;
+  while (launch.threadsPerBlock > 1 &&
+         static_cast<std::size_t>(launch.threadsPerBlock) > launch.tileSize) {
+    launch.threadsPerBlock /= 2;
+  }
+
+  launch.sharedBytesPerScanBlock =
+      static_cast<std::size_t>(launch.threadsPerBlock) *
+      (sizeof(GpuSplitCandidate) +
+       static_cast<std::size_t>(numClasses) * sizeof(std::uint32_t));
+  launch.sharedBytesForSingleBlock =
+      launch.sharedBytesPerScanBlock +
+      static_cast<std::size_t>(numClasses) * sizeof(std::uint32_t);
+  return launch;
+}
+
 } // namespace
 
-// Persistent + reusable device buffers for one fit().
+// CPU-side bookkeeping for one training run. The struct itself lives in host RAM;
+// its pointer fields (d_*) point at buffers allocated on the GPU with cudaMalloc.
 struct TreeCuda::CudaState {
   // Whole-dataset, uploaded once.
   GpuValue *d_features = nullptr;      // feature-major: [feature][row]
@@ -583,7 +639,7 @@ struct TreeCuda::CudaState {
   std::size_t featureCount = 0;
   std::uint16_t numClasses = 0;
 
-  // Per-node scratch, grown on demand and reused across nodes.
+  // Per-node scratch, pre-allocated at root size and reused across nodes.
   std::uint32_t *d_currentRows = nullptr; // this node's row indices
   GpuValue *d_values = nullptr;           // gathered values (sort keys, in)
   std::uint32_t *d_rowIds = nullptr;      // gathered row ids (sort values, in)
@@ -598,8 +654,7 @@ struct TreeCuda::CudaState {
   std::uint32_t *d_featureTotals = nullptr;  // [feature][class]
   GpuSplitCandidate *d_blockBest = nullptr;  // [feature][tile]
 
-  int maxTilesPerFeature = 128; // from TrainingOptions::cudaMaxTilesPerFeature
-  std::size_t scratchCapacity = 0; // current featureCount*nodeRows capacity
+  int maxTilesPerFeature = 128; // from Options::cudaMaxTilesPerFeature
 };
 
 void TreeCuda::releaseCudaState() noexcept {
@@ -630,10 +685,12 @@ void TreeCuda::releaseCudaState() noexcept {
 
 TreeCuda::~TreeCuda() { releaseCudaState(); }
 
-void TreeCuda::fit(const Dataset &dataset, const TrainingOptions &options) {
+void TreeCuda::fit(const Dataset &dataset, const Options &options) {
   prepareFit(dataset, options);
   validateCudaLaunchOptions(options_);
 
+  // Create GPU session state for this fit(). cuda_ is owned by the CPU; it only
+  // holds pointers to device memory, freed in releaseCudaState() below.
   cuda_ = new CudaState();
   CudaState &gpu = *cuda_;
   gpu.totalRows = dataset.samples.size();
@@ -644,17 +701,26 @@ void TreeCuda::fit(const Dataset &dataset, const TrainingOptions &options) {
     throw std::runtime_error("TreeCuda supports at most 64 classes.");
   }
 
-  // Upload the dataset once in feature-major layout (column f, row r).
+  // --- Stage A: pack the full dataset on the host, then upload once to the GPU ---
+  //
+  // hostFeatures: every feature value of every row (feature-major: all of feature 0,
+  // then all of feature 1, ...). For large datasets this vector is huge, but we
+  // pay the copy cost only once; each tree node later sends just a list of row ids.
   std::vector<GpuValue> hostFeatures(gpu.featureCount * gpu.totalRows);
+  // hostClassIds: numeric class id per row. Labels in the CSV are strings; we map
+  // them to small integers (0, 1, 2, ...) in buildClassMapping() so counting and
+  // impurity math on the GPU use cheap numbers instead of string compares.
   std::vector<std::uint16_t> hostClassIds(gpu.totalRows);
   for (std::size_t row = 0; row < gpu.totalRows; ++row) {
     hostClassIds[row] = classIdForRow(row);
     for (std::size_t f = 0; f < gpu.featureCount; ++f) {
-      hostFeatures[f * gpu.totalRows + row] =
-          static_cast<GpuValue>(dataset.samples[row].features[f]);
+      // Reorder row-major samples into feature-major GPU layout.
+      hostFeatures[f * gpu.totalRows + row] = dataset.samples[row].features[f];
     }
   }
 
+  // cudaMalloc allocates memory on the device (GPU VRAM). cudaMemcpy copies our
+  // host staging vectors into those device buffers (HostToDevice = CPU -> GPU).
   CUDA_CHECK(cudaMalloc(&gpu.d_features, hostFeatures.size() * sizeof(GpuValue)));
   CUDA_CHECK(cudaMalloc(&gpu.d_classIds,
                         hostClassIds.size() * sizeof(std::uint16_t)));
@@ -679,6 +745,16 @@ void TreeCuda::fit(const Dataset &dataset, const TrainingOptions &options) {
   CUDA_CHECK(cudaMalloc(&gpu.d_blockBest, gpu.featureCount * gpu.maxTilesPerFeature *
                                               sizeof(GpuSplitCandidate)));
 
+  // Per node scratch space.
+  const std::size_t scratchItems = gpu.featureCount * gpu.totalRows;
+  CUDA_CHECK(cudaMalloc(&gpu.d_currentRows,
+                        gpu.totalRows * sizeof(std::uint32_t)));
+  CUDA_CHECK(cudaMalloc(&gpu.d_values, scratchItems * sizeof(GpuValue)));
+  CUDA_CHECK(cudaMalloc(&gpu.d_rowIds, scratchItems * sizeof(std::uint32_t)));
+  CUDA_CHECK(cudaMalloc(&gpu.d_valuesSorted, scratchItems * sizeof(GpuValue)));
+  CUDA_CHECK(cudaMalloc(&gpu.d_rowIdsSorted,
+                        scratchItems * sizeof(std::uint32_t)));
+
   const std::vector<std::size_t> rowIndices = makeRootRowIndices();
   const BuildTimePoint buildStart = startBuildTimer();
   root_ = buildNode(rowIndices, 0); // CPU recursion; GPU answers each node.
@@ -686,35 +762,6 @@ void TreeCuda::fit(const Dataset &dataset, const TrainingOptions &options) {
 
   finalizeFit(options);
   releaseCudaState();
-}
-
-// Grow the reusable per-node scratch if this node needs more room. Buffers only
-// ever grow, so deep trees with many small nodes never re-allocate.
-void TreeCuda::ensureNodeScratch(std::size_t nodeRows) const {
-  CudaState &gpu = *cuda_;
-  const std::size_t needed = gpu.featureCount * nodeRows;
-  if (needed <= gpu.scratchCapacity && gpu.d_currentRows != nullptr) {
-    return;
-  }
-
-  auto freeIf = [](auto *&pointer) {
-    if (pointer) {
-      cudaFree(pointer);
-      pointer = nullptr;
-    }
-  };
-  freeIf(gpu.d_currentRows);
-  freeIf(gpu.d_values);
-  freeIf(gpu.d_rowIds);
-  freeIf(gpu.d_valuesSorted);
-  freeIf(gpu.d_rowIdsSorted);
-
-  gpu.scratchCapacity = needed;
-  CUDA_CHECK(cudaMalloc(&gpu.d_currentRows, nodeRows * sizeof(std::uint32_t)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_values, needed * sizeof(GpuValue)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_rowIds, needed * sizeof(std::uint32_t)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_valuesSorted, needed * sizeof(GpuValue)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_rowIdsSorted, needed * sizeof(std::uint32_t)));
 }
 
 TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
@@ -729,7 +776,6 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
 
   CudaState &gpu = *cuda_;
   const std::size_t nodeRows = rowIndices.size();
-  ensureNodeScratch(nodeRows);
 
   // Row indices fit in 32 bits (datasets have far fewer than 4B rows); the
   // narrower type halves this transfer and buffer.
@@ -786,73 +832,45 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
   GpuValue *valuesSorted = keys.Current();
   std::uint32_t *rowIdsSorted = vals.Current();
 
-  // 3) Evaluate all features' thresholds in parallel (one thread per feature).
-  GpuTrainConfig config;
-  config.impurityMeasure =
-      options_.impurityMeasure == ImpurityMeasure::Gini ? 1 : 0;
-  config.splitSelectionMode =
-      options_.splitSelectionMode == SplitSelectionMode::MaxGain ? 1 : 0;
-  config.epsilon = options_.epsilon;
-  config.minSamplesPerLeaf = options_.minSamplesPerLeaf;
-  config.numClasses = numClasses_;
+  // 3) Evaluate all features' thresholds in parallel. Each CUDA block scans one
+  // feature slice (or one tile of a feature slice for large nodes).
+  const GpuTrainConfig config = makeGpuTrainConfig(options_, numClasses_);
+  const SplitScanLaunch scanLaunch = makeSplitScanLaunch(
+      nodeRows, numClasses_, options_, cuda_->maxTilesPerFeature);
 
-  // Decide how many tiles (blocks) per feature. Small nodes use one block per
-  // feature (numTiles == 1); large nodes are split into tiles so all SMs stay
-  // busy. ~32k rows per tile keeps each block well-fed.
-  const std::size_t rowsPerTile = options_.cudaRowsPerTile;
-  const int maxTiles = cuda_->maxTilesPerFeature;
-  int numTiles = static_cast<int>((nodeRows + rowsPerTile - 1) / rowsPerTile);
-  if (numTiles < 1) numTiles = 1;
-  if (numTiles > maxTiles) numTiles = maxTiles;
-
-  // Threads per block, capped so each thread still gets a non-trivial chunk.
-  int scoreThreads = options_.cudaScoreThreadsPerBlock;
-  const std::size_t perBlockRows =
-      (nodeRows + static_cast<std::size_t>(numTiles) - 1) / numTiles;
-  while (scoreThreads > 1 &&
-         static_cast<std::size_t>(scoreThreads) > perBlockRows) {
-    scoreThreads /= 2;
-  }
-  const std::size_t scanShared =
-      static_cast<std::size_t>(scoreThreads) * sizeof(GpuSplitCandidate) +
-      static_cast<std::size_t>(scoreThreads) * numClasses_ *
-          sizeof(std::uint32_t);
-
-  if (numTiles == 1) {
+  if (scanLaunch.numTiles == 1) {
     // Single block per feature: self-contained (histogram + prefix + sweep).
-    const std::size_t sharedBytes =
-        scanShared + numClasses_ * sizeof(std::uint32_t);
-    scoreSplitsKernel<<<static_cast<int>(featureCount), scoreThreads,
-                        sharedBytes>>>(valuesSorted, rowIdsSorted,
-                                       gpu.d_classIds, nodeRows, config,
-                                       gpu.d_candidates);
+    scoreSplitsKernel<<<static_cast<int>(featureCount),
+                        scanLaunch.threadsPerBlock,
+                        scanLaunch.sharedBytesForSingleBlock>>>(
+        valuesSorted, rowIdsSorted, gpu.d_classIds, nodeRows, config,
+        gpu.d_candidates);
     CUDA_CHECK(cudaGetLastError());
   } else {
     // Multi-block tiled path for large nodes (A: histogram, B: prefix,
     // C: per-tile sweep, D: per-feature reduce).
-    const std::size_t tileSize =
-        (nodeRows + static_cast<std::size_t>(numTiles) - 1) / numTiles;
-    const dim3 grid(static_cast<unsigned>(numTiles),
+    const dim3 grid(static_cast<unsigned>(scanLaunch.numTiles),
                     static_cast<unsigned>(featureCount));
 
     tileHistogramKernel<<<grid, 256, numClasses_ * sizeof(std::uint32_t)>>>(
-        rowIdsSorted, gpu.d_classIds, nodeRows, numTiles, tileSize,
-        numClasses_, gpu.d_tileHist);
+        rowIdsSorted, gpu.d_classIds, nodeRows, scanLaunch.numTiles,
+        scanLaunch.tileSize, numClasses_, gpu.d_tileHist);
     CUDA_CHECK(cudaGetLastError());
 
     const int prefixThreads = numClasses_ < 32 ? 32 : numClasses_;
     tilePrefixKernel<<<static_cast<int>(featureCount), prefixThreads>>>(
-        gpu.d_tileHist, numTiles, numClasses_, gpu.d_featureTotals);
+        gpu.d_tileHist, scanLaunch.numTiles, numClasses_, gpu.d_featureTotals);
     CUDA_CHECK(cudaGetLastError());
 
-    tileScanKernel<<<grid, scoreThreads, scanShared>>>(
-        valuesSorted, rowIdsSorted, gpu.d_classIds, nodeRows, numTiles,
-        tileSize, config, gpu.d_tileHist, gpu.d_featureTotals,
-        gpu.d_blockBest);
+    tileScanKernel<<<grid, scanLaunch.threadsPerBlock,
+                     scanLaunch.sharedBytesPerScanBlock>>>(
+        valuesSorted, rowIdsSorted, gpu.d_classIds, nodeRows,
+        scanLaunch.numTiles, scanLaunch.tileSize, config, gpu.d_tileHist,
+        gpu.d_featureTotals, gpu.d_blockBest);
     CUDA_CHECK(cudaGetLastError());
 
     reduceTilesKernel<<<static_cast<int>(featureCount), 1>>>(
-        gpu.d_blockBest, numTiles, config, gpu.d_candidates);
+        gpu.d_blockBest, scanLaunch.numTiles, config, gpu.d_candidates);
     CUDA_CHECK(cudaGetLastError());
   }
 
