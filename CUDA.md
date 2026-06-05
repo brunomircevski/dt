@@ -87,10 +87,9 @@ Set up once at the start of `fit()` and kept for the whole training run:
 
 Two important memory choices:
 
-- **`d_features` uses 32-bit `float`, not 64-bit `double`** (see the `GpuValue`
-  alias). This halves the memory and makes sorting about twice as fast. For data
-  like SUSY it does not change the resulting tree. (One comment in the code says
-  how to switch back to `double` if you ever need an exact match with the CPU.)
+- **Feature values are `float` everywhere** — loaded from CSV as `float`, stored
+  in `Sample::features`, packed into `hostFeatures`, and uploaded as `GpuValue`
+  (`float` on the GPU). Thresholds and impurity math still use `double`.
 - The full feature matrix lives on the GPU the entire time, so we never re-upload
   it. Each node only sends the GPU a small list of which rows it contains.
 
@@ -159,6 +158,11 @@ in three phases inside the block. Suppose the block has 256 threads:
 
 The result — the best split per feature — is written to `d_candidates`.
 
+The actual threshold-walking loop lives in a small shared device helper named
+`scanSortedThresholds`. Both the small-node kernel and the large-node tiled
+kernel call it. That way there is only one place to read the "walk sorted rows,
+move one row at a time to the left side, score useful gaps" logic.
+
 > Why the three phases? A single thread walking 5 million rows would be painfully
 > slow and waste the GPU. Splitting the work across 256 threads needs each thread
 > to know its starting left-side counts, and the histogram + prefix sum is how
@@ -203,6 +207,17 @@ Small nodes skip all this and use the single-block kernel from Step 3, because
 launching four kernels is not worth it when there is little data. The code picks
 the path automatically based on how many rows the node has.
 
+The host-side helper `makeSplitScanLaunch` is where that choice is made. It
+computes:
+
+- how many tiles to use,
+- how many rows go in each tile,
+- how many threads each scan block should launch,
+- how much shared memory the scan kernels need.
+
+This keeps `findBestSplitAtNode` focused on the high-level pipeline: gather,
+sort, scan, copy back.
+
 ---
 
 ## 7. How the pieces map to the code
@@ -216,6 +231,8 @@ the path automatically based on how many rows the node has.
 | Step 2: sort | the `cub::DeviceSegmentedRadixSort` calls |
 | Step 3: score (small nodes) | `scoreSplitsKernel` |
 | Step 3+: score (large nodes) | `tileHistogramKernel`, `tilePrefixKernel`, `tileScanKernel`, `reduceTilesKernel` |
+| Shared sorted-row sweep | `scanSortedThresholds` |
+| Launch/tile sizing | `makeSplitScanLaunch` |
 | Impurity / scoring math | `deviceImpurity`, `deviceScoreCandidate` |
 | Tie-breaking (which split is "better") | `deviceIsBetterMaxGain`, `deviceIsBetterC45` |
 | Cleanup of GPU memory | `TreeCuda::releaseCudaState` |
@@ -231,9 +248,9 @@ the path automatically based on how many rows the node has.
 3. The CPU still drives the recursion and partitions the rows, so the GPU only
    ever answers the narrow question "best split for this list of rows?".
 
-The one intentional difference: feature values are `float` on the GPU. On
-continuous data this produces the same tree as the CPU; on data with many exact
-ties it can produce slightly different (but equally accurate) trees.
+CPU and GPU backends now share the same `float` feature storage, so split search
+uses the same numeric values on both sides. Thresholds and scores are still
+computed in `double` for stable impurity math.
 
 ---
 

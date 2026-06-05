@@ -10,7 +10,7 @@
 class TreeParallel : public TreeBase {
 public:
   void fit(const Dataset &dataset,
-           const TrainingOptions &options = TrainingOptions{}) override;
+           const Options &options = Options{}) override;
 
   SplitSearchResult findBestSplitAtNode(
       const std::vector<std::size_t> &rowIndices) const override;

@@ -11,7 +11,7 @@ public:
   ~TreeCuda() override;
 
   void fit(const Dataset &dataset,
-           const TrainingOptions &options = TrainingOptions{}) override;
+           const Options &options = Options{}) override;
 
 protected:
   SplitSearchResult findBestSplitAtNode(
@@ -20,7 +20,6 @@ protected:
 private:
   struct CudaState;
 
-  void ensureNodeScratch(std::size_t nodeRows) const;
   void releaseCudaState() noexcept;
 
   mutable CudaState *cuda_ = nullptr;

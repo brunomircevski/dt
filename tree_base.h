@@ -2,6 +2,7 @@
 
 #include "dataset.h"
 #include "node.h"
+#include "options.h"
 
 #include <chrono>
 #include <cstddef>
@@ -12,62 +13,14 @@
 #include <unordered_map>
 #include <vector>
 
-// --- Algorithm options (CART vs C4.5) ---
-//
-// CART:  ImpurityMeasure::Gini, SplitSelectionMode::MaxGain,
-//        PruningMode::CostComplexity
-// C4.5: ImpurityMeasure::Entropy, SplitSelectionMode::MeanGainFiltered,
-//        PruningMode::PessimisticError
-
-enum class ImpurityMeasure {
-  Entropy,
-  Gini
-};
-
-enum class SplitSelectionMode {
-  MeanGainFiltered,
-  MaxGain
-};
-
-enum class PruningMode {
-  None,
-  PessimisticError,
-  CostComplexity
-};
-
-struct TrainingOptions {
-  int maxDepth = -1;
-  std::size_t minSamplesToSplit = 2;
-  std::size_t minSamplesPerLeaf = 1;
-
-  PruningMode pruningMode = PruningMode::None;
-  SplitSelectionMode splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
-  double epsilon = 1e-9;
-  double pruningConfidenceFactor = 0.25;
-  double ccpAlpha = 0.5;
-  ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
-
-  int maxFeatureThreadCount = 4;
-  int maxNodeThreadCount = 4;
-  std::size_t minFeaturesToParallelize = 4;
-  std::size_t minRowsToParallelize = 32;
-
-  // TreeCuda launch tuning (ignored by TreeSerial / TreeParallel).
-  // Lower cudaRowsPerTile or raise cudaMaxTilesPerFeature on GPUs with many SMs.
-  std::size_t cudaRowsPerTile = 32768;
-  int cudaMaxTilesPerFeature = 128;
-  int cudaScoreThreadsPerBlock = 256;
-  int cudaGatherBlockSize = 256;
-};
-
 class TreeBase {
 public:
   virtual ~TreeBase() = default;
 
   virtual void fit(const Dataset &dataset,
-                   const TrainingOptions &options = TrainingOptions{}) = 0;
+                   const Options &options = Options{}) = 0;
 
-  virtual void prune(const TrainingOptions &options = TrainingOptions{});
+  virtual void prune(const Options &options = Options{});
   virtual std::string predict(const Sample &sample) const;
   virtual void print(std::ostream &output) const;
   virtual int treeDepth() const;
@@ -83,7 +36,7 @@ protected:
 
   struct SortedFeatureRow {
     std::size_t rowIndex = 0;
-    double value = 0.0;
+    float value = 0.0f;
     std::uint16_t classId = 0;
   };
 
@@ -119,7 +72,7 @@ protected:
 
   const Dataset *dataset_ = nullptr;
   std::unique_ptr<Node> root_;
-  TrainingOptions options_;
+  Options options_;
   double buildTimeSeconds_ = 0.0;
   double pruneTimeSeconds_ = 0.0;
 
@@ -127,10 +80,10 @@ protected:
   std::unordered_map<std::string, std::uint16_t> labelToClassId_;
   std::uint16_t numClasses_ = 0;
 
-  void prepareFit(const Dataset &dataset, const TrainingOptions &options);
+  void prepareFit(const Dataset &dataset, const Options &options);
   BuildTimePoint startBuildTimer() const;
   void finishBuildTimer(BuildTimePoint start);
-  void finalizeFit(const TrainingOptions &options);
+  void finalizeFit(const Options &options);
 
   std::vector<std::size_t> makeRootRowIndices() const;
 
@@ -194,5 +147,5 @@ protected:
   static bool isBetterMaxGain(const SplitResult &lhs, const SplitResult &rhs,
                               double epsilon);
 
-  friend void pruneTree(TreeBase &tree, const TrainingOptions &options);
+  friend void pruneTree(TreeBase &tree, const Options &options);
 };

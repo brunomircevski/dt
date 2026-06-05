@@ -122,7 +122,7 @@ TreeParallel::SplitSearchResult TreeParallel::findBestSplitAtNode(
   return reduceBestSplitSearch(std::move(bestSplitPerFeature), rowIndices);
 }
 
-void TreeParallel::fit(const Dataset &dataset, const TrainingOptions &options) {
+void TreeParallel::fit(const Dataset &dataset, const Options &options) {
   prepareFit(dataset, options);
 
   fitContext_ = std::make_unique<FitContext>();

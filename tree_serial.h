@@ -6,7 +6,7 @@
 class TreeSerial : public TreeBase {
 public:
   void fit(const Dataset &dataset,
-           const TrainingOptions &options = TrainingOptions{}) override;
+           const Options &options = Options{}) override;
 
 protected:
   SplitSearchResult findBestSplitAtNode(

@@ -121,7 +121,7 @@ std::vector<std::size_t> allRowIndices(const Dataset &dataset) {
 
 } // namespace
 
-void pruneTree(TreeBase &tree, const TrainingOptions &options) {
+void pruneTree(TreeBase &tree, const Options &options) {
   tree.pruneTimeSeconds_ = 0.0;
 
   if (!tree.root_ || options.pruningMode == PruningMode::None) {

@@ -55,7 +55,7 @@ inline std::string pruningModeToString(PruningMode mode) {
 } // namespace
 
 inline void generateTreeSvg(const TreeBase &tree, const std::string &svgPath,
-                            const TrainingOptions &options,
+                            const Options &options,
                             const Dataset &dataset) {
   std::ostringstream printedTree;
 

@@ -63,7 +63,7 @@ Dataset loadDataset(const std::string& filePath) {
         // This makes it possible for C4.5 to search for thresholds like
         // "PetalLengthCm <= 2.45".
         for (std::size_t index = 1; index + 1 < cells.size(); ++index) {
-            sample.features.push_back(std::stod(cells[index]));
+            sample.features.push_back(std::stof(cells[index]));
         }
 
         // The last column is the species we want the model to predict.

@@ -4,27 +4,7 @@
         {
             "label": "Build tree",
             "type": "shell",
-            "command": "/opt/cuda/bin/nvcc",
-            "args": [
-                "-std=c++20",
-                "-O2",
-                "-arch=native",
-                "-x",
-                "cu",
-                "-I.",
-                "-I/usr/include/cccl",
-                "main.cpp",
-                "tree_base.cpp",
-                "tree_parallel.cpp",
-                "tree_serial.cpp",
-                "tree_cuda.cpp",
-                "task_executor.cpp",
-                "dataset.cpp",
-                "node.cpp",
-                "pruning/pruning.cpp",
-                "-o",
-                "${workspaceFolder}/tree"
-            ],
+            "command": "${workspaceFolder}/build_cuda.sh",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -35,7 +15,22 @@
                 "kind": "build",
                 "isDefault": true
             },
-            "detail": "Build with nvcc (CUDA + Thrust). Required for tree_cuda.cpp."
+            "detail": "Incremental split build: g++ for CPU sources, nvcc for tree_cuda.cpp."
+        },
+        {
+            "label": "Build tree (clean)",
+            "type": "shell",
+            "command": "${workspaceFolder}/build_cuda.sh",
+            "args": [
+                "clean"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Remove build/ artifacts and the tree binary."
         },
         {
             "label": "Build tree (CPU only)",
@@ -54,6 +49,7 @@
                 "task_executor.cpp",
                 "dataset.cpp",
                 "node.cpp",
+                "options.cpp",
                 "pruning/pruning.cpp",
                 "-o",
                 "${workspaceFolder}/tree_cpu"
