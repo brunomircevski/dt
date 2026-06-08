@@ -109,7 +109,7 @@ TreeParallel::SplitSearchResult TreeParallel::findBestSplitAtNode(
 
     for (std::size_t featureIndex = 0; featureIndex < featureCount;
          ++featureIndex) {
-      bestSplitPerFeature.push_back(featureJobs[featureIndex].get());
+      bestSplitPerFeature.push_back(featureJobs[featureIndex].get()); // get() pauses until thread is finished
     }
   } else {
     for (std::size_t featureIndex = 0; featureIndex < featureCount;
