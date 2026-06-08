@@ -42,10 +42,17 @@ struct Options {
   std::size_t minFeaturesToParallelize = 4;
   std::size_t minRowsToParallelize = 32;
 
-  // TreeCuda launch tuning (ignored by TreeSerial / TreeParallel).
+  // TreeCuda only (ignored by TreeSerial / TreeParallel).
+  // On large nodes, each feature's sorted rows are split into tiles so more GPU
+  // blocks can work in parallel. Smaller values = more tiles, more parallelism.
   std::size_t cudaRowsPerTile = 32768;
+  // Cap on tiles per feature. Also sizes GPU buffers allocated at fit() time.
+  // Higher = more parallelism on big nodes, but more VRAM.
   int cudaMaxTilesPerFeature = 128;
+  // Threads per block when scanning sorted values to find the best split.
+  // Must be between 32 and 1024 (CUDA warp size and max threads per block).
   int cudaScoreThreadsPerBlock = 256;
+  // Threads per block when copying this node's rows into GPU scratch memory.
   int cudaGatherBlockSize = 256;
 };
 
