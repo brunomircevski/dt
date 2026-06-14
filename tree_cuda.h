@@ -22,5 +22,10 @@ private:
 
   void releaseCudaState() noexcept;
 
+  std::unique_ptr<Node> buildNodeParallel(
+      const std::vector<std::size_t> &rowIndices, int depth) const;
+  bool tryStartNodeTask() const;
+  void finishNodeTask() const;
+
   mutable CudaState *cuda_ = nullptr;
 };

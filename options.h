@@ -43,17 +43,23 @@ struct Options {
   std::size_t minRowsToParallelize = 32;
 
   // TreeCuda only (ignored by TreeSerial / TreeParallel).
-  // On large nodes, each feature's sorted rows are split into tiles so more GPU
-  // blocks can work in parallel. Smaller values = more tiles, more parallelism.
+  //
+  // Large-node GPU scan: split each feature's sorted rows into tiles so more
+  // blocks can run in parallel. Smaller values = more tiles.
   std::size_t cudaRowsPerTile = 32768;
-  // Cap on tiles per feature. Also sizes GPU buffers allocated at fit() time.
-  // Higher = more parallelism on big nodes, but more VRAM.
+  // Max tiles per feature; also sizes GPU buffers allocated at fit() time.
   int cudaMaxTilesPerFeature = 128;
-  // Threads per block when scanning sorted values to find the best split.
-  // Must be between 32 and 1024 (CUDA warp size and max threads per block).
+  // Threads per block in the split-scoring kernels (32–1024).
   int cudaScoreThreadsPerBlock = 256;
-  // Threads per block when copying this node's rows into GPU scratch memory.
+  // Threads per block in the gather kernel (32–1024).
   int cudaGatherBlockSize = 256;
+  // Concurrent GPU workers (scratch + stream each). Set in main, not CLI.
+  // 1 = one stream; higher T adds VRAM (~geometric series) and allows more
+  // overlapping large-node GPU jobs. Does not size the CPU tree-walk pool.
+  int cudaGpuWorkerCount = 4;
+  // Nodes with fewer rows use the exact CPU split path (same as TreeSerial).
+  // 0 = always GPU. Values above dataset size = always CPU (matches serial).
+  std::size_t cudaMinRowsForGpu = 2048;
 };
 
 class TreeBase;

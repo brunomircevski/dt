@@ -106,6 +106,10 @@ inline void generateTreeSvg(const TreeBase &tree, const std::string &svgPath,
               << options.cudaScoreThreadsPerBlock << "\n";
   printedTree << "OPTION: cudaGatherBlockSize = " << options.cudaGatherBlockSize
               << "\n";
+  printedTree << "OPTION: cudaGpuWorkerCount = "
+              << options.cudaGpuWorkerCount << "\n";
+  printedTree << "OPTION: cudaMinRowsForGpu = "
+              << options.cudaMinRowsForGpu << "\n";
 
   std::ostringstream factorStr;
   factorStr << std::fixed << std::setprecision(4)

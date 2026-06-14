@@ -1,15 +1,25 @@
 #include "tree_cuda.h"
 
+#include "node.h"
+#include "task_executor.h"
+
 #include <cub/cub.cuh>
 #include <cuda_runtime.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <condition_variable>
 #include <cstdint>
+#include <future>
+#include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -24,6 +34,14 @@ void validateCudaLaunchOptions(Options &options) {
       std::clamp(options.cudaScoreThreadsPerBlock, 32, 1024);
   options.cudaGatherBlockSize =
       std::clamp(options.cudaGatherBlockSize, 32, 1024);
+  options.cudaGpuWorkerCount =
+      std::clamp(options.cudaGpuWorkerCount, 1, 32);
+  if (options.cudaMinRowsForGpu == 0) {
+    // 0 means "always GPU"; leave it.
+  } else {
+    options.cudaMinRowsForGpu =
+        std::max(options.cudaMinRowsForGpu, std::size_t{1});
+  }
 }
 
 } // namespace
@@ -629,56 +647,107 @@ SplitScanLaunch makeSplitScanLaunch(std::size_t nodeRows,
 
 } // namespace
 
+// One GPU worker: a fixed-capacity slice of scratch plus its own CUDA stream.
+// Worker i is sized for max(1, N >> i) rows (geometric capacities), so several
+// workers can run concurrent split searches without T x root-sized VRAM. Each
+// node's gather/sort/score and its per-feature output buffers live entirely in
+// the worker, so concurrent nodes never touch each other's memory.
+namespace {
+
+struct GpuWorker {
+  // Per-node scratch, pre-allocated at this worker's capacity and reused.
+  std::uint32_t *d_currentRows = nullptr; // this node's row indices
+  GpuValue *d_values = nullptr;           // gathered values (sort keys, in)
+  std::uint32_t *d_rowIds = nullptr;      // gathered row ids (sort values, in)
+  GpuValue *d_valuesSorted = nullptr;     // sorted values (out)
+  std::uint32_t *d_rowIdsSorted = nullptr;// sorted row ids (out)
+  void *d_temp = nullptr;       // CUB segmented-sort temp (sized for capacity)
+  std::size_t sortTempBytes = 0;
+  GpuSplitCandidate *d_candidates = nullptr; // best split per feature
+
+  // Per-worker buffers for the multi-block scan (large nodes only).
+  std::uint32_t *d_tileHist = nullptr;       // [feature][tile][class]
+  std::uint32_t *d_featureTotals = nullptr;  // [feature][class]
+  GpuSplitCandidate *d_blockBest = nullptr;  // [feature][tile]
+
+  cudaStream_t stream = nullptr;
+  std::size_t maxRows = 0; // capacity in rows
+  bool busy = false;
+
+  // Page-locked staging for async H2D row upload and D2H sorted row-id copy.
+  std::uint32_t *h_pinned = nullptr;
+};
+
+// The worker checked out by the current CPU thread for the node it is building.
+// Set in buildNodeParallel around expandOneNode so findBestSplitAtNode (whose
+// signature is fixed by TreeBase) can reach its scratch + stream.
+thread_local GpuWorker *tCurrentWorker = nullptr;
+
+} // namespace
+
 // CPU-side bookkeeping for one training run. The struct itself lives in host RAM;
 // its pointer fields (d_*) point at buffers allocated on the GPU with cudaMalloc.
 struct TreeCuda::CudaState {
-  // Whole-dataset, uploaded once.
+  // Whole-dataset, uploaded once and shared (read-only) by all workers.
   GpuValue *d_features = nullptr;      // feature-major: [feature][row]
   std::uint16_t *d_classIds = nullptr; // class id per row
   std::size_t totalRows = 0;
   std::size_t featureCount = 0;
   std::uint16_t numClasses = 0;
 
-  // Per-node scratch, pre-allocated at root size and reused across nodes.
-  std::uint32_t *d_currentRows = nullptr; // this node's row indices
-  GpuValue *d_values = nullptr;           // gathered values (sort keys, in)
-  std::uint32_t *d_rowIds = nullptr;      // gathered row ids (sort values, in)
-  GpuValue *d_valuesSorted = nullptr;     // sorted values (out)
-  std::uint32_t *d_rowIdsSorted = nullptr;// sorted row ids (out)
-  void *d_temp = nullptr;       // CUB segmented-sort temp (sized for root at fit())
-  std::size_t sortTempBytes = 0;
-  GpuSplitCandidate *d_candidates = nullptr; // best split per feature
-
-  // Small fixed-size buffers for the multi-block scan (large nodes only).
-  std::uint32_t *d_tileHist = nullptr;       // [feature][tile][class]
-  std::uint32_t *d_featureTotals = nullptr;  // [feature][class]
-  GpuSplitCandidate *d_blockBest = nullptr;  // [feature][tile]
-
   int maxTilesPerFeature = 128; // from Options::cudaMaxTilesPerFeature
+
+  // Per-worker scratch + streams. Reserved to T so element addresses are stable.
+  std::vector<GpuWorker> workers;
+
+  // Node-build thread pool (mirrors TreeParallel's nodeExecutor).
+  std::unique_ptr<TaskExecutor> executor;
+  std::atomic<std::size_t> activeNodeTasks{0};
+  std::size_t maxNodeTasks = 0;
+
+  // Worker checkout pool.
+  std::mutex poolMutex;
+  std::condition_variable poolCv;
 };
 
 void TreeCuda::releaseCudaState() noexcept {
   if (!cuda_) {
     return;
   }
+  // Join node-build threads before touching any GPU resource they may still use.
+  cuda_->executor.reset();
+
   auto freeDevice = [](auto *&pointer) {
     if (pointer) {
       cudaFree(pointer);
       pointer = nullptr;
     }
   };
+  for (GpuWorker &worker : cuda_->workers) {
+    if (worker.stream) {
+      cudaStreamSynchronize(worker.stream);
+    }
+    if (worker.h_pinned) {
+      cudaFreeHost(worker.h_pinned);
+      worker.h_pinned = nullptr;
+    }
+    freeDevice(worker.d_currentRows);
+    freeDevice(worker.d_values);
+    freeDevice(worker.d_rowIds);
+    freeDevice(worker.d_valuesSorted);
+    freeDevice(worker.d_rowIdsSorted);
+    freeDevice(worker.d_temp);
+    freeDevice(worker.d_candidates);
+    freeDevice(worker.d_tileHist);
+    freeDevice(worker.d_featureTotals);
+    freeDevice(worker.d_blockBest);
+    if (worker.stream) {
+      cudaStreamDestroy(worker.stream);
+      worker.stream = nullptr;
+    }
+  }
   freeDevice(cuda_->d_features);
   freeDevice(cuda_->d_classIds);
-  freeDevice(cuda_->d_currentRows);
-  freeDevice(cuda_->d_values);
-  freeDevice(cuda_->d_rowIds);
-  freeDevice(cuda_->d_valuesSorted);
-  freeDevice(cuda_->d_rowIdsSorted);
-  freeDevice(cuda_->d_temp);
-  freeDevice(cuda_->d_candidates);
-  freeDevice(cuda_->d_tileHist);
-  freeDevice(cuda_->d_featureTotals);
-  freeDevice(cuda_->d_blockBest);
   delete cuda_;
   cuda_ = nullptr;
 }
@@ -731,52 +800,172 @@ void TreeCuda::fit(const Dataset &dataset, const Options &options) {
                         hostClassIds.size() * sizeof(std::uint16_t),
                         cudaMemcpyHostToDevice));
 
-  // One small buffer of per-feature results, reused by every node.
-  CUDA_CHECK(cudaMalloc(&gpu.d_candidates,
-                        gpu.featureCount * sizeof(GpuSplitCandidate)));
+  // --- Stage B: create T workers, each with fixed scratch + one CUDA stream ---
+  //
+  // Worker i is sized for max(1, N >> i) rows. The geometric series of
+  // capacities sums to ~2x the root scratch instead of T x, so T concurrent
+  // split searches fit comfortably in VRAM. Worker 0 (capacity N) can host any
+  // node, which both routes oversized work and guarantees forward progress.
+  const int threadCount = options_.cudaGpuWorkerCount;
+  gpu.workers.resize(static_cast<std::size_t>(threadCount));
+  for (int i = 0; i < threadCount; ++i) {
+    GpuWorker &worker = gpu.workers[static_cast<std::size_t>(i)];
+    const std::size_t capacity =
+        std::max<std::size_t>(1, gpu.totalRows >> i);
+    worker.maxRows = capacity;
+    const std::size_t scratchItems = gpu.featureCount * capacity;
 
-  // Small fixed buffers for the multi-block (large-node) scan path.
-  CUDA_CHECK(cudaMalloc(&gpu.d_tileHist,
-                        gpu.featureCount * gpu.maxTilesPerFeature *
-                            gpu.numClasses * sizeof(std::uint32_t)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_featureTotals,
-                        gpu.featureCount * gpu.numClasses *
-                            sizeof(std::uint32_t)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_blockBest, gpu.featureCount * gpu.maxTilesPerFeature *
-                                              sizeof(GpuSplitCandidate)));
+    CUDA_CHECK(cudaStreamCreateWithFlags(&worker.stream,
+                                         cudaStreamNonBlocking));
 
-  // Per node scratch space.
-  const std::size_t scratchItems = gpu.featureCount * gpu.totalRows;
-  CUDA_CHECK(cudaMalloc(&gpu.d_currentRows,
-                        gpu.totalRows * sizeof(std::uint32_t)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_values, scratchItems * sizeof(GpuValue)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_rowIds, scratchItems * sizeof(std::uint32_t)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_valuesSorted, scratchItems * sizeof(GpuValue)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_rowIdsSorted,
-                        scratchItems * sizeof(std::uint32_t)));
+    CUDA_CHECK(cudaMalloc(&worker.d_candidates,
+                          gpu.featureCount * sizeof(GpuSplitCandidate)));
+    CUDA_CHECK(cudaMalloc(&worker.d_tileHist,
+                          gpu.featureCount * gpu.maxTilesPerFeature *
+                              gpu.numClasses * sizeof(std::uint32_t)));
+    CUDA_CHECK(cudaMalloc(&worker.d_featureTotals,
+                          gpu.featureCount * gpu.numClasses *
+                              sizeof(std::uint32_t)));
+    CUDA_CHECK(cudaMalloc(&worker.d_blockBest,
+                          gpu.featureCount * gpu.maxTilesPerFeature *
+                              sizeof(GpuSplitCandidate)));
 
-  // CUB sort temp for the root node (largest possible); smaller nodes reuse it.
-  {
+    CUDA_CHECK(cudaMalloc(&worker.d_currentRows,
+                          capacity * sizeof(std::uint32_t)));
+    CUDA_CHECK(cudaMalloc(&worker.d_values, scratchItems * sizeof(GpuValue)));
+    CUDA_CHECK(cudaMalloc(&worker.d_rowIds,
+                          scratchItems * sizeof(std::uint32_t)));
+    CUDA_CHECK(cudaMalloc(&worker.d_valuesSorted,
+                          scratchItems * sizeof(GpuValue)));
+    CUDA_CHECK(cudaMalloc(&worker.d_rowIdsSorted,
+                          scratchItems * sizeof(std::uint32_t)));
+
+    // CUB sort temp sized for this worker's capacity; smaller nodes reuse it.
     const int numItems = static_cast<int>(scratchItems);
     const int numSegments = static_cast<int>(gpu.featureCount);
     auto beginOffsets = thrust::make_transform_iterator(
-        thrust::make_counting_iterator<int>(0), SegmentOffset{gpu.totalRows});
+        thrust::make_counting_iterator<int>(0), SegmentOffset{capacity});
     auto endOffsets = beginOffsets + 1;
-    cub::DoubleBuffer<GpuValue> keys(gpu.d_values, gpu.d_valuesSorted);
-    cub::DoubleBuffer<std::uint32_t> vals(gpu.d_rowIds, gpu.d_rowIdsSorted);
-    cub::DeviceSegmentedRadixSort::SortPairs(nullptr, gpu.sortTempBytes, keys,
+    cub::DoubleBuffer<GpuValue> keys(worker.d_values, worker.d_valuesSorted);
+    cub::DoubleBuffer<std::uint32_t> vals(worker.d_rowIds,
+                                          worker.d_rowIdsSorted);
+    cub::DeviceSegmentedRadixSort::SortPairs(nullptr, worker.sortTempBytes, keys,
                                              vals, numItems, numSegments,
                                              beginOffsets, endOffsets);
-    CUDA_CHECK(cudaMalloc(&gpu.d_temp, gpu.sortTempBytes));
+    CUDA_CHECK(cudaMalloc(&worker.d_temp, worker.sortTempBytes));
+
+    CUDA_CHECK(cudaMallocHost(&worker.h_pinned,
+                              capacity * sizeof(std::uint32_t)));
   }
+
+  // Node-build thread pool: use all CPU cores for the many small subtrees while
+  // only cudaGpuWorkerCount threads can hold GPU workers at once.
+  const std::size_t poolThreads = std::max(
+      static_cast<std::size_t>(threadCount),
+      static_cast<std::size_t>(std::thread::hardware_concurrency()));
+  gpu.executor = std::make_unique<TaskExecutor>(poolThreads);
+  gpu.maxNodeTasks =
+      poolThreads > 1 ? poolThreads - 1 : 0;
+  gpu.activeNodeTasks.store(0, std::memory_order_relaxed);
 
   const std::vector<std::size_t> rowIndices = makeRootRowIndices();
   const BuildTimePoint buildStart = startBuildTimer();
-  root_ = buildNode(rowIndices, 0); // CPU recursion; GPU answers each node.
+  root_ = buildNodeParallel(rowIndices, 0);
   finishBuildTimer(buildStart);
 
   finalizeFit(options);
   releaseCudaState();
+}
+
+bool TreeCuda::tryStartNodeTask() const {
+  if (cuda_->maxNodeTasks == 0) {
+    return false;
+  }
+  std::size_t current =
+      cuda_->activeNodeTasks.load(std::memory_order_relaxed);
+  while (current < cuda_->maxNodeTasks) {
+    if (cuda_->activeNodeTasks.compare_exchange_weak(
+            current, current + 1, std::memory_order_relaxed,
+            std::memory_order_relaxed)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void TreeCuda::finishNodeTask() const {
+  cuda_->activeNodeTasks.fetch_sub(1, std::memory_order_relaxed);
+}
+
+// Build one node, then mirror TreeParallel's scheduling: submit the left child
+// to the thread pool and build the right child on the current thread. Large
+// nodes (rows >= cudaMinRowsForGpu) check out a GPU worker; smaller nodes use the
+// exact CPU split path (same math as TreeSerial) with no GPU round-trip.
+std::unique_ptr<Node>
+TreeCuda::buildNodeParallel(const std::vector<std::size_t> &rowIndices,
+                            int depth) const {
+  CudaState &gpu = *cuda_;
+  const std::size_t nodeRows = rowIndices.size();
+  const bool useGpu = nodeRows >= options_.cudaMinRowsForGpu;
+
+  GpuWorker *worker = nullptr;
+  if (useGpu) {
+    // Check out the smallest idle worker with capacity >= nodeRows.
+    std::unique_lock<std::mutex> lock(gpu.poolMutex);
+    gpu.poolCv.wait(lock, [&]() {
+      GpuWorker *best = nullptr;
+      for (GpuWorker &candidate : gpu.workers) {
+        if (candidate.busy || candidate.maxRows < nodeRows) {
+          continue;
+        }
+        if (!best || candidate.maxRows < best->maxRows) {
+          best = &candidate;
+        }
+      }
+      worker = best;
+      return worker != nullptr;
+    });
+    worker->busy = true;
+  }
+
+  if (useGpu) {
+    tCurrentWorker = worker;
+  }
+  NodeExpandResult expanded = expandOneNode(rowIndices, depth);
+  tCurrentWorker = nullptr;
+
+  if (useGpu) {
+    // Release the worker immediately (GPU split + CPU partition are done).
+    std::lock_guard<std::mutex> lock(gpu.poolMutex);
+    worker->busy = false;
+    gpu.poolCv.notify_all();
+  }
+
+  if (expanded.node->isLeaf) {
+    return std::move(expanded.node);
+  }
+
+  if (nodeRows < options_.minRowsToParallelize || !tryStartNodeTask()) {
+    expanded.node->leftChild =
+        buildNodeParallel(expanded.partitions.leftRows, depth + 1);
+    expanded.node->rightChild =
+        buildNodeParallel(expanded.partitions.rightRows, depth + 1);
+    return std::move(expanded.node);
+  }
+
+  auto leftRows = std::move(expanded.partitions.leftRows);
+  auto rightRows = std::move(expanded.partitions.rightRows);
+
+  std::future<std::unique_ptr<Node>> leftJob = gpu.executor->submit(
+      [this, rows = std::move(leftRows), depth]() {
+        std::unique_ptr<Node> child = buildNodeParallel(rows, depth + 1);
+        finishNodeTask();
+        return child;
+      });
+
+  expanded.node->rightChild = buildNodeParallel(rightRows, depth + 1);
+  expanded.node->leftChild = leftJob.get();
+  return std::move(expanded.node);
 }
 
 TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
@@ -789,25 +978,37 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
     return {};
   }
 
+  // Small nodes: exact CPU path (identical to TreeSerial / TreeParallel math).
+  if (!tCurrentWorker) {
+    std::vector<SplitSearchResult> featureResults;
+    featureResults.reserve(featureCount);
+    for (std::size_t featureIndex = 0; featureIndex < featureCount;
+         ++featureIndex) {
+      featureResults.push_back(evaluateFeatureSplit(rowIndices, featureIndex));
+    }
+    return reduceBestSplitSearch(std::move(featureResults), rowIndices);
+  }
+
   CudaState &gpu = *cuda_;
+  GpuWorker &worker = *tCurrentWorker;
+  const cudaStream_t stream = worker.stream;
   const std::size_t nodeRows = rowIndices.size();
 
-  // Row indices fit in 32 bits (datasets have far fewer than 4B rows); the
-  // narrower type halves this transfer and buffer.
-  std::vector<std::uint32_t> hostRows(nodeRows);
+  // Row indices fit in 32 bits; copy into pinned staging for true async H2D.
   for (std::size_t i = 0; i < nodeRows; ++i) {
-    hostRows[i] = static_cast<std::uint32_t>(rowIndices[i]);
+    worker.h_pinned[i] = static_cast<std::uint32_t>(rowIndices[i]);
   }
-  CUDA_CHECK(cudaMemcpy(gpu.d_currentRows, hostRows.data(),
-                        nodeRows * sizeof(std::uint32_t), cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMemcpyAsync(worker.d_currentRows, worker.h_pinned,
+                             nodeRows * sizeof(std::uint32_t),
+                             cudaMemcpyHostToDevice, stream));
 
   // 1) Gather this node's (value, rowId) pairs into dense, feature-major scratch.
   const std::size_t workItems = featureCount * nodeRows;
   const int blockSize = options_.cudaGatherBlockSize;
   const int gridSize = static_cast<int>((workItems + blockSize - 1) / blockSize);
-  gatherNodeFeaturesKernel<<<gridSize, blockSize>>>(
-      gpu.d_currentRows, gpu.d_features, nodeRows, gpu.totalRows, featureCount,
-      gpu.d_values, gpu.d_rowIds);
+  gatherNodeFeaturesKernel<<<gridSize, blockSize, 0, stream>>>(
+      worker.d_currentRows, gpu.d_features, nodeRows, gpu.totalRows, featureCount,
+      worker.d_values, worker.d_rowIds);
   CUDA_CHECK(cudaGetLastError());
 
   // 2) Sort every feature's slice by value with ONE segmented radix sort.
@@ -823,12 +1024,12 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
   const int numItems = static_cast<int>(workItems);
   const int numSegments = static_cast<int>(featureCount);
 
-  cub::DoubleBuffer<GpuValue> keys(gpu.d_values, gpu.d_valuesSorted);
-  cub::DoubleBuffer<std::uint32_t> vals(gpu.d_rowIds, gpu.d_rowIdsSorted);
+  cub::DoubleBuffer<GpuValue> keys(worker.d_values, worker.d_valuesSorted);
+  cub::DoubleBuffer<std::uint32_t> vals(worker.d_rowIds, worker.d_rowIdsSorted);
 
-  cub::DeviceSegmentedRadixSort::SortPairs(gpu.d_temp, gpu.sortTempBytes, keys,
-                                           vals, numItems, numSegments,
-                                           beginOffsets, endOffsets);
+  cub::DeviceSegmentedRadixSort::SortPairs(
+      worker.d_temp, worker.sortTempBytes, keys, vals, numItems, numSegments,
+      beginOffsets, endOffsets, 0, sizeof(GpuValue) * 8, stream);
   CUDA_CHECK(cudaGetLastError());
 
   // Sorted results live in the "current" side of each double buffer.
@@ -845,9 +1046,9 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
     // Single block per feature: self-contained (histogram + prefix + sweep).
     scoreSplitsKernel<<<static_cast<int>(featureCount),
                         scanLaunch.threadsPerBlock,
-                        scanLaunch.sharedBytesForSingleBlock>>>(
+                        scanLaunch.sharedBytesForSingleBlock, stream>>>(
         valuesSorted, rowIdsSorted, gpu.d_classIds, nodeRows, config,
-        gpu.d_candidates);
+        worker.d_candidates);
     CUDA_CHECK(cudaGetLastError());
   } else {
     // Multi-block tiled path for large nodes (A: histogram, B: prefix,
@@ -855,33 +1056,38 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
     const dim3 grid(static_cast<unsigned>(scanLaunch.numTiles),
                     static_cast<unsigned>(featureCount));
 
-    tileHistogramKernel<<<grid, 256, numClasses_ * sizeof(std::uint32_t)>>>(
+    tileHistogramKernel<<<grid, 256, numClasses_ * sizeof(std::uint32_t),
+                          stream>>>(
         rowIdsSorted, gpu.d_classIds, nodeRows, scanLaunch.numTiles,
-        scanLaunch.tileSize, numClasses_, gpu.d_tileHist);
+        scanLaunch.tileSize, numClasses_, worker.d_tileHist);
     CUDA_CHECK(cudaGetLastError());
 
     const int prefixThreads = numClasses_ < 32 ? 32 : numClasses_;
-    tilePrefixKernel<<<static_cast<int>(featureCount), prefixThreads>>>(
-        gpu.d_tileHist, scanLaunch.numTiles, numClasses_, gpu.d_featureTotals);
+    tilePrefixKernel<<<static_cast<int>(featureCount), prefixThreads, 0,
+                       stream>>>(
+        worker.d_tileHist, scanLaunch.numTiles, numClasses_,
+        worker.d_featureTotals);
     CUDA_CHECK(cudaGetLastError());
 
     tileScanKernel<<<grid, scanLaunch.threadsPerBlock,
-                     scanLaunch.sharedBytesPerScanBlock>>>(
+                     scanLaunch.sharedBytesPerScanBlock, stream>>>(
         valuesSorted, rowIdsSorted, gpu.d_classIds, nodeRows,
-        scanLaunch.numTiles, scanLaunch.tileSize, config, gpu.d_tileHist,
-        gpu.d_featureTotals, gpu.d_blockBest);
+        scanLaunch.numTiles, scanLaunch.tileSize, config, worker.d_tileHist,
+        worker.d_featureTotals, worker.d_blockBest);
     CUDA_CHECK(cudaGetLastError());
 
-    reduceTilesKernel<<<static_cast<int>(featureCount), 1>>>(
-        gpu.d_blockBest, scanLaunch.numTiles, config, gpu.d_candidates);
+    reduceTilesKernel<<<static_cast<int>(featureCount), 1, 0, stream>>>(
+        worker.d_blockBest, scanLaunch.numTiles, config, worker.d_candidates);
     CUDA_CHECK(cudaGetLastError());
   }
 
-  // 4) One copy of the per-feature winners back to the host (also syncs the GPU).
+  // 4) One copy of the per-feature winners back to the host. Sync the worker's
+  // stream first so the CPU reads completed results.
   std::vector<GpuSplitCandidate> hostCandidates(featureCount);
-  CUDA_CHECK(cudaMemcpy(hostCandidates.data(), gpu.d_candidates,
-                        featureCount * sizeof(GpuSplitCandidate),
-                        cudaMemcpyDeviceToHost));
+  CUDA_CHECK(cudaMemcpyAsync(hostCandidates.data(), worker.d_candidates,
+                             featureCount * sizeof(GpuSplitCandidate),
+                             cudaMemcpyDeviceToHost, stream));
+  CUDA_CHECK(cudaStreamSynchronize(stream));
 
   // Pick the best feature overall using the shared CPU tie-breaking rules.
   std::vector<SplitResult> featureBestCandidates;
@@ -922,12 +1128,13 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
   bestSearch.view.totalRows = nodeRows;
   bestSearch.view.rows.resize(nodeRows);
 
-  std::vector<std::uint32_t> hostRowIds(nodeRows);
-  CUDA_CHECK(cudaMemcpy(hostRowIds.data(), rowIdsSorted + sliceOffset,
-                        nodeRows * sizeof(std::uint32_t), cudaMemcpyDeviceToHost));
+  CUDA_CHECK(cudaMemcpyAsync(worker.h_pinned, rowIdsSorted + sliceOffset,
+                             nodeRows * sizeof(std::uint32_t),
+                             cudaMemcpyDeviceToHost, stream));
+  CUDA_CHECK(cudaStreamSynchronize(stream));
 
   for (std::size_t index = 0; index < nodeRows; ++index) {
-    bestSearch.view.rows[index].rowIndex = hostRowIds[index];
+    bestSearch.view.rows[index].rowIndex = worker.h_pinned[index];
   }
   bestSearch.hasView = true;
   return bestSearch;
