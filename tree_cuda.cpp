@@ -645,8 +645,8 @@ struct TreeCuda::CudaState {
   std::uint32_t *d_rowIds = nullptr;      // gathered row ids (sort values, in)
   GpuValue *d_valuesSorted = nullptr;     // sorted values (out)
   std::uint32_t *d_rowIdsSorted = nullptr;// sorted row ids (out)
-  void *d_temp = nullptr;                 // CUB segmented-sort temp storage
-  std::size_t tempCapacity = 0;
+  void *d_temp = nullptr;       // CUB segmented-sort temp (sized for root at fit())
+  std::size_t sortTempBytes = 0;
   GpuSplitCandidate *d_candidates = nullptr; // best split per feature
 
   // Small fixed-size buffers for the multi-block scan (large nodes only).
@@ -755,6 +755,21 @@ void TreeCuda::fit(const Dataset &dataset, const Options &options) {
   CUDA_CHECK(cudaMalloc(&gpu.d_rowIdsSorted,
                         scratchItems * sizeof(std::uint32_t)));
 
+  // CUB sort temp for the root node (largest possible); smaller nodes reuse it.
+  {
+    const int numItems = static_cast<int>(scratchItems);
+    const int numSegments = static_cast<int>(gpu.featureCount);
+    auto beginOffsets = thrust::make_transform_iterator(
+        thrust::make_counting_iterator<int>(0), SegmentOffset{gpu.totalRows});
+    auto endOffsets = beginOffsets + 1;
+    cub::DoubleBuffer<GpuValue> keys(gpu.d_values, gpu.d_valuesSorted);
+    cub::DoubleBuffer<std::uint32_t> vals(gpu.d_rowIds, gpu.d_rowIdsSorted);
+    cub::DeviceSegmentedRadixSort::SortPairs(nullptr, gpu.sortTempBytes, keys,
+                                             vals, numItems, numSegments,
+                                             beginOffsets, endOffsets);
+    CUDA_CHECK(cudaMalloc(&gpu.d_temp, gpu.sortTempBytes));
+  }
+
   const std::vector<std::size_t> rowIndices = makeRootRowIndices();
   const BuildTimePoint buildStart = startBuildTimer();
   root_ = buildNode(rowIndices, 0); // CPU recursion; GPU answers each node.
@@ -811,21 +826,9 @@ TreeCuda::SplitSearchResult TreeCuda::findBestSplitAtNode(
   cub::DoubleBuffer<GpuValue> keys(gpu.d_values, gpu.d_valuesSorted);
   cub::DoubleBuffer<std::uint32_t> vals(gpu.d_rowIds, gpu.d_rowIdsSorted);
 
-  // First call (temp = null) only reports how much scratch CUB needs.
-  std::size_t tempBytes = 0;
-  cub::DeviceSegmentedRadixSort::SortPairs(nullptr, tempBytes, keys, vals,
-                                           numItems, numSegments, beginOffsets,
-                                           endOffsets);
-  if (tempBytes > gpu.tempCapacity) {
-    if (gpu.d_temp) {
-      cudaFree(gpu.d_temp);
-    }
-    CUDA_CHECK(cudaMalloc(&gpu.d_temp, tempBytes));
-    gpu.tempCapacity = tempBytes;
-  }
-  cub::DeviceSegmentedRadixSort::SortPairs(gpu.d_temp, tempBytes, keys, vals,
-                                           numItems, numSegments, beginOffsets,
-                                           endOffsets);
+  cub::DeviceSegmentedRadixSort::SortPairs(gpu.d_temp, gpu.sortTempBytes, keys,
+                                           vals, numItems, numSegments,
+                                           beginOffsets, endOffsets);
   CUDA_CHECK(cudaGetLastError());
 
   // Sorted results live in the "current" side of each double buffer.

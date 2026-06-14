@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
     Options options;
     options.backend = Backend::Cuda;
     options.datasetPath = "datasets/supersymmetry.csv";
-    options.maxDepth = 7;
+    options.maxDepth = 10;
     options.minFeaturesToParallelize = 4;
     options.minRowsToParallelize = 32;
     options.maxFeatureThreadCount = 20;
