@@ -10,18 +10,23 @@ int main(int argc, char *argv[]) {
     options.backend = Backend::Cuda;
     options.datasetPath = "datasets/supersymmetry.csv";
     options.maxDepth = 30;
-    options.minFeaturesToParallelize = 4;
-    options.minRowsToParallelize = 32;
-    options.maxFeatureThreadCount = 20;
-    options.maxNodeThreadCount = 4;
 
-    // TreeCuda only (ignored by TreeSerial / TreeParallel).
+    // TreeParallel only.
+    options.parallelMinFeaturesToParallelize = 4;
+    options.parallelMaxFeatureThreadCount = 20;
+    options.parallelMaxNodeThreadCount = 4;
+
+    // TreeParallel + TreeCuda.
+    options.minRowsToParallelize = 32;
+
+    // TreeCuda only.
+    options.cudaCpuThreadCount = 16;
+    options.cudaGpuWorkerCount = 4;
+    options.cudaMinRowsForGpu = 2048;
     // options.cudaRowsPerTile = 16384;
     // options.cudaMaxTilesPerFeature = 256;
     // options.cudaScoreThreadsPerBlock = 256;
     // options.cudaGatherBlockSize = 256;
-    options.cudaGpuWorkerCount = 4;
-    options.cudaMinRowsForGpu = 2048;
 
     // --- CART Configuration ---
     options.impurityMeasure = ImpurityMeasure::Gini;

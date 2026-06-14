@@ -91,14 +91,16 @@ inline void generateTreeSvg(const TreeBase &tree, const std::string &svgPath,
               << "\n";
   printedTree << "OPTION: minSamplesPerLeaf = " << options.minSamplesPerLeaf
               << "\n";
-  printedTree << "OPTION: maxFeatureThreadCount = "
-              << options.maxFeatureThreadCount << "\n";
-  printedTree << "OPTION: maxNodeThreadCount = " << options.maxNodeThreadCount
-              << "\n";
-  printedTree << "OPTION: minFeaturesToParallelize = "
-              << options.minFeaturesToParallelize << "\n";
+  printedTree << "OPTION: parallelMaxFeatureThreadCount = "
+              << options.parallelMaxFeatureThreadCount << "\n";
+  printedTree << "OPTION: parallelMaxNodeThreadCount = "
+              << options.parallelMaxNodeThreadCount << "\n";
+  printedTree << "OPTION: parallelMinFeaturesToParallelize = "
+              << options.parallelMinFeaturesToParallelize << "\n";
   printedTree << "OPTION: minRowsToParallelize = "
               << options.minRowsToParallelize << "\n";
+  printedTree << "OPTION: cudaCpuThreadCount = "
+              << options.cudaCpuThreadCount << "\n";
   printedTree << "OPTION: cudaRowsPerTile = " << options.cudaRowsPerTile << "\n";
   printedTree << "OPTION: cudaMaxTilesPerFeature = "
               << options.cudaMaxTilesPerFeature << "\n";

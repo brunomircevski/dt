@@ -23,10 +23,13 @@ enum class PruningMode {
 };
 
 struct Options {
-  Backend backend = Backend::Parallel;
-  std::string datasetPath = "datasets/covertype.csv";
+  // ---------------------------------------------------------------------------
+  // All backends (TreeSerial, TreeParallel, TreeCuda)
+  // ---------------------------------------------------------------------------
+  Backend backend = Backend::Parallel; // CLI: --serial | --parallel | --cuda
+  std::string datasetPath = "datasets/covertype.csv"; // CLI: <path> (positional)
 
-  int maxDepth = -1;
+  int maxDepth = -1; // CLI: -d <N>
   std::size_t minSamplesToSplit = 2;
   std::size_t minSamplesPerLeaf = 1;
 
@@ -37,29 +40,44 @@ struct Options {
   double ccpAlpha = 0.5;
   ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
 
-  int maxFeatureThreadCount = 4;
-  int maxNodeThreadCount = 4;
-  std::size_t minFeaturesToParallelize = 4;
+  // ---------------------------------------------------------------------------
+  // TreeParallel + TreeCuda
+  //
+  // Minimum rows in a node before left/right subtrees may be built on different
+  // CPU threads. Below this threshold both children stay on the current thread.
+  // ---------------------------------------------------------------------------
   std::size_t minRowsToParallelize = 32;
 
-  // TreeCuda only (ignored by TreeSerial / TreeParallel).
-  //
-  // Large-node GPU scan: split each feature's sorted rows into tiles so more
-  // blocks can run in parallel. Smaller values = more tiles.
+  // ---------------------------------------------------------------------------
+  // TreeParallel only (ignored by TreeSerial and TreeCuda)
+  // ---------------------------------------------------------------------------
+  // Threads that score features in parallel inside one node.
+  int parallelMaxFeatureThreadCount = 4;
+  // Threads that build sibling subtrees in parallel.
+  int parallelMaxNodeThreadCount = 4;
+  // Minimum feature count before feature search is parallelized.
+  std::size_t parallelMinFeaturesToParallelize = 4;
+
+  // ---------------------------------------------------------------------------
+  // TreeCuda only (ignored by TreeSerial and TreeParallel)
+  // ---------------------------------------------------------------------------
+  // CPU threads that walk the tree and build subtrees in parallel. Each thread
+  // may check out a GPU worker for large nodes; at most cudaGpuWorkerCount
+  // threads can hold a worker at once. Must be >= cudaGpuWorkerCount.
+  int cudaCpuThreadCount = 8;
+  // Concurrent GPU workers: each owns VRAM scratch + one CUDA stream. Worker i
+  // is sized for max(1, N >> i) rows so total scratch stays ~2× root, not T×.
+  int cudaGpuWorkerCount = 4;
+  // Nodes with fewer rows use the CPU split path inside TreeCuda. 0 = always GPU.
+  std::size_t cudaMinRowsForGpu = 2048;
+
+  // Large-node GPU scan: split each feature into tiles so more blocks run.
   std::size_t cudaRowsPerTile = 32768;
   // Max tiles per feature; also sizes GPU buffers allocated at fit() time.
   int cudaMaxTilesPerFeature = 128;
-  // Threads per block in the split-scoring kernels (32–1024).
+  // CUDA kernel launch parameters (threads per block).
   int cudaScoreThreadsPerBlock = 256;
-  // Threads per block in the gather kernel (32–1024).
   int cudaGatherBlockSize = 256;
-  // Concurrent GPU workers (scratch + stream each). Set in main, not CLI.
-  // 1 = one stream; higher T adds VRAM (~geometric series) and allows more
-  // overlapping large-node GPU jobs. Does not size the CPU tree-walk pool.
-  int cudaGpuWorkerCount = 4;
-  // Nodes with fewer rows use the exact CPU split path (same as TreeSerial).
-  // 0 = always GPU. Values above dataset size = always CPU (matches serial).
-  std::size_t cudaMinRowsForGpu = 2048;
 };
 
 class TreeBase;

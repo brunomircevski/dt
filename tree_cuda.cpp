@@ -18,7 +18,6 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -34,8 +33,14 @@ void validateCudaLaunchOptions(Options &options) {
       std::clamp(options.cudaScoreThreadsPerBlock, 32, 1024);
   options.cudaGatherBlockSize =
       std::clamp(options.cudaGatherBlockSize, 32, 1024);
+  options.cudaCpuThreadCount = std::clamp(options.cudaCpuThreadCount, 1, 256);
   options.cudaGpuWorkerCount =
       std::clamp(options.cudaGpuWorkerCount, 1, 32);
+  if (options.cudaCpuThreadCount < options.cudaGpuWorkerCount) {
+    throw std::runtime_error(
+        "cudaCpuThreadCount must be >= cudaGpuWorkerCount (CPU threads walk "
+        "the tree; at most cudaGpuWorkerCount can hold a GPU worker at once)");
+  }
   if (options.cudaMinRowsForGpu == 0) {
     // 0 means "always GPU"; leave it.
   } else {
@@ -800,15 +805,14 @@ void TreeCuda::fit(const Dataset &dataset, const Options &options) {
                         hostClassIds.size() * sizeof(std::uint16_t),
                         cudaMemcpyHostToDevice));
 
-  // --- Stage B: create T workers, each with fixed scratch + one CUDA stream ---
+  // --- Stage B: create GPU workers (scratch + stream each) ---
   //
-  // Worker i is sized for max(1, N >> i) rows. The geometric series of
-  // capacities sums to ~2x the root scratch instead of T x, so T concurrent
-  // split searches fit comfortably in VRAM. Worker 0 (capacity N) can host any
-  // node, which both routes oversized work and guarantees forward progress.
-  const int threadCount = options_.cudaGpuWorkerCount;
-  gpu.workers.resize(static_cast<std::size_t>(threadCount));
-  for (int i = 0; i < threadCount; ++i) {
+  // Worker i is sized for max(1, N >> i) rows. Capacities sum to ~2× root
+  // scratch instead of T×, so T concurrent split searches fit in VRAM.
+  // Worker 0 (capacity N) can host any node and guarantees forward progress.
+  const int gpuWorkerCount = options_.cudaGpuWorkerCount;
+  gpu.workers.resize(static_cast<std::size_t>(gpuWorkerCount));
+  for (int i = 0; i < gpuWorkerCount; ++i) {
     GpuWorker &worker = gpu.workers[static_cast<std::size_t>(i)];
     const std::size_t capacity =
         std::max<std::size_t>(1, gpu.totalRows >> i);
@@ -858,14 +862,13 @@ void TreeCuda::fit(const Dataset &dataset, const Options &options) {
                               capacity * sizeof(std::uint32_t)));
   }
 
-  // Node-build thread pool: use all CPU cores for the many small subtrees while
-  // only cudaGpuWorkerCount threads can hold GPU workers at once.
-  const std::size_t poolThreads = std::max(
-      static_cast<std::size_t>(threadCount),
-      static_cast<std::size_t>(std::thread::hardware_concurrency()));
-  gpu.executor = std::make_unique<TaskExecutor>(poolThreads);
-  gpu.maxNodeTasks =
-      poolThreads > 1 ? poolThreads - 1 : 0;
+  // CPU thread pool for parallel subtree building (Options::cudaCpuThreadCount).
+  // Many nodes use the CPU split path and never touch a GPU worker; only large
+  // nodes check one out, and at most cudaGpuWorkerCount can be held at once.
+  const std::size_t cpuThreadCount =
+      static_cast<std::size_t>(options_.cudaCpuThreadCount);
+  gpu.executor = std::make_unique<TaskExecutor>(cpuThreadCount);
+  gpu.maxNodeTasks = cpuThreadCount > 1 ? cpuThreadCount - 1 : 0;
   gpu.activeNodeTasks.store(0, std::memory_order_relaxed);
 
   const std::vector<std::size_t> rowIndices = makeRootRowIndices();

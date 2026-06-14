@@ -59,12 +59,6 @@ void applyCommandLine(int argc, char *argv[], Options &options) {
       } else {
         options.maxDepth = std::stoi(value);
       }
-    } else if (arg == "--cuda-min-gpu-rows") {
-      if (i + 1 >= argc) {
-        throw std::runtime_error("Option --cuda-min-gpu-rows requires a value");
-      }
-      options.cudaMinRowsForGpu =
-          static_cast<std::size_t>(std::stoull(argv[++i]));
     } else if (arg.rfind("--", 0) == 0) {
       throw std::runtime_error("Unknown option: " + arg);
     } else if (arg.rfind("-", 0) == 0) {

@@ -11,10 +11,10 @@ void TreeParallel::setupParallelExecutors() {
   // - featureExecutor: score each feature at the same node in parallel
   // - nodeExecutor: build one child subtree while the current thread builds the
   // other
-  const std::size_t featureThreadCount =
-      static_cast<std::size_t>(std::max(options_.maxFeatureThreadCount, 1));
-  const std::size_t nodeThreadCount =
-      static_cast<std::size_t>(std::max(options_.maxNodeThreadCount, 1));
+  const std::size_t featureThreadCount = static_cast<std::size_t>(
+      std::max(options_.parallelMaxFeatureThreadCount, 1));
+  const std::size_t nodeThreadCount = static_cast<std::size_t>(
+      std::max(options_.parallelMaxNodeThreadCount, 1));
   fitContext_->featureExecutor =
       std::make_unique<TaskExecutor>(featureThreadCount);
   fitContext_->nodeExecutor = std::make_unique<TaskExecutor>(nodeThreadCount);
@@ -25,7 +25,7 @@ void TreeParallel::setupParallelExecutors() {
 }
 
 bool TreeParallel::shouldParallelizeAttributes(std::size_t featureCount) const {
-  return featureCount >= options_.minFeaturesToParallelize;
+  return featureCount >= options_.parallelMinFeaturesToParallelize;
 }
 
 bool TreeParallel::shouldParallelizeNodes(std::size_t rowCount) const {
