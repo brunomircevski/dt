@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dataset.h"
+#include "timing.h"
 #include "tree_base.h"
 
 #include <cstdio>
@@ -53,6 +54,11 @@ inline std::string pruningModeToString(PruningMode mode) {
 }
 
 } // namespace
+
+inline void printTimingLine(const char *label, double seconds) {
+  std::cout << "  " << label << " = " << std::fixed << std::setprecision(4)
+            << seconds * 1000.0 << " ms\n";
+}
 
 inline void generateTreeSvg(const TreeBase &tree, const std::string &svgPath,
                             const Options &options,
@@ -166,10 +172,15 @@ inline void printSummary(const TreeBase &tree, const Dataset &dataset) {
   std::cout << "  node count = " << tree.nodeCount() << '\n';
   std::cout << "  accuracy = " << std::fixed << std::setprecision(4)
             << accuracy * 100.0 << "%\n";
-  std::cout << "  build time = " << std::fixed << std::setprecision(4)
-            << tree.buildTimeSeconds() * 1000.0 << " ms\n";
-  std::cout << "  prune time = " << std::fixed << std::setprecision(4)
-            << tree.pruneTimeSeconds() * 1000.0 << " ms\n";
+
+  const FitTimings &timings = tree.fitTimings();
+  std::cout << "Timings:\n";
+  printTimingLine("load time", timings.loadSeconds);
+  printTimingLine("gpu alloc time", timings.gpuAllocSeconds);
+  printTimingLine("gpu upload time", timings.gpuUploadSeconds);
+  printTimingLine("build time", timings.buildSeconds);
+  printTimingLine("prune time", timings.pruneSeconds);
+  printTimingLine("end-to-end total", timings.endToEndSeconds());
 }
 
 inline void printDatasetSummary(const Dataset &dataset) {

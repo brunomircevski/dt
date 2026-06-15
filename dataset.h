@@ -21,4 +21,5 @@ struct Dataset {
     std::vector<Sample> samples;
 };
 
-Dataset loadDataset(const std::string& filePath);
+Dataset loadDataset(const std::string &filePath,
+                    std::size_t demoDatasetMultiplier = 1);

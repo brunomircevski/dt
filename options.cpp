@@ -59,6 +59,32 @@ void applyCommandLine(int argc, char *argv[], Options &options) {
       } else {
         options.maxDepth = std::stoi(value);
       }
+    } else if (arg == "--cuda-min-gpu-rows") {
+      if (i + 1 >= argc) {
+        throw std::runtime_error("Option --cuda-min-gpu-rows requires a value");
+      }
+      options.cudaMinRowsForGpu =
+          static_cast<std::size_t>(std::stoull(argv[++i]));
+    } else if (arg.rfind("-m", 0) == 0) {
+      const std::string value = arg.substr(2);
+      if (value.empty()) {
+        if (i + 1 >= argc) {
+          throw std::runtime_error("Option -m requires a value");
+        }
+        const std::size_t multiplier =
+            static_cast<std::size_t>(std::stoull(argv[++i]));
+        if (multiplier < 1) {
+          throw std::runtime_error("Option -m must be at least 1");
+        }
+        options.demoDatasetMultiplier = multiplier;
+      } else {
+        const std::size_t multiplier =
+            static_cast<std::size_t>(std::stoull(value));
+        if (multiplier < 1) {
+          throw std::runtime_error("Option -m must be at least 1");
+        }
+        options.demoDatasetMultiplier = multiplier;
+      }
     } else if (arg.rfind("--", 0) == 0) {
       throw std::runtime_error("Unknown option: " + arg);
     } else if (arg.rfind("-", 0) == 0) {

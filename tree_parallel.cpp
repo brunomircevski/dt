@@ -1,6 +1,7 @@
 #include "tree_parallel.h"
 
 #include "node.h"
+#include "timing.h"
 
 #include <algorithm>
 #include <future>
@@ -129,11 +130,10 @@ void TreeParallel::fit(const Dataset &dataset, const Options &options) {
   setupParallelExecutors();
 
   const std::vector<std::size_t> rowIndices = makeRootRowIndices();
-  const BuildTimePoint buildStart = startBuildTimer();
-
-  root_ = buildNodeParallel(rowIndices, 0);
-
-  finishBuildTimer(buildStart);
+  {
+    ScopedTimer buildTimer(fitTimings_.buildSeconds);
+    root_ = buildNodeParallel(rowIndices, 0);
+  }
   fitContext_.reset();
 
   finalizeFit(options);

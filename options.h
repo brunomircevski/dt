@@ -78,6 +78,10 @@ struct Options {
   // CUDA kernel launch parameters (threads per block).
   int cudaScoreThreadsPerBlock = 256;
   int cudaGatherBlockSize = 256;
+
+  // Demo only: duplicate loaded rows in memory to stress GPU without re-reading
+  // CSV. 1 = no duplication; 2 = double the dataset, etc.
+  std::size_t demoDatasetMultiplier = 1; // CLI: -m <N>
 };
 
 class TreeBase;

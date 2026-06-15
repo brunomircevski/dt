@@ -1,5 +1,7 @@
 #include "tree_serial.h"
 
+#include "timing.h"
+
 #include <utility>
 
 TreeSerial::SplitSearchResult TreeSerial::findBestSplitAtNode(
@@ -30,11 +32,10 @@ void TreeSerial::fit(const Dataset &dataset, const Options &options) {
 
   // At the root, every training row is available for splitting.
   const std::vector<std::size_t> rowIndices = makeRootRowIndices();
-  const BuildTimePoint buildStart = startBuildTimer();
-
-  // Build the whole tree with normal recursive calls: left subtree, then right.
-  root_ = buildNode(rowIndices, 0);
-  finishBuildTimer(buildStart);
+  {
+    ScopedTimer buildTimer(fitTimings_.buildSeconds);
+    root_ = buildNode(rowIndices, 0);
+  }
 
   // Shared finish step: run the selected pruning method, if any.
   finalizeFit(options);

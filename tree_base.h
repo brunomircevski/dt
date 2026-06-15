@@ -3,8 +3,7 @@
 #include "dataset.h"
 #include "node.h"
 #include "options.h"
-
-#include <chrono>
+#include "timing.h"
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -25,8 +24,11 @@ public:
   virtual void print(std::ostream &output) const;
   virtual int treeDepth() const;
   virtual std::size_t nodeCount() const;
+  const FitTimings &fitTimings() const;
   virtual double buildTimeSeconds() const;
   virtual double pruneTimeSeconds() const;
+
+  void setLoadTimeSeconds(double seconds);
 
 protected:
   struct PartitionedRows {
@@ -68,21 +70,16 @@ protected:
     PartitionedRows partitions;
   };
 
-  using BuildTimePoint = std::chrono::steady_clock::time_point;
-
   const Dataset *dataset_ = nullptr;
   std::unique_ptr<Node> root_;
   Options options_;
-  double buildTimeSeconds_ = 0.0;
-  double pruneTimeSeconds_ = 0.0;
+  FitTimings fitTimings_;
 
   std::vector<std::string> classLabels_;
   std::unordered_map<std::string, std::uint16_t> labelToClassId_;
   std::uint16_t numClasses_ = 0;
 
   void prepareFit(const Dataset &dataset, const Options &options);
-  BuildTimePoint startBuildTimer() const;
-  void finishBuildTimer(BuildTimePoint start);
   void finalizeFit(const Options &options);
 
   std::vector<std::size_t> makeRootRowIndices() const;

@@ -35,10 +35,22 @@ mkdir -p "${BUILD_DIR}"
 
 pids=()
 
+headers_newer_than() {
+  local object=$1
+  local header
+  while IFS= read -r header; do
+    if [[ "${header}" -nt "${object}" ]]; then
+      return 0
+    fi
+  done < <(find . -maxdepth 3 -name '*.h' -not -path './python/*' -print)
+  return 1
+}
+
 compile_cpu() {
   local source=$1
   local object="${BUILD_DIR}/$(basename "${source}" .cpp).o"
-  if [[ ! -f "${object}" || "${source}" -nt "${object}" ]]; then
+  if [[ ! -f "${object}" || "${source}" -nt "${object}" ]] ||
+     headers_newer_than "${object}"; then
     "${CXX}" "${CXX_FLAGS[@]}" -c "${source}" -o "${object}"
   fi
 }
@@ -52,7 +64,8 @@ for pid in "${pids[@]}"; do
 done
 
 cuda_object="${BUILD_DIR}/tree_cuda.o"
-if [[ ! -f "${cuda_object}" || tree_cuda.cpp -nt "${cuda_object}" ]]; then
+if [[ ! -f "${cuda_object}" || tree_cuda.cpp -nt "${cuda_object}" ]] ||
+   headers_newer_than "${cuda_object}"; then
   "${NVCC}" "${NVCC_FLAGS[@]}" -c tree_cuda.cpp -o "${cuda_object}"
 fi
 

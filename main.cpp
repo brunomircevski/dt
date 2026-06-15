@@ -1,14 +1,17 @@
 #include "dataset.h"
 #include "options.h"
+#include "timing.h"
 #include "tree_visualization.h"
 
 #include <iostream>
 
 int main(int argc, char *argv[]) {
   try {
+    double loadSeconds = 0.0;
     Options options;
     options.backend = Backend::Cuda;
     options.datasetPath = "datasets/supersymmetry.csv";
+    options.demoDatasetMultiplier = 1;
     options.maxDepth = 30;
 
     // TreeParallel only.
@@ -17,12 +20,12 @@ int main(int argc, char *argv[]) {
     options.parallelMaxNodeThreadCount = 4;
 
     // TreeParallel + TreeCuda.
-    options.minRowsToParallelize = 32;
+    options.minRowsToParallelize = 20; //16-32 optimal
 
     // TreeCuda only.
-    options.cudaCpuThreadCount = 16;
-    options.cudaGpuWorkerCount = 4;
-    options.cudaMinRowsForGpu = 2048;
+    options.cudaCpuThreadCount = 120; // 120 is 10% faster than 20
+    options.cudaGpuWorkerCount = 8; // 4-8 optimal, higher needs more cpu threads
+    options.cudaMinRowsForGpu = 400; // around 400 is the fastest
     // options.cudaRowsPerTile = 16384;
     // options.cudaMaxTilesPerFeature = 256;
     // options.cudaScoreThreadsPerBlock = 256;
@@ -44,15 +47,24 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Backend: " << backendName(options.backend) << "\n";
     std::cout << "Loading dataset: " << options.datasetPath << "\n";
-    const Dataset dataset = loadDataset(options.datasetPath);
+    if (options.demoDatasetMultiplier > 1) {
+      std::cout << "Demo dataset multiply: " << options.demoDatasetMultiplier
+                << "x (in-memory)\n";
+    }
+    Dataset dataset;
+    {
+      ScopedTimer loadTimer(loadSeconds);
+      dataset = loadDataset(options.datasetPath, options.demoDatasetMultiplier);
+    }
     printDatasetSummary(dataset);
 
     auto tree = createTree(options.backend);
+    tree->setLoadTimeSeconds(loadSeconds);
 
     std::cout << "Fitting tree...\n";
     tree->fit(dataset, options);
 
-    generateTreeSvg(*tree, "tree.svg", options, dataset);
+    //generateTreeSvg(*tree, "tree.svg", options, dataset);
     printSummary(*tree, dataset);
 
   } catch (const std::exception &exception) {

@@ -202,16 +202,14 @@ VRAM is similar to all-GPU because workers are still allocated at `fit()`.
 
 ## Performance notes (supersymmetry, 5M rows)
 
-| Config | depth 30 build time | Notes |
-|--------|---------------------|-------|
-| All GPU (`cudaMinRowsForGpu=0`) | ~15–47 s | Every node pays GPU round-trip |
-| Hybrid (default 2048) | **~6.5 s** | ~860k nodes on CPU path, ~few k on GPU |
-| All CPU path (`cudaMinRowsForGpu > N`) | ~40+ s | No GPU benefit |
+Tuned values in `main.cpp` for this dataset:
 
-The main speedup comes from **`cudaMinRowsForGpu`**, not from raising
-`cudaGpuWorkerCount`. Extra GPU streams help only when many large nodes are
-ready at once; on supersymmetry the upper tree already saturates the GPU per
-node.
+| Option | Value | Notes |
+|--------|-------|-------|
+| `minRowsToParallelize` | 20 | 16–32 optimal |
+| `cudaCpuThreadCount` | 120 | ~10% faster than 20 |
+| `cudaGpuWorkerCount` | 8 | 4–8 optimal; higher needs more CPU threads |
+| `cudaMinRowsForGpu` | 400 | ~fastest here |
 
 ---
 

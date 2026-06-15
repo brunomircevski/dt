@@ -2,6 +2,7 @@
 
 #include "node.h"
 #include "task_executor.h"
+#include "timing.h"
 
 #include <cub/cub.cuh>
 #include <cuda_runtime.h>
@@ -14,6 +15,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -775,7 +777,7 @@ void TreeCuda::fit(const Dataset &dataset, const Options &options) {
     throw std::runtime_error("TreeCuda supports at most 64 classes.");
   }
 
-  // --- Stage A: pack the full dataset on the host, then upload once to the GPU ---
+  std::cout << "  packing dataset for GPU...\n" << std::flush;
   //
   // hostFeatures: every feature value of every row (feature-major: all of feature 0,
   // then all of feature 1, ...). For large datasets this vector is huge, but we
@@ -793,71 +795,84 @@ void TreeCuda::fit(const Dataset &dataset, const Options &options) {
     }
   }
 
-  // cudaMalloc allocates memory on the device (GPU VRAM). cudaMemcpy copies our
-  // host staging vectors into those device buffers (HostToDevice = CPU -> GPU).
-  CUDA_CHECK(cudaMalloc(&gpu.d_features, hostFeatures.size() * sizeof(GpuValue)));
-  CUDA_CHECK(cudaMalloc(&gpu.d_classIds,
-                        hostClassIds.size() * sizeof(std::uint16_t)));
-  CUDA_CHECK(cudaMemcpy(gpu.d_features, hostFeatures.data(),
-                        hostFeatures.size() * sizeof(GpuValue),
-                        cudaMemcpyHostToDevice));
-  CUDA_CHECK(cudaMemcpy(gpu.d_classIds, hostClassIds.data(),
-                        hostClassIds.size() * sizeof(std::uint16_t),
-                        cudaMemcpyHostToDevice));
-
-  // --- Stage B: create GPU workers (scratch + stream each) ---
-  //
-  // Worker i is sized for max(1, N >> i) rows. Capacities sum to ~2× root
-  // scratch instead of T×, so T concurrent split searches fit in VRAM.
-  // Worker 0 (capacity N) can host any node and guarantees forward progress.
+  std::cout << "  allocating GPU memory...\n" << std::flush;
   const int gpuWorkerCount = options_.cudaGpuWorkerCount;
   gpu.workers.resize(static_cast<std::size_t>(gpuWorkerCount));
+  {
+    ScopedTimer allocTimer(fitTimings_.gpuAllocSeconds);
+    CUDA_CHECK(cudaMalloc(&gpu.d_features, hostFeatures.size() * sizeof(GpuValue)));
+    CUDA_CHECK(cudaMalloc(&gpu.d_classIds,
+                          hostClassIds.size() * sizeof(std::uint16_t)));
+
+    // --- Stage B: create GPU workers (scratch + stream each) ---
+    //
+    // Worker i is sized for max(1, N >> i) rows. Capacities sum to ~2x root
+    // scratch instead of T x, so T concurrent split searches fit in VRAM.
+    // Worker 0 (capacity N) can host any node and guarantees forward progress.
+    for (int i = 0; i < gpuWorkerCount; ++i) {
+      GpuWorker &worker = gpu.workers[static_cast<std::size_t>(i)];
+      const std::size_t capacity =
+          std::max<std::size_t>(1, gpu.totalRows >> i);
+      worker.maxRows = capacity;
+      const std::size_t scratchItems = gpu.featureCount * capacity;
+
+      CUDA_CHECK(cudaMalloc(&worker.d_candidates,
+                            gpu.featureCount * sizeof(GpuSplitCandidate)));
+      CUDA_CHECK(cudaMalloc(&worker.d_tileHist,
+                            gpu.featureCount * gpu.maxTilesPerFeature *
+                                gpu.numClasses * sizeof(std::uint32_t)));
+      CUDA_CHECK(cudaMalloc(&worker.d_featureTotals,
+                            gpu.featureCount * gpu.numClasses *
+                                sizeof(std::uint32_t)));
+      CUDA_CHECK(cudaMalloc(&worker.d_blockBest,
+                            gpu.featureCount * gpu.maxTilesPerFeature *
+                                sizeof(GpuSplitCandidate)));
+
+      CUDA_CHECK(cudaMalloc(&worker.d_currentRows,
+                            capacity * sizeof(std::uint32_t)));
+      CUDA_CHECK(cudaMalloc(&worker.d_values, scratchItems * sizeof(GpuValue)));
+      CUDA_CHECK(cudaMalloc(&worker.d_rowIds,
+                            scratchItems * sizeof(std::uint32_t)));
+      CUDA_CHECK(cudaMalloc(&worker.d_valuesSorted,
+                            scratchItems * sizeof(GpuValue)));
+      CUDA_CHECK(cudaMalloc(&worker.d_rowIdsSorted,
+                            scratchItems * sizeof(std::uint32_t)));
+
+      // CUB sort temp sized for this worker's capacity; smaller nodes reuse it.
+      const int numItems = static_cast<int>(scratchItems);
+      const int numSegments = static_cast<int>(gpu.featureCount);
+      auto beginOffsets = thrust::make_transform_iterator(
+          thrust::make_counting_iterator<int>(0), SegmentOffset{capacity});
+      auto endOffsets = beginOffsets + 1;
+      cub::DoubleBuffer<GpuValue> keys(worker.d_values, worker.d_valuesSorted);
+      cub::DoubleBuffer<std::uint32_t> vals(worker.d_rowIds,
+                                            worker.d_rowIdsSorted);
+      cub::DeviceSegmentedRadixSort::SortPairs(nullptr, worker.sortTempBytes,
+                                               keys, vals, numItems,
+                                               numSegments, beginOffsets,
+                                               endOffsets);
+      CUDA_CHECK(cudaMalloc(&worker.d_temp, worker.sortTempBytes));
+    }
+  }
+
+  std::cout << "  uploading dataset to GPU...\n" << std::flush;
+  {
+    ScopedTimer uploadTimer(fitTimings_.gpuUploadSeconds);
+    CUDA_CHECK(cudaMemcpy(gpu.d_features, hostFeatures.data(),
+                          hostFeatures.size() * sizeof(GpuValue),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(gpu.d_classIds, hostClassIds.data(),
+                          hostClassIds.size() * sizeof(std::uint16_t),
+                          cudaMemcpyHostToDevice));
+  }
+
   for (int i = 0; i < gpuWorkerCount; ++i) {
     GpuWorker &worker = gpu.workers[static_cast<std::size_t>(i)];
     const std::size_t capacity =
         std::max<std::size_t>(1, gpu.totalRows >> i);
-    worker.maxRows = capacity;
-    const std::size_t scratchItems = gpu.featureCount * capacity;
 
     CUDA_CHECK(cudaStreamCreateWithFlags(&worker.stream,
                                          cudaStreamNonBlocking));
-
-    CUDA_CHECK(cudaMalloc(&worker.d_candidates,
-                          gpu.featureCount * sizeof(GpuSplitCandidate)));
-    CUDA_CHECK(cudaMalloc(&worker.d_tileHist,
-                          gpu.featureCount * gpu.maxTilesPerFeature *
-                              gpu.numClasses * sizeof(std::uint32_t)));
-    CUDA_CHECK(cudaMalloc(&worker.d_featureTotals,
-                          gpu.featureCount * gpu.numClasses *
-                              sizeof(std::uint32_t)));
-    CUDA_CHECK(cudaMalloc(&worker.d_blockBest,
-                          gpu.featureCount * gpu.maxTilesPerFeature *
-                              sizeof(GpuSplitCandidate)));
-
-    CUDA_CHECK(cudaMalloc(&worker.d_currentRows,
-                          capacity * sizeof(std::uint32_t)));
-    CUDA_CHECK(cudaMalloc(&worker.d_values, scratchItems * sizeof(GpuValue)));
-    CUDA_CHECK(cudaMalloc(&worker.d_rowIds,
-                          scratchItems * sizeof(std::uint32_t)));
-    CUDA_CHECK(cudaMalloc(&worker.d_valuesSorted,
-                          scratchItems * sizeof(GpuValue)));
-    CUDA_CHECK(cudaMalloc(&worker.d_rowIdsSorted,
-                          scratchItems * sizeof(std::uint32_t)));
-
-    // CUB sort temp sized for this worker's capacity; smaller nodes reuse it.
-    const int numItems = static_cast<int>(scratchItems);
-    const int numSegments = static_cast<int>(gpu.featureCount);
-    auto beginOffsets = thrust::make_transform_iterator(
-        thrust::make_counting_iterator<int>(0), SegmentOffset{capacity});
-    auto endOffsets = beginOffsets + 1;
-    cub::DoubleBuffer<GpuValue> keys(worker.d_values, worker.d_valuesSorted);
-    cub::DoubleBuffer<std::uint32_t> vals(worker.d_rowIds,
-                                          worker.d_rowIdsSorted);
-    cub::DeviceSegmentedRadixSort::SortPairs(nullptr, worker.sortTempBytes, keys,
-                                             vals, numItems, numSegments,
-                                             beginOffsets, endOffsets);
-    CUDA_CHECK(cudaMalloc(&worker.d_temp, worker.sortTempBytes));
-
     CUDA_CHECK(cudaMallocHost(&worker.h_pinned,
                               capacity * sizeof(std::uint32_t)));
   }
@@ -871,10 +886,12 @@ void TreeCuda::fit(const Dataset &dataset, const Options &options) {
   gpu.maxNodeTasks = cpuThreadCount > 1 ? cpuThreadCount - 1 : 0;
   gpu.activeNodeTasks.store(0, std::memory_order_relaxed);
 
+  std::cout << "  building tree...\n" << std::flush;
   const std::vector<std::size_t> rowIndices = makeRootRowIndices();
-  const BuildTimePoint buildStart = startBuildTimer();
-  root_ = buildNodeParallel(rowIndices, 0);
-  finishBuildTimer(buildStart);
+  {
+    ScopedTimer buildTimer(fitTimings_.buildSeconds);
+    root_ = buildNodeParallel(rowIndices, 0);
+  }
 
   finalizeFit(options);
   releaseCudaState();

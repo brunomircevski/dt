@@ -66,18 +66,11 @@ void TreeBase::prepareFit(const Dataset &dataset,
   dataset_ = &dataset;
   options_ = options;
   buildClassMapping(dataset);
-  buildTimeSeconds_ = 0.0;
-  pruneTimeSeconds_ = 0.0;
+  fitTimings_.resetFitPhases();
 }
 
-TreeBase::BuildTimePoint TreeBase::startBuildTimer() const {
-  return std::chrono::steady_clock::now();
-}
-
-void TreeBase::finishBuildTimer(BuildTimePoint start) {
-  buildTimeSeconds_ =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() - start)
-          .count();
+void TreeBase::setLoadTimeSeconds(double seconds) {
+  fitTimings_.loadSeconds = seconds;
 }
 
 void TreeBase::finalizeFit(const Options &options) { prune(options); }
@@ -856,6 +849,8 @@ void TreeBase::prune(const Options &options) {
   pruneTree(*this, options);
 }
 
-double TreeBase::buildTimeSeconds() const { return buildTimeSeconds_; }
+const FitTimings &TreeBase::fitTimings() const { return fitTimings_; }
 
-double TreeBase::pruneTimeSeconds() const { return pruneTimeSeconds_; }
+double TreeBase::buildTimeSeconds() const { return fitTimings_.buildSeconds; }
+
+double TreeBase::pruneTimeSeconds() const { return fitTimings_.pruneSeconds; }

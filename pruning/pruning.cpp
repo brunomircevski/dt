@@ -1,7 +1,8 @@
 #include "pruning/pruning.h"
 
+#include "timing.h"
+
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <functional>
 #include <limits>
@@ -122,14 +123,14 @@ std::vector<std::size_t> allRowIndices(const Dataset &dataset) {
 } // namespace
 
 void pruneTree(TreeBase &tree, const Options &options) {
-  tree.pruneTimeSeconds_ = 0.0;
+  tree.fitTimings_.pruneSeconds = 0.0;
 
   if (!tree.root_ || options.pruningMode == PruningMode::None) {
     return;
   }
 
   if (options.pruningMode == PruningMode::PessimisticError) {
-    const auto pruneStart = std::chrono::steady_clock::now();
+    ScopedTimer pruneTimer(tree.fitTimings_.pruneSeconds);
     const double confidenceFactor = options.pruningConfidenceFactor;
     const std::vector<std::size_t> rowIndices = allRowIndices(*tree.dataset_);
 
@@ -193,15 +194,11 @@ void pruneTree(TreeBase &tree, const Options &options) {
         };
 
     pruneNode(tree.root_, rowIndices);
-
-    tree.pruneTimeSeconds_ = std::chrono::duration<double>(
-                                 std::chrono::steady_clock::now() - pruneStart)
-                                 .count();
     return;
   }
 
   if (options.pruningMode == PruningMode::CostComplexity) {
-    const auto pruneStart = std::chrono::steady_clock::now();
+    ScopedTimer pruneTimer(tree.fitTimings_.pruneSeconds);
     const double ccpAlpha = options.ccpAlpha;
     const std::vector<std::size_t> rowIndices = allRowIndices(*tree.dataset_);
 
@@ -246,9 +243,5 @@ void pruneTree(TreeBase &tree, const Options &options) {
         };
 
     pruneNode(tree.root_, rowIndices);
-
-    tree.pruneTimeSeconds_ = std::chrono::duration<double>(
-                                 std::chrono::steady_clock::now() - pruneStart)
-                                 .count();
   }
 }
