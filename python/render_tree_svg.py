@@ -17,7 +17,7 @@ CORNER_RADIUS = 14
 
 NODE_RE = re.compile(r"^(?P<edge>\w+) \[n=(?P<count>\d+)\]: (?P<body>.+)$")
 LEAF_RE = re.compile(r"^Leaf -> (?P<label>.+)$")
-DECISION_RE = re.compile(r"^if (?P<feature>.+) <= (?P<threshold>-?\d+(?:\.\d+)?)$")
+DECISION_RE = re.compile(r"^if (?P<feature>.+) <= (?P<threshold>-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)$")
 
 
 @dataclass

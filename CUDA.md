@@ -1,283 +1,99 @@
-# How the CUDA decision tree works
+# Growing a tree on the GPU
 
-This document explains `tree_cuda.cpp` for someone who has never written GPU
-code before. It assumes you understand the basic idea of a decision tree but
-nothing about CUDA. Read it top to bottom.
+File: `gpu_builder.cu` (the CPU side it hands work to is `cpu_builder.cpp`).
 
----
+Read [CPU.md](CPU.md) first: the GPU runs the same algorithm — presorted
+columns, one sweep per feature, stable partition — but organised so that
+thousands of GPU threads have work at the same time.
 
-## 1. The 30-second picture
+## CUDA in five words
 
-A decision tree is built by repeatedly asking: **"for this group of rows, what
-is the single best yes/no question to split them into two cleaner groups?"** A
-question looks like `feature_7 <= 0.42`.
+*Host* = CPU and its RAM, *device* = GPU and its memory; data must be copied
+between them. A *kernel* is a function the GPU runs in many *threads* at once;
+threads come in *blocks* (here 256 threads) that share a small fast memory, and
+32 neighbouring threads form a *warp* that executes in lockstep and can
+exchange registers directly (`__shfl_*`, `__ballot_sync`).
 
-- The **CPU** owns the tree structure. It starts with all rows at the root,
-  finds a split, divides the rows into a left group and a right group, and then
-  repeats on each group. This recursion lives in the shared base class
-  (`TreeBase::buildNode`), not in the CUDA file.
-- The **GPU** does the one expensive job: given a group of rows, **try every
-  possible split and report the best one**. That is the function
-  `TreeCuda::findBestSplitAtNode`.
+## Breadth-first instead of depth-first
 
-So the CPU keeps asking "best split for these rows?" and the GPU answers, over
-and over, once per node in the tree.
+The CPU builds one node at a time. The GPU instead processes **all large nodes
+of one tree level together**: a level with 300 nodes × 18 features is one set
+of kernel launches, not 300. Work is cut into **tiles**: 2048 consecutive
+entries of one (node, feature) column range — a *segment*. Every kernel runs
+one block per tile (or per segment).
+
+Two copies of all columns live on the device. Level `d` reads buffer `d % 2`
+and writes the partitioned children into the other one (ping-pong), so a
+partition never overwrites data it still has to read.
+
+## Setup
+
+1. Upload the feature columns (through temporarily page-locked memory: 4×
+   faster copies) and labels.
+2. Build `(value, packed row/class)` pairs and sort each feature with CUB's
+   radix sort (stable, like the CPU's).
+3. For C4.5, copy the sorted values back; the CPU pool extracts each feature's
+   distinct values in the background (needed for C4.5's thresholds).
+
+The CUDA context itself is created on a background thread while the CSV is
+being parsed (`gpuPrepare`).
+
+## One level
+
+Every node that enters a level already has its class counts (the root's are
+counted on the host, the others come from their parent's split) and is known
+to need a split search, so the host prepares the whole level before launching
+anything.
+
+| # | Kernel | What |
+|---|--------|------|
+| 1 | `tileHistogramKernel` | Class counts of each tile (one `__ballot_sync` per class per 32 entries). |
+| 2 | `segmentPrefixKernel` | Per segment, exclusive scan over its tiles: each tile learns the class counts *before* it. |
+| 3a | `tileEstimateKernel` | Sweep all cuts of the tile in **single precision**; keep the tile's best estimate and count C4.5's `tries`. |
+| 3b | `segmentMaxKernel` | Best estimate per segment. |
+| 3c | `tileExactKernel` | Sweep again, but compute the exact **double-precision** gain (`dt::cutGain`, the CPU's function) only for cuts whose estimate is within a proven float error bound of the segment's best. |
+| 4 | `segmentBestKernel` | Best cut per (node, feature), and the class counts left of it. **Host** (the level's only round trip): `SplitRules::choose` picks each node's split exactly like the CPU; the winning feature's left counts give both children's class counts, so children that are leaves (pure, too small, depth limit) are finished on the spot. |
+| 5 | `markGoesLeftKernel`, `tileLeftCountKernel`, `segmentPrefixKernel`, `scatterKernel` | Stable partition of every column of every split node into the other buffer (skipped for nodes whose children are both leaves). |
+| 6 | `copyKernel` | Children with fewer than `--gpu-min-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer. |
+
+Small children become `CpuTreeBuilder` tasks on the thread pool, which grow them
+while the GPU continues with the next level. The host buffer they read from is
+page-locked once, in the background, so these copies run at full speed.
+
+### Inside the sweep (kernels 3a / 3c)
+
+Each warp handles 256 consecutive entries of the tile in 8 steps of 32. In a
+step, lane `i` holds entry `i`; the class counts left of its entry are
 
 ```
-CPU: "best split for these 5,000,000 rows?"  ->  GPU: "feature 11 <= 0.83"
-CPU splits rows into left (3.1M) and right (1.9M)
-CPU: "best split for these 3,100,000 rows?"  ->  GPU: "feature 4 <= -0.10"
-... and so on, down the tree
+left[k] = (count before this step) + popc(ballot(class == k) & lanes below i)
 ```
 
----
+and the previous / next values come from warp shuffles. No thread ever walks
+entries one by one.
 
-## 2. A tiny bit of CUDA vocabulary
+### Why two passes
 
-You only need five words:
+Consumer GPUs run double precision about 64× slower than single precision. The
+float pass rules out almost all cuts; the exact pass keeps the result
+bit-identical to the CPU, so `tests/check_backends.sh` can require identical
+trees. (Comparing against the *tile's* best estimate was not enough: in a node
+with millions of rows the gain hardly changes within 2048 rows, so most cuts
+survived. The segment-wide best fixes that.)
 
-- **Host** = the CPU and its normal RAM. **Device** = the GPU and its own
-  memory (VRAM). They are separate; you must *copy* data between them.
-- **Kernel** = a function that runs on the GPU. We mark it `__global__`. When we
-  "launch" a kernel we ask the GPU to run that function many thousands of times
-  at once, each copy on a different piece of data.
-- **Thread** = one of those copies. Each thread knows its own number.
-- **Block** = a team of threads (e.g. 256 of them) that runs together on one of
-  the GPU's processors and can share a small, very fast scratchpad of memory.
-- **Grid** = all the blocks of one kernel launch.
+## Tuning
 
-The launch syntax `myKernel<<<numBlocks, threadsPerBlock>>>(args)` means "run
-`myKernel` using this many blocks, each with this many threads."
+* `--gpu-min-rows N` (default 512): nodes smaller than this are finished on
+  the CPU. Lower values keep more of the tree on the GPU (more, smaller levels);
+  higher values hand over earlier and keep the CPU pool busier. The best value
+  depends on the balance between the GPU and the CPU: on the test laptop
+  (power-limited GPU) full CART trees on SUSY were fastest around 512,
+  covertype (54 features, 7 classes) around 4096, and C4.5 barely cared.
+* `DT_GPU_VERBOSE=1 ./tree --cuda ...` prints per-level times, a per-kernel
+  profile and the setup phases.
 
-Inside a kernel a thread figures out which data it owns from built-in variables:
-`blockIdx` (which block am I in), `threadIdx` (which thread am I inside my
-block), and `blockDim` (how big is my block).
+## Memory
 
-A GPU is fast only when thousands of threads are busy at the same time. A lot of
-this code is about keeping the whole GPU busy instead of a few threads.
-
----
-
-## 3. Why sorting is the key idea
-
-For one numeric feature, the best threshold always sits *between two values that
-are next to each other once you line the rows up in order*. So if we **sort the
-rows by that feature's value**, we can walk left to right and, at each gap,
-instantly know how many rows of each class are on the left vs the right. That
-"walk" is what finds the best threshold.
-
-We do this for every feature, then pick the feature+threshold with the best
-score overall.
-
-To score a split we need, at each gap, the **class counts** on each side.
-Keeping a running count as we walk is cheap. The "impurity" math (Gini or
-entropy) just turns those counts into a number that says how mixed the groups
-are; a good split makes the two sides much less mixed than the parent.
-
----
-
-## 4. What is stored on the GPU
-
-Set up once at the start of `fit()` and kept for the whole training run:
-
-| Buffer | What it holds |
-|---|---|
-| `d_features` | Every feature value of every row, stored **feature by feature** (all of feature 0, then all of feature 1, ...). |
-| `d_classIds`  | The class (label as a small integer) of every row. |
-
-Two important memory choices:
-
-- **Feature values are `float` everywhere** — loaded from CSV as `float`, stored
-  in `Sample::features`, packed into `hostFeatures`, and uploaded as `GpuValue`
-  (`float` on the GPU). Thresholds and impurity math still use `double`.
-- The full feature matrix lives on the GPU the entire time, so we never re-upload
-  it. Each node only sends the GPU a small list of which rows it contains.
-
-Then there is **scratch** memory that is reused by every node (it is sized for
-the biggest node, the root, and never shrinks, so we don't keep re-allocating):
-
-| Buffer | What it holds |
-|---|---|
-| `d_currentRows`  | The row numbers in the current node (`uint32`, since datasets have far fewer than 4 billion rows). |
-| `d_values` / `d_valuesSorted`   | The current node's feature values, before / after sorting. |
-| `d_rowIds` / `d_rowIdsSorted`   | The matching row numbers, before / after sorting. |
-| `d_temp`         | Temporary space the sort library needs. |
-| `d_candidates`   | The best split found for each feature. |
-| `d_tileHist`, `d_featureTotals`, `d_blockBest` | Small helpers for the "large node" path (Section 6). |
-
----
-
-## 5. What happens for ONE node (`findBestSplitAtNode`)
-
-This is the heart of the file. Given the node's list of row numbers, it does
-four steps.
-
-### Step 1 — Gather (`gatherNodeFeaturesKernel`)
-
-We copy the node's rows out of the big feature matrix into the compact scratch
-arrays, laid out one feature after another. Each GPU thread handles one
-`(feature, row)` pair: it writes that row's feature **value** (the thing we will
-sort by) and the **row number** (so we remember where each value came from).
-
-We deliberately do **not** copy the class here. Instead, later code looks up a
-row's class from the small `d_classIds` array using the row number. Why? Because
-it keeps the sort dealing with just one value + one row-number per element, which
-lets us use the fastest kind of sort.
-
-### Step 2 — Sort (one call to CUB's segmented radix sort)
-
-`CUB` is NVIDIA's library of ready-made fast GPU building blocks. We ask it to
-sort, **in a single launch**, every feature's slice by value. The trick is
-"segmented" sorting: we tell CUB "treat each feature's chunk as its own segment,"
-so all 18 features get sorted independently but in one go. The row numbers ride
-along with their values, so afterwards `d_rowIdsSorted` tells us the sorted order
-of rows for each feature.
-
-(We use a `DoubleBuffer`, which just lets the sort flip-flop between the two
-buffers we already own instead of allocating a big extra one — that saved a lot
-of VRAM.)
-
-### Step 3 — Score every split (the interesting kernel)
-
-Now each feature's rows are sorted. We sweep through them to find the best
-threshold. To know the class counts on the left side at any point, we keep a
-running tally as we move right.
-
-The simple version (used for small nodes) is **one block per feature** and works
-in three phases inside the block. Suppose the block has 256 threads:
-
-1. **Histogram.** Split the feature's sorted rows into 256 equal chunks, one per
-   thread. Each thread counts how many rows of each class are in its chunk.
-2. **Prefix sum.** Add up those per-chunk counts so each thread learns how many
-   rows of each class come *before* its chunk. That is exactly the "left side"
-   class counts at the start of its chunk.
-3. **Sweep.** Each thread walks its own chunk. At every gap where the value
-   changes *and* the class changes, it computes the split's score (using the
-   running left/right counts) and remembers the best one it has seen. Finally the
-   block compares all 256 thread-bests and keeps the single best for that feature.
-
-The result — the best split per feature — is written to `d_candidates`.
-
-The actual threshold-walking loop lives in a small shared device helper named
-`scanSortedThresholds`. Both the small-node kernel and the large-node tiled
-kernel call it. That way there is only one place to read the "walk sorted rows,
-move one row at a time to the left side, score useful gaps" logic.
-
-> Why the three phases? A single thread walking 5 million rows would be painfully
-> slow and waste the GPU. Splitting the work across 256 threads needs each thread
-> to know its starting left-side counts, and the histogram + prefix sum is how
-> they get that.
-
-### Step 4 — Copy back and choose
-
-We copy the per-feature best splits (`d_candidates`) to the CPU — a tiny copy,
-just one entry per feature. The CPU then picks the overall winner using the exact
-same tie-breaking rules as the pure-CPU backend (`chooseBestSplit`), so the GPU
-and CPU agree on what "best" means.
-
-Finally we copy back just the **sorted row numbers of the winning feature** so
-the CPU can split the node into its left and right groups without doing any work
-over again. (We copy only the row numbers — not the values, and we don't re-look
-up classes — because that host-side bookkeeping used to be the slowest part of
-the whole program.)
-
----
-
-## 6. The "large node" speed-up (tiling)
-
-Step 3's simple version uses one block per feature. With ~18 features that is
-only 18 blocks. But the GPU has 36 processors (SMs), so half of it would sit
-idle on the big nodes near the top of the tree — and those nodes have the most
-rows, so they dominate the running time.
-
-For large nodes we instead cut each feature's sorted slice into many **tiles**
-(about 32k rows each) and give each tile its own block. Now there are hundreds
-of blocks and the whole GPU is busy. The catch is the same as before: a tile
-needs to know the class counts of every row *before* it. So the large-node path
-runs four small kernels:
-
-1. `tileHistogramKernel` — each tile counts its own classes.
-2. `tilePrefixKernel` — add up tile counts so each tile learns the counts before
-   it (its starting "left" side) plus the totals for the whole feature.
-3. `tileScanKernel` — each tile sweeps its rows (same three-phase idea as above,
-   just starting from its tile's counts) and reports its best split.
-4. `reduceTilesKernel` — combine each feature's tile-winners into one best split.
-
-Small nodes skip all this and use the single-block kernel from Step 3, because
-launching four kernels is not worth it when there is little data. The code picks
-the path automatically based on how many rows the node has.
-
-The host-side helper `makeSplitScanLaunch` is where that choice is made. It
-computes:
-
-- how many tiles to use,
-- how many rows go in each tile,
-- how many threads each scan block should launch,
-- how much shared memory the scan kernels need.
-
-This keeps `findBestSplitAtNode` focused on the high-level pipeline: gather,
-sort, scan, copy back.
-
----
-
-## 7. How the pieces map to the code
-
-| Concept | Where to look in `tree_cuda.cpp` |
-|---|---|
-| Per-node entry point | `TreeCuda::findBestSplitAtNode` |
-| One-time setup / upload | `TreeCuda::fit` |
-| Scratch allocation (grows as needed) | `TreeCuda::ensureNodeScratch` |
-| Step 1: gather | `gatherNodeFeaturesKernel` |
-| Step 2: sort | the `cub::DeviceSegmentedRadixSort` calls |
-| Step 3: score (small nodes) | `scoreSplitsKernel` |
-| Step 3+: score (large nodes) | `tileHistogramKernel`, `tilePrefixKernel`, `tileScanKernel`, `reduceTilesKernel` |
-| Shared sorted-row sweep | `scanSortedThresholds` |
-| Launch/tile sizing | `makeSplitScanLaunch` |
-| Impurity / scoring math | `deviceImpurity`, `deviceScoreCandidate` |
-| Tie-breaking (which split is "better") | `deviceIsBetterMaxGain`, `deviceIsBetterC45` |
-| Cleanup of GPU memory | `TreeCuda::releaseCudaState` |
-
----
-
-## 8. The few rules that keep GPU and CPU in agreement
-
-1. The GPU scoring math mirrors the CPU functions exactly (`deviceScoreCandidate`
-   matches `TreeBase::scoreCandidateFromCounts`).
-2. The "which split wins" comparison matches the CPU's rules, so ties are broken
-   the same way.
-3. The CPU still drives the recursion and partitions the rows, so the GPU only
-   ever answers the narrow question "best split for this list of rows?".
-
-CPU and GPU backends now share the same `float` feature storage, so split search
-uses the same numeric values on both sides. Thresholds and scores are still
-computed in `double` for stable impurity math.
-
----
-
-## 9. Tuning knobs (`TrainingOptions`, CUDA-prefixed)
-
-`TreeCuda` reads these fields from `TrainingOptions` (ignored by CPU backends).
-They are clamped once at the start of `fit()`:
-
-| Field | Default | Meaning |
-|-------|---------|---------|
-| `cudaRowsPerTile` | 32768 | Rows per tile on large nodes (smaller → more GPU blocks). |
-| `cudaMaxTilesPerFeature` | 128 | Max tiles per feature; also sizes tile buffers allocated on GPU. |
-| `cudaScoreThreadsPerBlock` | 256 | Threads per block in the split-scan kernels. |
-| `cudaGatherBlockSize` | 256 | Threads per block in the gather kernel. |
-
-Example in `main.cpp` (uncomment to override defaults).
-
----
-
-## 10. Building it
-
-The GPU code must be compiled with NVIDIA's compiler, `nvcc` (a normal C++
-compiler does not understand `__global__`, `<<<...>>>`, or the CUB headers).
-See `build_cuda.sh` (or the "Build tree" task in `.vscode/tasks.json`). Your code
-editor's linter may underline CUDA keywords as errors — that is expected and
-harmless; only the `nvcc` build matters.
-```
-./build_cuda.sh        # produces the ./tree executable
-./tree
-```
+Device: two copies of all columns (`2 × 8 × rows × features` bytes, 1.4 GB for
+5M × 18) plus small per-level arrays. The builder checks free memory first and
+suggests `--parallel` if it does not fit.

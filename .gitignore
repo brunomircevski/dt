@@ -37,6 +37,7 @@ __pycache__
 program
 build
 tree
+tree_cpu
 tree_cuda
 datasets
 tree.svg

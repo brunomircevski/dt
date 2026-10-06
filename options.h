@@ -1,91 +1,105 @@
 #pragma once
 
 #include <cstddef>
-#include <memory>
 #include <string>
 
-enum class Backend { Serial, Parallel, Cuda };
-
-enum class ImpurityMeasure {
-  Entropy,
-  Gini
+// Which learning algorithm to run. Each one has its own split rule, stopping
+// rules and pruning method; the options below say which knobs belong to which.
+enum class Algorithm {
+  Cart, // Breiman et al. 1984: binary splits, max impurity decrease, CCP pruning
+  C45   // Quinlan 1993 (Release 8): gain ratio, MDL threshold cost, EBP pruning
 };
 
-enum class SplitSelectionMode {
-  MeanGainFiltered,
-  MaxGain
-};
+// Impurity used by CART. C4.5 always uses entropy (information gain).
+enum class Criterion { Gini, Entropy };
 
-enum class PruningMode {
-  None,
-  PessimisticError,
-  CostComplexity
+// Where the tree is grown.
+enum class Backend {
+  Serial,   // one thread; the reference implementation
+  Parallel, // CPU thread pool (feature- and node-level parallelism)
+  Cuda      // GPU for large nodes (breadth-first), CPU pool for small subtrees
 };
 
 struct Options {
   // ---------------------------------------------------------------------------
-  // All backends (TreeSerial, TreeParallel, TreeCuda)
+  // Run
   // ---------------------------------------------------------------------------
-  Backend backend = Backend::Parallel; // CLI: --serial | --parallel | --cuda
-  std::string datasetPath = "datasets/covertype.csv"; // CLI: <path> (positional)
+  std::string datasetPath = "datasets/covertype.csv";
+  Backend backend = Backend::Parallel;
+  Algorithm algorithm = Algorithm::Cart;
 
-  int maxDepth = -1; // CLI: -d <N>
-  std::size_t minSamplesToSplit = 2;
-  std::size_t minSamplesPerLeaf = 1;
+  // Fraction of rows held out as a test set (0 = train and evaluate on all
+  // rows). The split is a deterministic shuffle so runs are comparable.
+  double holdoutFraction = 0.0;
 
-  PruningMode pruningMode = PruningMode::None;
-  SplitSelectionMode splitSelectionMode = SplitSelectionMode::MeanGainFiltered;
-  double epsilon = 1e-9;
-  double pruningConfidenceFactor = 0.25;
-  double ccpAlpha = 0.5;
-  ImpurityMeasure impurityMeasure = ImpurityMeasure::Entropy;
+  // Demo only: duplicate the loaded rows in memory (slightly rescaled) to
+  // stress the builders without a bigger CSV. 1 = no duplication.
+  std::size_t datasetMultiplier = 1;
 
-  // ---------------------------------------------------------------------------
-  // TreeParallel + TreeCuda
-  //
-  // Minimum rows in a node before left/right subtrees may be built on different
-  // CPU threads. Below this threshold both children stay on the current thread.
-  // ---------------------------------------------------------------------------
-  std::size_t minRowsToParallelize = 32;
+  bool printTree = false;       // print the tree as text to stdout
+  std::string svgPath;          // render the tree to SVG (needs python3)
+  std::string dumpPath;         // write the tree as text to a file
+  // Instead of growing a tree, read one written by --dump and only run the
+  // algorithm's post-processing / pruning on it.
+  std::string loadTreePath;
 
   // ---------------------------------------------------------------------------
-  // TreeParallel only (ignored by TreeSerial and TreeCuda)
+  // Growth limits (both algorithms)
   // ---------------------------------------------------------------------------
-  // Threads that score features in parallel inside one node.
-  int parallelMaxFeatureThreadCount = 4;
-  // Threads that build sibling subtrees in parallel.
-  int parallelMaxNodeThreadCount = 4;
-  // Minimum feature count before feature search is parallelized.
-  std::size_t parallelMinFeaturesToParallelize = 4;
+  int maxDepth = -1; // -1 = unlimited
 
   // ---------------------------------------------------------------------------
-  // TreeCuda only (ignored by TreeSerial and TreeParallel)
+  // CART
   // ---------------------------------------------------------------------------
-  // CPU threads that walk the tree and build subtrees in parallel. Each thread
-  // may check out a GPU worker for large nodes; at most cudaGpuWorkerCount
-  // threads can hold a worker at once. Must be >= cudaGpuWorkerCount.
-  int cudaCpuThreadCount = 8;
-  // Concurrent GPU workers: each owns VRAM scratch + one CUDA stream. Worker i
-  // is sized for max(1, N >> i) rows so total scratch stays ~2× root, not T×.
-  int cudaGpuWorkerCount = 4;
-  // Nodes with fewer rows use the CPU split path inside TreeCuda. 0 = always GPU.
-  std::size_t cudaMinRowsForGpu = 2048;
+  Criterion criterion = Criterion::Gini;
+  std::size_t minSamplesSplit = 2; // nodes with fewer rows become leaves
+  std::size_t minSamplesLeaf = 1;  // every child must keep at least this many
+  // A split must satisfy (rows/totalRows) * impurityDecrease >= this
+  // (same definition as scikit-learn's min_impurity_decrease).
+  double minImpurityDecrease = 0.0;
 
-  // Large-node GPU scan: split each feature into tiles so more blocks run.
-  std::size_t cudaRowsPerTile = 32768;
-  // Max tiles per feature; also sizes GPU buffers allocated at fit() time.
-  int cudaMaxTilesPerFeature = 128;
-  // CUDA kernel launch parameters (threads per block).
-  int cudaScoreThreadsPerBlock = 256;
-  int cudaGatherBlockSize = 256;
+  // Minimal cost-complexity pruning: keep the smallest subtree minimising
+  // R(T) + alpha * |leaves(T)|, where R(T) is the training misclassification
+  // rate. Used only when cartPrune is true.
+  bool cartPrune = false;
+  double ccpAlpha = 0.0;
+  // If > 1, ignore ccpAlpha and choose alpha by K-fold cross-validation over
+  // the weakest-link pruning sequence using the 1-SE rule (Breiman's method).
+  int ccpFolds = 0;
 
-  // Demo only: duplicate loaded rows in memory to stress GPU without re-reading
-  // CSV. 1 = no duplication; 2 = double the dataset, etc.
-  std::size_t demoDatasetMultiplier = 1; // CLI: -m <N>
+  // ---------------------------------------------------------------------------
+  // C4.5 (defaults match the original c4.5 program)
+  // ---------------------------------------------------------------------------
+  std::size_t c45MinObjects = 2;      // -m: min cases in at least two branches
+  bool c45Prune = true;               // error-based (pessimistic) pruning
+  double c45ConfidenceFactor = 0.25;  // -c 25
+  bool c45SubtreeRaising = true;      // replace a node by its largest branch
+
+  // ---------------------------------------------------------------------------
+  // Parallel CPU (Parallel backend, and the CPU side of the Cuda backend)
+  // ---------------------------------------------------------------------------
+  int threads = 0; // 0 = std::thread::hardware_concurrency()
+  // Nodes with at least this many rows spawn their children as separate tasks.
+  std::size_t minRowsForNodeTask = 4096;
+  // Nodes with at least this many rows scan/partition features in parallel.
+  std::size_t minRowsForFeatureParallel = 65536;
+
+  // ---------------------------------------------------------------------------
+  // Cuda backend
+  // ---------------------------------------------------------------------------
+  // Nodes with fewer rows are copied back and finished by the CPU pool while
+  // the GPU keeps working on the large nodes of the next level.
+  std::size_t gpuMinRows = 512;
 };
 
-class TreeBase;
-
 const char *backendName(Backend backend);
-std::unique_ptr<TreeBase> createTree(Backend backend);
-void applyCommandLine(int argc, char *argv[], Options &options);
+const char *algorithmName(Algorithm algorithm);
+const char *criterionName(Criterion criterion);
+
+// Parse argv on top of `options`. Throws std::runtime_error on bad input.
+// Returns false if --help was requested.
+bool applyCommandLine(int argc, char *argv[], Options &options);
+void printUsage(const char *program);
+
+// Reject combinations that are not a valid CART or C4.5 configuration.
+void validateOptions(const Options &options);
