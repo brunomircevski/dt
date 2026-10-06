@@ -1,41 +1,44 @@
 # make        -> ./tree      (CPU + CUDA backends; needs nvcc)
 # make cpu    -> ./tree_cpu  (CPU backends only; any C++20 compiler)
+# make test   -> tests/check.sh on ./tree
 # make clean
 
 CXX       ?= g++
 NVCC      ?= /opt/cuda/bin/nvcc
 CUDA_LIB  ?= /opt/cuda/lib64
-CUDA_ARCH ?= native
+# native = the GPU of this machine. For other GPUs list them, e.g.
+#   make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90"
+CUDA_ARCH ?= -arch=native
 
-CXXFLAGS  := -std=c++20 -O3 -pthread -Wall -Wextra -MMD -MP
-NVCCFLAGS := -std=c++20 -O3 -arch=$(CUDA_ARCH) -MMD -MP -Xcompiler -Wall
+CXXFLAGS  := -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP
+NVCCFLAGS := -std=c++20 -O3 $(CUDA_ARCH) -Isrc -MMD -MP -Xcompiler -Wall
 
-CPU_SOURCES := main.cpp options.cpp dataset.cpp tree.cpp thread_pool.cpp \
-               split_rules.cpp cpu_builder.cpp pruning.cpp trainer.cpp
+BUILD   := build
+SOURCES := $(filter-out src/build/gpu_grower_stub.cpp,$(wildcard src/*/*.cpp))
+OBJECTS := $(SOURCES:src/%.cpp=$(BUILD)/%.o)
 
-BUILD := build
-CPU_OBJECTS := $(CPU_SOURCES:%.cpp=$(BUILD)/%.o)
-
-.PHONY: all cpu clean
+.PHONY: all cpu test clean
 all: tree
 cpu: tree_cpu
 
-tree: $(CPU_OBJECTS) $(BUILD)/gpu_builder.o
+tree: $(OBJECTS) $(BUILD)/build/gpu_grower.o
 	$(CXX) $(CXXFLAGS) $^ -L$(CUDA_LIB) -lcudart -o $@
 
-tree_cpu: $(CPU_OBJECTS) $(BUILD)/gpu_builder_stub.o
+tree_cpu: $(OBJECTS) $(BUILD)/build/gpu_grower_stub.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-$(BUILD)/%.o: %.cpp | $(BUILD)
+$(BUILD)/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD)/gpu_builder.o: gpu_builder.cu | $(BUILD)
+$(BUILD)/%.o: src/%.cu
+	@mkdir -p $(dir $@)
 	$(NVCC) $(NVCCFLAGS) -c $< -o $@
 
-$(BUILD):
-	mkdir -p $(BUILD)
+test: tree
+	tests/check.sh
 
 clean:
 	rm -rf $(BUILD) tree tree_cpu
 
--include $(wildcard $(BUILD)/*.d)
+-include $(shell find $(BUILD) -name '*.d' 2>/dev/null)

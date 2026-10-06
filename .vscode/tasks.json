@@ -27,9 +27,9 @@
             "detail": "Remove build/, tree and tree_cpu."
         },
         {
-            "label": "Check backends agree",
+            "label": "Run tests",
             "type": "shell",
-            "command": "tests/check_backends.sh",
+            "command": "tests/check.sh",
             "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": [],
             "dependsOn": "Build tree"
