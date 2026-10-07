@@ -274,7 +274,7 @@ void multiplyDataset(Dataset &dataset, std::size_t multiplier) {
   if (newRows > 0xFFFFFFFFull) {
     throw std::runtime_error("Datasets are limited to 2^32 - 1 rows");
   }
-  std::vector<float> values(dataset.featureCount() * newRows);
+  Dataset::Values values(dataset.featureCount() * newRows);
   for (std::size_t feature = 0; feature < dataset.featureCount(); ++feature) {
     const float *source = dataset.column(feature);
     float *target = values.data() + feature * newRows;
@@ -353,10 +353,11 @@ void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t see
   test = selectRows(dataset, testIndex, pool);
 }
 
-std::vector<float> rowMajorFeatures(const Dataset &dataset, ThreadPool *pool) {
+std::unique_ptr<float[]> rowMajorFeatures(const Dataset &dataset, ThreadPool *pool) {
   const std::size_t rows = dataset.rowCount;
   const std::size_t features = dataset.featureCount();
-  std::vector<float> matrix(rows * features);
+  // Not zero-filled first: the threads write (and so first touch) it.
+  std::unique_ptr<float[]> matrix(new float[rows * features]);
   constexpr std::size_t kBlock = 4096;
   const std::size_t blocks = (rows + kBlock - 1) / kBlock;
   auto transpose = [&](std::size_t block) {

@@ -29,9 +29,8 @@ public:
     const std::size_t count = rows.empty() ? rows_ : rows.size();
     {
       ScopedTimer timer(timings.prepareSeconds);
-      prepare(rows);
-      if (sortedValues) {
-        sortedValues->resize(features_ * count);
+      prepare(rows, sortedValues);
+      if (sortedValues && reusable_) { // the presort wrote them otherwise
         parallelFor(pool_, features_, [&](std::size_t feature) {
           const Entry *column = work_.get() + feature * count;
           float *values = sortedValues->data() + feature * count;
@@ -54,7 +53,7 @@ public:
                  std::vector<std::uint32_t>(features_)};
     std::iota(root.features.begin(), root.features.end(), 0u);
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
-                           options_.parallel);
+                           options_.parallel, countTables());
     builder.grow(Columns{work_.get(), count, scratch_.get()}, std::move(root));
     if (pool_) {
       pool_->waitIdle();
@@ -64,15 +63,33 @@ public:
   }
 
 private:
+  // The sweep's per-count tables, for every count up to the number of
+  // training rows (the builder's default tables cover small training sets).
+  CountTables countTables() {
+    if (rows_ < kLogTableSize) {
+      return {};
+    }
+    if (countXlog_.empty()) {
+      fillCountTables(rows_ + 1, countXlog_, countInverse_, pool_);
+    }
+    return {countXlog_.data(), countInverse_.data(), static_cast<std::uint32_t>(rows_ + 1)};
+  }
+
   // Fill work_ with the sorted columns of the selected rows (stride = their
-  // count). Without reuse, presort straight into work_.
-  void prepare(std::span<const std::uint32_t> rows) {
+  // count), and `sortedValues` (if not null) with their values. Without
+  // reuse, presort straight into work_.
+  void prepare(std::span<const std::uint32_t> rows, std::vector<float> *sortedValues) {
+    const std::size_t count = rows.empty() ? rows_ : rows.size();
+    if (sortedValues) {
+      sortedValues->resize(features_ * count);
+    }
     if (!reusable_) {
       if (used_ || !rows.empty()) {
         throw std::logic_error("CpuGrower: not created for repeated use");
       }
       used_ = true;
-      presortColumns(train_, codec_, work_.get(), pool_);
+      presortColumns(train_, codec_, work_.get(), pool_,
+                     sortedValues ? sortedValues->data() : nullptr);
       return;
     }
     if (!presorted_) {
@@ -118,6 +135,8 @@ private:
   std::unique_ptr<Entry[]> work_;   // columns being partitioned by the builder
   std::unique_ptr<Entry[]> scratch_;
   std::unique_ptr<std::uint8_t[]> goesLeft_;
+  std::vector<double> countXlog_; // see countTables()
+  std::vector<double> countInverse_;
 };
 
 } // namespace

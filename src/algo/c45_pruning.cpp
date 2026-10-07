@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <vector>
 
 namespace dt {
@@ -354,8 +355,8 @@ void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFact
   if (tree.nodes.empty()) {
     return;
   }
-  const std::vector<float> rowMajor = rowMajorFeatures(train, pool);
-  C45Pruner(tree, train, rowMajor.data(), confidenceFactor, pool).run();
+  const std::unique_ptr<float[]> rowMajor = rowMajorFeatures(train, pool);
+  C45Pruner(tree, train, rowMajor.get(), confidenceFactor, pool).run();
 }
 
 } // namespace dt

@@ -33,9 +33,10 @@ struct Columns {
 EntryCodec makeEntryCodec(std::size_t classCount, std::size_t rowCount);
 
 // Fill `out` (featureCount * rowCount entries) with every feature column
-// sorted by value (LSD radix sort, stable, so equal values keep row order).
+// sorted by value (LSD radix sort, stable, so equal values keep row order),
+// and `sortedValues` (if not null, as many floats) with the values alone.
 void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
-                    ThreadPool *pool);
+                    ThreadPool *pool, float *sortedValues = nullptr);
 
 // A node that still has to be split, and the features that can still split
 // it: a feature whose values are all equal in a node is dropped for the whole
@@ -48,33 +49,67 @@ struct Subtree {
   std::vector<std::uint32_t> features;
 };
 
+// Per-count tables for the sweep's gain estimates, for counts below `size`:
+// c * log2(c) (the same values as LogTable and dt::xlog2x) and 1 / c. Above
+// `size` the values are computed. The CPU grower passes tables that cover all
+// training rows; the default ones cover counts below kLogTableSize.
+struct CountTables {
+  const double *xlog = nullptr;
+  const double *inverse = nullptr;
+  std::uint32_t size = 0;
+
+  double xlog2x(std::uint32_t count) const {
+    return count < size ? xlog[count] : dt::xlog2x(static_cast<double>(count));
+  }
+  double reciprocal(std::uint32_t count) const {
+    return count < size ? inverse[count] : 1.0 / static_cast<double>(count);
+  }
+};
+
+// Fill `xlog` and `inverse` with the tables for counts 0 .. size - 1.
+void fillCountTables(std::size_t size, std::vector<double> &xlog, std::vector<double> &inverse,
+                     ThreadPool *pool);
+
 // Grows (sub)trees on the CPU from presorted columns. Used by the Serial and
 // Parallel backends, and by the Cuda backend for nodes that are too small to be
 // worth a GPU launch.
 class CpuTreeBuilder {
 public:
   // `goesLeft` is a scratch byte per row id (rows of different nodes never
-  // collide). `pool` may be null (serial build).
+  // collide). `pool` may be null (serial build). Without `tables`, tables
+  // for counts below kLogTableSize are used.
   CpuTreeBuilder(const SplitRules &rules, const EntryCodec &codec, std::size_t featureCount,
                  NodeStore &store, std::uint8_t *goesLeft, ThreadPool *pool,
-                 const ParallelOptions &options);
+                 const ParallelOptions &options, CountTables tables = {});
 
   // Grow the subtree under `root`. With a pool, parts of it are grown by pool
   // tasks: call pool->waitIdle() before using the tree.
   void grow(const Columns &columns, Subtree root);
 
 private:
+  // Which children of a split are grown further, i.e. need sorted columns.
+  enum class Keep { Both, Left, Right };
+
   void split(const Columns &columns, Subtree &item, std::vector<Subtree> &stack);
+  // Best cut of one feature; `bestLeft` receives the class counts left of it.
   CutCandidate scanFeature(const Entry *entries, std::uint32_t count,
                            const std::uint32_t *total, double parentWeighted,
-                           std::uint32_t minChild) const;
-  template <int FixedK>
+                           std::uint32_t minChild, std::uint32_t *bestLeft) const;
+  template <Criterion Crit>
+  CutCandidate scanFeatureFor(const Entry *entries, std::uint32_t count,
+                              const std::uint32_t *total, double parentWeighted,
+                              std::uint32_t minChild, std::uint32_t *bestLeft) const;
+  template <Criterion Crit, bool HasGap>
+  CutCandidate scanTwoClasses(const Entry *entries, std::uint32_t count,
+                              const std::uint32_t *total, double parentWeighted,
+                              std::uint32_t minChild, std::uint32_t *bestLeft) const;
+  template <int FixedK, Criterion Crit>
   CutCandidate scanFeatureK(const Entry *entries, std::uint32_t count,
                             const std::uint32_t *total, double parentWeighted,
-                            std::uint32_t minChild) const;
+                            std::uint32_t minChild, std::uint32_t *bestLeft) const;
   void partition(const Columns &columns, const Subtree &item, int winner,
-                 std::uint32_t leftCount);
-  void partitionFeature(Entry *entries, std::uint32_t count, Entry *buffer) const;
+                 std::uint32_t leftCount, Keep keep);
+  void partitionFeature(Entry *entries, std::uint32_t count, Entry *buffer, Keep keep) const;
   void partitionFeatureInBlocks(Entry *entries, std::uint32_t count, std::uint32_t leftCount,
                                 Entry *buffer) const;
 
@@ -86,6 +121,7 @@ private:
   std::uint8_t *goesLeft_;
   ThreadPool *pool_;
   ParallelOptions options_;
+  CountTables tables_;
 };
 
 } // namespace dt
