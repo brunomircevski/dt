@@ -102,7 +102,7 @@ trees.
 
 ## Cross-validation
 
-CART's 10-fold cross-validation grows ten more trees on 90% subsets. The
+CART's K-fold cross-validation (`--cv K`) grows K more trees on (K-1)/K subsets. The
 grower keeps the presorted columns of the full training set; a fold's columns
 are obtained by filtering them (one pass, the order stays sorted) instead of
 copying the data and sorting again.

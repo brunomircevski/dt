@@ -17,8 +17,7 @@ std::vector<double> xlog2xTable();
 // Every backend calls these same functions, so they all grow the same tree.
 class SplitRules {
 public:
-  // `totalRows`: rows of the training set the tree is grown on.
-  SplitRules(const Options &options, std::size_t classCount, std::size_t totalRows);
+  SplitRules(const Options &options, std::size_t classCount);
 
   Algorithm algorithm() const { return algorithm_; }
   Criterion criterion() const { return criterion_; }
@@ -34,8 +33,9 @@ public:
   double minValueGap() const { return algorithm_ == Algorithm::C45 ? 1e-5 : 0.0; }
 
   // Minimum number of rows on each side of a cut, for a node with n rows.
-  //   CART: minLeaf.
-  //   C4.5: MinSplit = 10% of the average class size, clamped to [m, 25].
+  //   CART: minLeaf (--min-leaf, default 1).
+  //   C4.5: MinSplit = 10% of the average class size, clamped to [m, 25],
+  //         m = --min-leaf (c4.5's -m, default 2).
   std::uint32_t minChildRows(std::uint32_t n) const;
 
   // True if the node must become a leaf without looking for a split.
@@ -57,20 +57,15 @@ public:
                   std::uint32_t n) const;
 
 private:
-  Decision chooseCart(const CutCandidate *cuts, std::size_t featureCount,
-                      std::uint32_t n) const;
+  Decision chooseCart(const CutCandidate *cuts, std::size_t featureCount) const;
   Decision chooseC45(const CutCandidate *cuts, std::size_t featureCount,
                      std::uint32_t n) const;
 
   Algorithm algorithm_;
   Criterion criterion_;
   int classCount_;
-  double totalRows_;
   int maxDepth_;
-  std::uint32_t minSplit_;
   std::uint32_t minLeaf_;
-  double minDecrease_;
-  std::uint32_t c45MinObjects_;
   std::vector<double> xlog2xTable_;
 };
 

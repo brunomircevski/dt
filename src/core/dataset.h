@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -46,8 +47,15 @@ void multiplyDataset(Dataset &dataset, std::size_t multiplier);
 // Walking a tree for one row then touches one or two cache lines only.
 std::vector<float> rowMajorFeatures(const Dataset &dataset, ThreadPool *pool);
 
-// Deterministically shuffle the rows and split off `testFraction` of them.
-void splitHoldout(const Dataset &dataset, double testFraction, Dataset &train,
-                  Dataset &test);
+// Independent random streams derived from one --seed, so that e.g. changing
+// the CV folds does not change the holdout split.
+enum class RandomStream : std::uint32_t { Holdout = 1, CrossValidation = 2, TestSample = 3 };
+std::mt19937_64 seededRandom(std::uint64_t seed, RandomStream stream);
+
+// Shuffle the rows (same seed and stream = same split) and split off
+// `testFraction` of them as the test set.
+void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t seed,
+                  RandomStream stream, Dataset &train, Dataset &test,
+                  ThreadPool *pool = nullptr);
 
 } // namespace dt

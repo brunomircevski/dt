@@ -6,8 +6,8 @@
   C4.5 vs Quinlan's original c4.5 (Release 8) binary:
     python3 tools/compare_reference.py c45 datasets/iris.csv --c45 /path/to/c4.5
 
-Any other arguments are passed on to ./tree (e.g. -d 5, --criterion entropy,
---min-objs 5, --cf 0.1). Set TREE_BIN to use another binary (e.g. ./tree_cpu).
+Any other arguments are passed on to ./tree (e.g. -d 5, --min-leaf 3,
+--cf 0.1); --min-leaf becomes c4.5's -m. Set TREE_BIN to use another binary (e.g. ./tree_cpu).
 
 Both trees are walked together. Where they pick different splits, the impurity
 decrease of both splits is recomputed on the rows of that node: if it is equal,
@@ -152,9 +152,8 @@ def run_own(dataset, algorithm, extra, dump_path):
 def sklearn_tree(features, X, y, extra):
     from sklearn.tree import DecisionTreeClassifier
 
-    kwargs = {"criterion": "entropy" if "entropy" in extra else "gini", "random_state": 0}
-    for flag, name in (("-d", "max_depth"), ("--min-leaf", "min_samples_leaf"),
-                       ("--min-split", "min_samples_split")):
+    kwargs = {"criterion": "gini", "random_state": 0}
+    for flag, name in (("-d", "max_depth"), ("--min-leaf", "min_samples_leaf")):
         if flag in extra:
             kwargs[name] = int(extra[extra.index(flag) + 1])
     model = DecisionTreeClassifier(**kwargs).fit(X, y)
@@ -181,8 +180,8 @@ def c45_trees(features, X, y, c45_binary, workdir, extra):
         for row, label in zip(X, y):
             data.write(",".join(repr(float(value)) for value in row) + f",{label}\n")
     command = [c45_binary, "-f", stem]
-    if "--min-objs" in extra:
-        command += ["-m", extra[extra.index("--min-objs") + 1]]
+    if "--min-leaf" in extra:
+        command += ["-m", extra[extra.index("--min-leaf") + 1]]
     if "--cf" in extra:
         command += ["-c", f"{float(extra[extra.index('--cf') + 1]) * 100:g}"]
     subprocess.run(command, capture_output=True, text=True, check=True)
@@ -231,10 +230,9 @@ def main():
     with tempfile.TemporaryDirectory() as workdir:
         dump = os.path.join(workdir, "ours.txt")
         if args.algorithm == "cart":
-            criterion = "entropy" if "entropy" in extra else "gini"
             pairs = [("CART vs scikit-learn",
                       run_own(args.dataset, "cart", extra + ["--no-prune"], dump),
-                      sklearn_tree(features, X, y, extra), criterion)]
+                      sklearn_tree(features, X, y, extra), "gini")]
         else:
             if not args.c45:
                 sys.exit("--c45 /path/to/c4.5 is required")
@@ -246,7 +244,7 @@ def main():
 
     failed = False
     for title, ours, ref, criterion in pairs:
-        min_objs = int(extra[extra.index("--min-objs") + 1]) if "--min-objs" in extra else 2
+        min_objs = int(extra[extra.index("--min-leaf") + 1]) if "--min-leaf" in extra else 2
         comparison = Comparison(X, y, features, criterion, min_objs)
         comparison.walk(ours, ref, np.arange(len(y)))
         status = "DIFFERENT" if comparison.differences else (

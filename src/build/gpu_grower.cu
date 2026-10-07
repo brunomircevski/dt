@@ -832,7 +832,7 @@ private:
   std::size_t capacity_ = 0;
 };
 
-// Optional per-kernel timing (DT_GPU_VERBOSE=1): CUDA events around launches.
+// Optional per-kernel timing (--gpu-profile): CUDA events around launches.
 class KernelProfile {
 public:
   explicit KernelProfile(bool enabled) : enabled_(enabled) {}
@@ -909,7 +909,7 @@ public:
         classCount_(static_cast<int>(train.classCount())),
         codec_(makeEntryCodec(train.classCount(), train.rowCount)),
         hostGoesLeft_(new std::uint8_t[train.rowCount]),
-        profile_(std::getenv("DT_GPU_VERBOSE") != nullptr) {
+        profile_(options.gpu.profile) {
     if (classCount_ > kMaxGpuClasses) {
       throw std::runtime_error("The Cuda backend supports at most 64 classes.");
     }

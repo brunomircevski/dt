@@ -10,6 +10,7 @@
 #include <future>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -28,8 +29,15 @@ std::string pruningDescription(const dt::Options &options) {
   switch (options.cart.pruning) {
   case dt::CartPruning::None: return "off";
   case dt::CartPruning::Alpha: return "alpha " + std::to_string(options.cart.alpha);
+  case dt::CartPruning::TestSample: {
+    std::ostringstream text;
+    text << "alpha by test sample (" << options.cart.testFraction * 100.0 << "% of rows, seed "
+         << options.seed << ")";
+    return text.str();
+  }
   case dt::CartPruning::CrossValidation:
-    return "alpha by " + std::to_string(options.cart.folds) + "-fold CV";
+    return "alpha by " + std::to_string(options.cart.folds) + "-fold CV (seed " +
+           std::to_string(options.seed) + ")";
   }
   return "?";
 }
@@ -70,23 +78,19 @@ int main(int argc, char *argv[]) {
     Dataset train;
     Dataset test;
     if (options.holdout > 0.0) {
-      splitHoldout(data, options.holdout, train, test);
+      splitHoldout(data, options.holdout, options.seed, RandomStream::Holdout, train, test,
+                   &pool);
       data = Dataset{};
     } else {
       train = std::move(data);
     }
     std::cout << "  rows " << train.rowCount << " train";
     if (test.rowCount > 0) {
-      std::cout << " / " << test.rowCount << " test";
+      std::cout << " / " << test.rowCount << " test (seed " << options.seed << ")";
     }
     std::cout << ", " << train.featureCount() << " features, " << train.classCount()
               << " classes\n";
-    if (options.algorithm == Algorithm::Cart) {
-      std::cout << "  criterion " << criterionName(options.cart.criterion) << ", ";
-    } else {
-      std::cout << "  ";
-    }
-    std::cout << "pruning " << pruningDescription(options) << "\n";
+    std::cout << "  pruning " << pruningDescription(options) << "\n";
 
     if (gpuReady.valid()) {
       gpuReady.get();

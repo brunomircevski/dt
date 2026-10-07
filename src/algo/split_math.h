@@ -3,8 +3,6 @@
 // Split-scoring math shared by the CPU builder (g++) and the GPU kernels
 // (nvcc). Keeping one copy guarantees both backends score cuts identically.
 
-#include "core/options.h"
-
 #include <cmath>
 #include <cstdint>
 
@@ -15,6 +13,9 @@
 #endif
 
 namespace dt {
+
+// Impurity: CART uses the Gini index, C4.5 entropy (information gain).
+enum class Criterion : int { Gini, Entropy };
 
 // ---------------------------------------------------------------------------
 // Presorted entries

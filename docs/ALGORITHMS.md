@@ -28,8 +28,8 @@ right (`n_R`, `r_k`).
 The code works with **weighted impurities** (impurity times row count), which
 need no division per class and make gains exact sums:
 
-* Gini: `G(c) = n - Σ c_k² / n`  (= n · (1 − Σ p_k²))
-* Entropy: `E(c) = n log₂ n − Σ c_k log₂ c_k`  (= n · H; C4.5 calls it `TotalInfo`)
+* Gini (CART): `G(c) = n - Σ c_k² / n`  (= n · (1 − Σ p_k²))
+* Entropy (C4.5): `E(c) = n log₂ n − Σ c_k log₂ c_k`  (= n · H; C4.5 calls it `TotalInfo`)
 
 `gain = (W(parent) − W(left) − W(right)) / n` is then the usual impurity
 decrease (Gini) or information gain (entropy).
@@ -39,27 +39,32 @@ decrease (Gini) or information gain (entropy).
 ## CART (Breiman, Friedman, Olshen, Stone 1984)
 
 **Split selection.** Every feature's best threshold is the one with the largest
-impurity decrease (Gini by default, entropy optional). Across features the
+decrease of the Gini index, CART's standard impurity (Breiman et al.
+found the choice of impurity matters little; entropy is C4.5's). Across features the
 largest decrease wins. Thresholds are midpoints between the two neighbouring
 values, computed in `double` (the midpoint of two floats is exact in double),
 like scikit-learn.
 
-**Stopping.** A node becomes a leaf when it is pure, has fewer than
-`--min-split` rows, is at `--max-depth`, or no threshold leaves `--min-leaf`
-rows on both sides. A split with zero gain is still accepted (CART grows the
-maximal tree and lets pruning decide; scikit-learn does the same — it matters
-for XOR-like data). `--min-decrease` is scikit-learn's `min_impurity_decrease`.
+**Stopping.** A node becomes a leaf when it is pure, is at `--max-depth`, or
+no threshold leaves `--min-leaf` rows (default 1) on both sides. A split with
+zero gain is still accepted (CART grows the maximal tree and lets pruning
+decide; scikit-learn does the same — it matters for XOR-like data).
 
 **Pruning: minimal cost-complexity.** For a subtree `T` let `R(T)` be its
 training misclassification rate and `|T|` its number of leaves. For a given
 `α`, `T(α)` is the smallest subtree minimising `R(T) + α|T|`
 (`cartCostComplexityPrune`, a bottom-up dynamic program).
 
-* By default (`--cv K`, K = 10) `α` is chosen as Breiman describes: compute the weakest-link sequence
-  `α_1 = 0 < α_2 < …` of the full tree, grow a tree on each of K folds'
-  complement, measure each fold tree's error at the geometric midpoints
-  `√(α_k α_{k+1})`, and pick the simplest tree within one standard error of
-  the best (1-SE rule). The sequence is computed in one bottom-up pass by
+* `α` is chosen with one of Breiman's two error estimates, both measuring the
+  subtrees of the weakest-link sequence `α_1 = 0 < α_2 < …` at the geometric
+  midpoints `√(α_k α_{k+1})` and picking the simplest tree within one
+  standard error of the best (1-SE rule):
+  * test sample (default, `--test-sample F`, F = 1/3): the tree is grown on
+    the other 1 − F of the rows and its own sequence is measured on the F
+    put aside;
+  * K-fold cross-validation (`--cv K`): the tree is grown on all rows, a tree
+    is grown on each of K folds' complement, and each fold tree is measured
+    on its fold along the full tree's sequence. The sequence is computed in one bottom-up pass by
   representing each subtree's optimal cost as a concave piecewise-linear
   function of `α` (`cartPruningSequence`). The fold trees are grown by the
   same backend as the main tree, reusing its presorted columns (CPU) or
@@ -83,7 +88,7 @@ This follows the original C source (`contin.c`, `build.c`, `info.c`,
 
 **Threshold of a feature (`EvalContinuousAtt`).**
 * Only thresholds leaving at least `MinSplit` rows on each side are tried, with
-  `MinSplit = 0.10 · n / K` clamped to `[m, 25]` (`m` = `--min-objs`, default 2).
+  `MinSplit = 0.10 · n / K` clamped to `[m, 25]` (`m` = `--min-leaf`, default 2).
   This is what stops C4.5 from cutting off single outliers.
 * Two values closer than `1e-5` are treated as equal (no threshold between
   them) — a C4.5 detail that matters for real-valued data.
@@ -118,7 +123,7 @@ table, `AddErrs`). Bottom-up, a subtree is replaced by
 
 **Verified against** Quinlan's own `c4.5` binary (`tools/compare_reference.py
 c45`): iris, diabetes, and covertype / supersymmetry samples
-give identical unpruned and pruned trees for several `--cf` and `--min-objs`
+give identical unpruned and pruned trees for several `--cf` and `--min-leaf`
 values. The only differences are nodes where two features have exactly the same
 gain ratio: C4.5 computes in single precision, so the rounding of mathematically
 equal values decides there, while this code takes the first feature (what the

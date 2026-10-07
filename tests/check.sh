@@ -28,14 +28,15 @@ for name in covertype supersymmetry; do
   fi
 done
 
-configs=("--cart --no-prune"
-         "--cart --criterion entropy --min-leaf 3 --no-prune"
-         "--cart --min-split 10 --min-decrease 0.001 --no-prune"
+configs=("--cart"
+         "--cart --test-sample 0.25 --holdout 0.3"
+         "--cart --no-prune"
+         "--cart --min-leaf 3 --no-prune"
          "--cart -d 8 --alpha 0.001"
          "--cart --cv 5"
          "--cart --cv 5 --holdout 0.3"
          "--c45"
-         "--c45 --cf 0.1 --min-objs 5"
+         "--c45 --cf 0.1 --min-leaf 5"
          "--c45 --no-prune"
          "--c45 -d 6 --holdout 0.3")
 

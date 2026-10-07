@@ -22,12 +22,15 @@ declare -A path=([covertype]=datasets/covertype.csv
 # dataset | name | flags | backends
 cases=(
   "covertype|CART|--cart --no-prune|serial parallel cuda"
+  "covertype|CART + test-sample pruning|--cart|serial parallel cuda"
   "covertype|CART + 10-fold CV|--cart --cv 10|serial parallel cuda"
   "covertype|C4.5|--c45|serial parallel cuda"
   "susy|CART|--cart --no-prune|serial parallel cuda"
+  "susy|CART + test-sample pruning|--cart|serial parallel cuda"
   "susy|CART + 10-fold CV|--cart --cv 10|parallel cuda"
   "susy|C4.5|--c45|serial parallel cuda"
   "higgs|CART|--cart --no-prune|serial parallel cuda"
+  "higgs|CART + test-sample pruning|--cart|serial parallel cuda"
   "higgs|CART + 10-fold CV|--cart --cv 10|parallel cuda"
   "higgs|C4.5|--c45|serial parallel cuda"
 )

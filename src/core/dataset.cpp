@@ -298,20 +298,21 @@ void multiplyDataset(Dataset &dataset, std::size_t multiplier) {
 namespace {
 
 // Copy the given rows (in order) into a new dataset with the same schema.
-Dataset selectRows(const Dataset &dataset, const std::vector<std::uint32_t> &rows) {
+Dataset selectRows(const Dataset &dataset, const std::vector<std::uint32_t> &rows,
+                   ThreadPool *pool) {
   Dataset subset;
   subset.featureNames = dataset.featureNames;
   subset.classNames = dataset.classNames;
   subset.rowCount = rows.size();
   subset.values.resize(dataset.featureCount() * rows.size());
   subset.labels.resize(rows.size());
-  for (std::size_t feature = 0; feature < dataset.featureCount(); ++feature) {
+  parallelFor(pool, dataset.featureCount(), [&](std::size_t feature) {
     const float *source = dataset.column(feature);
     float *target = subset.values.data() + feature * rows.size();
     for (std::size_t index = 0; index < rows.size(); ++index) {
       target[index] = source[rows[index]];
     }
-  }
+  });
   for (std::size_t index = 0; index < rows.size(); ++index) {
     subset.labels[index] = dataset.labels[rows[index]];
   }
@@ -320,22 +321,36 @@ Dataset selectRows(const Dataset &dataset, const std::vector<std::uint32_t> &row
 
 } // namespace
 
-void splitHoldout(const Dataset &dataset, double testFraction, Dataset &train,
-                  Dataset &test) {
+std::mt19937_64 seededRandom(std::uint64_t seed, RandomStream stream) {
+  std::seed_seq seeds{static_cast<std::uint32_t>(seed), static_cast<std::uint32_t>(seed >> 32),
+                      static_cast<std::uint32_t>(stream)};
+  return std::mt19937_64(seeds);
+}
+
+void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t seed,
+                  RandomStream stream, Dataset &train, Dataset &test, ThreadPool *pool) {
   std::vector<std::uint32_t> order(dataset.rowCount);
   std::iota(order.begin(), order.end(), 0u);
-  std::mt19937_64 random(12345);
+  std::mt19937_64 random = seededRandom(seed, stream);
   std::shuffle(order.begin(), order.end(), random);
 
   const std::size_t testRows =
       static_cast<std::size_t>(std::llround(testFraction * static_cast<double>(order.size())));
-  std::vector<std::uint32_t> testIndex(order.begin(), order.begin() + testRows);
-  std::vector<std::uint32_t> trainIndex(order.begin() + testRows, order.end());
-  // Keep the original row order inside each part (nicer for debugging).
-  std::sort(testIndex.begin(), testIndex.end());
-  std::sort(trainIndex.begin(), trainIndex.end());
-  train = selectRows(dataset, trainIndex);
-  test = selectRows(dataset, testIndex);
+  // Both parts keep the original row order (nicer for debugging, and the
+  // reads in selectRows stay sequential).
+  std::vector<std::uint8_t> inTest(order.size(), 0);
+  for (std::size_t index = 0; index < testRows; ++index) {
+    inTest[order[index]] = 1;
+  }
+  std::vector<std::uint32_t> testIndex;
+  std::vector<std::uint32_t> trainIndex;
+  testIndex.reserve(testRows);
+  trainIndex.reserve(order.size() - testRows);
+  for (std::uint32_t row = 0; row < order.size(); ++row) {
+    (inTest[row] ? testIndex : trainIndex).push_back(row);
+  }
+  train = selectRows(dataset, trainIndex, pool);
+  test = selectRows(dataset, testIndex, pool);
 }
 
 std::vector<float> rowMajorFeatures(const Dataset &dataset, ThreadPool *pool) {

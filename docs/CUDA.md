@@ -34,8 +34,8 @@ partition never overwrites data it still has to read.
 2. Per grown tree: build `(value, packed row/class)` pairs of the selected
    rows and sort each feature with CUB's radix sort (stable, like the CPU's).
 
-With cross-validation (CART's default) the raw values stay on the device in
-their own buffer, so each of the ten fold trees only uploads its row list and
+With cross-validation (CART `--cv K`) the raw values stay on the device in
+their own buffer, so each fold tree only uploads its row list and
 sorts on the device; nothing is reallocated or re-pinned between folds.
 
 The CUDA context itself is created on a background thread while the CSV is
@@ -93,7 +93,7 @@ survived. The segment-wide best fixes that.)
   depends on the balance between the GPU and the CPU: on the test laptop
   (power-limited GPU) full CART trees on SUSY were fastest around 512,
   covertype (54 features, 7 classes) around 4096, and C4.5 barely cared.
-* `DT_GPU_VERBOSE=1 ./tree --cuda ...` prints per-level times, a per-kernel
+* `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
   profile and the setup phases.
 
 ## Memory

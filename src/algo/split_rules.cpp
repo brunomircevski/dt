@@ -27,18 +27,14 @@ std::vector<double> xlog2xTable() {
   return table;
 }
 
-SplitRules::SplitRules(const Options &options, std::size_t classCount,
-                       std::size_t totalRows)
+SplitRules::SplitRules(const Options &options, std::size_t classCount)
     : algorithm_(options.algorithm),
-      criterion_(options.algorithm == Algorithm::C45 ? Criterion::Entropy
-                                                      : options.cart.criterion),
+      criterion_(options.algorithm == Algorithm::C45 ? Criterion::Entropy : Criterion::Gini),
       classCount_(static_cast<int>(classCount)),
-      totalRows_(static_cast<double>(totalRows)),
       maxDepth_(options.maxDepth),
-      minSplit_(static_cast<std::uint32_t>(options.cart.minSplit)),
-      minLeaf_(static_cast<std::uint32_t>(std::max<std::size_t>(1, options.cart.minLeaf))),
-      minDecrease_(options.cart.minDecrease),
-      c45MinObjects_(static_cast<std::uint32_t>(options.c45.minObjects)),
+      minLeaf_(static_cast<std::uint32_t>(
+          options.minLeaf > 0 ? options.minLeaf
+                              : (options.algorithm == Algorithm::C45 ? 2 : 1))),
       xlog2xTable_(xlog2xTable()) {}
 
 std::uint32_t SplitRules::minChildRows(std::uint32_t n) const {
@@ -51,12 +47,12 @@ std::uint32_t SplitRules::minChildRows(std::uint32_t n) const {
   // (ComputeGain additionally needs MINOBJS cases per branch, which only
   // matters when -m is above 25.)
   float minSplit = static_cast<float>(0.10 * static_cast<double>(n) / classCount_);
-  if (minSplit <= static_cast<float>(c45MinObjects_)) {
-    minSplit = static_cast<float>(c45MinObjects_);
+  if (minSplit <= static_cast<float>(minLeaf_)) {
+    minSplit = static_cast<float>(minLeaf_);
   } else if (minSplit > 25.0f) {
     minSplit = 25.0f;
   }
-  return std::max(static_cast<std::uint32_t>(std::ceil(minSplit)), c45MinObjects_);
+  return std::max(static_cast<std::uint32_t>(std::ceil(minSplit)), minLeaf_);
 }
 
 bool SplitRules::isTerminal(const std::uint32_t *classCounts, std::uint32_t n,
@@ -68,24 +64,19 @@ bool SplitRules::isTerminal(const std::uint32_t *classCounts, std::uint32_t n,
   if (maxDepth_ >= 0 && depth >= maxDepth_) {
     return true;
   }
-  if (algorithm_ == Algorithm::Cart && n < minSplit_) {
-    return true;
-  }
-  if (algorithm_ == Algorithm::C45 && n < 2 * c45MinObjects_) {
-    return true; // build.c: Cases < 2 * MINOBJS
-  }
-  return n < 2 * minChildRows(n); // no cut can give both children enough rows
+  // No cut can give both children enough rows (for C4.5 this includes
+  // build.c's "Cases < 2 * MINOBJS").
+  return n < 2 * minChildRows(n);
 }
 
 SplitRules::Decision SplitRules::choose(const CutCandidate *cuts,
                                         std::size_t featureCount, std::uint32_t n) const {
-  return algorithm_ == Algorithm::Cart ? chooseCart(cuts, featureCount, n)
+  return algorithm_ == Algorithm::Cart ? chooseCart(cuts, featureCount)
                                        : chooseC45(cuts, featureCount, n);
 }
 
 SplitRules::Decision SplitRules::chooseCart(const CutCandidate *cuts,
-                                            std::size_t featureCount,
-                                            std::uint32_t n) const {
+                                            std::size_t featureCount) const {
   int best = -1;
   for (std::size_t feature = 0; feature < featureCount; ++feature) {
     if (!cuts[feature].valid()) {
@@ -99,12 +90,8 @@ SplitRules::Decision SplitRules::chooseCart(const CutCandidate *cuts,
   if (best < 0) {
     return decision;
   }
-  // Like scikit-learn: any split is accepted (even one with zero gain, which
-  // CART needs for e.g. XOR-like data) unless min_impurity_decrease says no.
-  const double weightedDecrease = static_cast<double>(n) / totalRows_ * cuts[best].gain;
-  if (weightedDecrease + kTieEps < minDecrease_) {
-    return decision;
-  }
+  // Any split is accepted, even one with zero gain (CART needs it for e.g.
+  // XOR-like data); pruning removes the useless ones afterwards.
   decision.feature = best;
   decision.leftCount = cuts[best].leftCount;
   decision.threshold = midpoint(cuts[best].leftValue, cuts[best].rightValue);

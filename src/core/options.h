@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace dt {
@@ -12,9 +13,6 @@ enum class Algorithm {
   C45   // Quinlan 1993 (Release 8): gain ratio, MDL threshold cost, EBP pruning
 };
 
-// Impurity used by CART. C4.5 always uses entropy (information gain).
-enum class Criterion : int { Gini, Entropy };
-
 // Where the tree is grown.
 enum class Backend {
   Serial,   // one thread; the reference implementation
@@ -22,11 +20,13 @@ enum class Backend {
   Cuda      // GPU for large nodes (breadth-first), CPU pool for small subtrees
 };
 
-// How CART chooses the cost-complexity parameter alpha.
+// How CART chooses the cost-complexity parameter alpha (Breiman et al. ch. 3
+// give both estimates; both pick the subtree with the 1-SE rule).
 enum class CartPruning {
-  None,           // keep the maximal tree
-  Alpha,          // fixed alpha
-  CrossValidation // Breiman: K-fold CV over the pruning sequence, 1-SE rule
+  None,            // keep the maximal tree
+  Alpha,           // fixed alpha
+  TestSample,      // grow on part of the rows, measure the rest: one tree
+  CrossValidation  // K-fold CV over the pruning sequence: K + 1 trees
 };
 
 // How the GPU scores cuts.
@@ -36,26 +36,20 @@ enum class GpuSweep {
   TwoPass  // single-precision filter, double precision only for candidates
 };
 
+// CART always uses the Gini index, as in Breiman et al.
 struct CartOptions {
-  Criterion criterion = Criterion::Gini;
-  std::size_t minSplit = 2; // nodes with fewer rows become leaves
-  std::size_t minLeaf = 1;  // every child must keep at least this many rows
-  // A split must satisfy (rows / totalRows) * impurityDecrease >= this
-  // (scikit-learn's min_impurity_decrease).
-  double minDecrease = 0.0;
-
   // Minimal cost-complexity pruning: the smallest subtree minimising
   // R(T) + alpha * |leaves(T)|, R(T) = training misclassification rate.
-  CartPruning pruning = CartPruning::CrossValidation;
-  double alpha = 0.0; // CartPruning::Alpha
-  int folds = 10;     // CartPruning::CrossValidation
+  CartPruning pruning = CartPruning::TestSample;
+  double alpha = 0.0;              // CartPruning::Alpha
+  double testFraction = 1.0 / 3.0; // CartPruning::TestSample: rows held back
+  int folds = 10;                  // CartPruning::CrossValidation
 };
 
-// Defaults match the original c4.5 program (-m 2 -c 25, subtree raising).
+// Defaults match the original c4.5 program (-c 25, subtree raising).
 struct C45Options {
-  std::size_t minObjects = 2; // -m: min cases in at least two branches
-  bool prune = true;          // error-based pruning with subtree raising
-  double confidence = 0.25;   // -c 25
+  bool prune = true;        // error-based pruning with subtree raising
+  double confidence = 0.25; // -c 25
 };
 
 struct ParallelOptions {
@@ -71,6 +65,9 @@ struct GpuOptions {
   // the GPU keeps working on the large nodes of the next level.
   std::size_t minRows = 512;
   GpuSweep sweep = GpuSweep::Auto;
+  // Print per-level and per-kernel GPU times. Synchronises after every
+  // kernel, so it slows the build down.
+  bool profile = false;
 };
 
 struct Options {
@@ -81,6 +78,9 @@ struct Options {
   // Fraction of rows held out as a test set (0 = train and evaluate on all
   // rows). The split is a deterministic shuffle so runs are comparable.
   double holdout = 0.0;
+  // Seeds the random choices: the holdout split and CART's test sample / CV
+  // folds. Same seed = same choices on every machine and backend.
+  std::uint64_t seed = 1;
   // Stress tests: duplicate the loaded rows in memory (slightly rescaled) to
   // get a bigger dataset without a bigger CSV. 1 = no duplication.
   std::size_t multiplier = 1;
@@ -88,7 +88,11 @@ struct Options {
   bool printTree = false; // print the tree as text to stdout
   std::string dumpPath;   // write the tree as text to a file
 
-  int maxDepth = -1; // both algorithms; -1 = unlimited
+  // Pre-pruning (stopping rules), the same for both algorithms.
+  int maxDepth = -1; // -1 = unlimited
+  // Every child of a split keeps at least this many rows. 0 = the
+  // algorithm's own default: 1 for CART, 2 for C4.5 (its -m).
+  std::size_t minLeaf = 0;
 
   CartOptions cart;
   C45Options c45;
@@ -98,7 +102,6 @@ struct Options {
 
 const char *backendName(Backend backend);
 const char *algorithmName(Algorithm algorithm);
-const char *criterionName(Criterion criterion);
 
 // Threads to use (options.parallel.threads, or all cores).
 unsigned threadCount(const Options &options);

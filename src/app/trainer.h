@@ -12,7 +12,7 @@ struct TrainTimings {
   double presortSeconds = 0.0;  // sorting every feature once
   double buildSeconds = 0.0;    // growing the tree
   double cvSeconds = 0.0;       // CART: cross-validation (growing the fold trees)
-  double pruneSeconds = 0.0;    // post-processing and pruning
+  double pruneSeconds = 0.0;    // pruning (CART test sample: split + measuring it)
 
   double total() const {
     return gpuSetupSeconds + presortSeconds + buildSeconds + cvSeconds + pruneSeconds;

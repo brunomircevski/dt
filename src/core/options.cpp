@@ -25,14 +25,6 @@ const char *algorithmName(Algorithm algorithm) {
   return "unknown";
 }
 
-const char *criterionName(Criterion criterion) {
-  switch (criterion) {
-  case Criterion::Gini: return "gini";
-  case Criterion::Entropy: return "entropy";
-  }
-  return "unknown";
-}
-
 unsigned threadCount(const Options &options) {
   if (options.parallel.threads > 0) {
     return static_cast<unsigned>(options.parallel.threads);
@@ -49,30 +41,39 @@ void printUsage(const char *program) {
       << "\n"
       << "Common:\n"
       << "  -d, --max-depth N        depth limit (-1 = unlimited)\n"
+      << "  --min-leaf N             every child keeps at least N rows (default: 1 for\n"
+      << "                           CART, 2 for C4.5)\n"
       << "  --no-prune               keep the unpruned tree (pruning is on by default)\n"
       << "  --holdout F              hold out fraction F of rows as test set\n"
+      << "  --seed N                 random seed for the holdout split and CART's test\n"
+      << "                           sample / CV folds (default 1)\n"
       << "  -m N                     duplicate rows N times in memory (stress tests)\n"
       << "  --threads N              CPU threads (0 = all cores)\n"
       << "  --print                  print the tree\n"
       << "  --dump FILE              write the tree as text (tools/render_tree_svg.py\n"
       << "                           turns it into an SVG)\n"
       << "\n"
-      << "CART (default: Gini, cost-complexity pruning with alpha by 10-fold CV):\n"
-      << "  --criterion gini|entropy impurity\n"
-      << "  --min-split N            min rows to split a node (default 2)\n"
-      << "  --min-leaf N             min rows per child (default 1)\n"
-      << "  --min-decrease X         min weighted impurity decrease\n"
-      << "  --cv K                   choose alpha by K-fold cross-validation (default 10)\n"
+      << "CART (default: cost-complexity pruning, alpha chosen on a test sample):\n"
+      << "  --test-sample F          grow on 1-F of the rows, choose alpha on the other F\n"
+      << "                           (default 0.333, one tree)\n"
+      << "  --cv K                   choose alpha by K-fold cross-validation instead\n"
+      << "                           (K + 1 trees)\n"
       << "  --alpha X                prune with a fixed alpha instead\n"
       << "\n"
-      << "C4.5 (default: -m 2, error-based pruning with CF 0.25 and subtree raising):\n"
-      << "  --min-objs N             C4.5 -m\n"
+      << "C4.5 (default: error-based pruning with CF 0.25 and subtree raising):\n"
       << "  --cf X                   pruning confidence factor\n"
+      << "\n"
+      << "Parallel and Cuda (CPU side):\n"
+      << "  --task-rows N            nodes with >= N rows grow a child as a pool task\n"
+      << "                           (default 4096)\n"
+      << "  --feature-parallel-rows N  nodes with >= N rows scan features in parallel\n"
+      << "                           (default 65536)\n"
       << "\n"
       << "Cuda:\n"
       << "  --gpu-min-rows N         smaller nodes go to the CPU pool (default 512)\n"
       << "  --gpu-sweep MODE         auto | one-pass | two-pass (default auto: one-pass\n"
-      << "                           on GPUs with fast double precision)\n";
+      << "                           on GPUs with fast double precision)\n"
+      << "  --gpu-profile            print per-level / per-kernel GPU times (slower)\n";
 }
 
 namespace {
@@ -152,6 +153,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.maxDepth = static_cast<int>(parseInteger(arg, args.value(arg), -1));
     } else if (arg.rfind("-d", 0) == 0 && arg.size() > 2 && arg[2] != '-') {
       options.maxDepth = static_cast<int>(parseInteger("-d", arg.substr(2), -1));
+    } else if (arg == "--min-leaf") {
+      options.minLeaf = static_cast<std::size_t>(parseInteger(arg, args.value(arg), 1));
     } else if (arg == "--no-prune") {
       options.cart.pruning = CartPruning::None;
       options.c45.prune = false;
@@ -159,35 +162,29 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.multiplier = parseCount(arg, args.value(arg));
     } else if (arg == "--holdout") {
       options.holdout = parseReal(arg, args.value(arg));
+    } else if (arg == "--seed") {
+      options.seed = static_cast<std::uint64_t>(parseCount(arg, args.value(arg)));
     } else if (arg == "--threads") {
       options.parallel.threads = static_cast<int>(parseCount(arg, args.value(arg)));
     } else if (arg == "--print") {
       options.printTree = true;
     } else if (arg == "--dump") {
       options.dumpPath = args.value(arg);
-    } else if (arg == "--criterion") {
-      const std::string value = args.value(arg);
-      if (value == "gini") {
-        options.cart.criterion = Criterion::Gini;
-      } else if (value == "entropy") {
-        options.cart.criterion = Criterion::Entropy;
-      } else {
-        throw std::runtime_error("Unknown criterion: " + value);
-      }
-    } else if (arg == "--min-split") {
-      options.cart.minSplit = parseCount(arg, args.value(arg));
-    } else if (arg == "--min-leaf") {
-      options.cart.minLeaf = parseCount(arg, args.value(arg));
-    } else if (arg == "--min-decrease") {
-      options.cart.minDecrease = parseReal(arg, args.value(arg));
     } else if (arg == "--alpha") {
       options.cart.pruning = CartPruning::Alpha;
       options.cart.alpha = parseReal(arg, args.value(arg));
+    } else if (arg == "--test-sample") {
+      options.cart.pruning = CartPruning::TestSample;
+      options.cart.testFraction = parseReal(arg, args.value(arg));
     } else if (arg == "--cv") {
       options.cart.pruning = CartPruning::CrossValidation;
       options.cart.folds = static_cast<int>(parseCount(arg, args.value(arg)));
-    } else if (arg == "--min-objs") {
-      options.c45.minObjects = parseCount(arg, args.value(arg));
+    } else if (arg == "--task-rows") {
+      options.parallel.nodeTaskRows = parseCount(arg, args.value(arg));
+    } else if (arg == "--feature-parallel-rows") {
+      options.parallel.featureParallelRows = parseCount(arg, args.value(arg));
+    } else if (arg == "--gpu-profile") {
+      options.gpu.profile = true;
     } else if (arg == "--cf") {
       options.c45.prune = true;
       options.c45.confidence = parseReal(arg, args.value(arg));
@@ -222,22 +219,17 @@ void validateOptions(const Options &options) {
   }
   if (options.algorithm == Algorithm::Cart) {
     const CartOptions &cart = options.cart;
-    if (cart.minSplit < 2) {
-      throw std::runtime_error("CART: --min-split must be at least 2");
-    }
-    if (cart.minLeaf < 1) {
-      throw std::runtime_error("CART: --min-leaf must be at least 1");
-    }
     if (cart.pruning == CartPruning::Alpha && cart.alpha < 0.0) {
       throw std::runtime_error("CART: --alpha must be >= 0");
+    }
+    if (cart.pruning == CartPruning::TestSample &&
+        !(cart.testFraction > 0.0 && cart.testFraction < 1.0)) {
+      throw std::runtime_error("CART: --test-sample must be in (0, 1)");
     }
     if (cart.pruning == CartPruning::CrossValidation && cart.folds < 2) {
       throw std::runtime_error("CART: --cv needs at least 2 folds");
     }
   } else {
-    if (options.c45.minObjects < 1) {
-      throw std::runtime_error("C4.5: --min-objs must be at least 1");
-    }
     if (options.c45.confidence <= 0.0 || options.c45.confidence >= 1.0) {
       throw std::runtime_error("C4.5: --cf must be in (0, 1)");
     }
