@@ -1,10 +1,13 @@
 #include "core/options.h"
 
 #include <algorithm>
+#include <initializer_list>
 #include <iostream>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace dt {
 
@@ -130,12 +133,62 @@ double parseReal(const std::string &flag, const std::string &text) {
   }
 }
 
+// The flags of `group` that were given, in the group's order.
+std::vector<std::string> givenOf(const std::set<std::string> &given,
+                                 std::initializer_list<const char *> group) {
+  std::vector<std::string> found;
+  for (const char *flag : group) {
+    if (given.count(flag) > 0) {
+      found.push_back(flag);
+    }
+  }
+  return found;
+}
+
+// A flag the chosen algorithm or backend would ignore, or two flags that
+// contradict each other, is an error rather than silently dropped. Checked
+// once every flag is read, so their order does not matter.
+void checkFlagCombination(const Options &options, const std::set<std::string> &given) {
+  for (const auto &group : {givenOf(given, {"--serial", "--parallel", "--cuda"}),
+                            givenOf(given, {"--cart", "--c45"}),
+                            givenOf(given, {"--no-prune", "--test-sample", "--cv", "--alpha"}),
+                            givenOf(given, {"--no-prune", "--cf"})}) {
+    if (group.size() > 1) {
+      throw std::runtime_error("Options " + group[0] + " and " + group[1] +
+                               " contradict each other; give only one");
+    }
+  }
+  // `flags` must not be given in this configuration.
+  auto refuse = [&](std::initializer_list<const char *> flags, const std::string &reason) {
+    const std::vector<std::string> found = givenOf(given, flags);
+    if (!found.empty()) {
+      throw std::runtime_error("Option " + found[0] + " " + reason);
+    }
+  };
+  if (options.algorithm == Algorithm::C45) {
+    refuse({"--test-sample", "--cv", "--alpha"},
+           "is for CART (it chooses CART's alpha); C4.5 prunes with --cf");
+  } else {
+    refuse({"--cf"}, "is for C4.5; CART prunes with --test-sample, --cv or --alpha");
+  }
+  if (options.backend == Backend::Serial) {
+    refuse({"--task-rows", "--feature-parallel-rows"}, "is for --parallel and --cuda, not --serial");
+  }
+  if (options.backend != Backend::Cuda) {
+    refuse({"--gpu-min-rows", "--gpu-sweep", "--gpu-profile"}, "is for --cuda only");
+  }
+}
+
 } // namespace
 
 bool applyCommandLine(int argc, char *argv[], Options &options) {
   ArgReader args(argc, argv);
+  std::set<std::string> given; // flags only; their values are read separately
   while (!args.done()) {
     const std::string arg = args.next();
+    if (!arg.empty() && arg[0] == '-') {
+      given.insert(arg);
+    }
 
     if (arg == "-h" || arg == "--help") {
       return false;
@@ -207,6 +260,7 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.datasetPath = arg;
     }
   }
+  checkFlagCombination(options, given);
   return true;
 }
 

@@ -149,6 +149,18 @@ def run_own(dataset, algorithm, extra, dump_path):
     return parse_own_dump(dump_path)
 
 
+def unpruned(extra):
+    """`extra` with --no-prune instead of its pruning options (./tree refuses both)."""
+    kept = []
+    flags = iter(extra)
+    for flag in flags:
+        if flag in ("--cf", "--alpha", "--test-sample", "--cv"):
+            next(flags, None)  # its value
+        elif flag != "--no-prune":
+            kept.append(flag)
+    return kept + ["--no-prune"]
+
+
 def sklearn_tree(features, X, y, extra):
     from sklearn.tree import DecisionTreeClassifier
 
@@ -231,13 +243,13 @@ def main():
         dump = os.path.join(workdir, "ours.txt")
         if args.algorithm == "cart":
             pairs = [("CART vs scikit-learn",
-                      run_own(args.dataset, "cart", extra + ["--no-prune"], dump),
+                      run_own(args.dataset, "cart", unpruned(extra), dump),
                       sklearn_tree(features, X, y, extra), "gini")]
         else:
             if not args.c45:
                 sys.exit("--c45 /path/to/c4.5 is required")
             unpruned_ref, pruned_ref = c45_trees(features, X, y, args.c45, workdir, extra)
-            pairs = [("C4.5 unpruned vs c4.5", run_own(args.dataset, "c45", extra + ["--no-prune"], dump),
+            pairs = [("C4.5 unpruned vs c4.5", run_own(args.dataset, "c45", unpruned(extra), dump),
                       unpruned_ref, "c45"),
                      ("C4.5 pruned   vs c4.5", run_own(args.dataset, "c45", extra, dump),
                       pruned_ref, "c45")]

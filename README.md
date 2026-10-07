@@ -49,6 +49,10 @@ Defaults follow the published algorithms: CART as described by Breiman et al.
 
 ### Options
 
+A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
+`--c45`, `--gpu-min-rows` without `--cuda`) or that contradicts another one
+(e.g. `--cv` with `--alpha`, `--cf` with `--no-prune`) is an error.
+
 **Backend and algorithm**
 
 | Flag | Default | Meaning |
