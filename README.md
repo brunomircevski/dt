@@ -13,6 +13,8 @@ interchangeable backends that produce the *same* tree (byte for byte):
   here and how it was verified against scikit-learn and Quinlan's C4.5.
 * [docs/CPU.md](docs/CPU.md) — presorted columns and the CPU builder.
 * [docs/CUDA.md](docs/CUDA.md) — the GPU builder, kernel by kernel.
+* [docs/PYTHON_COMPARISON.md](docs/PYTHON_COMPARISON.md) — speed and accuracy
+  against scikit-learn and the Python C4.5 packages.
 
 ## Build
 
@@ -190,6 +192,7 @@ TREE_BIN=./tree_cpu tests/check.sh
 bench/bench.sh                # timing table for the datasets found in datasets/
 python3 tools/compare_reference.py cart datasets/diabetes.csv           # vs scikit-learn
 python3 tools/compare_reference.py c45 datasets/diabetes.csv --c45 PATH # vs original c4.5
+python3 bench/compare_python.py prep && python3 bench/compare_python.py run covertype_20k  # vs Python libraries (docs/PYTHON_COMPARISON.md)
 ```
 
 `tests/golden/` holds the trees of the version that was checked node by node

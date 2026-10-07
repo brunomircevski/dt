@@ -1,0 +1,9 @@
+# bench/compare_python.py (versions used for docs/PYTHON_COMPARISON.md, Python 3.14)
+numpy==2.5.3
+pandas==3.0.6
+pyarrow==25.0.1
+scikit-learn==1.9.1
+# pure-Python C4.5 packages (small datasets only)
+chefboost==0.0.19
+c4dot5-decision-tree==1.2.1
+statsmodels==0.15.0
