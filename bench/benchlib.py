@@ -32,11 +32,17 @@ BASELINE = "_baseline"  # tiny synthetic dataset: each tool's runtime footprint
 # and a tree that only one tool may grow deeper is not the same work.
 CART_DEPTH = 30
 
+# The fixed alpha of cart_alpha (run.py --alpha overrides it). Every CART tool
+# gets this same number; nothing tunes it per tool or per dataset, and no
+# tool's tree is forced to another tool's size: each reports the tree it builds.
+# No cross-validation anywhere in the benchmark: every case grows one tree.
+CART_ALPHA = 1e-5
+
 # ------------------------------------------------------------------ protocols
 #
 # A protocol is one well-defined piece of work that every listed implementation
-# performs with equivalent settings. Values in braces are filled in per dataset
-# by run.py's calibration step (cart_alpha).
+# performs with equivalent settings. "{alpha}" is filled in by run.py
+# (CART_ALPHA or --alpha).
 #
 # ./tree and YaDT entries are command-line flags; the others are key=value
 # arguments of the adapters in bench/adapters/.
@@ -62,16 +68,8 @@ PROTOCOLS = {
         "title": "CART, one tree pruned at a fixed alpha (cost-complexity)",
         "impls": {
             "tree": ["--cart", "-d", str(CART_DEPTH), "--alpha", "{alpha}"],
-            "sklearn": {"mode": "fit", "max_depth": CART_DEPTH, "ccp_alpha": "{sk_ccp_alpha}"},
+            "sklearn": {"mode": "fit", "max_depth": CART_DEPTH, "ccp_alpha": "{alpha}"},
             "rpart": {"mode": "alpha", "maxdepth": CART_DEPTH, "alpha": "{alpha}"},
-        },
-    },
-    "cart_cv10": {
-        "title": "CART, alpha chosen by 10-fold CV with the 1-SE rule (whole procedure)",
-        "impls": {
-            "tree": ["--cart", "-d", str(CART_DEPTH), "--cv", "10"],
-            "sklearn": {"mode": "cv", "folds": 10, "candidates": 16, "max_depth": CART_DEPTH},
-            "rpart": {"mode": "cv", "folds": 10, "maxdepth": CART_DEPTH},
         },
     },
     "c45": {
@@ -106,12 +104,6 @@ IMPLS = {
 }
 
 
-def supports_threads(protocol, impl):
-    """scikit-learn fits one tree on one thread; only its CV search is parallel."""
-    if impl == "sklearn":
-        return protocol == "cart_cv10"
-    return IMPLS[impl]["threads"] == "multi"
-
 
 # ------------------------------------------------------------------ datasets
 
@@ -145,7 +137,7 @@ def parse_tree_dump(path, n_features):
             threshold.append(0.0)
             value.append(int(body[len("Leaf -> c"):]))
         else:
-            name, cut = re.match(r"if f(\d+) <= (\S+)$", body).groups()
+            name, cut = re.match(r"if \"?f(\d+)\"? <= (\S+)$", body).groups()
             assert int(name) < n_features
             feature.append(int(name))
             threshold.append(float(cut))

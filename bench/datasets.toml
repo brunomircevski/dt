@@ -52,3 +52,11 @@ source = "datasets/higgs.csv"
 drop = ["Id"]
 split = "tail"
 test_rows = 500_000
+
+[susy_500k]
+source = "datasets/supersymmetry.csv"
+drop = ["Id"]
+split = "tail"
+test_rows = 500_000
+train_rows = 500_000
+max_test_rows = 100_000

@@ -4,7 +4,11 @@ This directory is a benchmark for a paper. It compares `./tree` on the CPU with:
 - **CART:** scikit-learn and R rpart.
 - **C4.5:** Weka J48 and YaDT.
 
-It measures training time and peak memory, and records tree size and test accuracy so you can check that the tools built comparable trees. Nothing has been run yet.
+It measures training time and peak memory, and records tree size and test accuracy so you can check that the tools built comparable trees.
+
+**Two rules hold for every benchmark here:**
+- **No cross-validation.** Every case grows exactly one tree.
+- **No forced tree size.** Each tool gets the same settings, including one fixed α for all CART tools, and reports whatever tree it builds. No tool's parameters are tuned to reproduce another tool's node or leaf count.
 
 ## Files
 
@@ -30,6 +34,7 @@ bench/.venv/bin/python bench/report.py --md report.md --csv summary.csv
 
 `run.py` options:
 - Selection: `--protocols`, `--impls`.
+- CART pruning: `--alpha` sets the fixed α of `cart_alpha` (default `CART_ALPHA` = 1e-5 in `benchlib.py`).
 - Threads: `--threads 1,2,4,all` sets the thread counts tried for the multi-threaded tools.
 - Pinning: `--cpus` sets the order of logical CPUs to pin to.
 - Repetitions and limits: `--reps` (default 5), `--mem-reps` (default 3), `--timeout`.
@@ -45,18 +50,18 @@ Each protocol is one well-defined piece of work, done with equivalent settings i
 |---|---|---|---|---|---|
 | `cart_full`: grown to pure leaves, depth ≤ 30 | `--cart --no-prune -d 30` | `max_depth=30` | `cp=0, minsplit=2, minbucket=1, maxdepth=30` | | |
 | `cart_depth12` | `-d 12` | `max_depth=12` | `maxdepth=12` | | |
-| `cart_alpha`: one tree, pruned at a fixed α | `--alpha α` | `ccp_alpha` with the same leaf count | `prune(cp = α·n / root risk)` | | |
-| `cart_cv10`: α chosen by 10-fold CV with the 1-SE rule (whole procedure) | `--cv 10` | GridSearchCV over 16 α, 1-SE refit, threads | `xval=10`, 1-SE | | |
+| `cart_alpha`: one tree, pruned at a fixed α | `--alpha α` | `ccp_alpha=α` | `xval=0`, `prune(cp = α·n / root risk)` | | |
 | `c45`: error-based pruning, CF 0.25, subtree raising | `--c45` | | | `-C 0.25 -M 2` | `-ebpg -c 0.25 -m 2` |
 | `c45_unpruned` | `--c45 --no-prune` | | | `-U -M 2` | `-np -m 2` |
 
 **Settings that keep the comparison fair:**
 - **Same depth cap.** Every CART tool stops at depth 30, because rpart cannot grow deeper.
 - **No extra rpart work.** rpart's competitor and surrogate splits are off (`maxcompete=0, maxsurrogate=0`), since no other tool computes them.
-- **One α for all CART tools in `cart_alpha`.** α is computed once per dataset and cached in `data/<name>/alpha.json`. It is `./tree`'s 10-fold CV choice, which is deterministic, so it is the same on every machine.
-- **scikit-learn's α is matched by size.** scikit-learn's `ccp_alpha` measures Gini impurity, not misclassified rows, so it gets the value from its own pruning path whose tree has the same number of leaves.
-- **`cart_cv10` is a whole procedure, not one tree.** Report it separately. scikit-learn has no built-in CV pruning, so it fits 162 trees there instead of 11.
-- **C4.5 needs no α search.** Error-based pruning is a single pass over the tree, so every C4.5 protocol grows exactly one tree.
+- **One fixed α for all CART tools in `cart_alpha`.** Every tool gets the same number: `CART_ALPHA`, or `run.py --alpha`.
+  - Nothing chooses or tunes it per tool or per dataset.
+  - There is no cross-validation, and no tool is matched to another's tree size.
+  - scikit-learn's `ccp_alpha` measures Gini impurity, while `./tree` and rpart count misclassified rows. So the same α prunes scikit-learn's tree to a somewhat different size. Report the size each tool builds; don't adjust for it.
+- **C4.5 needs no α.** Error-based pruning is a single pass over the tree, so every C4.5 protocol grows exactly one tree.
 
 ## How time is measured
 
@@ -64,9 +69,9 @@ The reported time is **training time**: from the data being in memory to the fin
 
 | Tool | What is timed |
 |---|---|
-| ./tree | `train total`: presort, build, pruning or CV |
+| ./tree | `train total`: presort, build, pruning |
 | YaDT | the indexing part of its read time, plus build and prune (from its log) |
-| scikit-learn | `fit`, or the whole search |
+| scikit-learn | `fit` |
 | rpart | `rpart()` + `prune()` |
 | J48 | `buildClassifier` |
 
@@ -112,7 +117,7 @@ The reported time is **training time**: from the data being in memory to the fin
 - **Separate memory runs.** Memory runs are fresh processes with no warm-up and no evaluation (no test set loaded), separate from the timing runs.
 - **Binary input for the adapters.** scikit-learn, rpart and J48 read float32 binary files directly into their own data structures, so no CSV parser's temporary objects inflate the peak.
 - **CSV for ./tree and YaDT.** They only read CSV, so their peak includes the parser. Two possible improvements for `./tree`: a binary input format, or a `--load-only` mode that would allow subtracting the load peak exactly.
-- **Single process per run.** Every tool runs as one process (scikit-learn's search uses threads, not worker processes), so `ru_maxrss` covers all of its work. A tool that spawned worker processes would need cgroup v2 `memory.peak` instead. That counts the whole process tree, but also charges it with page cache from file reads.
+- **Single process per run.** Every tool runs as one process, so `ru_maxrss` covers all of its work. A tool that spawned worker processes would need cgroup v2 `memory.peak` instead. That counts the whole process tree, but also charges it with page cache from file reads.
 
 **Caveats to state in the paper:**
 - **JVM.** Its peak RSS depends on its heap sizing: the JVM grows the heap rather than collect early, so J48's number is an upper bound. Use the same `--java-heap` on every machine and report it. To find J48's minimum heap, lower `-Xmx` until it fails (an optional extra experiment).

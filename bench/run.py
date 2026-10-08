@@ -6,8 +6,10 @@ timed and memory-measured, one fresh process per measurement.
   bench/.venv/bin/python bench/run.py covertype_10k susy_50k    # run these datasets
   bench/.venv/bin/python bench/run.py --protocols c45 --impls tree,yadt --threads 1,2,4,8,all
 
+Every case grows one tree (no cross-validation). cart_alpha prunes at one fixed
+alpha (benchlib.CART_ALPHA, or --alpha) given unchanged to every CART tool.
+
 Phases (see bench/README.md for why):
-  calibrate  per dataset, the fixed alpha of cart_alpha (untimed, cached)
   check      one untimed process per case: tree size and test accuracy; it is
              also the warm-up of the native tools (file cache, CPU clocks)
   time       --reps processes per case: training time measured inside the tool
@@ -139,11 +141,11 @@ def adapter_args(dataset, threads, warmup, evaluate):
             f"threads={threads}", f"warmup={warmup}", f"eval={int(evaluate)}"]
 
 
-def fill(value, alphas):
-    return value.format(**alphas) if isinstance(value, str) and "{" in value else value
+def fill(value, alpha):
+    return value.format(alpha=repr(alpha)) if isinstance(value, str) and "{" in value else value
 
 
-def build_command(case, kind, java_heap, alphas, scratch):
+def build_command(case, kind, java_heap, alpha, scratch):
     """-> (argv, extra env, parser of stdout -> result dict)."""
     dataset, protocol, impl, threads = case
     spec = B.PROTOCOLS[protocol]["impls"][impl]
@@ -152,7 +154,7 @@ def build_command(case, kind, java_heap, alphas, scratch):
     data = B.DATA / dataset
 
     if impl == "tree":
-        flags = [fill(flag, alphas) for flag in spec]
+        flags = [fill(flag, alpha) for flag in spec]
         backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
         dump = scratch / "tree.dump"
         argv = [str(B.TREE)] + backend + flags + (["--dump", str(dump)] if evaluate else []) \
@@ -195,7 +197,7 @@ def build_command(case, kind, java_heap, alphas, scratch):
             return result
         return argv, {"LD_LIBRARY_PATH": str(B.YADT.parent)}, parse
 
-    params = [f"{key}={fill(value, alphas)}" for key, value in spec.items()]
+    params = [f"{key}={fill(value, alpha)}" for key, value in spec.items()]
     common = adapter_args(dataset, threads, warmup, evaluate)
     if impl == "sklearn":
         argv = [PYTHON, str(ADAPTERS / "sklearn_fit.py")] + common + params
@@ -214,60 +216,6 @@ def base_env():
     env.update(OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1",
                LC_ALL="C", PYTHONHASHSEED="0")
     return env
-
-
-# ------------------------------------------------------------------ calibration
-
-def calibrate_alpha(dataset):
-    """The fixed alpha of cart_alpha, chosen once per dataset (cached in
-    data/<dataset>/alpha.json; deterministic, so the same on every machine):
-    ./tree's 10-fold CV choice nudged up by 1e-6 (relative) so it lies inside
-    an interval of the pruning sequence, not on a boundary where rounding would
-    decide. ./tree and rpart prune with it directly (both count a leaf's cost in
-    misclassified rows). scikit-learn's ccp_alpha measures Gini impurity, so it
-    gets the ccp_alpha from its own pruning path whose tree has the same number
-    of leaves (or the closest)."""
-    path = B.DATA / dataset / "alpha.json"
-    if path.exists():
-        return json.load(open(path))
-    print(f"  calibrating alpha for {dataset} ...", flush=True)
-    train = str(B.DATA / dataset / "train.csv")
-    depth = ["-d", str(B.CART_DEPTH)]
-    out = subprocess.run([str(B.TREE), "--parallel", "--cart", *depth, "--cv", "10", train],
-                         capture_output=True, text=True, check=True).stdout
-    alpha = float(re.search(r"--alpha (\S+)", out).group(1)) * (1 + 1e-6)
-    out = subprocess.run([str(B.TREE), "--parallel", "--cart", *depth, "--alpha", repr(alpha),
-                          train], capture_output=True, text=True, check=True).stdout
-    leaves = int(re.search(r"leaves (\d+)", out).group(1))
-
-    import copy
-    from sklearn.tree import DecisionTreeClassifier
-    X, y = B.load(dataset, "train")
-    full = DecisionTreeClassifier(max_depth=B.CART_DEPTH, random_state=0).fit(X, y)
-    steps = np.unique(full.cost_complexity_pruning_path(X, y).ccp_alphas)
-    # The tree of [steps[i], steps[i+1]) is probed at the interval's geometric midpoint.
-    probes = [float(np.sqrt(a * b)) if a > 0 else b / 2 for a, b in zip(steps, steps[1:])]
-
-    def sk_leaves(i):
-        # Prune a copy of the fitted tree (what fit(ccp_alpha=...) does after
-        # growing) instead of refitting: calibration only, never timed.
-        model = copy.deepcopy(full)
-        model.ccp_alpha = probes[i]
-        model._prune_tree()
-        return int(model.get_n_leaves())
-
-    low, high = 0, len(probes) - 1  # leaves fall as i grows: first i with <= leaves
-    while low < high:
-        mid = (low + high) // 2
-        if sk_leaves(mid) <= leaves:
-            high = mid
-        else:
-            low = mid + 1
-    best = min({max(low - 1, 0), low}, key=lambda i: (abs(sk_leaves(i) - leaves), i))
-    result = {"alpha": alpha, "leaves": leaves, "sk_ccp_alpha": probes[best],
-              "sk_leaves": sk_leaves(best)}
-    json.dump(result, open(path, "w"), indent=1)
-    return result
 
 
 # ------------------------------------------------------------------ machine
@@ -327,7 +275,7 @@ def machine_info(args):
             "yadt": command_output([str(B.YADT)], env={"LD_LIBRARY_PATH": str(B.YADT.parent)})
             .splitlines()[0] if B.YADT.exists() else None,
         },
-        "settings": {"java_heap": args.java_heap, "cpus": args.cpus, "reps": args.reps,
+        "settings": {"alpha": args.alpha, "java_heap": args.java_heap, "cpus": args.cpus, "reps": args.reps,
                      "mem_reps": args.mem_reps, "timeout": args.timeout,
                      "sample_ms": args.sample_ms, "cooldown": args.cooldown},
     }
@@ -362,7 +310,7 @@ def plan_cases(args):
                 if impl not in impls:
                     continue
                 for t in threads:
-                    if t == 1 or B.supports_threads(protocol, impl):
+                    if t == 1 or B.IMPLS[impl]["threads"] == "multi":
                         cases.append((dataset, protocol, impl, t))
     return cases
 
@@ -379,6 +327,9 @@ def main():
     parser.add_argument("--impls", help=f"comma list (default all: {','.join(B.IMPLS)})")
     parser.add_argument("--threads", default="1,all",
                         help="thread counts for multi-threaded tools, e.g. 1,2,4,8,all")
+    parser.add_argument("--alpha", type=float, default=B.CART_ALPHA,
+                        help=f"fixed alpha of cart_alpha, the same for every CART tool "
+                        f"(default {B.CART_ALPHA})")
     parser.add_argument("--cpus", help="logical CPUs to pin to, in order of use, e.g. 0,2,4,6 "
                         "or 0-11; N threads use the first N (default: no pinning)")
     parser.add_argument("--reps", type=int, default=5, help="timed processes per case")
@@ -425,10 +376,6 @@ def main():
               open(out_dir / "plan.json", "w"), indent=1)
     results = open(out_dir / "results.jsonl", "a")
 
-    alphas = {}
-    for dataset in sorted({case[0] for case in cases if case[1] == "cart_alpha"}):
-        alphas[dataset] = calibrate_alpha(dataset)
-
     failed = set()  # cases that timed out or failed: their other runs are skipped
     env = base_env()
     scratch = Path(tempfile.mkdtemp(prefix="bench-"))
@@ -437,8 +384,7 @@ def main():
         if case in failed:
             return
         dataset, protocol, impl, threads = case
-        argv, extra_env, parse = build_command(case, kind, args.java_heap,
-                                               alphas.get(dataset, {}), scratch)
+        argv, extra_env, parse = build_command(case, kind, args.java_heap, args.alpha, scratch)
         if args.cpu_list:
             argv = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] + argv
         run = measure(argv, {**env, **extra_env}, args.timeout, args.sample_ms / 1000)
