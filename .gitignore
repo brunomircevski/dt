@@ -39,4 +39,6 @@ __pycache__
 /tree_cpu
 /datasets/
 /tree.svg
-/bench/work/
+/bench/.venv/
+/bench/.tools/
+/bench/data/

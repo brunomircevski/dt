@@ -13,8 +13,8 @@ interchangeable backends that produce the *same* tree (byte for byte):
   here and how it was verified against scikit-learn and Quinlan's C4.5.
 * [docs/CPU.md](docs/CPU.md) — presorted columns and the CPU builder.
 * [docs/CUDA.md](docs/CUDA.md) — the GPU builder, kernel by kernel.
-* [docs/PYTHON_COMPARISON.md](docs/PYTHON_COMPARISON.md) — speed and accuracy
-  against scikit-learn and the Python C4.5 packages.
+* [bench/README.md](bench/README.md) — CPU benchmark against scikit-learn,
+  rpart, Weka J48 and YaDT (time and memory).
 
 ## Build
 
@@ -189,10 +189,9 @@ cross-validation (the CV result is the same on every machine for the same
 ```bash
 make test                     # every backend must grow the verified trees in tests/golden/
 TREE_BIN=./tree_cpu tests/check.sh
-bench/bench.sh                # timing table for the datasets found in datasets/
 python3 tools/compare_reference.py cart datasets/diabetes.csv           # vs scikit-learn
 python3 tools/compare_reference.py c45 datasets/diabetes.csv --c45 PATH # vs original c4.5
-python3 bench/compare_python.py prep && python3 bench/compare_python.py run covertype_20k  # vs Python libraries (docs/PYTHON_COMPARISON.md)
+bench/setup.sh && bench/.venv/bin/python bench/run.py --dry-run          # CPU benchmark (bench/README.md)
 ```
 
 `tests/golden/` holds the trees of the version that was checked node by node
@@ -214,7 +213,8 @@ Training time (`train total`: presort, GPU setup, build, cross-validation,
 pruning; loading and evaluation excluded) on a laptop: i7-13650HX (20 threads),
 RTX 5070 Laptop GPU (8 GB, power-limited). The laptop throttles under
 sustained load, so expect ±10–15% run-to-run noise (up to 2× on long parallel
-runs); `bench/bench.sh` regenerates the table.
+runs). Measured with the former `bench/bench.sh`; the new CPU benchmark is in
+[bench/README.md](bench/README.md).
 
 | Dataset | Algorithm | Serial | Parallel | Cuda |
 |---------|-----------|-------:|---------:|-----:|
@@ -279,4 +279,4 @@ of two (`--gpu-sweep`), which this laptop GPU cannot show.
 | `src/build/cpu_builder.*`, `cpu_grower.cpp` | Presort + CPU tree growing (serial and parallel). |
 | `src/build/gpu_grower.cu` | GPU tree growing. |
 | `src/build/node_store.*` | Thread-safe node storage used while growing. |
-| `tests/`, `bench/`, `tools/` | Golden-tree tests, benchmark script, reference comparison and SVG rendering. |
+| `tests/`, `bench/`, `tools/` | Golden-tree tests, CPU benchmark, reference comparison and SVG rendering. |

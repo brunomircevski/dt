@@ -1,0 +1,54 @@
+# Datasets for the CPU benchmark. prepare.py turns each entry into
+# bench/data/<name>/ (train/test split in every tool's input format).
+#
+# Keys:
+#   source         CSV file, relative to the repository root (header row required)
+#   label          label column name, or "last" (default)
+#   drop           columns that are not features (e.g. ["Id"])
+#   split          "random": shuffle with `seed`, then take the test rows
+#                  "tail":   the last rows are the test set (the published split
+#                            of SUSY and HIGGS: their rows are already random)
+#   test_fraction  share of rows in the test set (default 0.2), or
+#   test_rows      an exact number of test rows (wins over test_fraction)
+#   train_rows     use only the first N training rows (0 = all; default 0)
+#   max_test_rows  cap the test set (0 = no cap; default 0)
+#   seed           shuffle seed for split = "random" (default 1)
+#
+# Only numeric features are supported for now. A smaller variant of a dataset
+# is just another entry with the same source and train_rows set.
+
+[diabetes]
+source = "tests/data/diabetes.csv"
+split = "random"
+
+[covertype_10k]
+source = "datasets/covertype.csv"
+drop = ["Id"]
+split = "random"
+train_rows = 10_000
+max_test_rows = 2_500
+
+[covertype]
+source = "datasets/covertype.csv"
+drop = ["Id"]
+split = "random"
+
+[susy_50k]
+source = "datasets/supersymmetry.csv"
+drop = ["Id"]
+split = "tail"
+test_rows = 500_000
+train_rows = 50_000
+max_test_rows = 12_500
+
+[susy]
+source = "datasets/supersymmetry.csv"
+drop = ["Id"]
+split = "tail"
+test_rows = 500_000
+
+[higgs]
+source = "datasets/higgs.csv"
+drop = ["Id"]
+split = "tail"
+test_rows = 500_000
