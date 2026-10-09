@@ -28,10 +28,10 @@ EntryCodec makeEntryCodec(std::size_t classCount, std::size_t rowCount) {
 
 namespace {
 
-// Nodes with more rows partition their columns one at a time, each with all
-// threads, through the node's own range of Columns::scratch. Smaller nodes
-// partition one column per thread with a per-thread buffer of at most this
-// size, so memory does not grow with threads * rows.
+// Nodes with more rows partition their columns through the node's own range
+// of Columns::scratch (see partition()). Smaller nodes partition one column
+// per thread with a per-thread buffer of at most this size, so memory does not
+// grow with threads * rows.
 constexpr std::uint32_t kBlockPartitionRows = 1u << 18;
 
 // Map a float to an unsigned key with the same order (negatives flipped).
@@ -328,17 +328,31 @@ void CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int 
     }
   }
   if (count > kBlockPartitionRows) {
-    // Big node: the node's own range of the shared scratch array; with a
-    // pool, all threads work on one column at a time.
+    // Big node: the node's own range of the shared scratch array. A column is
+    // partitioned in place with a buffer for the smaller child's rows only, so
+    // the range holds `slots` such buffers and as many columns are
+    // partitioned at once, one per thread. This moves every entry once, and
+    // the splits deep in a big tree are often lopsided (many slots). With a
+    // single slot, all threads work on one column at a time instead (every
+    // entry moves twice).
     Entry *nodeScratch = columns.scratch + item.begin;
-    for (std::uint32_t feature : others) {
-      Entry *entries = columns.feature(feature) + item.begin;
-      if (pool_) {
-        partitionFeatureInBlocks(entries, count, leftCount, nodeScratch);
-      } else {
-        partitionFeature(entries, count, nodeScratch, keep);
+    const std::size_t bufferSize = std::size_t{std::min(leftCount, count - leftCount)} + 1;
+    const std::size_t slots =
+        std::min(others.size(), keep == Keep::Both ? count / bufferSize : others.size());
+    if (pool_ && slots < 2) {
+      for (std::uint32_t feature : others) {
+        partitionFeatureInBlocks(columns.feature(feature) + item.begin, count, leftCount,
+                                 nodeScratch);
       }
+      return;
     }
+    parallelFor(pool_, slots, [&](std::size_t slot) {
+      Entry *buffer = nodeScratch + slot * bufferSize;
+      for (std::size_t index = slot; index < others.size(); index += slots) {
+        partitionFeature(columns.feature(others[index]) + item.begin, count, leftCount, buffer,
+                         keep);
+      }
+    });
     return;
   }
   // Small node: a per-thread buffer (stays in cache), one column per thread
@@ -348,18 +362,20 @@ void CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int 
     if (keep == Keep::Both && buffer.size() < count) {
       buffer.resize(count);
     }
-    partitionFeature(columns.feature(others[index]) + item.begin, count, buffer.data(), keep);
+    partitionFeature(columns.feature(others[index]) + item.begin, count, leftCount, buffer.data(),
+                     keep);
   };
   parallelFor(pool_ && count >= options_.featureParallelRows ? pool_ : nullptr, others.size(),
               partitionOne);
 }
 
-// Stable partition by goesLeft: left rows are compacted forward in place (the
-// write index never passes the read index), right rows wait in `buffer`. If
+// Stable partition by goesLeft (`leftCount` rows go left). The larger side is
+// compacted in place (the write index never passes the read index), the
+// smaller one waits in `buffer`, which needs min(left, right) + 1 entries. If
 // only one child is grown further, only its rows are moved, in place: left
 // rows forward, or right rows backward from the end.
-void CpuTreeBuilder::partitionFeature(Entry *entries, std::uint32_t count, Entry *buffer,
-                                      Keep keep) const {
+void CpuTreeBuilder::partitionFeature(Entry *entries, std::uint32_t count,
+                                      std::uint32_t leftCount, Entry *buffer, Keep keep) const {
   if (keep == Keep::Left) {
     std::uint32_t write = 0;
     for (std::uint32_t index = 0; index < count; ++index) {
@@ -376,6 +392,22 @@ void CpuTreeBuilder::partitionFeature(Entry *entries, std::uint32_t count, Entry
       entries[write - 1] = entry;
       write -= 1u - goesLeft_[codec_.row(entry.packed)];
     }
+    return;
+  }
+  if (leftCount < count - leftCount) {
+    // Right rows compacted backward from the end, left rows into
+    // buffer[1, leftCount], also backward.
+    std::uint32_t rightWrite = count;
+    std::uint32_t leftWrite = leftCount;
+    for (std::uint32_t index = count; index-- > 0;) {
+      const Entry entry = entries[index];
+      const std::uint32_t goesLeft = goesLeft_[codec_.row(entry.packed)];
+      entries[rightWrite - 1] = entry;
+      buffer[leftWrite] = entry;
+      rightWrite -= 1 - goesLeft;
+      leftWrite -= goesLeft;
+    }
+    std::memcpy(entries, buffer + 1, leftCount * sizeof(Entry));
     return;
   }
   std::uint32_t leftWrite = 0;

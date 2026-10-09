@@ -116,10 +116,19 @@ belong to such columns.
 
 One thread pool (`ThreadPool`), two kinds of work:
 
-* **Big nodes** (≥ `featureParallelRows` = 65536 rows, e.g. the top levels):
-  `parallelFor` over features for the sweep. The partition runs one column per
-  thread, or, above 2^18 rows, column by column with all threads working on
-  blocks of the column. Marking `goesLeft` is split into blocks too.
+* **Big nodes** (≥ `featureParallelRows` = 4096 rows): `parallelFor` over
+  features for the sweep, and the partition runs one column per thread.
+  Marking `goesLeft` is split into blocks too. The threshold is low because
+  C4.5's lopsided splits leave long chains of mid-size nodes on the critical
+  path (SUSY 500k, 28 threads: C4.5 140 → 110 ms against 65536).
+* **Huge nodes** (> 2^18 rows) partition through the node's own range of the
+  shared scratch array. A column is partitioned in place with a buffer for
+  the smaller child's rows only, so the range holds `count / (smaller + 1)`
+  buffers and as many columns are partitioned at once, one per thread: every
+  entry moves once, which matters because this part is bound by memory
+  bandwidth. Only a perfectly balanced split (one buffer) falls back to
+  column by column with all threads on blocks of the column (every entry
+  moves twice).
 * **Subtrees**: after a split of a node with ≥ `nodeTaskRows` = 4096 rows, the
   left child becomes a pool task, and the current thread continues with the
   right child (an explicit stack, no recursion). Nobody waits for a task; the
@@ -131,8 +140,8 @@ tasks without deadlocks.
 
 ## Memory
 
-The columns take `8 · F · n` bytes. Partitioning needs a buffer for the rows
-going right: a node uses its own range of one shared `n`-entry scratch array,
+The columns take `8 · F · n` bytes. Partitioning needs a buffer for the rows of
+one child: a node uses its own range of one shared `n`-entry scratch array,
 and per-thread buffers are capped at 2^18 entries, so extra memory is about
 `8 · n` bytes plus 2 MB per thread, however many threads run. The sweep's
 tables of `c·log2 c` and `1/c` take another `16 · n` bytes for training sets

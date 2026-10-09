@@ -67,7 +67,7 @@ void printUsage(const char *program) {
       << "  --task-rows N            nodes with >= N rows grow a child as a pool task\n"
       << "                           (default 4096)\n"
       << "  --feature-parallel-rows N  nodes with >= N rows scan features in parallel\n"
-      << "                           (default 65536)\n"
+      << "                           (default 4096)\n"
       << "\n"
       << "Cuda:\n"
       << "  --gpu-min-rows N         smaller nodes go to the CPU pool (default 512)\n"

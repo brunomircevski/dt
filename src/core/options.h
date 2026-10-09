@@ -56,7 +56,7 @@ struct ParallelOptions {
   // Nodes with at least this many rows build their left child as a pool task.
   std::size_t nodeTaskRows = 4096;
   // Nodes with at least this many rows scan / partition features in parallel.
-  std::size_t featureParallelRows = 65536;
+  std::size_t featureParallelRows = 4096;
 };
 
 struct GpuOptions {

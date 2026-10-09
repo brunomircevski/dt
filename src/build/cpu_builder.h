@@ -109,7 +109,8 @@ private:
                             std::uint32_t minChild, std::uint32_t *bestLeft) const;
   void partition(const Columns &columns, const Subtree &item, int winner,
                  std::uint32_t leftCount, Keep keep);
-  void partitionFeature(Entry *entries, std::uint32_t count, Entry *buffer, Keep keep) const;
+  void partitionFeature(Entry *entries, std::uint32_t count, std::uint32_t leftCount,
+                        Entry *buffer, Keep keep) const;
   void partitionFeatureInBlocks(Entry *entries, std::uint32_t count, std::uint32_t leftCount,
                                 Entry *buffer) const;
 
