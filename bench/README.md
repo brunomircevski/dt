@@ -22,6 +22,7 @@ It measures training time and peak memory, and records tree size and training an
 | `run.py` | Checks the data, then runs every case in fresh processes. It measures time inside each tool and memory from outside, and writes `results/<run-id>/`. |
 | `report.py` | Turns results into Markdown tables (single- and multi-thread separate), a per-case CSV and a per-process CSV. It can merge runs from several machines. |
 | `chart.py` | One figure per dataset: training time and peak RSS per tool, single- and multi-thread in separate panels. |
+| `scaling_chart.py` | Thread-scaling figure of ./tree for one run: training time against threads, one line per protocol, plus `scaling.csv` (time, speedup, efficiency, peak RSS). |
 
 ## Usage
 
@@ -56,6 +57,7 @@ Each protocol is one well-defined piece of work, done with equivalent settings i
 | `cart_full`: grown to pure leaves, depth ≤ 30 | `--cart --no-prune -d 30` | `max_depth=30` | `cp=0, minsplit=2, minbucket=1, maxdepth=30` | | |
 | `cart_depth12` | `-d 12` | `max_depth=12` | `maxdepth=12` | | |
 | `cart_alpha`: one tree, pruned at a fixed α | `--alpha α` | `ccp_alpha=α` | `xval=0`, `prune(cp = α·n / root risk)` | | |
+| `cart_alpha_nodepth`: `cart_alpha` without the depth cap, for ./tree-only benchmarks | `--cart --alpha α` | | | | |
 | `c45`: error-based pruning, CF 0.25, subtree raising | `--c45` | | | `-C 0.25 -M 2` | `-ebpg -c 0.25 -m 2` |
 | `c45_unpruned` | `--c45 --no-prune` | | | `-U -M 2` | `-np -m 2` |
 

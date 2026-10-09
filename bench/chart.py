@@ -30,7 +30,7 @@ COLORS = {"tree": "#2a78d6", "sklearn": "#eb6834", "rpart": "#1baf7a", "j48": "#
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 NAMES = {"susy": "SUSY", "higgs": "HIGGS", "covertype": "Covertype", "diabetes": "Diabetes"}
 GROUP = {"cart_alpha": "CART, fixed α", "cart_full": "CART, unpruned",
-         "cart_depth12": "CART, depth 12", "c45": "C4.5, CF 0.25", "c45_unpruned": "C4.5, unpruned"}
+         "cart_depth12": "CART, depth 12", "cart_alpha_nodepth": "CART, fixed α, no depth limit", "c45": "C4.5, CF 0.25", "c45_unpruned": "C4.5, unpruned"}
 
 
 def seconds_tick(value, _=None):

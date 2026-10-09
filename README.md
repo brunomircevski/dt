@@ -35,8 +35,8 @@ make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,cod
 ## Run
 
 ```bash
-./tree --cart datasets/covertype.csv                # CART: Gini, cost-complexity pruning with alpha 1e-4
-./tree --cart --alpha 1e-5 datasets/covertype.csv   # prune with another fixed alpha
+./tree --cart datasets/covertype.csv                # CART: Gini, cost-complexity pruning with alpha 1e-5
+./tree --cart --alpha 1e-4 datasets/covertype.csv   # prune with another fixed alpha
 ./tree --cart --cv 10 datasets/covertype.csv        # alpha by 10-fold cross-validation (11 trees)
 ./tree --cart --no-prune datasets/covertype.csv     # only grow the maximal tree
 ./tree --c45 datasets/covertype.csv                 # C4.5 as in Quinlan's c4.5: -m 2, CF 0.25
@@ -92,7 +92,7 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--alpha X` | 0.0001 | Prune with this fixed alpha (one tree on all rows, like scikit-learn's `ccp_alpha` and rpart's `cp`). Larger prunes more: each leaf must classify about X × rows more training rows correctly to be kept (covertype: `1e-6` 44k nodes, `1e-5` 10k, `1e-4` 0.9k, `1e-3` 37). |
+| `--alpha X` | 0.00001 | Prune with this fixed alpha (one tree on all rows, like scikit-learn's `ccp_alpha` and rpart's `cp`). Larger prunes more: each leaf must classify about X × rows more training rows correctly to be kept (covertype: `1e-6` 44k nodes, `1e-5` 10k, `1e-4` 0.9k, `1e-3` 37). |
 | `--cv K` | (off) | Choose alpha by K-fold cross-validation instead: the tree is grown on all rows, plus K fold trees. |
 
 **C4.5 post-pruning**
@@ -121,7 +121,7 @@ The best values depend on the hardware and the data (`docs/CPU.md`,
 A grown CART tree fits the training data too closely, so CART prunes it.
 Pruning has one parameter, alpha: the higher it is, the smaller the tree.
 
-* **Fixed alpha** (default, `--alpha X`, X = 0.0001): grow one tree on all rows
+* **Fixed alpha** (default, `--alpha X`, X = 0.00001): grow one tree on all rows
   and prune it at X, as scikit-learn and rpart do. Same steps as C4.5 (grow
   one tree, prune it), so the timings compare directly.
 * **Cross-validation** (`--cv K`): CART lists every alpha at which the full
@@ -138,13 +138,13 @@ neither growing nor pruning):
 | Run | Nodes | Test accuracy | train total |
 |-----|------:|--------------:|------------:|
 | covertype CART `--no-prune` | 48,089 | 93.85% | 0.15 s |
-| covertype CART (alpha 1e-4) | 987 | 81.52% | 0.15 s |
-| covertype CART `--alpha 1e-5` | 9,721 | 91.61% | 0.17 s |
+| covertype CART `--alpha 1e-4` | 987 | 81.52% | 0.15 s |
+| covertype CART (alpha 1e-5) | 9,721 | 91.61% | 0.17 s |
 | covertype CART `--cv 10` | 24,797 | 93.67% | 1.61 s |
 | covertype C4.5 | 26,631 | 94.20% | 0.31 s |
 | SUSY CART `--no-prune` | 1,063,237 | 71.64% | 1.23 s |
-| SUSY CART (alpha 1e-4) | 101 | 78.79% | 1.20 s |
-| SUSY CART `--alpha 1e-5` | 769 | 79.58% | 1.26 s |
+| SUSY CART `--alpha 1e-4` | 101 | 78.79% | 1.20 s |
+| SUSY CART (alpha 1e-5) | 769 | 79.58% | 1.26 s |
 | SUSY C4.5 | 13,889 | 79.63% | 1.53 s |
 
 ### Timings

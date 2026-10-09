@@ -56,7 +56,7 @@ void printUsage(const char *program) {
       << "  --dump FILE              write the tree as text\n"
       << "\n"
       << "CART (default: cost-complexity pruning with a fixed alpha, one tree):\n"
-      << "  --alpha X                cost-complexity parameter (default 0.0001)\n"
+      << "  --alpha X                cost-complexity parameter (default 0.00001)\n"
       << "  --cv K                   choose alpha by K-fold cross-validation instead\n"
       << "                           (K + 1 trees)\n"
       << "\n"

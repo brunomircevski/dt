@@ -73,6 +73,14 @@ PROTOCOLS = {
             "rpart": {"mode": "alpha", "maxdepth": CART_DEPTH, "alpha": "{alpha}"},
         },
     },
+    # cart_alpha without the depth cap, for ./tree-only benchmarks (thread
+    # scaling): the cap exists only because rpart cannot grow deeper than 30.
+    "cart_alpha_nodepth": {
+        "title": "CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit",
+        "impls": {
+            "tree": ["--cart", "--alpha", "{alpha}"],
+        },
+    },
     "c45": {
         "title": "C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows",
         "impls": {

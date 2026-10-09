@@ -28,7 +28,7 @@ for name in covertype supersymmetry; do
   fi
 done
 
-configs=("--cart"
+configs=("--cart --alpha 1e-4"
          "--cart --alpha 1e-5 --holdout 0.3"
          "--cart --no-prune"
          "--cart --min-leaf 3 --no-prune"

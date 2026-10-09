@@ -41,8 +41,8 @@ struct CartOptions {
   // Minimal cost-complexity pruning: the smallest subtree minimising
   // R(T) + alpha * |leaves(T)|, R(T) = training misclassification rate.
   CartPruning pruning = CartPruning::Alpha;
-  double alpha = 0.0001; // CartPruning::Alpha
-  int folds = 10;       // CartPruning::CrossValidation
+  double alpha = 0.00001; // CartPruning::Alpha
+  int folds = 10;        // CartPruning::CrossValidation
 };
 
 // Defaults match the original c4.5 program (-c 25, subtree raising).

@@ -55,7 +55,7 @@ training misclassification rate and `|T|` its number of leaves. For a given
 `α`, `T(α)` is the smallest subtree minimising `R(T) + α|T|`
 (`cartCostComplexityPrune`, a bottom-up dynamic program).
 
-* By default `α` is fixed (`--alpha X`, default 0.0001), as in scikit-learn
+* By default `α` is fixed (`--alpha X`, default 0.00001), as in scikit-learn
   and rpart: one tree, grown on all rows. `α` is a rate, so it does not
   depend on the dataset size. `--no-prune` keeps the maximal tree.
 * `--cv K` chooses `α` by Breiman's K-fold cross-validation instead: the tree
