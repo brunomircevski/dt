@@ -34,6 +34,8 @@ bench/.venv/bin/python bench/report.py --md report.md --csv summary.csv --runs-c
 bench/.venv/bin/python bench/chart.py bench/results/<run-id>
 ```
 
+Finished benchmarks, one directory per backend, machine and dataset, each with its own `run.sh`: see [results/README.md](results/README.md).
+
 `run.py` options:
 - Selection: `--protocols`, `--impls`.
 - CART pruning: `--alpha` sets the fixed α of `cart_alpha` (default `CART_ALPHA` = 1e-5 in `benchlib.py`).

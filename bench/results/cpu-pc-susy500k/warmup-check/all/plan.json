@@ -1,0 +1,250 @@
+{
+ "cases": [
+  [
+   "susy_500k",
+   "c45",
+   "j48",
+   1
+  ]
+ ],
+ "protocols": {
+  "cart_full": {
+   "title": "CART, grown to pure leaves (depth <= 30), no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 30
+    },
+    "rpart": {
+     "mode": "fit",
+     "maxdepth": 30
+    }
+   }
+  },
+  "cart_depth12": {
+   "title": "CART, grown to depth 12, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "12"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 12
+    },
+    "rpart": {
+     "mode": "fit",
+     "maxdepth": 12
+    }
+   }
+  },
+  "cart_alpha": {
+   "title": "CART, one tree pruned at a fixed alpha (cost-complexity)",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "30",
+     "--alpha",
+     "{alpha}"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 30,
+     "ccp_alpha": "{alpha}"
+    },
+    "rpart": {
+     "mode": "alpha",
+     "maxdepth": 30,
+     "alpha": "{alpha}"
+    }
+   }
+  },
+  "c45": {
+   "title": "C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows",
+   "impls": {
+    "tree": [
+     "--c45"
+    ],
+    "j48": {
+     "options": "-C 0.25 -M 2"
+    },
+    "yadt": [
+     "-ebpg",
+     "-c",
+     "0.25",
+     "-m",
+     "2"
+    ]
+   }
+  },
+  "c45_unpruned": {
+   "title": "C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows",
+   "impls": {
+    "tree": [
+     "--c45",
+     "--no-prune"
+    ],
+    "j48": {
+     "options": "-U -M 2"
+    },
+    "yadt": [
+     "-np",
+     "-m",
+     "2"
+    ]
+   }
+  }
+ },
+ "impls": {
+  "tree": {
+   "label": "./tree",
+   "threads": "multi",
+   "warmup": false
+  },
+  "sklearn": {
+   "label": "scikit-learn",
+   "threads": "single",
+   "warmup": true
+  },
+  "rpart": {
+   "label": "rpart",
+   "threads": "single",
+   "warmup": true
+  },
+  "j48": {
+   "label": "Weka J48",
+   "threads": "single",
+   "warmup": true
+  },
+  "yadt": {
+   "label": "YaDT",
+   "threads": "multi",
+   "warmup": false
+  }
+ },
+ "warmup_rows": "all",
+ "datasets": {
+  "_baseline": {
+   "name": "_baseline",
+   "features": [
+    "f0",
+    "f1",
+    "f2",
+    "f3"
+   ],
+   "feature_names": [
+    "x0",
+    "x1",
+    "x2",
+    "x3"
+   ],
+   "classes": [
+    "c0",
+    "c1"
+   ],
+   "class_names": [
+    "0",
+    "1"
+   ],
+   "n_train": 200,
+   "n_test": 50,
+   "source": "synthetic"
+  },
+  "susy_500k": {
+   "name": "susy_500k",
+   "features": [
+    "f0",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11",
+    "f12",
+    "f13",
+    "f14",
+    "f15",
+    "f16",
+    "f17"
+   ],
+   "feature_names": [
+    "lepton_1_pT",
+    "lepton_1_eta",
+    "lepton_1_phi",
+    "lepton_2_pT",
+    "lepton_2_eta",
+    "lepton_2_phi",
+    "missing_energy_magnitude",
+    "missing_energy_phi",
+    "MET_rel",
+    "axial_MET",
+    "M_R",
+    "M_TR_2",
+    "R",
+    "MT2",
+    "S_R",
+    "M_Delta_R",
+    "dPhi_r_b",
+    "costheta_r1"
+   ],
+   "classes": [
+    "c0",
+    "c1"
+   ],
+   "class_names": [
+    "background",
+    "signal"
+   ],
+   "n_train": 500000,
+   "n_test": 100000,
+   "spec": {
+    "source": "datasets/supersymmetry.csv",
+    "drop": [
+     "Id"
+    ],
+    "split": "tail",
+    "test_rows": 500000,
+    "train_rows": 500000,
+    "max_test_rows": 100000
+   }
+  }
+ },
+ "data_files": {
+  "_baseline": {
+   "meta.json": "4b324f2a45ca7ec08b13730e7b34b62ad730cb736c853f9cc37d32e8e0e2c7e7",
+   "test.f32": "03586feac2b171b20efedcc1e911e5b02ee4b79ac718b05790275441dccd5e4e",
+   "test.y.i32": "ea27eaef1452c2147c54f99f138113941b241ea047cf016adb62dad0aff76db8",
+   "test.yadt.csv": "e9846c11091c9df30b38cf2875615b42b4e5403f93b3cf3050e02caaf3f6a794",
+   "train.csv": "db2931af58aaf09174a4c38d4adcfa0456da35270a65c5943250604a6a24633d",
+   "train.f32": "4cdf1b4cfdc1bfea73f3b4d3c2224fdabd464dc8395978a6d7c1e54d36d7052a",
+   "train.y.i32": "e45debe117bd9a6b4b0e4518549b4e34f1a7727098d6a4d55cef9d9ec3a894fa",
+   "train.yadt.csv": "77928268dc58a666aa3a1621b04edfcdd215191de8bb53cb333d1fcef2b95efb",
+   "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168"
+  },
+  "susy_500k": {
+   "meta.json": "fe8ca5608e7a7294edeefc3717d7817cd485f207f9c4d561c9c2adcd77b9cad6",
+   "test.f32": "b7d6f10b4371965584bfb5394bbb63524310beb34ee04b6488a2925c81bfbce7",
+   "test.y.i32": "921da0af2044b1e2bbd0d8977f5900c37b96453532e75ac2a3484792005c29d7",
+   "test.yadt.csv": "481aa517c94acb0e727723e21deeccc035c59e1b7b23b0e61f8303669db6e554",
+   "train.csv": "d84197e6b70581eed5dd43c629c55742df426bb7aa84683c8a89685f5ad9f6d7",
+   "train.f32": "f1410ca4f968e246500b58c7f2a56c31e10d4f5c737035b6fee071368a99612c",
+   "train.y.i32": "fe0fc07e438735decc3b5e08a4c4167dcda63f6bfe11132f12e99ccad63b67f0",
+   "train.yadt.csv": "34b097a3138713df66950a07bc9c2d8c42750c8404116d77f34fa0fb096eb1c4",
+   "yadt.names": "b893792b4d89af536c87ec1120cd2580c255dca4b225d49b8473cb262c94f4e8"
+  }
+ }
+}

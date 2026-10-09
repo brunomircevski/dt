@@ -3,8 +3,8 @@
 # Weka J48 and YaDT (C4.5), 1 and 28 threads. Everything it writes goes into
 # this directory; BENCHMARK.md explains every choice.
 #
-#   bench/results/susy-paper-20261009/run.sh          # each case once (~45 min)
-#   bench/results/susy-paper-20261009/run.sh -m 5     # each case 5 times (~3 h)
+#   bench/results/cpu-pc-susy/run.sh          # each case once (~45 min)
+#   bench/results/cpu-pc-susy/run.sh -m 5     # each case 5 times (~3 h)
 #
 # Every run measures training time, peak memory, tree size and accuracy in the
 # same process.

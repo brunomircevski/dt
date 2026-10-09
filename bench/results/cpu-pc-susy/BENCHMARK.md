@@ -5,8 +5,8 @@
 ## Run it
 
 ```bash
-bench/results/susy-paper-20261009/run.sh          # each case once
-bench/results/susy-paper-20261009/run.sh -m 5     # each case 5 times
+bench/results/cpu-pc-susy/run.sh          # each case once
+bench/results/cpu-pc-susy/run.sh -m 5     # each case 5 times
 ```
 
 - **Time:** about 40 min with one run per case, about 2¾ h with `-m 5`. Measured per run on full SUSY: J48 ~14 min, scikit-learn ~7 min, rpart ~6.5 min, YaDT ~2.8 min (1 thread) or ~50 s (28 threads), ./tree ~15 s.
