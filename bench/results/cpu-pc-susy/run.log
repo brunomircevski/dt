@@ -1,0 +1,97 @@
+log: /home/bruno/Projects/dt/bench/results/cpu-pc-susy/run.log, started 2026-10-09 19:45:04
+
+=== 19:45:04  1/5 machine check
+CPU governor: performance
+warning: uncommitted changes in src/, bench/ or Makefile: machine.json will say -dirty
+load average: 6.19 5.94 5.08 (close browsers, chat apps, IDE indexers)
+runs per case: 1
+
+=== 19:45:04  2/5 build ./tree_cpu, the J48 adapter and the memory launcher; check the tools
+make: Entering directory '/home/bruno/Projects/dt'
+make: Nothing to be done for 'cpu'.
+make: Leaving directory '/home/bruno/Projects/dt'
+ready:
+  scikit-learn 1.9.1
+  R 4.6.1, rpart 4.1.27
+  openjdk version "17.0.20.1" 2026-08-18, Weka 3.8.7
+  YaDT version 2.3.0 (c) S. Ruggieri 2002-2020
+  (optional) GNU time not installed: needed only for manual memory cross-checks
+
+=== 19:45:05  3/5 warm-up check: is a 50,000-row warm-up enough for J48's JIT? (~5 min)
+1 cases, 3 processes:
+  susy_500k | c45 | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy_500k: identical in every format (0 s)
+1 cases x 3 run(s), then 1 footprint run(s) x 3: 3 processes. Time left is shown once every case has run once.
+[1/3] 19:45:06 run 1/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.8 s, peak 749 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m26s, elapsed 0m26s, about 0m53s left
+[2/3] 19:45:33 run 2/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.36 s, peak 753 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m26s, elapsed 0m52s, about 0m26s left
+[3/3] 19:45:59 run 3/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.61 s, peak 750 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m26s, elapsed 1m19s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cpu-pc-susy/warmup-check/50000/results.jsonl
+1 cases, 3 processes:
+  susy_500k | c45 | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy_500k: identical in every format (0 s)
+1 cases x 3 run(s), then 1 footprint run(s) x 3: 3 processes. Time left is shown once every case has run once.
+[1/3] 19:46:26 run 1/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.88 s, peak 904 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m51s, elapsed 0m51s, about 1m42s left
+[2/3] 19:47:18 run 2/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 25.27 s, peak 903 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m51s, elapsed 1m42s, about 0m51s left
+[3/3] 19:48:09 run 3/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.77 s, peak 898 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m50s, elapsed 2m33s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cpu-pc-susy/warmup-check/all/results.jsonl
+warm-up check: J48 24.61 s after 50k rows, 24.88 s after all rows (x0.989) -> --warmup-rows 50000
+
+=== 19:49:00  4/5 benchmark: SUSY, pruned CART and C4.5, 1 and 28 threads, 1 run(s) per case
+9 cases, 14 processes:
+  susy | cart_alpha | tree | 1
+  susy | cart_alpha | tree | 28
+  susy | cart_alpha | sklearn | 1
+  susy | cart_alpha | rpart | 1
+  susy | c45 | tree | 1
+  susy | c45 | tree | 28
+  susy | c45 | j48 | 1
+  susy | c45 | yadt | 1
+  susy | c45 | yadt | 28
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy: identical in every format (2 s)
+9 cases x 1 run(s), then 5 footprint run(s) x 1: 14 processes. Time left is shown once every case has run once.
+[1/14] 19:49:03 run 1/1: C4.5 YaDT, 1 thread, susy ...
+    ok: train 126.4 s, peak 3,402 MiB, 15,487 nodes, depth 33, test acc 79.75% | process 2m38s, elapsed 2m44s
+[2/14] 19:51:48 run 1/1: C4.5 ./tree, 28 threads, susy ...
+    ok: train 1.506 s, peak 2,408 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m01s, elapsed 2m47s
+[3/14] 19:51:51 run 1/1: CART ./tree, 28 threads, susy ...
+    ok: train 1.116 s, peak 1,797 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m01s, elapsed 2m50s
+[4/14] 19:51:53 run 1/1: CART rpart, 1 thread, susy ...
+    ok: train 361.8 s, peak 3,638 MiB, 701 nodes, depth 19, test acc 79.64% | process 6m06s, elapsed 8m56s
+[5/14] 19:57:59 run 1/1: C4.5 ./tree, 1 thread, susy ...
+    ok: train 7.582 s, peak 1,759 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m09s, elapsed 9m06s
+[6/14] 19:58:10 run 1/1: CART scikit-learn, 1 thread, susy ...
+    ok: train 412.2 s, peak 662 MiB, 1,059 nodes, depth 17, test acc 79.48% | process 6m53s, elapsed 16m00s
+[7/14] 20:05:04 run 1/1: CART ./tree, 1 thread, susy ...
+    ok: train 9.081 s, peak 1,158 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m10s, elapsed 16m11s
+[8/14] 20:05:15 run 1/1: C4.5 YaDT, 28 threads, susy ...
+    ok: train 33.46 s, peak 4,789 MiB, 15,487 nodes, depth 33, test acc 79.75% | process 0m43s, elapsed 17m01s
+[9/14] 20:06:05 run 1/1: C4.5 Weka J48, 1 thread, susy ...
+    ok: train 828.9 s, peak 11,262 MiB, 15,479 nodes, depth 38, test acc 79.71% | process 13m52s, elapsed 30m53s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[10/14] 20:19:57 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.06527 s, peak 52 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 30m54s, about 0m00s left
+[11/14] 20:19:57 footprint: CART rpart, 1 thread, _baseline ...
+    ok: train 0.002924 s, peak 71 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 30m54s, about 0m00s left
+[12/14] 20:19:57 footprint: CART scikit-learn, 1 thread, _baseline ...
+    ok: train 0.002338 s, peak 125 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 30m54s, about 0m00s left
+[13/14] 20:19:58 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 30m54s, about 0m00s left
+[14/14] 20:19:58 footprint: C4.5 YaDT, 1 thread, _baseline ...
+    ok: train 0.0001335 s, peak 11 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 30m54s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cpu-pc-susy/results.jsonl
+
+=== 20:19:58  5/5 tables, CSV files and the chart
+/home/bruno/Projects/dt/bench/results/cpu-pc-susy/chart.png
+done: /home/bruno/Projects/dt/bench/results/cpu-pc-susy/report.md, summary.csv, runs.csv, chart.png

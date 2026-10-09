@@ -22,7 +22,7 @@ bench/results/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
 
   | File | Content |
   |---|---|
-  | `chart.png` | Training time against threads, one line for CART and one for C4.5 (`bench/scaling_chart.py`) |
+  | `chart.png` | Training time (solid, left axis) and peak RSS (dashed, right axis) against threads, CART and C4.5 (`bench/scaling_chart.py`) |
   | `scaling.csv` | One row per protocol and thread count: median time, min–max, speedup, efficiency, peak RSS |
   | `report.md`, `summary.csv`, `runs.csv` | The same tables and CSVs as the other benchmarks (`bench/report.py`) |
   | `results.jsonl` | Raw rows with the exact commands |

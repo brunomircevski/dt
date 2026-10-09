@@ -22,7 +22,7 @@ It measures training time and peak memory, and records tree size and training an
 | `run.py` | Checks the data, then runs every case in fresh processes. It measures time inside each tool and memory from outside, and writes `results/<run-id>/`. |
 | `report.py` | Turns results into Markdown tables (single- and multi-thread separate), a per-case CSV and a per-process CSV. It can merge runs from several machines. |
 | `chart.py` | One figure per dataset: training time and peak RSS per tool, single- and multi-thread in separate panels. |
-| `scaling_chart.py` | Thread-scaling figure of ./tree for one run: training time against threads, one line per protocol, plus `scaling.csv` (time, speedup, efficiency, peak RSS). |
+| `scaling_chart.py` | Thread-scaling figure of ./tree for one run: training time and peak RSS (second axis) against threads, one colour per protocol, plus `scaling.csv` (time, speedup, efficiency, peak RSS). |
 
 ## Usage
 

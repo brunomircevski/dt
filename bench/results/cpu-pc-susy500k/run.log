@@ -1,0 +1,109 @@
+log: /home/bruno/Projects/dt/bench/results/cpu-pc-susy500k/run.log, started 2026-10-09 19:25:57
+
+=== 19:25:57  1/5 machine check
+CPU governor: performance
+code: committed (93f2c03)
+load average: 0.61 3.99 7.60 (close browsers, chat apps, IDE indexers)
+runs per case: 1
+
+=== 19:25:57  2/5 build ./tree_cpu, the J48 adapter and the memory launcher; check the tools
+make: Entering directory '/home/bruno/Projects/dt'
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/c45_pruning.cpp -o build/algo/c45_pruning.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/cart_pruning.cpp -o build/algo/cart_pruning.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/split_rules.cpp -o build/algo/split_rules.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/app/main.cpp -o build/app/main.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/app/trainer.cpp -o build/app/trainer.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/cpu_builder.cpp -o build/build/cpu_builder.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/cpu_grower.cpp -o build/build/cpu_grower.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/node_store.cpp -o build/build/node_store.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/core/dataset.cpp -o build/core/dataset.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/core/options.cpp -o build/core/options.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/core/tree.cpp -o build/core/tree.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/gpu_grower_stub.cpp -o build/build/gpu_grower_stub.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP build/algo/c45_pruning.o build/algo/cart_pruning.o build/algo/split_rules.o build/app/main.o build/app/trainer.o build/build/cpu_builder.o build/build/cpu_grower.o build/build/node_store.o build/core/dataset.o build/core/options.o build/core/thread_pool.o build/core/tree.o build/build/gpu_grower_stub.o -o tree_cpu
+make: Leaving directory '/home/bruno/Projects/dt'
+ready:
+  scikit-learn 1.9.1
+  R 4.6.1, rpart 4.1.27
+  openjdk version "17.0.20.1" 2026-08-18, Weka 3.8.7
+  YaDT version 2.3.0 (c) S. Ruggieri 2002-2020
+  (optional) GNU time not installed: needed only for manual memory cross-checks
+
+=== 19:26:10  3/5 warm-up check: is a 50,000-row warm-up enough for J48's JIT? (~5 min)
+1 cases, 3 processes:
+  susy_500k | c45 | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy_500k: identical in every format (0 s)
+1 cases x 3 run(s), then 1 footprint run(s) x 3: 3 processes. Time left is shown once every case has run once.
+[1/3] 19:26:10 run 1/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.94 s, peak 752 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m26s, elapsed 0m26s, about 0m53s left
+[2/3] 19:26:37 run 2/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.91 s, peak 749 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m26s, elapsed 0m53s, about 0m26s left
+[3/3] 19:27:04 run 3/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 25.01 s, peak 749 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m26s, elapsed 1m20s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cpu-pc-susy500k/warmup-check/50000/results.jsonl
+1 cases, 3 processes:
+  susy_500k | c45 | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy_500k: identical in every format (0 s)
+1 cases x 3 run(s), then 1 footprint run(s) x 3: 3 processes. Time left is shown once every case has run once.
+[1/3] 19:27:32 run 1/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 25.11 s, peak 902 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m51s, elapsed 0m51s, about 1m43s left
+[2/3] 19:28:23 run 2/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.85 s, peak 897 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m50s, elapsed 1m42s, about 0m51s left
+[3/3] 19:29:14 run 3/3: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 25.19 s, peak 899 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m51s, elapsed 2m34s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cpu-pc-susy500k/warmup-check/all/results.jsonl
+warm-up check: J48 24.94 s after 50k rows, 25.11 s after all rows (x0.993) -> --warmup-rows 50000
+
+=== 19:30:06  4/5 benchmark: SUSY 500k, pruned CART and C4.5, 1 and 28 threads, 1 run(s) per case
+9 cases, 14 processes:
+  susy_500k | cart_alpha | tree | 1
+  susy_500k | cart_alpha | tree | 28
+  susy_500k | cart_alpha | sklearn | 1
+  susy_500k | cart_alpha | rpart | 1
+  susy_500k | c45 | tree | 1
+  susy_500k | c45 | tree | 28
+  susy_500k | c45 | j48 | 1
+  susy_500k | c45 | yadt | 1
+  susy_500k | c45 | yadt | 28
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy_500k: identical in every format (0 s)
+9 cases x 1 run(s), then 5 footprint run(s) x 1: 14 processes. Time left is shown once every case has run once.
+[1/14] 19:30:07 run 1/1: C4.5 YaDT, 1 thread, susy_500k ...
+    ok: train 9.971 s, peak 758 MiB, 3,533 nodes, depth 27, test acc 79.29% | process 0m13s, elapsed 0m15s
+[2/14] 19:30:22 run 1/1: C4.5 ./tree, 28 threads, susy_500k ...
+    ok: train 0.106 s, peak 314 MiB, 3,579 nodes, depth 27, test acc 79.26% | process 0m00s, elapsed 0m15s
+[3/14] 19:30:22 run 1/1: CART ./tree, 28 threads, susy_500k ...
+    ok: train 0.1051 s, peak 250 MiB, 3,269 nodes, depth 30, test acc 79.26% | process 0m00s, elapsed 0m15s
+[4/14] 19:30:22 run 1/1: CART rpart, 1 thread, susy_500k ...
+    ok: train 9.388 s, peak 425 MiB, 2,863 nodes, depth 29, test acc 79.32% | process 0m10s, elapsed 0m26s
+[5/14] 19:30:33 run 1/1: C4.5 ./tree, 1 thread, susy_500k ...
+    ok: train 0.6308 s, peak 204 MiB, 3,579 nodes, depth 27, test acc 79.26% | process 0m00s, elapsed 0m27s
+[6/14] 19:30:34 run 1/1: CART scikit-learn, 1 thread, susy_500k ...
+    ok: train 16.66 s, peak 188 MiB, 3,473 nodes, depth 25, test acc 78.94% | process 0m17s, elapsed 0m45s
+[7/14] 19:30:52 run 1/1: CART ./tree, 1 thread, susy_500k ...
+    ok: train 0.8261 s, peak 139 MiB, 3,269 nodes, depth 30, test acc 79.26% | process 0m01s, elapsed 0m46s
+[8/14] 19:30:53 run 1/1: C4.5 YaDT, 28 threads, susy_500k ...
+    ok: train 2.834 s, peak 1,125 MiB, 3,533 nodes, depth 27, test acc 79.29% | process 0m04s, elapsed 0m52s
+[9/14] 19:30:59 run 1/1: C4.5 Weka J48, 1 thread, susy_500k ...
+    ok: train 24.71 s, peak 749 MiB, 3,635 nodes, depth 27, test acc 79.27% | process 0m26s, elapsed 1m18s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[10/14] 19:31:26 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.06432 s, peak 52 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 1m19s, about 0m00s left
+[11/14] 19:31:26 footprint: CART rpart, 1 thread, _baseline ...
+    ok: train 0.002886 s, peak 71 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m19s, about 0m00s left
+[12/14] 19:31:26 footprint: CART scikit-learn, 1 thread, _baseline ...
+    ok: train 0.001372 s, peak 125 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m19s, about 0m00s left
+[13/14] 19:31:26 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m19s, about 0m00s left
+[14/14] 19:31:26 footprint: C4.5 YaDT, 1 thread, _baseline ...
+    ok: train 0.0001435 s, peak 5 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 1m19s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cpu-pc-susy500k/results.jsonl
+
+=== 19:31:26  5/5 tables, CSV files and the chart
+/home/bruno/Projects/dt/bench/results/cpu-pc-susy500k/chart.png
+done: /home/bruno/Projects/dt/bench/results/cpu-pc-susy500k/report.md, summary.csv, runs.csv, chart.png

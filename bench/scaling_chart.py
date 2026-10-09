@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Thread-scaling chart of ./tree: training time against the number of threads,
-one line per protocol (CART, C4.5); dot = median over the runs, bar = min-max.
+"""Thread-scaling chart of ./tree: training time (solid lines, left axis) and peak
+memory (dashed lines, right axis) against the number of threads, one colour per
+protocol (CART, C4.5); dot = median over the runs, bar = min-max of the time.
 
 Also writes scaling.csv: one row per (protocol, threads) with the median time,
 speedup over 1 thread (serial backend), parallel efficiency and peak RSS.
@@ -78,7 +79,7 @@ def figure(run, dataset, protocols, series, settings, out):
     meta = json.load(open(run / "plan.json"))["datasets"][dataset]
     threads = sorted({p["threads"] for points in series.values() for p in points})
     fig, ax = plt.subplots(figsize=(8, 5.0))
-    ax.set_xlim(0, max(threads) + 1)
+    ax.set_xlim(0, max(threads) * 1.13)  # room for the end labels
     ax.set_xticks(threads)
     ax.tick_params(colors=MUTED, labelsize=8.5, length=0)
     for side in ("top", "right"):
@@ -88,7 +89,13 @@ def figure(run, dataset, protocols, series, settings, out):
     ax.grid(axis="y", color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
     ax.set_xlabel("threads", fontsize=9, color=MUTED)
-    ax.set_title("Training time", loc="left", fontsize=10.5, color=INK, fontweight="bold")
+    ax.set_title("Training time (solid, left) and peak memory (dashed, right)", loc="left",
+                 fontsize=10.5, color=INK, fontweight="bold")
+    mem = ax.twinx()
+    mem.tick_params(colors=MUTED, labelsize=8.5, length=0)
+    for side in ("top", "left", "bottom"):
+        mem.spines[side].set_visible(False)
+    mem.spines["right"].set_color(GRID)
 
     for protocol in protocols:
         points, color = series[protocol], COLORS.get(protocol, INK)
@@ -97,21 +104,30 @@ def figure(run, dataset, protocols, series, settings, out):
                 markersize=7, markeredgecolor="white", markeredgewidth=1.5, zorder=3)
         ax.vlines(xs, [p["time_min"] for p in points], [p["time_max"] for p in points],
                   color=color, linewidth=2, zorder=2)
+        mem.plot(xs, [p["peak_rss_median"] / 1e9 for p in points], color=color, linewidth=1.6,
+                 linestyle=(0, (4, 2.5)), marker="s", markersize=5, markerfacecolor="white",
+                 markeredgecolor=color, markeredgewidth=1.4, zorder=3)
     ax.set_ylim(bottom=0)
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
+    mem.set_ylim(0, 1.15 * max(p["peak_rss_median"] for points in series.values()
+                               for p in points) / 1e9)
+    mem.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GB"))
 
-    # Time at the last thread count, at the end of each line, pushed apart
+    # Value at the last thread count, at the end of each line, pushed apart
     # vertically where two lines end close together.
     fig.canvas.draw()
-    gap, placed = 13, []  # pixels between label centres
-    ends = sorted((series[p][-1]["threads"], series[p][-1]["time_median"]) for p in protocols)
-    for x, y in sorted(ends, key=lambda end: end[1]):
-        pixel = wanted = ax.transData.transform((x, y))[1]
-        if placed and pixel - placed[-1] < gap:
-            pixel = placed[-1] + gap
-        placed.append(pixel)
-        ax.annotate(f"{y:.3g} s", (x, y), xytext=(6, (pixel - wanted) * 72 / fig.dpi),
-                    textcoords="offset points", va="center", fontsize=9, color=INK)
+    gap = 13  # pixels between label centres
+    for axis, key, scale, unit in ((ax, "time_median", 1, "s"),
+                                   (mem, "peak_rss_median", 1e9, "GB")):
+        placed = []
+        ends = [(series[p][-1]["threads"], series[p][-1][key] / scale) for p in protocols]
+        for x, y in sorted(ends, key=lambda end: end[1]):
+            pixel = wanted = axis.transData.transform((x, y))[1]
+            if placed and pixel - placed[-1] < gap:
+                pixel = placed[-1] + gap
+            placed.append(pixel)
+            axis.annotate(f"{y:.3g} {unit}", (x, y), xytext=(7, (pixel - wanted) * 72 / fig.dpi),
+                          textcoords="offset points", va="center", fontsize=9, color=INK)
 
     handles = [Line2D([], [], color=COLORS.get(p, INK), linewidth=2, marker="o", markersize=7,
                       markeredgecolor="white", label=f"{LABELS.get(p, p)}: "
@@ -128,9 +144,10 @@ def figure(run, dataset, protocols, series, settings, out):
     runs = f"median of {reps} runs, bar: min–max" if reps and reps > 1 else "one run per point"
     fig.text(0.08, 0.015,
              f"Dot: {runs}. 1 thread = the serial backend, more = the parallel backend;\n"
-             "every thread count builds the same tree. Training time excludes reading the data.",
+             "every thread count builds the same tree. Training time excludes reading the data;\n"
+             "peak memory is the peak RSS up to the end of training, the loaded data included.",
              fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.08, right=0.9, top=0.8, bottom=0.17)
+    fig.subplots_adjust(left=0.08, right=0.84, top=0.8, bottom=0.2)
     fig.savefig(out, dpi=150, facecolor="white")
     return out
 
