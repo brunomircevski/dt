@@ -20,7 +20,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
-from benchlib import BASELINE, BENCH, DATA, ROOT
+from benchlib import BASELINE, BENCH, DATA, ROOT, check_csv
 
 
 def split_rows(n, spec):
@@ -75,16 +75,16 @@ def write_dataset(name, features, classes, X, y, train, test, info):
         Xp.tofile(tmp / f"{part}.f32")
         y[rows].astype("<i4").tofile(tmp / f"{part}.y.i32")
         # Arrow prints float32 in the shortest form that reads back as the same
-        # float32 (verify_csv checks this on a sample of rows).
+        # float32 (check_csv checks every row).
         columns = [pa.array(Xp[:, j]) for j in range(F)]
         columns.append(pc.take(labels, pa.array(y[rows])))
         table = pa.table(columns, names=[f"f{j}" for j in range(F)] + ["class"])
         if part == "train":
             pacsv.write_csv(table, tmp / "train.csv", pacsv.WriteOptions(quoting_style="none"))
-            verify_csv(tmp / "train.csv", Xp, header=True)
+            check_csv(tmp / "train.csv", Xp, y[rows], header=True)
         pacsv.write_csv(table, tmp / f"{part}.yadt.csv",
                         pacsv.WriteOptions(include_header=False, quoting_style="none"))
-        verify_csv(tmp / f"{part}.yadt.csv", Xp, header=False)
+        check_csv(tmp / f"{part}.yadt.csv", Xp, y[rows], header=False)
     with open(tmp / "yadt.names", "w") as names:
         for j in range(F):
             names.write(f"f{j},float,continuous\n")
@@ -95,20 +95,6 @@ def write_dataset(name, features, classes, X, y, train, test, info):
     json.dump(meta, open(tmp / "meta.json", "w"), indent=1)
     shutil.rmtree(out, ignore_errors=True)
     tmp.rename(out)
-
-
-def verify_csv(path, X, header, sample=2000):
-    """Sampled rows of the CSV must parse back to exactly the same float32 values."""
-    rng = np.random.default_rng(0)
-    check = set(rng.choice(len(X), size=min(sample, len(X)), replace=False).tolist())
-    with open(path) as handle:
-        if header:
-            next(handle)
-        for i, line in enumerate(handle):
-            if i in check:
-                values = np.array(line.rstrip("\n").split(",")[:-1], dtype=np.float32)
-                if not np.array_equal(values, X[i]):
-                    raise AssertionError(f"{path}: row {i} does not round-trip as float32")
 
 
 def make_baseline():

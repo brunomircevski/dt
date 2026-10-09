@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Installs everything the benchmark needs except system packages:
-#   bench/.venv/            Python venv: numpy, pyarrow, scikit-learn (requirements.txt)
+#   bench/.venv/            Python venv: numpy, pyarrow, scikit-learn, matplotlib (requirements.txt)
+#   bench/.tools/rusage     launcher that measures each process's peak RSS (adapters/rusage.c)
 #   bench/.tools/weka.jar   Weka 3.8.7 (J48) and bounce.jar (a Weka dependency)
 #   bench/.tools/classes/   the compiled J48 adapter
 #   bench/.tools/yadt/      YaDT 2.3.0 Linux binary (dTcmd + libtbb)
@@ -17,7 +18,7 @@ TOOLS=.tools
 mkdir -p "$TOOLS"
 
 missing=()
-for command in python3 Rscript java javac taskset unzip curl make g++; do
+for command in python3 Rscript java javac taskset unzip curl make g++ cc; do
   command -v "$command" >/dev/null || missing+=("$command")
 done
 if ((${#missing[@]})); then
@@ -27,6 +28,10 @@ fi
 Rscript -e 'suppressMessages(library(rpart))' || { echo "R package rpart missing" >&2; exit 1; }
 
 make -C .. cpu
+# Static if the C library allows it: the smaller the launcher, the less it adds
+# to the peak RSS of the processes it starts (see adapters/rusage.c).
+cc -O2 -static -Wall -o "$TOOLS/rusage" adapters/rusage.c 2>/dev/null ||
+  cc -O2 -Wall -o "$TOOLS/rusage" adapters/rusage.c
 
 [ -x .venv/bin/python ] || python3 -m venv .venv
 .venv/bin/pip install -q -r requirements.txt

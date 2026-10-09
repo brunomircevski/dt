@@ -4,7 +4,7 @@ This directory is a benchmark for a paper. It compares `./tree` on the CPU with:
 - **CART:** scikit-learn and R rpart.
 - **C4.5:** Weka J48 and YaDT.
 
-It measures training time and peak memory, and records tree size and test accuracy so you can check that the tools built comparable trees.
+It measures training time and peak memory, and records tree size and training and test accuracy so you can check that the tools built comparable trees.
 
 **Two rules hold for every benchmark here:**
 - **No cross-validation.** Every case grows exactly one tree.
@@ -14,13 +14,14 @@ It measures training time and peak memory, and records tree size and test accura
 
 | File | Purpose |
 |---|---|
-| `setup.sh` | Builds `tree_cpu`, creates `.venv`, and downloads Weka and YaDT into `.tools/`. It also compiles the J48 adapter. |
+| `setup.sh` | Builds `tree_cpu`, creates `.venv`, and downloads Weka and YaDT into `.tools/`. It also compiles the J48 adapter and the `rusage` launcher. |
 | `datasets.toml` | Dataset registry: source CSV, split, subsampling. Add new datasets here. |
-| `prepare.py` | Writes `data/<name>/`: the split as float32 binary (for the adapters), a CSV for `./tree`, and CSV plus `.names` for YaDT. Also writes the tiny `_baseline` dataset. |
-| `benchlib.py` | The protocols (the exact settings for every tool), the implementations, and the data layout. |
-| `adapters/` | One program per library (`sklearn_fit.py`, `rpart_fit.R`, `J48Fit.java`). Each loads the binary data, times only the fit, and prints one JSON line. `./tree` and YaDT are run directly. |
-| `run.py` | Runs every case in fresh processes. It measures time inside each tool and memory from outside, and writes `results/<run-id>/`. |
-| `report.py` | Turns results into Markdown tables and a CSV. It can merge runs from several machines. |
+| `prepare.py` | Writes `data/<name>/`: the split as float32 binary (for the adapters), a CSV for `./tree`, and CSV plus `.names` for YaDT. Every CSV row is checked to read back as the binary values. Also writes the tiny `_baseline` dataset. |
+| `benchlib.py` | The protocols (the exact settings for every tool), the implementations, the data layout and the data check. |
+| `adapters/` | One program per library (`sklearn_fit.py`, `rpart_fit.R`, `J48Fit.java`). Each loads the binary data, times only the fit, then measures accuracy and prints one JSON line. `./tree` and YaDT are run directly. `rusage.c` is the launcher every measured process runs under. |
+| `run.py` | Checks the data, then runs every case in fresh processes. It measures time inside each tool and memory from outside, and writes `results/<run-id>/`. |
+| `report.py` | Turns results into Markdown tables (single- and multi-thread separate), a per-case CSV and a per-process CSV. It can merge runs from several machines. |
+| `chart.py` | One figure per dataset: training time and peak RSS per tool, single- and multi-thread in separate panels. |
 
 ## Usage
 
@@ -29,7 +30,8 @@ bench/setup.sh                                   # once per machine; needs pytho
 bench/.venv/bin/python bench/prepare.py          # every dataset in datasets.toml whose source exists
 bench/.venv/bin/python bench/run.py --dry-run    # print the plan
 bench/.venv/bin/python bench/run.py diabetes covertype_10k --cpus 0,2,4,6,8,10 --threads 1,2,4,6
-bench/.venv/bin/python bench/report.py --md report.md --csv summary.csv
+bench/.venv/bin/python bench/report.py --md report.md --csv summary.csv --runs-csv runs.csv
+bench/.venv/bin/python bench/chart.py bench/results/<run-id>
 ```
 
 `run.py` options:
@@ -37,10 +39,11 @@ bench/.venv/bin/python bench/report.py --md report.md --csv summary.csv
 - CART pruning: `--alpha` sets the fixed α of `cart_alpha` (default `CART_ALPHA` = 1e-5 in `benchlib.py`).
 - Threads: `--threads 1,2,4,all` sets the thread counts tried for the multi-threaded tools.
 - Pinning: `--cpus` sets the order of logical CPUs to pin to.
-- Repetitions and limits: `--reps` (default 5), `--mem-reps` (default 3), `--timeout`.
+- Repetitions and limits: `--reps` (default 5), `--mem-reps` (default 5), `--timeout`.
+- Warm-up: `--warmup-rows` sets the rows of the managed runtimes' untimed warm-up fit (default `WARMUP_ROWS` = 50,000; `all` = the whole training set).
 - Thermal rest: `--cooldown` sets seconds of rest between processes.
 - JVM: `--java-heap` sets its maximum heap.
-- `--skip check,time,memory,baseline` leaves out phases.
+- `--skip time,memory,baseline` leaves out phases.
 
 ## Protocols (what is compared)
 
@@ -83,10 +86,12 @@ The reported time is **training time**: from the data being in memory to the fin
 **Preparation counts as training.** Each tool's own data preparation is included: `./tree`'s presort, YaDT's indexing, and the sorting the other libraries do inside their fit call. It is part of the algorithm, and leaving it out would favour some tools over others.
 
 **Repetitions and run order:**
-- **Check run:** one untimed process per case records tree size and test accuracy. For the native tools (./tree, YaDT) it is also the warm-up: it puts the file in the page cache and raises CPU clocks.
 - **Timed runs:** `--reps` fresh processes per case. Report the median and the min–max range.
-- **In-process warm-up:** the adapters warm up before the timed fit. J48 builds once on all rows so the JIT can compile; scikit-learn and rpart fit once on 2,000 rows to load code paths.
+- **Tree size and accuracy come from every timed run.** After its timer stops, each process reports nodes, leaves, depth, and training and test accuracy (each tool predicts with its own code; ./tree's dumped tree is evaluated by `benchlib.predict_tree`, checked against ./tree's own training accuracy). They must be the same in every repetition; `report.py` marks a case where they are not.
+- **One warm-up rule for the managed runtimes** (scikit-learn, rpart, J48): one untimed fit on the first `--warmup-rows` training rows, in the same process, before the timed fit. It loads code paths, and the JVM's JIT compiles the same methods on 50,000 rows as on millions. The native tools (./tree, YaDT) need none: loading is not timed, so the page cache does not matter.
+- **Cold fit:** the memory runs have no warm-up, so their training time is the cold-start time (an appendix number).
 - **Order:** shuffled anew on each repetition, so slow drift (heat, background load) is spread over all cases.
+- **No polling during timed runs.** The memory sampler (below) only runs in the memory runs, so it cannot take CPU time from a timed process.
 
 **Machine hygiene (record it; `run.py` writes `machine.json`):**
 - **Idle machine.** Set the `performance` governor, and either fix turbo or record whether it is on. Laptops throttle, so use `--cooldown` and look at the min–max spread.
@@ -104,8 +109,8 @@ The reported time is **training time**: from the data being in memory to the fin
 
 | Metric | Source | Includes | Excludes |
 |---|---|---|---|
-| **`peak_rss_bytes` (main metric)** | the kernel's high-water mark of resident memory, `ru_maxrss` from `wait4()`. This is the same number GNU time's `%M` prints. Exact, no sampling, no overhead. | everything the process touched: runtime, libraries, input data, the loader's temporary memory, training structures, and memory-mapped files | |
-| **`peak_anon_bytes`** | the largest sum of `RssAnon` over the process tree, sampled from `/proc` every 5 ms (`--sample-ms`) | memory the program allocated | file-backed pages: memory-mapped input (./tree maps its CSV), program and library code. Can miss a spike shorter than the sampling interval. |
+| **`peak_rss_bytes` (main metric)** | the kernel's high-water mark of resident memory, `ru_maxrss` from `wait4()` in the `rusage` launcher. This is the same number GNU time's `%M` prints. Exact, no sampling, no overhead. | everything the process touched: runtime, libraries, input data, the loader's temporary memory, training structures, and memory-mapped files | |
+| **`peak_anon_bytes`** | the largest sum of `RssAnon` over the process tree, sampled from `/proc` every 5 ms (`--sample-ms`) | memory the program allocated | file-backed pages: memory-mapped files, program and library code. Can miss a spike shorter than the sampling interval. |
 | **runtime footprint** | `peak_rss_bytes` of the same tool on the tiny `_baseline` dataset (200 rows) | interpreter, JVM or R, libraries | |
 
 **Report three numbers** for each case:
@@ -113,10 +118,12 @@ The reported time is **training time**: from the data being in memory to the fin
 - peak RSS minus the runtime footprint, which is memory for the data plus training;
 - the input size (n × F × 4 bytes) for scale.
 
+**Why the launcher:** Linux starts a new process's `ru_maxrss` at the peak RSS of the process it was forked from, and `exec` keeps it. Started straight from `run.py` (a Python process that has just checked hundreds of MiB of data), every tool would report at least `run.py`'s own peak: ./tree on 200 rows showed 316 MiB instead of 7 MiB. So every measured process runs under `.tools/rusage` (`adapters/rusage.c`), a tiny static program that forks the tool and reports its `wait4()` usage; `taskset` pins the launcher, and the tool inherits the pinning.
+
 **How the measurement is kept clean:**
 - **Separate memory runs.** Memory runs are fresh processes with no warm-up and no evaluation (no test set loaded), separate from the timing runs.
 - **Binary input for the adapters.** scikit-learn, rpart and J48 read float32 binary files directly into their own data structures, so no CSV parser's temporary objects inflate the peak.
-- **CSV for ./tree and YaDT.** They only read CSV, so their peak includes the parser. Two possible improvements for `./tree`: a binary input format, or a `--load-only` mode that would allow subtracting the load peak exactly.
+- **CSV for ./tree and YaDT.** They only read CSV, so their peak includes the parser. ./tree reads the file through a 64 KiB buffer per thread (no memory mapping), so it never holds more than a few MiB of text; on SUSY its peak comes from training (presort and build), not from loading.
 - **Single process per run.** Every tool runs as one process, so `ru_maxrss` covers all of its work. A tool that spawned worker processes would need cgroup v2 `memory.peak` instead. That counts the whole process tree, but also charges it with page cache from file reads.
 
 **Caveats to state in the paper:**
@@ -126,10 +133,17 @@ The reported time is **training time**: from the data being in memory to the fin
 **Cross-checking by hand:**
 
 ```bash
-/usr/bin/time -v ./tree_cpu --serial --c45 bench/data/covertype_10k/train.csv   # "Maximum resident set size"
+bench/.tools/rusage /dev/stdout ./tree_cpu --serial --c45 bench/data/susy_50k/train.csv   # first number: peak RSS in KiB
+/usr/bin/time -v ./tree_cpu --serial --c45 bench/data/susy_50k/train.csv                  # "Maximum resident set size"
 ```
 
-GNU time is the `time` package. Its "Maximum resident set size" must match `peak_rss_bytes`.
+GNU time is the `time` package (forked from a small process, so it is exact too). Its "Maximum resident set size" must match `peak_rss_bytes`.
+
+## Same data for every run
+
+- `prepare.py` writes one split per dataset, in every tool's format, and checks every CSV row against the binary files.
+- At the start of every run, `run.py` repeats that check and records the SHA-256 of every data file in `plan.json`.
+- Every process reports the rows and features it loaded (and YaDT the rows it classified); a mismatch with the dataset makes the run an error.
 
 ## Datasets
 

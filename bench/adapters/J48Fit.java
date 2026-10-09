@@ -1,13 +1,14 @@
 // Weka J48 adapter: fit one protocol on a prepared dataset, print one JSON line.
 //
 //   java -cp weka.jar:bounce.jar:classes J48Fit data=DIR n_train=N n_test=M \
-//       n_features=F n_classes=K warmup=full|none eval=0|1 options="-C 0.25 -M 2"
+//       n_features=F n_classes=K warmup=ROWS eval=0|1 options="-C 0.25 -M 2"
 //
 // The data are read from the binary files straight into Weka Instances (no
 // ARFF/CSV parser, whose temporary objects would dominate peak memory).
-// Timed: buildClassifier. With warmup=full, one untimed build on all rows runs
-// first so the JIT has compiled the hot code. Loading and prediction are not
-// timed.
+// warmup=ROWS: one untimed build on the first ROWS training rows first, so the
+// JIT has compiled the hot code (0 = none). Timed: buildClassifier. Loading and
+// prediction are not timed; with eval=1 the training and test accuracy are
+// measured after the timed build.
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -59,6 +60,14 @@ public class J48Fit {
         return tree;
     }
 
+    static double accuracy(J48 model, Instances data) throws Exception {
+        int correct = 0;
+        for (Instance row : data) {
+            if (model.classifyInstance(row) == row.classValue()) correct++;
+        }
+        return (double) correct / data.numInstances();
+    }
+
     public static void main(String[] argv) throws Exception {
         for (String arg : argv) {
             int eq = arg.indexOf('=');
@@ -68,7 +77,8 @@ public class J48Fit {
         int classes = Integer.parseInt(args.get("n_classes"));
         Instances train = load("train", Integer.parseInt(args.get("n_train")), features, classes);
 
-        if (args.get("warmup").equals("full")) build(train);
+        int warmup = Math.min(Integer.parseInt(args.get("warmup")), train.numInstances());
+        if (warmup > 0) build(new Instances(train, 0, warmup));
         long start = System.nanoTime();
         J48 model = build(train);
         double seconds = (System.nanoTime() - start) / 1e9;
@@ -82,15 +92,14 @@ public class J48Fit {
             }
         }
         StringBuilder out = new StringBuilder(String.format(Locale.ROOT,
-                "{\"train_seconds\": %.9f, \"nodes\": %d, \"leaves\": %d, \"depth\": %d",
-                seconds, (int) model.measureTreeSize(), (int) model.measureNumLeaves(), depth));
+                "{\"train_seconds\": %.9f, \"nodes\": %d, \"leaves\": %d, \"depth\": %d, "
+                        + "\"n_train_loaded\": %d, \"n_features_loaded\": %d",
+                seconds, (int) model.measureTreeSize(), (int) model.measureNumLeaves(), depth,
+                train.numInstances(), train.numAttributes() - 1));
         if (args.get("eval").equals("1")) {
             Instances test = load("test", Integer.parseInt(args.get("n_test")), features, classes);
-            int correct = 0;
-            for (Instance row : test) {
-                if (model.classifyInstance(row) == row.classValue()) correct++;
-            }
-            out.append(String.format(Locale.ROOT, ", \"test_accuracy\": %.9f", (double) correct / test.numInstances()));
+            out.append(String.format(Locale.ROOT, ", \"train_accuracy\": %.9f, \"test_accuracy\": %.9f",
+                    accuracy(model, train), accuracy(model, test)));
         }
         System.out.println(out.append("}"));
     }

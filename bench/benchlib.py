@@ -25,6 +25,7 @@ TOOLS = BENCH / ".tools"
 RESULTS = BENCH / "results"
 TREE = Path(os.environ.get("TREE_BIN", ROOT / "tree_cpu"))
 YADT = TOOLS / "yadt" / "dTcmd"
+RUSAGE = TOOLS / "rusage"  # adapters/rusage.c: runs every measured process
 JAVA_CLASSPATH = f"{TOOLS / 'weka.jar'}:{TOOLS / 'bounce.jar'}:{TOOLS / 'classes'}"
 BASELINE = "_baseline"  # tiny synthetic dataset: each tool's runtime footprint
 
@@ -91,17 +92,21 @@ PROTOCOLS = {
 }
 
 # threads: "multi" = runs with every thread count asked for, "single" = only 1.
-# warmup: what the adapter does before the timed fit, in the same process
-#   "full"   one untimed fit on all rows (JIT compilation in the JVM)
-#   "subset" one untimed fit on 2,000 rows (imports, first-call costs)
-#   "none"   a native executable: run.py runs one untimed process instead
+# warmup: True for the managed runtimes (Python, R, JVM): before the timed fit,
+#   the adapter fits one untimed tree on the first WARMUP_ROWS training rows in
+#   the same process (imports, first-call costs, JIT compilation). The native
+#   executables need none: loading is not timed, so the file cache does not matter.
 IMPLS = {
-    "tree": {"label": "./tree", "threads": "multi", "warmup": "none"},
-    "sklearn": {"label": "scikit-learn", "threads": "single", "warmup": "subset"},
-    "rpart": {"label": "rpart", "threads": "single", "warmup": "subset"},
-    "j48": {"label": "Weka J48", "threads": "single", "warmup": "full"},
-    "yadt": {"label": "YaDT", "threads": "multi", "warmup": "none"},
+    "tree": {"label": "./tree", "threads": "multi", "warmup": False},
+    "sklearn": {"label": "scikit-learn", "threads": "single", "warmup": True},
+    "rpart": {"label": "rpart", "threads": "single", "warmup": True},
+    "j48": {"label": "Weka J48", "threads": "single", "warmup": True},
+    "yadt": {"label": "YaDT", "threads": "multi", "warmup": False},
 }
+
+# Rows of the untimed warm-up fit (run.py --warmup-rows overrides it; "all" =
+# the whole training set). The same number for every managed runtime.
+WARMUP_ROWS = 50_000
 
 
 
@@ -117,6 +122,49 @@ def load(dataset, part):
     X = np.fromfile(DATA / dataset / f"{part}.f32", dtype="<f4").reshape(rows, len(m["features"]))
     y = np.fromfile(DATA / dataset / f"{part}.y.i32", dtype="<i4")
     return X, y
+
+
+def check_csv(path, X, y, header):
+    """Every row of a prepared CSV must read back as exactly the binary files'
+    float32 values and class indices (labels c0..c{K-1}). Raises otherwise."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    F = X.shape[1]
+    names = [f"f{j}" for j in range(F)] + ["class"]
+    table = pacsv.read_csv(
+        path, read_options=pacsv.ReadOptions(column_names=names, skip_rows=int(header)),
+        convert_options=pacsv.ConvertOptions(
+            column_types={**{f"f{j}": pa.float32() for j in range(F)}, "class": pa.string()}))
+    if table.num_rows != len(y):
+        raise AssertionError(f"{path}: {table.num_rows} rows, expected {len(y)}")
+    for j in range(F):
+        if not np.array_equal(table[f"f{j}"].to_numpy(), X[:, j]):
+            raise AssertionError(f"{path}: column f{j} differs from the binary file")
+    classes = pa.array([f"c{k}" for k in range(int(y.max()) + 1)])
+    if not pc.all(pc.equal(table["class"], pc.take(classes, pa.array(y)))).as_py():
+        raise AssertionError(f"{path}: class labels differ from the binary file")
+
+
+def verify_dataset(dataset):
+    """Prove that every tool reads the same data: SHA-256 of every file of the
+    prepared dataset, and every CSV row checked against the binary files.
+    Returns {file name: sha256}."""
+    import hashlib
+    folder = DATA / dataset
+    hashes = {}
+    for path in sorted(folder.iterdir()):
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            while chunk := handle.read(1 << 24):
+                digest.update(chunk)
+        hashes[path.name] = digest.hexdigest()
+    for part in ("train", "test"):
+        X, y = load(dataset, part)
+        check_csv(folder / f"{part}.yadt.csv", X, y, header=False)
+        if part == "train":
+            check_csv(folder / "train.csv", X, y, header=True)
+    return hashes
 
 
 # ------------------------------------------------------------------ ./tree dumps

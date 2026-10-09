@@ -1,10 +1,12 @@
 """scikit-learn adapter: fit one tree on a prepared dataset, print one JSON line.
 
   python sklearn_fit.py data=DIR n_train=N n_test=M n_features=F threads=T \
-      warmup=subset|none eval=0|1 mode=fit [max_depth=D] [ccp_alpha=A]
+      warmup=ROWS eval=0|1 mode=fit [max_depth=D] [ccp_alpha=A]
 
+warmup=ROWS: one untimed fit on the first ROWS training rows first (0 = none).
 Timed: DecisionTreeClassifier.fit (one tree, on one thread: scikit-learn does
-not parallelise a single tree). Loading and prediction are not timed.
+not parallelise a single tree). Loading and prediction are not timed; with
+eval=1 the training and test accuracy are measured after the timed fit.
 """
 
 import json
@@ -35,15 +37,18 @@ def fit(X, y):
 
 
 X, y = read("train", int(args["n_train"]))
-if args["warmup"] == "subset":
-    fit(X[:2000], y[:2000])
+warmup = int(args["warmup"])
+if warmup:
+    fit(X[:warmup], y[:warmup])
 start = time.perf_counter()
 model = fit(X, y)
 seconds = time.perf_counter() - start
 
 result = {"train_seconds": seconds, "nodes": int(model.tree_.node_count),
-          "leaves": int(model.get_n_leaves()), "depth": int(model.get_depth())}
+          "leaves": int(model.get_n_leaves()), "depth": int(model.get_depth()),
+          "n_train_loaded": int(X.shape[0]), "n_features_loaded": int(X.shape[1])}
 if args["eval"] == "1":
+    result["train_accuracy"] = float(np.mean(model.predict(X) == y))
     X_test, y_test = read("test", int(args["n_test"]))
     result["test_accuracy"] = float(np.mean(model.predict(X_test) == y_test))
 print(json.dumps(result))

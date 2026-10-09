@@ -1,21 +1,31 @@
 #!/usr/bin/env python3
-"""Summarise benchmark runs: Markdown tables and one CSV row per case.
+"""Summarise benchmark runs: Markdown tables and CSV files.
 
   bench/.venv/bin/python bench/report.py                      # the latest run
   bench/.venv/bin/python bench/report.py bench/results/*      # several runs (machines)
-  bench/.venv/bin/python bench/report.py RUN --md out.md --csv out.csv
+  bench/.venv/bin/python bench/report.py RUN --md out.md --csv summary.csv --runs-csv runs.csv
 
-Per case: training time as median [min-max] over the timed repetitions, the
-ratio to ./tree on 1 thread (same machine, dataset, protocol), peak RSS and
-peak anonymous RSS (medians of the memory repetitions), peak RSS above the
-tool's runtime footprint (its median peak RSS on the _baseline dataset), and
-the tree size and test accuracy of the check run.
+Per case (dataset, protocol, implementation, threads):
+- training time: median and min-max over the timed repetitions, and the ratio
+  to ./tree with the same number of threads;
+- cold fit: the median training time of the memory runs, which have no warm-up;
+- peak RSS (median of the memory runs), peak anonymous RSS (memory the tool
+  allocated, without file-backed pages such as program code) and
+  peak RSS above the tool's runtime footprint (its median peak RSS on the
+  _baseline dataset);
+- nodes, leaves, depth, training and test accuracy, reported by every timed run.
+  They must be identical in every repetition; a case where they are not is
+  marked "varies".
+Single-thread and multi-thread cases go to separate tables.
+
+--csv writes one row per case, --runs-csv one row per process (the raw data).
 """
 
 import argparse
 import csv
 import io
 import json
+import math
 import re
 import statistics
 import sys
@@ -24,6 +34,8 @@ from pathlib import Path
 
 import benchlib as B
 
+TREE_FIELDS = ("nodes", "leaves", "depth", "train_accuracy", "test_accuracy")
+
 
 def median(values):
     return statistics.median(values) if values else None
@@ -31,6 +43,7 @@ def median(values):
 
 def summarise(run_dir):
     rows = [json.loads(line) for line in open(run_dir / "results.jsonl")]
+    metas = json.load(open(run_dir / "plan.json"))["datasets"]
     groups = defaultdict(list)
     for row in rows:
         groups[(row["dataset"], row["protocol"], row["impl"], row["threads"], row["kind"])].append(row)
@@ -48,28 +61,40 @@ def summarise(run_dir):
             continue
         case = cases.setdefault((dataset, protocol, impl, threads), {
             "run": run_dir.name, "dataset": dataset, "protocol": protocol, "impl": impl,
-            "threads": threads, "status": "ok"})
+            "threads": threads, "status": "ok", "consistent": True, "_tree": []})
         bad = [r["status"] for r in group if r["status"] != "ok"]
         if bad:
             case["status"] = bad[0]
         ok = [r for r in group if r["status"] == "ok"]
-        if kind == "check" and ok:
-            case.update({k: ok[0].get(k) for k in ("nodes", "leaves", "depth", "test_accuracy")})
-        elif kind == "time" and ok:
+        case["_tree"] += [tuple(r.get(k) for k in TREE_FIELDS[:3]) for r in ok]
+        if kind == "time" and ok:
             times = [r["train_seconds"] for r in ok]
+            case.update({k: ok[0].get(k) for k in TREE_FIELDS})
+            if len({tuple(r.get(k) for k in TREE_FIELDS) for r in ok}) > 1:
+                case["consistent"] = False
             case.update(time_median=median(times), time_min=min(times), time_max=max(times),
+                        time_mean=statistics.fmean(times),
+                        time_stdev=statistics.stdev(times) if len(times) > 1 else None,
                         time_reps=len(times), wall_median=median([r["wall_seconds"] for r in ok]))
+            accuracy, n_test = case.get("test_accuracy"), metas[dataset]["n_test"]
+            if accuracy is not None:
+                case["test_accuracy_ci95"] = 1.96 * math.sqrt(accuracy * (1 - accuracy) / n_test)
         elif kind == "memory" and ok:
-            rss = median([r["peak_rss_bytes"] for r in ok])
+            rss = [r["peak_rss_bytes"] for r in ok]
             anon = median([r["peak_anon_bytes"] for r in ok if r["peak_anon_bytes"]])
             base_rss, base_anon = baseline.get(impl, (None, None))
-            case.update(peak_rss=rss, peak_anon=anon,
-                        peak_rss_above_baseline=rss - base_rss if base_rss else None,
+            case.update(peak_rss=median(rss), peak_rss_min=min(rss), peak_rss_max=max(rss),
+                        memory_reps=len(rss), peak_anon=anon,
+                        cold_median=median([r["train_seconds"] for r in ok]),
+                        peak_rss_above_baseline=median(rss) - base_rss if base_rss else None,
                         peak_anon_above_baseline=anon - base_anon if anon and base_anon else None)
     for case in cases.values():
-        reference = cases.get((case["dataset"], case["protocol"], "tree", 1), {})
+        # Memory runs build the same tree too (no evaluation there): sizes must agree.
+        if len(set(case.pop("_tree"))) > 1:
+            case["consistent"] = False
+        reference = cases.get((case["dataset"], case["protocol"], "tree", case["threads"]), {})
         if case.get("time_median") and reference.get("time_median"):
-            case["ratio_to_tree_1"] = case["time_median"] / reference["time_median"]
+            case["ratio_to_tree"] = case["time_median"] / reference["time_median"]
     return cases, baseline
 
 
@@ -86,20 +111,58 @@ def fmt_seconds(seconds):
 def fmt_bytes(count):
     if count is None:
         return ""
+    if abs(count) < 2**19:
+        return "0 MiB"
     if abs(count) < 2**30:
         return f"{count / 2**20:.0f} MiB"
     return f"{count / 2**30:.2f} GiB"
+
+
+def fmt_percent(value):
+    return f"{100 * value:.2f}%" if value is not None else ""
 
 
 def machine_line(run_dir):
     info = json.load(open(run_dir / "machine.json"))
     model = re.search(r"Model name:\s+(.*)", info.get("lscpu", ""))
     memory = f"{info['mem_total_kb'] / 2**20:.0f} GiB" if info.get("mem_total_kb") else "?"
+    settings = info["settings"]
     return (f"**{run_dir.name}**: {model.group(1) if model else '?'}, {info['logical_cpus']} "
             f"logical CPUs (P-cores {info.get('p_cores')}, E-cores {info.get('e_cores')}), "
             f"{memory}, {info.get('kernel')}, governor {', '.join(info.get('governors', []))}, "
-            f"./tree {info['versions'].get('tree_git')}, pinned to CPUs "
-            f"{info['settings'].get('cpus') or 'none'}")
+            f"turbo {'off' if info.get('intel_no_turbo') == '1' else 'on'}, "
+            f"./tree {info['versions'].get('tree_git')}, CPUs in order of use "
+            f"{settings.get('cpus') or 'none'}, {settings.get('reps')} timed + "
+            f"{settings.get('mem_reps')} memory runs per case, warm-up "
+            f"{settings.get('warmup_rows')} rows")
+
+
+def table(cases):
+    out = io.StringIO()
+    out.write("| Implementation | Train time (median) | min–max | × ./tree | Cold fit | Peak RSS "
+              "| Peak anon | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |\n"
+              "|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|\n")
+    order = list(B.IMPLS)
+    for c in sorted(cases, key=lambda c: order.index(c["impl"])):
+        label = B.IMPLS[c["impl"]]["label"]
+        if not c.get("time_median"):
+            out.write(f"| {label} | {c['status']} |" + " |" * 11 + "\n")
+            continue
+        flags = [] if c["status"] == "ok" else [c["status"]]
+        if not c["consistent"]:
+            flags.append("varies")
+        span = f"{fmt_seconds(c['time_min'])}–{fmt_seconds(c['time_max'])}"
+        ratio = f"{c['ratio_to_tree']:.2f}×" if c.get("ratio_to_tree") else ""
+        out.write(" | ".join([
+            f"| {label}" + (f" ({', '.join(flags)})" if flags else ""),
+            fmt_seconds(c["time_median"]), span, ratio, fmt_seconds(c.get("cold_median")),
+            fmt_bytes(c.get("peak_rss")), fmt_bytes(c.get("peak_anon")),
+            fmt_bytes(c.get("peak_rss_above_baseline")),
+            f"{c['nodes']:,}" if c.get("nodes") is not None else "",
+            f"{c['leaves']:,}" if c.get("leaves") is not None else "",
+            str(c.get("depth", "")), fmt_percent(c.get("train_accuracy")),
+            fmt_percent(c.get("test_accuracy"))]) + " |\n")
+    return out.getvalue()
 
 
 def markdown(run_dirs):
@@ -107,8 +170,8 @@ def markdown(run_dirs):
     for run_dir in run_dirs:
         cases, baseline = summarise(run_dir)
         out.write(f"## {run_dir.name}\n\n{machine_line(run_dir)}\n\n")
-        out.write("Runtime footprint (_baseline dataset, peak RSS / anon): " + ", ".join(
-            f"{B.IMPLS[impl]['label']} {fmt_bytes(rss)} / {fmt_bytes(anon)}"
+        out.write("Runtime footprint (peak RSS on the 200-row _baseline dataset): " + ", ".join(
+            f"{B.IMPLS[impl]['label']} {fmt_bytes(rss)}"
             for impl, (rss, anon) in sorted(baseline.items())) + "\n")
         metas = json.load(open(run_dir / "plan.json"))["datasets"]
         for dataset in dict.fromkeys(case[0] for case in cases):
@@ -116,39 +179,26 @@ def markdown(run_dirs):
             out.write(f"\n### {dataset} ({meta['n_train']:,} train / {meta['n_test']:,} test rows, "
                       f"{len(meta['features'])} features, {len(meta['classes'])} classes)\n")
             for protocol in B.PROTOCOLS:
-                rows = [c for key, c in cases.items() if key[0] == dataset and key[1] == protocol]
-                if not rows:
-                    continue
-                out.write(f"\n**{B.PROTOCOLS[protocol]['title']}** (`{protocol}`)\n\n")
-                out.write("| Implementation | Threads | Train time (median) | min–max | vs ./tree 1 thr "
-                          "| Peak RSS | Peak anon | RSS − footprint | Nodes | Leaves | Depth "
-                          "| Test acc. |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
-                order = list(B.IMPLS)
-                for c in sorted(rows, key=lambda c: (order.index(c["impl"]), c["threads"])):
-                    if c["status"] != "ok" and not c.get("time_median"):
-                        out.write(f"| {B.IMPLS[c['impl']]['label']} | {c['threads']} | "
-                                  f"{c['status']} |" + " |" * 9 + "\n")
-                        continue
-                    span = (f"{fmt_seconds(c.get('time_min'))}–{fmt_seconds(c.get('time_max'))}"
-                            if c.get("time_min") is not None else "")
-                    ratio = f"{c['ratio_to_tree_1']:.2f}×" if c.get("ratio_to_tree_1") else ""
-                    accuracy = (f"{100 * c['test_accuracy']:.2f}%"
-                                if c.get("test_accuracy") is not None else "")
-                    out.write(" | ".join([
-                        f"| {B.IMPLS[c['impl']]['label']}", str(c["threads"]),
-                        fmt_seconds(c.get("time_median")), span, ratio,
-                        fmt_bytes(c.get("peak_rss")), fmt_bytes(c.get("peak_anon")),
-                        fmt_bytes(c.get("peak_rss_above_baseline")),
-                        f"{c['nodes']:,}" if c.get("nodes") is not None else "",
-                        f"{c['leaves']:,}" if c.get("leaves") is not None else "",
-                        str(c.get("depth", "")), accuracy]) + " |\n")
+                mine = [c for key, c in cases.items() if key[0] == dataset and key[1] == protocol]
+                for threads in sorted({c["threads"] for c in mine}):
+                    rows = [c for c in mine if c["threads"] == threads]
+                    heading = "1 thread" if threads == 1 else f"{threads} threads"
+                    out.write(f"\n**{B.PROTOCOLS[protocol]['title']}** (`{protocol}`), "
+                              f"{heading}\n\n{table(rows)}")
+            half_widths = [c["test_accuracy_ci95"] for key, c in cases.items()
+                           if key[0] == dataset and c.get("test_accuracy_ci95")]
+            if half_widths:
+                out.write(f"\nTest accuracy is measured on {meta['n_test']:,} rows: its 95% "
+                          f"interval is ±{100 * max(half_widths):.2f} percentage points at most.\n")
     return out.getvalue()
 
 
-FIELDS = ["run", "dataset", "protocol", "impl", "threads", "status", "time_median", "time_min",
-          "time_max", "time_reps", "wall_median", "ratio_to_tree_1", "peak_rss", "peak_anon",
-          "peak_rss_above_baseline", "peak_anon_above_baseline", "nodes", "leaves", "depth",
-          "test_accuracy"]
+FIELDS = ["run", "dataset", "protocol", "impl", "threads", "status", "consistent",
+          "time_median", "time_min", "time_max", "time_mean", "time_stdev", "time_reps",
+          "ratio_to_tree", "cold_median", "wall_median", "peak_rss", "peak_rss_min",
+          "peak_rss_max", "memory_reps", "peak_anon", "peak_rss_above_baseline",
+          "peak_anon_above_baseline", "nodes", "leaves", "depth", "train_accuracy",
+          "test_accuracy", "test_accuracy_ci95"]
 
 
 def main():
@@ -156,6 +206,7 @@ def main():
     parser.add_argument("runs", nargs="*", type=Path, help="run directories (default: the latest)")
     parser.add_argument("--md", type=Path, help="write the Markdown here instead of stdout")
     parser.add_argument("--csv", type=Path, help="also write one row per case here")
+    parser.add_argument("--runs-csv", type=Path, help="also write one row per process here")
     args = parser.parse_args()
     runs = args.runs or sorted((p for p in B.RESULTS.glob("*") if (p / "results.jsonl").exists()),
                                key=lambda p: p.stat().st_mtime)[-1:]
@@ -173,6 +224,13 @@ def main():
             for run in runs:
                 for case in summarise(run)[0].values():
                     writer.writerow(case)
+    if args.runs_csv:
+        rows = [json.loads(line) for run in runs for line in open(run / "results.jsonl")]
+        fields = list(dict.fromkeys(key for row in rows for key in row))
+        with open(args.runs_csv, "w", newline="") as handle:
+            writer = csv.DictWriter(handle, fields)
+            writer.writeheader()
+            writer.writerows(rows)
 
 
 if __name__ == "__main__":
