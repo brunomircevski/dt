@@ -5,10 +5,12 @@
 ## Run it
 
 ```bash
-bench/results/susy-paper-20261009/run.sh
+bench/results/susy-paper-20261009/run.sh          # each case once
+bench/results/susy-paper-20261009/run.sh -m 5     # each case 5 times
 ```
 
-- **Time:** about 2.5 hours (likely 2–3.5 h). Per process on full SUSY: J48 ~5 min, scikit-learn ~3.3 min, rpart ~2 min, YaDT ~2.6 min (1 thread) or ~1 min (28 threads), ./tree ~15 s.
+- **Time:** about 40 min with one run per case, about 2¾ h with `-m 5`. Measured per run on full SUSY: J48 ~14 min, scikit-learn ~7 min, rpart ~6.5 min, YaDT ~2.8 min (1 thread) or ~50 s (28 threads), ./tree ~15 s.
+- **Progress:** every process prints `[n/total]`, what it runs, and when it ends its time, peak memory, tree size, accuracy and the elapsed time. Ctrl+C stops the run and the tool it is running.
 - **Before:**
   - commit the code (`machine.json` records the ./tree version);
   - set the `performance` governor (already set);
@@ -18,7 +20,7 @@ bench/results/susy-paper-20261009/run.sh
   2. Builds the tools (`bench/setup.sh`).
   3. Runs the J48 warm-up pilot (see Training time).
   4. Runs the benchmark:
-     `bench/run.py susy --protocols cart_alpha,c45 --threads 1,all --cpus 2,0,1,3-27 --reps 5 --mem-reps 5 --timeout 3600`
+     `bench/run.py susy --protocols cart_alpha,c45 --threads 1,all --cpus 2,0,1,3-27 --reps <-m> --timeout 3600`
   5. Writes the outputs.
 - **Outputs:**
 
@@ -113,16 +115,16 @@ No tool is tuned to match another tool's tree size; each reports the tree it bui
   - The pilot times J48 on 500k rows after a 50k-row warm-up and after a full-size warm-up.
   - If the 50k warm-up is more than 3% slower, the main run warms up on all rows.
 - **Reported numbers:**
-  - median and min–max of 5 timed runs;
-  - the ratio to ./tree with the same thread count;
-  - the cold-start time (memory runs, no warm-up) for an appendix.
+  - median and min–max over the runs (one run per case unless `-m` asks for more);
+  - the ratio to ./tree with the same thread count.
 
 ### Peak memory
 
 **Peak RSS of the process** (`ru_maxrss`, the kernel's exact high-water mark). It counts everything: runtime, input data, parser, training structures.
 
-- **Memory runs:** 5 separate processes per case, no warm-up, no evaluation. The median is reported.
-- **Runtime footprint:** each tool's peak RSS on a 200-row dataset. The report also gives peak RSS minus this footprint (data + training) and peak anonymous memory (allocated memory only).
+- **Same process as the time.** Each tool reads its peak (`VmHWM`) right after training, before it loads the test set or predicts. So the peak covers runtime, data, the 50k-row warm-up and training.
+  - YaDT, a closed binary, can't read its own peak. Its measured process therefore only trains and saves the tree, and its whole-process peak is used. A second, unmeasured YaDT process loads the saved tree and classifies the test rows.
+- **Runtime footprint:** each tool's peak RSS on a 200-row dataset. The report also gives peak RSS minus this footprint (data + training).
 - **The launcher:** every process is started by a tiny launcher (`bench/adapters/rusage.c`). Linux gives a child the peak RSS of the process it was forked from, so starting tools from the Python harness inflated them (./tree on 200 rows: 316 MiB instead of 7 MiB).
 - **Input reading:**
   - scikit-learn, rpart and J48 read a 324 MB binary file.
@@ -133,7 +135,7 @@ No tool is tuned to match another tool's tree size; each reports the tree it bui
 
 ### Tree size and accuracy
 
-- **Every timed run reports**, after its timer stops: nodes, leaves, depth, training and test accuracy. They must be identical across the 5 runs; otherwise the report marks the case.
+- **Every run reports**, after its timer stops: nodes, leaves, depth, training and test accuracy. With `-m` above 1 they must be identical across the runs; otherwise the report marks the case.
 - **Nodes** = internal nodes + leaves. All splits are binary, so leaves = (nodes + 1) / 2.
 - **Depth** = edges from the root to the deepest leaf; a root-only tree has depth 0. The same in every tool.
 - **Accuracy:** each tool predicts with its own code. YaDT's comes from its confusion matrices (its printed error is rounded).
@@ -151,7 +153,7 @@ No tool is tuned to match another tool's tree size; each reports the tree it bui
 - **1 thread:** every tool is pinned with `taskset` to CPU 2, a performance core. The JVM's and R's helper threads share that core.
 - **28 threads:** CPUs 0–27. On this hybrid CPU the ideal speedup is well below 28×.
 - **No hidden threads:** `OMP/OPENBLAS/MKL_NUM_THREADS=1` for every process.
-- **Per case:** 5 timed and 5 memory processes. Each repetition runs the cases in a new random order.
+- **Per case:** one run, or `-m N` runs, each a fresh process measuring time and memory together. Each repetition runs the cases in a new random order.
 - **Timeout:** 1 hour per process; a timeout is reported, not dropped.
 
 ### Caveats for the paper

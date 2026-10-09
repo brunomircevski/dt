@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run the CPU benchmark: every (dataset, protocol, implementation, threads) case,
-timed and memory-measured, one fresh process per measurement.
+--reps fresh processes each; every process gives training time, peak memory,
+tree size and accuracy.
 
   bench/.venv/bin/python bench/run.py --dry-run                 # show the plan only
   bench/.venv/bin/python bench/run.py covertype_10k susy_50k    # run these datasets
@@ -13,19 +14,20 @@ Before anything runs, every prepared file of the datasets is hashed (SHA-256)
 and every CSV row is checked against the binary files (plan.json records the
 hashes), so every tool provably reads the same rows.
 
-Phases (see bench/README.md for why):
-  time       --reps processes per case: training time measured inside the tool
-             (after the managed runtimes' untimed warm-up fit); after the timer
-             stops, the same process reports tree size and training and test
-             accuracy
-  memory     --mem-reps processes per case, no warm-up, no evaluation: peak memory
-             (their training time is the cold-start time, for an appendix)
-  baseline   --mem-reps processes per implementation on the tiny _baseline
-             dataset: the tool's runtime footprint
-Time and memory repetitions run in a shuffled order (a new order every
-repetition), so slow drift (heat, background load) spreads over all cases.
-Every process reports the rows and features it loaded; a mismatch with the
-dataset is an error.
+Each run (see bench/README.md for why):
+  1. the managed runtimes (Python, R, JVM) fit one untimed warm-up tree;
+  2. the tool times the training itself (data already in memory);
+  3. right after it, the peak resident memory so far is read (VmHWM): load,
+     warm-up and training, before evaluation allocates anything. YaDT, a closed
+     binary, cannot do that, so its measured process only trains (and saves
+     the tree); its peak is the process's ru_maxrss, and a second, unmeasured
+     YaDT process classifies the test rows with the saved tree;
+  4. tree size and training and test accuracy are recorded.
+The repetitions run in a shuffled order (a new order every repetition), so slow
+drift (heat, background load) spreads over all cases. Every process reports the
+rows and features it loaded; a mismatch with the dataset is an error. After the
+runs, each tool runs --reps times on the tiny _baseline dataset (no warm-up, no
+evaluation): its runtime footprint.
 
 Results go to bench/results/<run-id>/results.jsonl, with machine.json (hardware,
 OS, versions) and plan.json next to it; bench/report.py turns them into tables.
@@ -45,7 +47,9 @@ import subprocess
 import sys
 import tempfile
 import threading
+import statistics
 import time
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -58,36 +62,7 @@ ADAPTERS = B.BENCH / "adapters"
 
 # ------------------------------------------------------------------ measuring
 
-def process_tree(pid):
-    """pid and all its descendants (Linux /proc)."""
-    pids, todo = [], [pid]
-    while todo:
-        current = todo.pop()
-        pids.append(current)
-        try:
-            for task in os.listdir(f"/proc/{current}/task"):
-                with open(f"/proc/{current}/task/{task}/children") as handle:
-                    todo.extend(int(child) for child in handle.read().split())
-        except OSError:
-            pass
-    return pids
-
-
-def anon_rss_bytes(pids):
-    total = 0
-    for pid in pids:
-        try:
-            with open(f"/proc/{pid}/status") as handle:
-                for line in handle:
-                    if line.startswith("RssAnon:"):
-                        total += int(line.split()[1]) * 1024
-                        break
-        except OSError:
-            pass
-    return total
-
-
-def measure(command, env, timeout, sample_seconds, pin=()):
+def measure(command, env, timeout, pin=()):
     """Run `command` to completion and measure it from the outside.
 
     The command runs under the tiny bench/.tools/rusage launcher (pinned with
@@ -97,32 +72,16 @@ def measure(command, env, timeout, sample_seconds, pin=()):
 
     peak_rss_bytes   the kernel's high-water mark of the process's resident set
                      (ru_maxrss from the launcher's wait4, the number GNU time's
-                     %M prints): exact, no sampling, no overhead. For a process
-                     that waited for children it is the largest of them, not the
-                     sum.
-    peak_anon_bytes  the largest sum of RssAnon over the process tree, sampled
-                     every sample_seconds: memory the tools allocated, without
-                     file-backed pages (memory-mapped input files, program and
-                     library code). Sampling can miss a peak shorter than the
-                     interval.
+                     %M prints), over the whole process.
     wall_seconds     from fork to exit, including start-up, loading, everything.
     """
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err, \
             tempfile.TemporaryDirectory() as folder:
         usage_file = Path(folder) / "rusage"
         start = time.perf_counter()
+        # Its own session, so a timeout (or Ctrl+C here) kills the whole tool.
         process = subprocess.Popen(list(pin) + [str(B.RUSAGE), str(usage_file)] + list(command),
                                    stdout=out, stderr=err, env=env, start_new_session=True)
-        done = threading.Event()
-        peak_anon = [0]
-
-        def sample():
-            while not done.wait(sample_seconds):
-                peak_anon[0] = max(peak_anon[0], anon_rss_bytes(process_tree(process.pid)))
-
-        sampler = threading.Thread(target=sample, daemon=True) if sample_seconds > 0 else None
-        if sampler:
-            sampler.start()
         timed_out = threading.Event()
 
         def kill():
@@ -131,12 +90,14 @@ def measure(command, env, timeout, sample_seconds, pin=()):
 
         timer = threading.Timer(timeout, kill)
         timer.start()
-        _, status, _ = os.wait4(process.pid, 0)
+        try:
+            _, status, _ = os.wait4(process.pid, 0)
+        except BaseException:
+            os.killpg(process.pid, signal.SIGKILL)
+            raise
+        finally:
+            timer.cancel()
         wall = time.perf_counter() - start
-        timer.cancel()
-        done.set()
-        if sampler:
-            sampler.join()
         process.returncode = os.waitstatus_to_exitcode(status)
         out.seek(0)
         err.seek(0)
@@ -146,7 +107,6 @@ def measure(command, env, timeout, sample_seconds, pin=()):
                 "stderr": err.read().decode(errors="replace"),
                 "wall_seconds": wall,
                 "peak_rss_bytes": int(usage[0]) * 1024 if usage else None,
-                "peak_anon_bytes": peak_anon[0] or None,
                 "user_seconds": float(usage[1]) if usage else None,
                 "system_seconds": float(usage[2]) if usage else None}
 
@@ -187,10 +147,10 @@ def build_command(case, kind, args, scratch):
     """-> (argv, extra env, parser of stdout -> result dict)."""
     dataset, protocol, impl, threads = case
     spec = B.PROTOCOLS[protocol]["impls"][impl]
-    evaluate = kind == "time"
+    evaluate = kind == "run"
     m = B.meta(dataset)
     warmup_rows = 0
-    if kind == "time" and B.IMPLS[impl]["warmup"]:
+    if kind == "run" and B.IMPLS[impl]["warmup"]:
         warmup_rows = m["n_train"] if args.warmup_rows == "all" else int(args.warmup_rows)
     data = B.DATA / dataset
 
@@ -205,10 +165,12 @@ def build_command(case, kind, args, scratch):
             nodes, leaves, depth = re.search(r"nodes (\d+), leaves (\d+), depth (\d+)",
                                              stdout).groups()
             rows, features = re.search(r"rows (\d+) train, (\d+) features", stdout).groups()
+            peak = int(re.search(r"peak after training (\d+) KiB", stdout).group(1))
             result = {"train_seconds": float(re.search(r"train total\s+([\d.]+) ms",
                                                        stdout).group(1)) / 1000,
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),
-                      "n_train_loaded": int(rows), "n_features_loaded": int(features)}
+                      "n_train_loaded": int(rows), "n_features_loaded": int(features),
+                      "peak_rss_train_bytes": peak * 1024}
             if evaluate:
                 # Both accuracies from the dumped tree, so ./tree is measured like the
                 # others: by predicting every row. ./tree's own training accuracy
@@ -225,12 +187,19 @@ def build_command(case, kind, args, scratch):
         return argv, {}, parse
 
     if impl == "yadt":
-        report = scratch / "yadt.txt"
+        # The measured process only trains: it saves the tree and reports the
+        # training accuracy; the test rows are classified afterwards by a second,
+        # unmeasured process that loads the saved tree, so they never add to the
+        # training process's peak memory.
+        report, test_report, saved = (scratch / "yadt.txt", scratch / "yadt_test.txt",
+                                      scratch / "yadt.tree")
         argv = [str(B.YADT), "-fm", str(data / "yadt.names"), "-fd", str(data / "train.yadt.csv"),
                 "-tt", str(threads)] + list(spec)
         if evaluate:
-            report.unlink(missing_ok=True)  # never read a previous run's report
-            argv += ["-ft", str(data / "test.yadt.csv"), "-t", str(report)]
+            for path in (report, test_report, saved):
+                path.unlink(missing_ok=True)  # never read a previous run's output
+            argv += ["-tb", str(saved), "-t", str(report)]
+        environment = {"LD_LIBRARY_PATH": str(B.YADT.parent)}
 
         def parse(stdout):
             # "load time" is parsing the CSV; the rest of "total time" is YaDT's
@@ -246,17 +215,23 @@ def build_command(case, kind, args, scratch):
                       "depth": int(steps[-1][1]),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features)}
             if evaluate:
-                text = report.read_text()
-                for part, title, expected in (
-                        ("train", "MISCLASSIFICATION on training", m["n_train"]),
-                        ("test", "MISCLASSIFICATION on test file", m["n_test"])):
+                subprocess.run([str(B.YADT), "-bt", str(saved), "-ft", str(data / "test.yadt.csv"),
+                                "-t", str(test_report)], env={**os.environ, **environment},
+                               capture_output=True, check=True, timeout=args.timeout)
+                for part, text, title, expected in (
+                        ("train", report.read_text(), "MISCLASSIFICATION on training",
+                         m["n_train"]),
+                        ("test", test_report.read_text(), "MISCLASSIFICATION on test file",
+                         m["n_test"])):
                     accuracy, counted = yadt_accuracy(text, title)
-                    if counted != expected:
+                    # YaDT prints counts with 6 significant digits (2.14332e+06),
+                    # so above a million rows the matrix sum is only that exact.
+                    if abs(counted - expected) > max(1, 1e-5 * expected):
                         raise ValueError(f"YaDT classified {counted} {part} rows, "
                                          f"expected {expected}")
                     result[f"{part}_accuracy"] = accuracy
             return result
-        return argv, {"LD_LIBRARY_PATH": str(B.YADT.parent)}, parse
+        return argv, environment, parse
 
     params = [f"{key}={fill(value, args.alpha)}" for key, value in spec.items()]
     common = adapter_args(dataset, threads, warmup_rows, evaluate)
@@ -341,8 +316,7 @@ def machine_info(args):
         },
         "settings": {"alpha": args.alpha, "warmup_rows": args.warmup_rows,
                      "java_heap": args.java_heap, "cpus": args.cpus, "reps": args.reps,
-                     "mem_reps": args.mem_reps, "timeout": args.timeout,
-                     "sample_ms": args.sample_ms, "cooldown": args.cooldown},
+                     "timeout": args.timeout, "cooldown": args.cooldown},
     }
 
 
@@ -397,38 +371,30 @@ def main():
                         f"(default {B.CART_ALPHA})")
     parser.add_argument("--cpus", help="logical CPUs to pin to, in order of use, e.g. 0,2,4,6 "
                         "or 0-11; N threads use the first N (default: no pinning)")
-    parser.add_argument("--reps", type=int, default=5, help="timed processes per case")
-    parser.add_argument("--mem-reps", type=int, default=5, help="memory processes per case")
+    parser.add_argument("--reps", type=int, default=1, help="runs (fresh processes) per case")
     parser.add_argument("--warmup-rows", default=str(B.WARMUP_ROWS),
                         help="rows of the untimed warm-up fit of the managed runtimes "
                         f"(Python, R, JVM); 'all' = the whole training set, 0 = none "
                         f"(default {B.WARMUP_ROWS})")
     parser.add_argument("--timeout", type=float, default=1800, help="seconds per process")
-    parser.add_argument("--sample-ms", type=float, default=5,
-                        help="RssAnon sampling interval (0 = off)")
     parser.add_argument("--cooldown", type=float, default=0, help="seconds of rest between processes")
     parser.add_argument("--java-heap", default=None, help="JVM -Xmx (default: half of RAM)")
     parser.add_argument("--run-id", help="results go to bench/results/<run-id> (default host-date)")
     parser.add_argument("--seed", type=int, default=0, help="seed of the shuffled order")
-    parser.add_argument("--skip", default="", help="phases to skip: comma list of "
-                        "time,memory,baseline")
+    parser.add_argument("--no-baseline", action="store_true",
+                        help="skip the runtime-footprint runs on the _baseline dataset")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
     args.cpu_list = parse_cpus(args.cpus) if args.cpus else None
     if not args.java_heap:
         total_kb = int(re.search(r"MemTotal:\s+(\d+)", open("/proc/meminfo").read()).group(1))
         args.java_heap = f"{max(1, total_kb // 2 // 1024 // 1024)}g"
-    skip = set(filter(None, args.skip.split(",")))
-    if skip - {"time", "memory", "baseline"}:
-        sys.exit(f"--skip: unknown phase {', '.join(sorted(skip - {'time', 'memory', 'baseline'}))}")
     if args.warmup_rows != "all" and not args.warmup_rows.isdigit():
         sys.exit("--warmup-rows: a number of rows or 'all'")
 
     cases = plan_cases(args)
     impls_used = sorted({case[2] for case in cases})
-    processes = len(cases) * (args.reps * ("time" not in skip)
-                              + args.mem_reps * ("memory" not in skip)) \
-        + len(impls_used) * args.mem_reps * ("baseline" not in skip)
+    processes = (len(cases) + len(impls_used) * (not args.no_baseline)) * args.reps
     print(f"{len(cases)} cases, {processes} processes:")
     for case in cases:
         print("  " + " | ".join(map(str, case)))
@@ -461,22 +427,46 @@ def main():
     failed = set()  # cases that timed out or failed: their other runs are skipped
     env = base_env()
     scratch = Path(tempfile.mkdtemp(prefix="bench-"))
+    total = len(cases) * args.reps + (0 if args.no_baseline else len(impls_used) * args.reps)
+    progress = {"done": 0, "started": time.perf_counter()}
+    walls = defaultdict(list)  # case -> whole-process seconds, for the time left
 
-    def execute(case, kind, rep):
+    def clock(seconds):
+        seconds = int(seconds)
+        return f"{seconds // 3600}h{seconds % 3600 // 60:02d}m" if seconds >= 3600 \
+            else f"{seconds // 60}m{seconds % 60:02d}s"
+
+    def describe(case):
+        dataset, protocol, impl, threads = case
+        algorithm = "CART" if protocol.startswith("cart") else "C4.5"
+        return (f"{algorithm} {B.IMPLS[impl]['label']}, {threads} thread"
+                f"{'s' if threads > 1 else ''}, {dataset}")
+
+    def time_left(pending):
+        """Seconds still to go, from the measured runs of the same cases (None
+        while some pending case has not run yet)."""
+        if any(not walls[case] for case in pending):
+            return None
+        return sum(statistics.median(walls[case]) for case in pending)
+
+    def execute(case, kind, rep, pending):
         if case in failed:
+            progress["done"] += 1
+            print(f"[{progress['done']}/{total}] skipped (failed before): {describe(case)}")
             return
         dataset, protocol, impl, threads = case
+        progress["done"] += 1
+        print(f"[{progress['done']}/{total}] {datetime.datetime.now():%H:%M:%S} "
+              f"{'run ' + str(rep + 1) + '/' + str(args.reps) if kind == 'run' else 'footprint'}"
+              f": {describe(case)} ...", flush=True)
         argv, extra_env, parse = build_command(case, kind, args, scratch)
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
-        # The RssAnon sampler polls /proc from this (unpinned) process, so it is
-        # left out of the timed runs, where it could steal cycles.
-        sampling = args.sample_ms / 1000 if kind != "time" else 0
-        run = measure(argv, {**env, **extra_env}, args.timeout, sampling, pin)
+        run = measure(argv, {**env, **extra_env}, args.timeout, pin)
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
                "threads": threads, "kind": kind, "rep": rep,
                "time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-               **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "peak_anon_bytes",
-                                      "user_seconds", "system_seconds")}}
+               **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "user_seconds",
+                                      "system_seconds")}}
         if run["timed_out"]:
             row["status"] = "timeout"
         elif run["returncode"] != 0:
@@ -495,35 +485,55 @@ def main():
                 row["status"] = "error"
                 row["error"] = (f"loaded {loaded[0]} rows x {loaded[1]} features, the dataset "
                                 f"has {m['n_train']} x {len(m['features'])}")
+        if row["status"] == "ok" and "peak_rss_train_bytes" not in row:
+            row["peak_rss_train_bytes"] = row["peak_rss_bytes"]  # YaDT: the process only trains
         if row["status"] != "ok" and kind != "baseline":
             failed.add(case)
         row["command"] = shlex.join(pin + argv)
         results.write(json.dumps(row) + "\n")
         results.flush()
-        shown = f"{row.get('train_seconds', float('nan')):.4g} s" if row["status"] == "ok" \
-            else row["status"]
-        peak = f"{row['peak_rss_bytes'] / 2**20:.0f} MiB" if row["peak_rss_bytes"] else "?"
-        print(f"  {kind:8} {rep} | {' | '.join(map(str, case))}: {shown}, peak {peak}",
-              flush=True)
+        walls[case].append(run["wall_seconds"])
+        elapsed = time.perf_counter() - progress["started"]
+        left = time_left(pending)
+        eta = f", about {clock(left)} left" if left is not None else ""
+        if row["status"] == "ok":
+            accuracy = (f", test acc {100 * row['test_accuracy']:.2f}%"
+                        if row.get("test_accuracy") is not None else "")
+            print(f"    ok: train {row['train_seconds']:.4g} s, peak "
+                  f"{row['peak_rss_train_bytes'] / 2**20:,.0f} MiB, {row['nodes']:,} nodes, depth "
+                  f"{row['depth']}{accuracy} | process {clock(run['wall_seconds'])}, "
+                  f"elapsed {clock(elapsed)}{eta}", flush=True)
+        else:
+            reason = row.get("error", "").strip().splitlines()
+            print(f"    {row['status'].upper()}: {reason[0][:300] if reason else ''}\n"
+                  f"    (the other runs of this case are skipped; details in results.jsonl) "
+                  f"| elapsed {clock(elapsed)}", flush=True)
         if args.cooldown:
             time.sleep(args.cooldown)
 
+    def stop(signum, frame):  # `kill` stops the run like Ctrl+C: measure() kills the tool
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, stop)
+
     rng = random.Random(args.seed)
-    for kind, reps in (("time", args.reps), ("memory", args.mem_reps)):
-        if kind in skip:
-            continue
-        print(f"{kind}:")
-        for rep in range(reps):
+    print(f"{len(cases)} cases x {args.reps} run(s), then {len(impls_used)} footprint "
+          f"run(s) x {args.reps}: {total} processes. Time left is shown once every case "
+          "has run once.")
+    try:
+        schedule = []
+        for rep in range(args.reps):
             order = list(cases)
             rng.shuffle(order)
-            for case in order:
-                execute(case, kind, rep)
-    if "baseline" not in skip:
-        print("baseline:")
-        for rep in range(args.mem_reps):
-            for impl in impls_used:
-                execute((B.BASELINE, BASELINE_PROTOCOL[impl], impl, 1), "baseline", rep)
-    shutil.rmtree(scratch, ignore_errors=True)
+            schedule += [(case, rep) for case in order]
+        for index, (case, rep) in enumerate(schedule):
+            execute(case, "run", rep, [c for c, _ in schedule[index + 1:]])
+        if not args.no_baseline:
+            print("runtime footprint of each tool (200-row _baseline dataset):")
+            for rep in range(args.reps):
+                for impl in impls_used:
+                    execute((B.BASELINE, BASELINE_PROTOCOL[impl], impl, 1), "baseline", rep, [])
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
     print(f"results: {out_dir / 'results.jsonl'}")
 
 

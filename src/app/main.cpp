@@ -20,6 +20,19 @@ void printMs(const char *label, double seconds) {
             << std::setprecision(1) << std::setw(10) << seconds * 1000.0 << " ms\n";
 }
 
+// The process's peak resident memory so far in KiB (VmHWM; Linux only, -1
+// elsewhere). Read right after training, before evaluation allocates more.
+long peakResidentKiB() {
+  std::ifstream status("/proc/self/status");
+  std::string line;
+  while (std::getline(status, line)) {
+    if (line.rfind("VmHWM:", 0) == 0) {
+      return std::stol(line.substr(6));
+    }
+  }
+  return -1;
+}
+
 std::string pruningDescription(const dt::Options &options) {
   if (options.algorithm == dt::Algorithm::C45) {
     return options.c45.prune ? "CF " + std::to_string(options.c45.confidence) + " + raising"
@@ -90,6 +103,7 @@ int main(int argc, char *argv[]) {
     }
     TrainTimings timings;
     const Tree tree = trainTree(train, options, &pool, timings);
+    const long trainPeakKiB = peakResidentKiB();
 
     double evalSeconds = 0.0;
     double trainAccuracy = 0.0;
@@ -123,6 +137,9 @@ int main(int argc, char *argv[]) {
     printMs("prune", timings.pruneSeconds);
     printMs("train total", timings.total());
     printMs("evaluate", evalSeconds);
+    if (trainPeakKiB >= 0) {
+      std::cout << "Memory:\n  peak after training " << trainPeakKiB << " KiB\n";
+    }
 
     if (options.printTree) {
       tree.print(std::cout);

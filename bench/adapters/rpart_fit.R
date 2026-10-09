@@ -7,7 +7,8 @@
 # Timed: the rpart() call, plus for mode=alpha pruning to `alpha` (in ./tree's
 # units: a leaf's cost as a misclassification rate). No cross-validation
 # (xval = 0). Loading and prediction are not timed; with eval=1 the training
-# and test accuracy are measured after the timed fit.
+# and test accuracy are measured after the timed fit. The peak resident memory
+# (VmHWM) is read right after the fit, before evaluation.
 #
 # Gini; split down to single-row leaves (minsplit 2, minbucket 1, cp 0); no
 # competitor or surrogate splits (rpart's defaults compute 4 and 5 per node,
@@ -57,13 +58,17 @@ if (warmup > 0) invisible(fit(train[seq_len(min(warmup, nrow(train))), ]))
 start <- Sys.time()
 model <- fit(train)
 seconds <- as.numeric(difftime(Sys.time(), start, units = "secs"))
+status <- readLines("/proc/self/status")
+peak_kib <- as.numeric(strsplit(trimws(sub("VmHWM:", "", grep("^VmHWM:", status, value = TRUE))),
+                                " ")[[1]][1])
 
 leaf <- model$frame$var == "<leaf>"
 result <- sprintf(paste0('"train_seconds": %.9f, "nodes": %d, "leaves": %d, "depth": %d, ',
-                         '"n_train_loaded": %d, "n_features_loaded": %d'),
+                         '"n_train_loaded": %d, "n_features_loaded": %d, ',
+                         '"peak_rss_train_bytes": %.0f'),
                   seconds, nrow(model$frame), sum(leaf),
                   max(floor(log2(as.numeric(rownames(model$frame))))),
-                  nrow(train), ncol(train) - 1L)
+                  nrow(train), ncol(train) - 1L, peak_kib * 1024)
 accuracy <- function(frame) {
   mean(as.character(predict(model, frame, type = "class")) == as.character(frame$class))
 }

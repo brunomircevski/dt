@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
 # The paper benchmark on SUSY: ./tree vs scikit-learn and rpart (CART) and
 # Weka J48 and YaDT (C4.5), 1 and 28 threads. Everything it writes goes into
-# this directory. BENCHMARK.md explains every choice. About 2.5 hours.
+# this directory; BENCHMARK.md explains every choice.
 #
-#   bench/results/susy-paper-20261009/run.sh
+#   bench/results/susy-paper-20261009/run.sh          # each case once (~45 min)
+#   bench/results/susy-paper-20261009/run.sh -m 5     # each case 5 times (~3 h)
+#
+# Every run measures training time, peak memory, tree size and accuracy in the
+# same process.
 
 set -euo pipefail
+RUNS=1
+while getopts "m:h" option; do
+  case "$option" in
+    m) RUNS="$OPTARG" ;;
+    *) sed -n '2,10p' "$0"; exit 2 ;;
+  esac
+done
+[[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RUN="$(basename "$HERE")"
 cd "$HERE/../../.."  # repository root
 PY=bench/.venv/bin/python
+step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 
 # run.py appends to results.jsonl: never mix two runs in one directory.
 if [ -e "$HERE/results.jsonl" ] || [ -e "$HERE/warmup-check" ]; then
@@ -17,23 +31,25 @@ if [ -e "$HERE/results.jsonl" ] || [ -e "$HERE/warmup-check" ]; then
   exit 1
 fi
 
-# --- machine checks: warn, do not stop (machine.json records the state anyway)
+step "1/5 machine check"
 governors="$(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor | sort -u | tr '\n' ' ')"
-[ "$governors" = "performance " ] || echo "warning: CPU governor is '$governors', not performance"
-git diff --quiet HEAD -- src bench Makefile ||
+[ "$governors" = "performance " ] && echo "CPU governor: performance" ||
+  echo "warning: CPU governor is '$governors', not performance"
+git diff --quiet HEAD -- src bench Makefile && echo "code: committed ($(git rev-parse --short HEAD))" ||
   echo "warning: uncommitted changes in src/, bench/ or Makefile: machine.json will say -dirty"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg) (close browsers, chat apps, IDE indexers)"
+echo "runs per case: $RUNS"
 
-# --- build ./tree_cpu, the J48 adapter and the rusage launcher; check the tools
+step "2/5 build ./tree_cpu, the J48 adapter and the memory launcher; check the tools"
 bench/setup.sh
 
-# --- pilot: is a 50,000-row warm-up enough for the JVM's JIT? J48 on the
-# 500k-row SUSY subset, 3 runs after a 50k-row warm-up and 3 after a full one.
-# If the 50k warm-up leaves J48 more than 3% slower, the main run warms up on
-# all rows instead (for all managed runtimes, so the rule stays the same).
+step "3/5 warm-up check: is a 50,000-row warm-up enough for J48's JIT? (~5 min)"
+# J48 on the 500k-row SUSY subset, 3 runs after a 50k-row warm-up and 3 after a
+# full one. If the 50k warm-up leaves J48 more than 3% slower, the benchmark
+# warms up on all rows instead (for all managed runtimes, so the rule stays the same).
 for warmup in 50000 all; do
   $PY bench/run.py susy_500k --protocols c45 --impls j48 --threads 1 --cpus 2 --reps 3 \
-    --skip memory,baseline --warmup-rows "$warmup" --run-id "$RUN/warmup-check/$warmup"
+    --no-baseline --warmup-rows "$warmup" --run-id "$RUN/warmup-check/$warmup"
 done
 WARMUP="$($PY - "$HERE/warmup-check" <<'EOF'
 import json, statistics, sys
@@ -53,13 +69,12 @@ print(f"warm-up check: J48 {median['50000']:.2f} s after 50k rows, {median['all'
 EOF
 )"
 
-# --- the benchmark: SUSY (published split), pruned CART and C4.5, 1 and 28
-# threads, 5 timed + 5 memory runs per case. 1 thread runs on CPU 2 (a
-# performance core); 28 threads on CPUs 0-27.
+step "4/5 benchmark: SUSY, pruned CART and C4.5, 1 and 28 threads, $RUNS run(s) per case"
+# 1 thread runs on CPU 2 (a performance core); 28 threads on CPUs 0-27.
 $PY bench/run.py susy --protocols cart_alpha,c45 --threads 1,all --cpus 2,0,1,3-27 \
-  --reps 5 --mem-reps 5 --timeout 3600 --warmup-rows "$WARMUP" --run-id "$RUN"
+  --reps "$RUNS" --timeout 3600 --warmup-rows "$WARMUP" --run-id "$RUN"
 
-# --- tables, CSV files and the chart
+step "5/5 tables, CSV files and the chart"
 $PY bench/report.py "$HERE" --md "$HERE/report.md" --csv "$HERE/summary.csv" \
   --runs-csv "$HERE/runs.csv"
 $PY bench/chart.py "$HERE"

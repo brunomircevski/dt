@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Chart of one benchmark run, one figure per dataset: training time (median,
-line = min-max over the timed runs, log scale) and peak RSS (median of the
-memory runs) per implementation. Single-thread and multi-thread cases are in
+line = min-max over the runs, log scale) and peak RSS up to the end of
+training (median of the same runs) per implementation. Single-thread and multi-thread cases are in
 separate rows of panels, never in one comparison. Each row is labelled with the
 tool and the tree it built (nodes, depth, test accuracy).
 
@@ -51,11 +51,10 @@ def collect(run):
         if r["status"] != "ok":
             status.setdefault(key, r["status"])
             continue
-        if r["kind"] == "time":
+        if r["kind"] == "run":
             times[key].append(r["train_seconds"])
+            memory[key].append(r["peak_rss_train_bytes"])
             tree.setdefault(key, r)
-        elif r["kind"] == "memory":
-            memory[key].append(r["peak_rss_bytes"])
     return times, memory, tree, status
 
 
@@ -84,7 +83,7 @@ def figure(run, dataset, times, memory, tree, status, meta, settings, out):
     fig, axes = plt.subplots(
         len(thread_rows), 2, figsize=(12.5, 1.6 + 0.62 * sum(l[2] for l in layouts)),
         gridspec_kw={"width_ratios": [1.45, 1], "height_ratios": [l[2] for l in layouts],
-                     "wspace": 0.08, "hspace": 0.32}, squeeze=False)
+                     "wspace": 0.14, "hspace": 0.32}, squeeze=False)
     every_time = [t for k in keys for t in times.get(k, [])]
     every_rss = [m for k in keys for m in memory.get(k, [])]
     time_limits = (min(every_time) / 2.5, max(every_time) * 4) if every_time else (0.1, 10)
@@ -158,9 +157,10 @@ def figure(run, dataset, times, memory, tree, status, meta, settings, out):
     fig.suptitle(f"{NAMES.get(dataset, dataset)}: {meta['n_train']:,} training rows, {meta['n_test']:,} test rows, "
                  f"{len(meta['features'])} features", x=0.215, y=0.99, ha="left", fontsize=12.5,
                  color=INK, fontweight="bold")
-    fig.text(0.215, 0.012, f"Dot: median of {reps} timed runs; line: min–max. Training time "
-             "excludes reading the data. Same data and the same CPUs for every tool.\nPeak RSS: median "
-             "of the memory runs (no warm-up, no evaluation): runtime, data and training.",
+    runs = f"median of {reps} runs; line: min–max" if reps and reps > 1 else "one run"
+    fig.text(0.215, 0.012, f"Dot: {runs}. Training time excludes reading the data. Same data "
+             "and the same CPUs for every tool.\nPeak RSS: highest resident memory of the same "
+             "process up to the end of training (runtime, data, warm-up, training).",
              fontsize=8,
              color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=0.215, right=0.985, top=0.87, bottom=0.08)

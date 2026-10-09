@@ -8,7 +8,8 @@
 // warmup=ROWS: one untimed build on the first ROWS training rows first, so the
 // JIT has compiled the hot code (0 = none). Timed: buildClassifier. Loading and
 // prediction are not timed; with eval=1 the training and test accuracy are
-// measured after the timed build.
+// measured after the timed build. The peak resident memory (VmHWM) is read
+// right after the build, before evaluation.
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -82,6 +83,10 @@ public class J48Fit {
         long start = System.nanoTime();
         J48 model = build(train);
         double seconds = (System.nanoTime() - start) / 1e9;
+        long peakKiB = -1;
+        for (String line : Files.readAllLines(Path.of("/proc/self/status"))) {
+            if (line.startsWith("VmHWM:")) peakKiB = Long.parseLong(line.replaceAll("\\D+", ""));
+        }
 
         // Depth: a node at depth d is printed after d-1 "|   " prefixes, and the
         // deepest test line carries a leaf at depth (prefixes + 1).
@@ -93,9 +98,9 @@ public class J48Fit {
         }
         StringBuilder out = new StringBuilder(String.format(Locale.ROOT,
                 "{\"train_seconds\": %.9f, \"nodes\": %d, \"leaves\": %d, \"depth\": %d, "
-                        + "\"n_train_loaded\": %d, \"n_features_loaded\": %d",
+                        + "\"n_train_loaded\": %d, \"n_features_loaded\": %d, \"peak_rss_train_bytes\": %d",
                 seconds, (int) model.measureTreeSize(), (int) model.measureNumLeaves(), depth,
-                train.numInstances(), train.numAttributes() - 1));
+                train.numInstances(), train.numAttributes() - 1, peakKiB * 1024));
         if (args.get("eval").equals("1")) {
             Instances test = load("test", Integer.parseInt(args.get("n_test")), features, classes);
             out.append(String.format(Locale.ROOT, ", \"train_accuracy\": %.9f, \"test_accuracy\": %.9f",
