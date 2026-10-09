@@ -34,6 +34,7 @@ bench/results/cpu-pc-susy/run.sh -m 5     # each case 5 times
   | `machine.json` | Hardware and versions |
   | `plan.json` | Settings and SHA-256 of every data file |
   | `warmup-check/` | The pilot's runs and decision |
+  | `run.log` | Everything `run.sh` printed |
 
 ## Method
 

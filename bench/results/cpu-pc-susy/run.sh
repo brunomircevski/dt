@@ -3,8 +3,8 @@
 # Weka J48 and YaDT (C4.5), 1 and 28 threads. Everything it writes goes into
 # this directory; BENCHMARK.md explains every choice.
 #
-#   bench/results/cpu-pc-susy/run.sh          # each case once (~45 min)
-#   bench/results/cpu-pc-susy/run.sh -m 5     # each case 5 times (~3 h)
+#   bench/results/cpu-pc-susy/run.sh          # each case once (~40 min)
+#   bench/results/cpu-pc-susy/run.sh -m 5     # each case 5 times (~2¾ h)
 #
 # Every run measures training time, peak memory, tree size and accuracy in the
 # same process.
@@ -30,6 +30,17 @@ if [ -e "$HERE/results.jsonl" ] || [ -e "$HERE/warmup-check" ]; then
   echo "$HERE already has results: move them away before running again" >&2
   exit 1
 fi
+
+# Keep the PC from sleeping or shutting down when idle (KDE's "when inactive"
+# action) until the run ends, and log everything to run.log next to the results.
+if [ -z "${BENCH_INHIBITED:-}" ] && command -v systemd-inhibit >/dev/null; then
+  export BENCH_INHIBITED=1
+  exec systemd-inhibit --what=idle:sleep:shutdown --who="bench $RUN" \
+    --why="benchmark running" "$HERE/run.sh" "$@"
+fi
+export PYTHONUNBUFFERED=1
+exec > >(trap "" INT; tee -a "$HERE/run.log") 2>&1
+echo "log: $HERE/run.log, started $(date '+%F %T')"
 
 step "1/5 machine check"
 governors="$(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor | sort -u | tr '\n' ' ')"
