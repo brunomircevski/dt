@@ -55,22 +55,20 @@ training misclassification rate and `|T|` its number of leaves. For a given
 `α`, `T(α)` is the smallest subtree minimising `R(T) + α|T|`
 (`cartCostComplexityPrune`, a bottom-up dynamic program).
 
-* `α` is chosen with one of Breiman's two error estimates, both measuring the
-  subtrees of the weakest-link sequence `α_1 = 0 < α_2 < …` at the geometric
-  midpoints `√(α_k α_{k+1})` and picking the simplest tree within one
-  standard error of the best (1-SE rule):
-  * test sample (default, `--test-sample F`, F = 1/3): the tree is grown on
-    the other 1 − F of the rows and its own sequence is measured on the F
-    put aside;
-  * K-fold cross-validation (`--cv K`): the tree is grown on all rows, a tree
-    is grown on each of K folds' complement, and each fold tree is measured
-    on its fold along the full tree's sequence. The sequence is computed in one bottom-up pass by
-  representing each subtree's optimal cost as a concave piecewise-linear
-  function of `α` (`cartPruningSequence`). The fold trees are grown by the
-  same backend as the main tree, reusing its presorted columns (CPU) or
-  device buffers (GPU).
-* `--alpha X` prunes with a fixed `α` (a rate, so it does not depend on the
-  dataset size); `--no-prune` keeps the maximal tree.
+* By default `α` is fixed (`--alpha X`, default 0.0001), as in scikit-learn
+  and rpart: one tree, grown on all rows. `α` is a rate, so it does not
+  depend on the dataset size. `--no-prune` keeps the maximal tree.
+* `--cv K` chooses `α` by Breiman's K-fold cross-validation instead: the tree
+  is grown on all rows, a tree is grown on each of K folds' complement, and
+  each fold tree is measured on its fold along the full tree's weakest-link
+  sequence `α_1 = 0 < α_2 < …`, at the geometric midpoints `√(α_k α_{k+1})`.
+  The simplest tree within one standard error of the best is kept (1-SE
+  rule). The sequence is computed in one bottom-up pass by representing each
+  subtree's optimal cost as a concave piecewise-linear function of `α`
+  (`cartPruningSequence`). The fold trees are grown by the same backend as
+  the main tree, reusing its presorted columns (CPU) or device buffers (GPU).
+  Breiman's other estimate, a held-back test sample, is not offered: it grows
+  the tree on part of the rows only.
 
 **Verified against** scikit-learn (`tools/compare_reference.py cart`): trees
 are identical except where two splits have exactly the same impurity decrease

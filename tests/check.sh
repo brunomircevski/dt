@@ -29,7 +29,7 @@ for name in covertype supersymmetry; do
 done
 
 configs=("--cart"
-         "--cart --test-sample 0.25 --holdout 0.3"
+         "--cart --alpha 1e-5 --holdout 0.3"
          "--cart --no-prune"
          "--cart --min-leaf 3 --no-prune"
          "--cart -d 8 --alpha 0.001"

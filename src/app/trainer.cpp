@@ -85,7 +85,7 @@ void addPrunedErrors(const Tree &tree, const std::vector<double> &collapse,
 // take the smallest subtree whose error is within one standard error of the
 // lowest. Returns its alpha.
 double oneStandardErrorAlpha(const std::vector<double> &alphas, const std::vector<double> &errors,
-                             double n, const char *method, bool verbose) {
+                             double n, bool verbose) {
   std::vector<double> risk(alphas.size());
   std::size_t bestIndex = 0;
   for (std::size_t k = 0; k < alphas.size(); ++k) {
@@ -102,25 +102,11 @@ double oneStandardErrorAlpha(const std::vector<double> &alphas, const std::vecto
     }
   }
   if (verbose) {
-    std::cout << "  " << method << " over " << alphas.size() << " subtrees: best alpha "
+    std::cout << "  CV over " << alphas.size() << " subtrees: best alpha "
               << alphas[bestIndex] << " (error " << risk[bestIndex] << "), 1-SE choice "
               << alphas[chosen] << " (error " << risk[chosen] << ")\n";
   }
   return alphas[chosen];
-}
-
-// Test-sample estimate: the tree was grown on the learning rows only; measure
-// every subtree of its pruning sequence on the held-back rows.
-double testSampleAlpha(const Tree &tree, const Dataset &heldBack, ThreadPool *pool,
-                       bool verbose) {
-  const PruningSequence sequence = cartPruningSequence(tree);
-  const std::vector<double> betas = evaluationPoints(sequence.alphas);
-  std::vector<std::uint32_t> rows(heldBack.rowCount);
-  std::iota(rows.begin(), rows.end(), 0u);
-  std::vector<double> errors(betas.size(), 0.0);
-  addPrunedErrors(tree, sequence.collapseAlpha, heldBack, rows, betas, errors, pool);
-  return oneStandardErrorAlpha(sequence.alphas, errors, static_cast<double>(heldBack.rowCount),
-                               "test sample", verbose);
 }
 
 // K-fold cross-validation: grow a tree on each fold's complement and measure
@@ -153,8 +139,8 @@ double crossValidateAlpha(const Dataset &train, const Tree &mainTree, const Opti
     addPrunedErrors(foldTree, cartPruningSequence(foldTree).collapseAlpha, train, testRows,
                     betas, errors, pool);
   }
-  const double alpha = oneStandardErrorAlpha(alphas, errors, static_cast<double>(train.rowCount),
-                                             "CV", verbose);
+  const double alpha =
+      oneStandardErrorAlpha(alphas, errors, static_cast<double>(train.rowCount), verbose);
   if (verbose) {
     std::cout << "  same tree without CV: --alpha " << std::setprecision(17) << alpha
               << std::setprecision(6) << "\n";
@@ -173,33 +159,18 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   ThreadPool *buildPool = options.backend == Backend::Serial ? nullptr : pool;
   const bool isCart = options.algorithm == Algorithm::Cart;
   const bool crossValidate = isCart && options.cart.pruning == CartPruning::CrossValidation;
-  const bool testSample = isCart && options.cart.pruning == CartPruning::TestSample;
-
-  // Test-sample pruning grows the tree on the learning rows only and keeps
-  // the rest for choosing alpha.
-  Dataset learning;
-  Dataset heldBack;
-  if (testSample) {
-    ScopedTimer timer(timings.pruneSeconds);
-    splitHoldout(train, options.cart.testFraction, options.seed, RandomStream::TestSample,
-                 learning, heldBack, buildPool);
-    if (learning.rowCount == 0 || heldBack.rowCount == 0) {
-      throw std::runtime_error("CART: --test-sample leaves no rows to grow or to test on");
-    }
-  }
-  const Dataset &growRows = testSample ? learning : train;
 
   std::unique_ptr<Grower> grower;
   if (options.backend == Backend::Cuda) {
     if (!pool) {
       throw std::logic_error("The Cuda backend needs a thread pool");
     }
-    grower = makeGpuGrower(growRows, options, *pool, crossValidate, timings.gpuSetupSeconds);
+    grower = makeGpuGrower(train, options, *pool, crossValidate, timings.gpuSetupSeconds);
   } else {
-    grower = makeCpuGrower(growRows, options, buildPool, crossValidate);
+    grower = makeCpuGrower(train, options, buildPool, crossValidate);
   }
 
-  const SplitRules rules(options, growRows.classCount());
+  const SplitRules rules(options, train.classCount());
   GrowTimings growTimings;
   std::vector<float> sortedValues; // C4.5's thresholds need them
   Tree tree = grower->grow(rules, {}, growTimings, isCart ? nullptr : &sortedValues);
@@ -230,9 +201,6 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   }
   if (options.cart.pruning != CartPruning::None) {
     ScopedTimer timer(timings.pruneSeconds);
-    if (testSample) {
-      alpha = testSampleAlpha(tree, heldBack, buildPool, verbose);
-    }
     cartCostComplexityPrune(tree, alpha);
   }
   return tree;

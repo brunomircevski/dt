@@ -10,7 +10,6 @@
 #include <future>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -29,12 +28,6 @@ std::string pruningDescription(const dt::Options &options) {
   switch (options.cart.pruning) {
   case dt::CartPruning::None: return "off";
   case dt::CartPruning::Alpha: return "alpha " + std::to_string(options.cart.alpha);
-  case dt::CartPruning::TestSample: {
-    std::ostringstream text;
-    text << "alpha by test sample (" << options.cart.testFraction * 100.0 << "% of rows, seed "
-         << options.seed << ")";
-    return text.str();
-  }
   case dt::CartPruning::CrossValidation:
     return "alpha by " + std::to_string(options.cart.folds) + "-fold CV (seed " +
            std::to_string(options.seed) + ")";

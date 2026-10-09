@@ -69,7 +69,7 @@ std::unique_ptr<float[]> rowMajorFeatures(const Dataset &dataset, ThreadPool *po
 
 // Independent random streams derived from one --seed, so that e.g. changing
 // the CV folds does not change the holdout split.
-enum class RandomStream : std::uint32_t { Holdout = 1, CrossValidation = 2, TestSample = 3 };
+enum class RandomStream : std::uint32_t { Holdout = 1, CrossValidation = 2 };
 std::mt19937_64 seededRandom(std::uint64_t seed, RandomStream stream);
 
 // Shuffle the rows (same seed and stream = same split) and split off

@@ -35,10 +35,10 @@ make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,cod
 ## Run
 
 ```bash
-./tree --cart datasets/covertype.csv                # CART as in Breiman et al.: Gini, alpha chosen on a test sample
+./tree --cart datasets/covertype.csv                # CART: Gini, cost-complexity pruning with alpha 1e-4
+./tree --cart --alpha 1e-5 datasets/covertype.csv   # prune with another fixed alpha
 ./tree --cart --cv 10 datasets/covertype.csv        # alpha by 10-fold cross-validation (11 trees)
 ./tree --cart --no-prune datasets/covertype.csv     # only grow the maximal tree
-./tree --cart --alpha 1e-5 datasets/covertype.csv   # prune with a fixed alpha
 ./tree --c45 datasets/covertype.csv                 # C4.5 as in Quinlan's c4.5: -m 2, CF 0.25
 ./tree --c45 --cuda --holdout 0.2 datasets/higgs.csv
 ./tree --help
@@ -83,18 +83,17 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--holdout F` | 0 | Put a random fraction F of the rows aside, train on the rest and report the accuracy on the put-aside rows (`test accuracy`). Tested once, on one split. |
-| `--seed N` | 1 | Random seed for the holdout split and for CART's test sample or CV folds. The same seed gives the same split and folds on every machine and backend; change it to see how much the result depends on the split. |
+| `--seed N` | 1 | Random seed for the holdout split and for CART's CV folds. The same seed gives the same split and folds on every machine and backend; change it to see how much the result depends on the split. |
 | `-m N` | 1 | Duplicate the rows N times in memory (slightly rescaled) to stress-test with bigger data. |
 | `--print` | off | Print the tree. |
-| `--dump FILE` | off | Write the tree as text; `tools/render_tree_svg.py FILE out.svg` draws it. |
+| `--dump FILE` | off | Write the tree as text. |
 
 **CART post-pruning** (splits always use the Gini index, as in Breiman et al.)
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--test-sample F` | 1/3 | Default. Grow the tree on 1 − F of the rows and choose alpha with the other F (see below). One tree. |
+| `--alpha X` | 0.0001 | Prune with this fixed alpha (one tree on all rows, like scikit-learn's `ccp_alpha` and rpart's `cp`). Larger prunes more: each leaf must classify about X × rows more training rows correctly to be kept (covertype: `1e-6` 44k nodes, `1e-5` 10k, `1e-4` 0.9k, `1e-3` 37). |
 | `--cv K` | (off) | Choose alpha by K-fold cross-validation instead: the tree is grown on all rows, plus K fold trees. |
-| `--alpha X` | (off) | Prune with this fixed alpha instead (one tree on all rows). Larger prunes more: each leaf must classify about X × rows more training rows correctly to be kept (covertype: `1e-6` 44k nodes, `1e-5` 10k, `1e-4` 0.9k). |
 
 **C4.5 post-pruning**
 
@@ -120,38 +119,33 @@ The best values depend on the hardware and the data (`docs/CPU.md`,
 ### How CART chooses its pruning strength
 
 A grown CART tree fits the training data too closely, so CART prunes it.
-Pruning has one parameter, alpha: the higher it is, the smaller the tree. CART
-first lists every alpha at which the full tree would lose a branch (the
-"pruning sequence", a series of ever smaller trees), then measures each of
-those trees on rows they were not grown on, and keeps the smallest tree whose
-error is within one standard error of the lowest (Breiman's 1-SE rule: near the
-minimum the differences are noise, so the simpler tree wins). Breiman et al.
-give two ways to get rows the tree has not seen:
+Pruning has one parameter, alpha: the higher it is, the smaller the tree.
 
-* **Test sample** (default, `--test-sample F`): put a random fraction F of the
-  rows aside (`--seed`), grow the tree on the rest, measure the pruning
-  sequence on the rows put aside. One tree, so it costs about as much as C4.5's
-  pruning. The tree is grown on fewer rows (2/3 by default); on big datasets a
-  smaller F such as 0.1 is usually enough to measure the error and leaves more
-  rows for growing.
-* **Cross-validation** (`--cv K`, better for small datasets): grow
-  the tree on all rows; then split the rows into K parts, grow K more trees,
-  each on all parts but one, and measure each on its left-out part. Every row
-  is used for growing and for measuring, but it costs K + 1 trees.
+* **Fixed alpha** (default, `--alpha X`, X = 0.0001): grow one tree on all rows
+  and prune it at X, as scikit-learn and rpart do. Same steps as C4.5 (grow
+  one tree, prune it), so the timings compare directly.
+* **Cross-validation** (`--cv K`): CART lists every alpha at which the full
+  tree would lose a branch (the "pruning sequence", a series of ever smaller
+  trees), splits the rows into K parts, grows K more trees, each on all parts
+  but one, and measures each on its left-out part. It keeps the smallest tree
+  whose error is within one standard error of the lowest (Breiman's 1-SE rule:
+  near the minimum the differences are noise, so the simpler tree wins). Every
+  row is used for growing and for measuring, but it costs K + 1 trees.
 
 On covertype and SUSY with `--holdout 0.2` (the accuracy is on rows used for
 neither growing nor pruning):
 
 | Run | Nodes | Test accuracy | train total |
 |-----|------:|--------------:|------------:|
-| covertype CART `--no-prune` | 48,089 | 93.85% | 0.19 s |
-| covertype CART (test sample 1/3) | 28,685 | 92.46% | 0.16 s |
-| covertype CART `--test-sample 0.1` | 33,807 | 93.60% | 0.19 s |
-| covertype CART `--cv 10` | 24,797 | 93.67% | 1.70 s |
-| covertype C4.5 | 26,631 | 94.20% | 0.37 s |
-| SUSY CART `--no-prune` | 1,063,237 | 71.64% | 2.38 s |
-| SUSY CART (test sample 1/3) | 1,489 | 79.65% | 1.30 s |
-| SUSY C4.5 | 13,889 | 79.63% | 1.80 s |
+| covertype CART `--no-prune` | 48,089 | 93.85% | 0.15 s |
+| covertype CART (alpha 1e-4) | 987 | 81.52% | 0.15 s |
+| covertype CART `--alpha 1e-5` | 9,721 | 91.61% | 0.17 s |
+| covertype CART `--cv 10` | 24,797 | 93.67% | 1.61 s |
+| covertype C4.5 | 26,631 | 94.20% | 0.31 s |
+| SUSY CART `--no-prune` | 1,063,237 | 71.64% | 1.23 s |
+| SUSY CART (alpha 1e-4) | 101 | 78.79% | 1.20 s |
+| SUSY CART `--alpha 1e-5` | 769 | 79.58% | 1.26 s |
+| SUSY C4.5 | 13,889 | 79.63% | 1.53 s |
 
 ### Timings
 
@@ -162,18 +156,17 @@ Every run prints:
 | `load` | Reading the CSV (not part of training). |
 | `gpu setup` | `--cuda`: allocating and uploading to the GPU. |
 | `presort` | Sorting every feature column once (needed by all backends). |
-| `build` | Growing the tree (CART with a test sample: on the rows not put aside). |
+| `build` | Growing the tree. |
 | `cross-validation` | CART `--cv` only: growing and scoring the fold trees. |
-| `prune` | Pruning. CART: putting the test sample aside, measuring the pruning sequence on it, pruning. C4.5: its threshold and collapse passes and error-based pruning. |
+| `prune` | Pruning. CART: cost-complexity pruning at the fixed or chosen alpha. C4.5: its threshold and collapse passes and error-based pruning. |
 | `train total` | Sum of the training lines above. |
 | `evaluate` | Computing the accuracies (not part of training). |
 
 ### Comparing CART and C4.5 timings
 
 With default settings both algorithms do the same steps: presort, grow one
-tree, prune it. `train total` and each line can be compared directly. Keep in
-mind that default CART grows its tree on 2/3 of the rows (the rest is its test
-sample) while C4.5 grows on all of them; `--no-prune` grows both on all rows.
+tree on all rows, prune it. `train total` and each line can be compared
+directly.
 
 With `--cv K`, CART also grows K fold trees, reported on the `cross-validation`
 line. A CV run prints the alpha it chose at full precision:
@@ -227,4 +220,4 @@ gcc -std=gnu89 -O2 -w -fcommon -Dcfree=free -include stdlib.h -include math.h -i
 | `src/build/cpu_builder.*`, `cpu_grower.cpp` | Presort + CPU tree growing (serial and parallel). |
 | `src/build/gpu_grower.cu` | GPU tree growing. |
 | `src/build/node_store.*` | Thread-safe node storage used while growing. |
-| `tests/`, `bench/`, `tools/` | Golden-tree tests, CPU benchmark, reference comparison and SVG rendering. |
+| `tests/`, `bench/`, `tools/` | Golden-tree tests, CPU benchmark and reference comparison. |

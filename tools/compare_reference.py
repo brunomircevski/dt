@@ -154,7 +154,7 @@ def unpruned(extra):
     kept = []
     flags = iter(extra)
     for flag in flags:
-        if flag in ("--cf", "--alpha", "--test-sample", "--cv"):
+        if flag in ("--cf", "--alpha", "--cv"):
             next(flags, None)  # its value
         elif flag != "--no-prune":
             kept.append(flag)

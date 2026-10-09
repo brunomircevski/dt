@@ -59,7 +59,7 @@ public:
   std::size_t leafCount() const;
   int depth() const;
 
-  // Indented text form (--dump), readable by tools/render_tree_svg.py.
+  // Indented text form (--dump).
   void print(std::ostream &output) const;
 
   // After pruning: drop the nodes that are no longer reachable from the root

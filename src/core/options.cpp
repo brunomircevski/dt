@@ -48,20 +48,17 @@ void printUsage(const char *program) {
       << "                           CART, 2 for C4.5)\n"
       << "  --no-prune               keep the unpruned tree (pruning is on by default)\n"
       << "  --holdout F              hold out fraction F of rows as test set\n"
-      << "  --seed N                 random seed for the holdout split and CART's test\n"
-      << "                           sample / CV folds (default 1)\n"
+      << "  --seed N                 random seed for the holdout split and CART's CV\n"
+      << "                           folds (default 1)\n"
       << "  -m N                     duplicate rows N times in memory (stress tests)\n"
       << "  --threads N              CPU threads (0 = all cores)\n"
       << "  --print                  print the tree\n"
-      << "  --dump FILE              write the tree as text (tools/render_tree_svg.py\n"
-      << "                           turns it into an SVG)\n"
+      << "  --dump FILE              write the tree as text\n"
       << "\n"
-      << "CART (default: cost-complexity pruning, alpha chosen on a test sample):\n"
-      << "  --test-sample F          grow on 1-F of the rows, choose alpha on the other F\n"
-      << "                           (default 0.333, one tree)\n"
+      << "CART (default: cost-complexity pruning with a fixed alpha, one tree):\n"
+      << "  --alpha X                cost-complexity parameter (default 0.0001)\n"
       << "  --cv K                   choose alpha by K-fold cross-validation instead\n"
       << "                           (K + 1 trees)\n"
-      << "  --alpha X                prune with a fixed alpha instead\n"
       << "\n"
       << "C4.5 (default: error-based pruning with CF 0.25 and subtree raising):\n"
       << "  --cf X                   pruning confidence factor\n"
@@ -151,7 +148,7 @@ std::vector<std::string> givenOf(const std::set<std::string> &given,
 void checkFlagCombination(const Options &options, const std::set<std::string> &given) {
   for (const auto &group : {givenOf(given, {"--serial", "--parallel", "--cuda"}),
                             givenOf(given, {"--cart", "--c45"}),
-                            givenOf(given, {"--no-prune", "--test-sample", "--cv", "--alpha"}),
+                            givenOf(given, {"--no-prune", "--cv", "--alpha"}),
                             givenOf(given, {"--no-prune", "--cf"})}) {
     if (group.size() > 1) {
       throw std::runtime_error("Options " + group[0] + " and " + group[1] +
@@ -166,10 +163,10 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
     }
   };
   if (options.algorithm == Algorithm::C45) {
-    refuse({"--test-sample", "--cv", "--alpha"},
+    refuse({"--cv", "--alpha"},
            "is for CART (it chooses CART's alpha); C4.5 prunes with --cf");
   } else {
-    refuse({"--cf"}, "is for C4.5; CART prunes with --test-sample, --cv or --alpha");
+    refuse({"--cf"}, "is for C4.5; CART prunes with --alpha or --cv");
   }
   if (options.backend == Backend::Serial) {
     refuse({"--task-rows", "--feature-parallel-rows"}, "is for --parallel and --cuda, not --serial");
@@ -226,9 +223,6 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
     } else if (arg == "--alpha") {
       options.cart.pruning = CartPruning::Alpha;
       options.cart.alpha = parseReal(arg, args.value(arg));
-    } else if (arg == "--test-sample") {
-      options.cart.pruning = CartPruning::TestSample;
-      options.cart.testFraction = parseReal(arg, args.value(arg));
     } else if (arg == "--cv") {
       options.cart.pruning = CartPruning::CrossValidation;
       options.cart.folds = static_cast<int>(parseCount(arg, args.value(arg)));
@@ -275,10 +269,6 @@ void validateOptions(const Options &options) {
     const CartOptions &cart = options.cart;
     if (cart.pruning == CartPruning::Alpha && cart.alpha < 0.0) {
       throw std::runtime_error("CART: --alpha must be >= 0");
-    }
-    if (cart.pruning == CartPruning::TestSample &&
-        !(cart.testFraction > 0.0 && cart.testFraction < 1.0)) {
-      throw std::runtime_error("CART: --test-sample must be in (0, 1)");
     }
     if (cart.pruning == CartPruning::CrossValidation && cart.folds < 2) {
       throw std::runtime_error("CART: --cv needs at least 2 folds");
