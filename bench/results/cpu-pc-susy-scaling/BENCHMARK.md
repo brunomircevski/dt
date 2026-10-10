@@ -1,6 +1,6 @@
 # SUSY thread scaling: ./tree with 1 to 28 threads
 
-**Status:** designed 2026-10-09, not run yet. Checked end to end on `susy_50k` (outside this directory). The results will be written into this directory.
+**Status:** run on 2026-10-10 at 19:11, one run per point, commit 49b7f47 (replacing the 2026-10-09 run on commit 93f2c03), `performance` governor. The load average at the start (8.5 / 2.9 / 1.6) is the benchmarks run just before it on this PC, which had ended; nothing else was running. `machine.json` says `-dirty` only because other benchmarks' result files were being replaced at the time; the code was committed.
 
 ## Run it
 
@@ -57,3 +57,24 @@ The i7-14700KF has 8 performance cores with 2 hardware threads each (logical CPU
 - **Why this order:** each step adds the fastest resource still free, so the curve shows separately what P-cores, E-cores and SMT contribute.
 - **CPU 2 first:** the 1-thread case runs on CPU 2, as in the other benchmarks (CPU 0 takes most interrupts).
 - **What to expect:** at most linear speedup up to 8 threads; flatter from 9 to 20, since an E-core is slower than a P-core and the slowest thread can hold up a parallel step; little from 21 to 28, since an SMT sibling shares its core with a thread already running.
+
+## Results
+
+![Thread scaling on SUSY](chart.png)
+
+| Threads | CART time | speedup | C4.5 time | speedup |
+|--:|--:|--:|--:|--:|
+| 1 (serial) | 7.06 s | 1.0× | 6.17 s | 1.0× |
+| 2 | 3.79 s | 1.9× | 3.40 s | 1.8× |
+| 4 | 2.12 s | 3.3× | 2.01 s | 3.1× |
+| 8 | 1.35 s | 5.2× | 1.31 s | 4.7× |
+| 12 | 1.12 s | 6.3× | 1.20 s | 5.2× |
+| 16 | 1.04 s | 6.8× | 1.18 s | 5.2× |
+| 20 | 0.99 s | 7.1× | 1.20 s | 5.2× |
+| 24 | 0.96 s | 7.4× | 1.20 s | 5.1× |
+| 28 | 0.96 s | 7.4× | 1.17 s | 5.3× |
+
+- **Same trees:** CART 723 nodes, C4.5 15,113 nodes at every thread count (and the same as on 2026-10-09).
+- **Shape:** near-linear up to 4 threads; beyond that the big nodes are bound by memory bandwidth (a STREAM-style triad reaches 36 GB/s on this PC). CART keeps gaining a little through the E-cores (1.35 s at 8 threads, 0.99 s at 20), C4.5 flattens at 12, and the SMT siblings (21–28) add almost nothing.
+- **Against the first run (commit 93f2c03):** 1.23–1.44× faster at every point (CART 10.06 → 7.06 s serial, 1.20 → 0.96 s on 28 threads; C4.5 7.59 → 6.17 s and 1.52 → 1.17 s).
+- **Memory:** the parallel backend keeps a second copy of the columns for the out-of-place partition, so from 2 threads on the peak RSS is a constant ~1.85 GB (CART) and ~2.13 GB (C4.5) instead of growing with the threads' buffers; the serial run needs 1.27 and 1.54 GB.

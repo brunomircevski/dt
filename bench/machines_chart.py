@@ -199,8 +199,10 @@ def main():
     for index, run in enumerate(reversed(runs)):
         machine = json.load(open(run / "machine.json"))
         used_gpu = any(e["run"] == run and e["backend"] == "cuda" for e in entries)
-        role = (f"reference: {run.name}, run {machine['started'][:10]}" if run in args.reference
-                else f"{run.name}, run {machine['started'][:10]}")
+        # Only ./tree is drawn: when its cases were rerun later, that is the date.
+        started = machine.get("tree_rerun", machine)["started"][:10]
+        role = (f"reference: {run.name}, run {started}" if run in args.reference
+                else f"{run.name}, run {started}")
         line_y = top - (0.36 + 0.2 * index) / inches
         fig.text(0.012, line_y, f"{where(run).capitalize()}", fontsize=9.2, color=INK,
                  fontweight="bold", va="top")

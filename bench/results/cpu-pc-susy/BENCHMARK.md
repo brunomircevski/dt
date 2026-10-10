@@ -1,6 +1,6 @@
 # SUSY benchmark: ./tree vs CART and C4.5 implementations
 
-**Status:** designed 2026-10-09, not run yet. The results will be written into this directory.
+**Status:** run on 2026-10-09 (one run per case); the ./tree cases were rerun on 2026-10-10 on the faster code (commit 49b7f47). Results at the end, files in this directory.
 
 ## Run it
 
@@ -167,4 +167,41 @@ No tool is tuned to match another tool's tree size; each reports the tree it bui
 
 ## Results
 
-*(Added after the run.)*
+![SUSY: training time and peak memory](chart.png)
+
+Run on 2026-10-09: one run per case, governor `performance`, load average 1.2 / 3.3 / 4.2 at the start (not a quiet PC; rerun with `-m 3` or more for the paper).
+- **./tree rerun:** the ./tree cases (and its footprint run) were rerun on 2026-10-10 on commit `49b7f47` (load average 0.4), with `bench/run.py susy --protocols cart_alpha,c45 --impls tree --threads 1,all --cpus 2,0,1,3-27`; their rows replace the old ./tree rows in `results.jsonl` (`machine.json` → `tree_rerun`, log appended to `run.log`). The other tools did not change, so their rows are from the first run. ./tree builds the same trees as before. `machine.json` says `-dirty` only because other benchmarks' result files were being replaced at the time; the code was committed.
+- **Warm-up:** the 50k-row warm-up was kept (`warmup-check/decision.json`).
+
+**CART, 1 thread** (α = 1e-5)
+
+| Implementation | Train time | × ./tree | Peak RSS | Nodes | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 6.18 s | 1.0× | 1.13 GiB | 723 | 19 | 79.68% | 79.65% |
+| scikit-learn | 412 s | 66.6× | 662 MiB | 1,059 | 17 | 79.46% | 79.48% |
+| rpart | 362 s | 58.5× | 3.55 GiB | 701 | 19 | 79.67% | 79.64% |
+
+**C4.5, 1 thread** (CF 0.25)
+
+| Implementation | Train time | × ./tree | Peak RSS | Nodes | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 6.15 s | 1.0× | 1.43 GiB | 15,113 | 38 | 80.67% | 79.74% |
+| Weka J48 | 829 s | 134.9× | 11.00 GiB | 15,479 | 38 | 80.68% | 79.71% |
+| YaDT | 126 s | 20.6× | 3.32 GiB | 15,487 | 33 | 80.67% | 79.75% |
+
+**28 threads**
+
+| Algorithm | Implementation | Train time | × ./tree | Peak RSS | Nodes | Depth | Test acc. |
+|---|---|--:|--:|--:|--:|--:|--:|
+| CART | ./tree | 0.899 s | 1.0× | 1.67 GiB | 723 | 19 | 79.65% |
+| C4.5 | ./tree | 1.20 s | 1.0× | 1.99 GiB | 15,113 | 38 | 79.74% |
+| C4.5 | YaDT | 33.5 s | 27.9× | 4.68 GiB | 15,487 | 33 | 79.75% |
+
+**Reading the results**
+- **Accuracy:** every tool is within the ±0.11-point interval of the others except scikit-learn's CART (79.48%), whose α in Gini units prunes to a different tree.
+- **Speed:** ./tree is 59–67× faster than the CART libraries and 21–135× faster than the C4.5 ones on one thread. On 28 threads it is 28× faster than YaDT.
+- **Speedup on 28 threads:** ./tree 6.9× (CART) and 5.1× (C4.5); YaDT 3.8×.
+- **Against the first run (2026-10-09, commit `93f2c03`):** ./tree is 1.47× (CART, 9.08 → 6.18 s) and 1.23× (C4.5, 7.58 → 6.15 s) faster on one thread, 1.24× (1.12 → 0.90 s) and 1.26× (1.51 → 1.20 s) on 28, and C4.5 needs 15–17% less memory (1.72 → 1.43 GiB, 2.35 → 1.99 GiB).
+- **Memory:** scikit-learn has the lowest peak RSS for CART (662 MiB vs ./tree's 1.13 GiB): ./tree keeps every feature presorted (8 bytes per value). For C4.5 ./tree needs the least (1.43 GiB vs 3.32 and 11.0 GiB).
+
+Full tables: `report.md`; every number: `summary.csv` (per case) and `runs.csv` (per process); chart: `chart.png`.

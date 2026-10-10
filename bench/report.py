@@ -124,7 +124,10 @@ def machine_line(run_dir):
             f"turbo {'off' if info.get('intel_no_turbo') == '1' else 'on'}, "
             f"./tree {info['versions'].get('tree_git')}, CPUs in order of use "
             f"{settings.get('cpus') or 'none'}, {settings.get('reps')} run(s) per case, warm-up "
-            f"{settings.get('warmup_rows')} rows")
+            f"{settings.get('warmup_rows')} rows"
+            + (f"; ./tree cases rerun on {info['tree_rerun']['started'][:10]}, the other tools' "
+               f"rows are from {info['started'][:10]} (./tree {info['tree_rerun']['replaced_tree_git']} then)"
+               if info.get("tree_rerun") else ""))
 
 
 def table(cases):

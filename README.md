@@ -16,7 +16,7 @@ interchangeable backends that produce the *same* tree (byte for byte):
 * [bench/README.md](bench/README.md) — CPU benchmark against scikit-learn,
   rpart, Weka J48 and YaDT (time and memory).
 * [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — timings of the serial,
-  parallel and Cuda backends, before and after each round of optimizations.
+  parallel and Cuda backends before and after the latest optimizations.
 
 ## Build
 
@@ -133,19 +133,19 @@ Pruning has one parameter, alpha: the higher it is, the smaller the tree.
   row is used for growing and for measuring, but it costs K + 1 trees.
 
 On covertype and SUSY with `--holdout 0.2` (the accuracy is on rows used for
-neither growing nor pruning):
+neither growing nor pruning; `--parallel`, 28 threads, i7-14700KF, commit 49b7f47):
 
 | Run | Nodes | Test accuracy | train total |
 |-----|------:|--------------:|------------:|
-| covertype CART `--no-prune` | 48,089 | 93.85% | 0.15 s |
-| covertype CART `--alpha 1e-4` | 987 | 81.52% | 0.15 s |
-| covertype CART (alpha 1e-5) | 9,721 | 91.61% | 0.17 s |
-| covertype CART `--cv 10` | 24,797 | 93.67% | 1.61 s |
-| covertype C4.5 | 26,631 | 94.20% | 0.31 s |
-| SUSY CART `--no-prune` | 1,063,237 | 71.64% | 1.23 s |
-| SUSY CART `--alpha 1e-4` | 101 | 78.79% | 1.20 s |
-| SUSY CART (alpha 1e-5) | 769 | 79.58% | 1.26 s |
-| SUSY C4.5 | 13,889 | 79.63% | 1.53 s |
+| covertype CART `--no-prune` | 48,089 | 93.85% | 0.14 s |
+| covertype CART `--alpha 1e-4` | 987 | 81.52% | 0.14 s |
+| covertype CART (alpha 1e-5) | 9,721 | 91.61% | 0.14 s |
+| covertype CART `--cv 10` | 24,797 | 93.67% | 1.28 s |
+| covertype C4.5 | 26,631 | 94.20% | 0.29 s |
+| SUSY CART `--no-prune` | 1,063,237 | 71.64% | 0.89 s |
+| SUSY CART `--alpha 1e-4` | 101 | 78.79% | 0.87 s |
+| SUSY CART (alpha 1e-5) | 769 | 79.58% | 0.89 s |
+| SUSY C4.5 | 13,889 | 79.63% | 1.03 s |
 
 ### Timings
 

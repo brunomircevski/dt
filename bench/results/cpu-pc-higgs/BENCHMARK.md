@@ -1,6 +1,6 @@
 # HIGGS on the desktop: ./tree parallel
 
-**Status:** run on 2026-10-10 at 12:46, one run per case, commit abc0a22, `performance` governor, load average 0.36. Results and chart: [`cuda-legion-higgs`](../cuda-legion-higgs/BENCHMARK.md#results).
+**Status:** rerun on 2026-10-10 at 19:10 on the faster code, one run per case, commit 49b7f47 (the first run, at 12:46 on commit abc0a22, is replaced), `performance` governor. The load average at the start (4.1) is the SUSY runs that had just ended on this PC; nothing else was running. `machine.json` says `-dirty` only because other benchmarks' result files were being replaced at the time; the code was committed. Results and chart: [`cuda-legion-higgs`](../cuda-legion-higgs/BENCHMARK.md#results).
 
 The desktop half of a laptop-vs-desktop comparison on HIGGS; the laptop half (parallel and CUDA) is [`cuda-legion-higgs`](../cuda-legion-higgs/BENCHMARK.md), which also holds the chart of both.
 

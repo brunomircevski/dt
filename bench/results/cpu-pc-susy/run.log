@@ -95,3 +95,28 @@ results: /home/bruno/Projects/dt/bench/results/cpu-pc-susy/results.jsonl
 === 20:19:58  5/5 tables, CSV files and the chart
 /home/bruno/Projects/dt/bench/results/cpu-pc-susy/chart.png
 done: /home/bruno/Projects/dt/bench/results/cpu-pc-susy/report.md, summary.csv, runs.csv, chart.png
+
+
+### 2026-10-10: ./tree cases rerun on commit 49b7f47 (bench/run.py --impls tree); their rows replace the old ./tree rows in results.jsonl
+=== 19:10:20 cpu-pc-susy: ./tree only
+4 cases, 5 processes:
+  susy | cart_alpha | tree | 1
+  susy | cart_alpha | tree | 28
+  susy | c45 | tree | 1
+  susy | c45 | tree | 28
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy: identical in every format (2 s)
+4 cases x 1 run(s), then 1 footprint run(s) x 1: 5 processes. Time left is shown once every case has run once.
+[1/5] 19:10:23 run 1/1: C4.5 ./tree, 1 thread, susy ...
+    ok: train 6.146 s, peak 1,468 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m07s, elapsed 0m09s
+[2/5] 19:10:32 run 1/1: CART ./tree, 1 thread, susy ...
+    ok: train 6.185 s, peak 1,158 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m07s, elapsed 0m17s
+[3/5] 19:10:40 run 1/1: CART ./tree, 28 threads, susy ...
+    ok: train 0.8993 s, peak 1,714 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m01s, elapsed 0m19s
+[4/5] 19:10:42 run 1/1: C4.5 ./tree, 28 threads, susy ...
+    ok: train 1.198 s, peak 2,038 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m01s, elapsed 0m22s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[5/5] 19:10:45 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m22s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cpu-pc-susy/tree-rerun/results.jsonl

@@ -1,6 +1,6 @@
 # HIGGS on the Legion laptop: ./tree parallel and CUDA
 
-**Status:** run on 2026-10-10 at 12:46 (at the same time as `cpu-pc-higgs`, on the other machine), one run per case, commit abc0a22, AC power, platform profile `max-power`, `performance` governor, load average 0.06. The 8 prepared data files have the same SHA-256 as in `cpu-pc-higgs` (`meta.json` differs only in the source's column and label names), and every case built the same tree.
+**Status:** rerun on 2026-10-10 at 19:10 on the faster code (at the same time as `cpu-pc-higgs`, on the other machine; the first runs, at 12:46 on commit abc0a22, are replaced), one run per case, commit 49b7f47, AC power, platform profile `max-power`, `performance` governor. The load average at the start (2.0) is `cuda-legion-susy`, which had just ended; nothing else was running. `machine.json` says `-dirty` only because the old result files had been deleted for the rerun; the code was committed. The 8 prepared data files have the same SHA-256 as in `cpu-pc-higgs` (`meta.json` differs only in the source's column and label names), and every case built the same tree.
 
 The laptop half of a laptop-vs-desktop comparison on HIGGS; the desktop half is [`cpu-pc-higgs`](../cpu-pc-higgs/BENCHMARK.md). Both are fresh runs; nothing is copied.
 
@@ -21,7 +21,6 @@ bench/results/cuda-legion-higgs/run.sh -m 5     # each case 5 times
       --reference bench/results/cpu-pc-higgs
   ```
   Run `cpu-pc-higgs` first: the chart needs it.
-- `machine.json` got its `ram_modules` on 2026-10-10 after the run (read from udev on the same laptop), as did `cpu-pc-higgs`'s.
 
 ## Method
 
@@ -43,18 +42,19 @@ Training time, one run per case, both machines run fresh:
 
 | | CART | C4.5 |
 |---|--:|--:|
-| Desktop parallel (i7-14700KF, 28 threads) | 4.45 s | 7.29 s |
-| Laptop parallel (i7-13650HX, 20 threads) | 4.60 s | 6.65 s |
-| Laptop CUDA (RTX 5070 Laptop + 20 threads) | **2.06 s** | **4.08 s** |
+| Desktop parallel (i7-14700KF, 28 threads) | 3.47 s | 5.18 s |
+| Laptop parallel (i7-13650HX, 20 threads) | 3.22 s | 5.13 s |
+| Laptop CUDA (RTX 5070 Laptop + 20 threads) | **1.37 s** | **2.00 s** |
 
-- **Same trees:** CART 1,611 nodes, depth 19, test accuracy 71.59%; C4.5 1,160,123 nodes, depth 71, 70.10%, on both machines and both backends.
-- **CUDA:** 2.2× (CART) and 1.6× (C4.5) faster than the laptop's 20 threads; 2.2× and 1.8× faster than the desktop's 28. About the same gain over the CPU as on SUSY (2.1× and 1.7× over the laptop's 20 threads there). C4.5 gains less than CART on both datasets; its trees are much larger (here 1.16 million nodes), and ./tree --cuda grows small subtrees on the CPU.
-- **Fits the GPU:** 4.67 GiB of the 8 GB (CART; C4.5 4.66 GiB), CUDA context included. Host peak RSS 3.83 GiB (CART) and 6.06 GiB (C4.5), below the parallel runs.
-- **Parallel:** the laptop's 20 threads match the desktop's 28 on CART (4.60 vs 4.45 s) and beat them on C4.5 (6.65 vs 7.29 s). The desktop also needs more memory (6.05 vs 5.40 GiB, 8.28 vs 7.63 GiB): more threads, more per-thread buffers.
+- **Same trees:** CART 1,611 nodes, depth 19, test accuracy 71.59%; C4.5 1,160,123 nodes, depth 71, 70.10%, on both machines, both backends, and the same as in the first runs.
+- **CUDA:** 2.3× (CART) and 2.6× (C4.5) faster than the laptop's 20 threads; 2.5× and 2.6× faster than the desktop's 28. About the same gain over the CPU as on SUSY (2.5× and 2.3× over the laptop's 20 threads there).
+- **Fits the GPU:** 4.72 GiB of the 8 GB (CART; C4.5 4.71 GiB), CUDA context included. Host peak RSS 3.85 GiB (CART) and 5.04 GiB (C4.5), below the parallel runs.
+- **Parallel:** the laptop's 20 threads and the desktop's 28 are within 7% of each other (CART 3.22 vs 3.47 s, C4.5 5.13 vs 5.18 s); repeated runs (below) put the desktop slightly ahead on CART, so one run per case does not tell these two machines apart. Both need the same memory (5.9 GiB CART, 7.1 GiB C4.5): the second copy of the columns for the out-of-place partition dominates, not per-thread buffers.
+- **Against the first runs (12:46, commit abc0a22):** CUDA 2.06 → 1.37 s (CART, 1.5×) and 4.08 → 2.00 s (C4.5, 2.0×); laptop parallel 4.60 → 3.22 s and 6.65 → 5.13 s; desktop parallel 4.45 → 3.47 s and 7.29 → 5.18 s. C4.5 used to gain less from CUDA than CART (1.6× against 2.2× over the laptop's 20 threads); its tree of 1.16 million nodes gains from both the GPU changes (the exact pass scores only the cuts the float pass kept) and the CPU ones (./tree --cuda grows the small subtrees and prunes on the CPU, and C4.5 pruning is 2–2.5× faster).
 
-### Why the laptop's 20 threads beat the desktop's 28 on C4.5
+### Why the laptop's 20 threads keep up with the desktop's 28
 
-The desktop's CPU is faster (serial runs are 11–12% faster on it), but the parallel build is limited by memory bandwidth, and the laptop has the faster RAM.
+The desktop's CPU is faster (serial runs on SUSY are 6–9% faster on it), but the parallel build is largely bound by memory bandwidth, and the laptop has the faster RAM.
 
 | Measured on 2026-10-10 | Desktop | Laptop |
 |---|--:|--:|
@@ -62,17 +62,16 @@ The desktop's CPU is faster (serial runs are 11–12% faster on it), but the par
 | STREAM-style triad, all threads | 36 GB/s (28 threads) | 53 GB/s (20 threads) |
 | Triad, 1 thread | 28.5 GB/s | 28.9 GB/s |
 
-./tree's own phase timings on HIGGS, `--parallel`, 3 runs each (ms; spread ≤ 3%, so the differences are real):
+./tree's own phase timings on HIGGS, `--parallel`, 3 runs each on commit 49b7f47, measured after the benchmark (ms):
 
 | | Presort | Build | Prune | Train total |
 |---|--:|--:|--:|--:|
-| C4.5 desktop (28 threads) | 949–955 | 5,035–5,100 | 1,228–1,300 | 7,274–7,289 |
-| C4.5 laptop (20 threads) | 637–652 | 4,727–4,794 | 1,301–1,377 | 6,668–6,762 |
-| CART desktop (28 threads) | 795–796 | 3,615–3,666 | 9–11 | 4,419–4,471 |
-| CART laptop (20 threads) | 517–534 | 4,185–4,226 | 10–11 | 4,727–4,761 |
+| C4.5 desktop (28 threads) | 730–755 | 3,869–3,900 | 525–582 | 5,154–5,226 |
+| C4.5 laptop (20 threads) | 557–563 | 3,897–4,195 | 532–549 | 5,005–5,295 |
+| CART desktop (28 threads) | 712–717 | 2,469–2,474 | 9–12 | 3,195–3,198 |
+| CART laptop (20 threads) | 495–506 | 2,898–2,936 | 9–12 | 3,408–3,448 |
 
-- **Presort** (sorting every column: streaming through memory) is 1.5× faster on the laptop in both algorithms, the same ratio as the measured bandwidth (53 / 36).
-- **Build:** CART's build takes 13% less time on the desktop (more cores, higher clocks); C4.5's takes 6% less on the laptop, so C4.5's build depends more on memory bandwidth than CART's (not broken down further).
-- **Prune** (largely serial) takes 6% less time on the desktop.
-- **Net:** C4.5 gains 0.3 s (presort) + 0.3 s (build) on the laptop and loses 0.1 s (prune): 0.6 s faster. CART gains 0.3 s on presort but loses 0.55 s on build: 0.3 s slower.
-
+- **Presort** (sorting every column: streaming through memory) is 1.3–1.4× faster on the laptop in both algorithms, close to the ratio of the measured bandwidth (53 / 36).
+- **Build:** CART's takes 15% less time on the desktop (more cores, higher clocks); C4.5's takes about as long on both (the laptop's three runs spread by 8%).
+- **Prune** takes ~0.55 s on both (C4.5; it was 1.2–1.4 s before the pruning rework).
+- **Net:** C4.5 is a tie (5.15–5.23 s vs 5.01–5.30 s). On CART the desktop's faster build outweighs the laptop's faster presort: 3.20 s vs 3.41–3.45 s, 7% in the desktop's favour, although the single benchmark run above happened to put the laptop ahead.

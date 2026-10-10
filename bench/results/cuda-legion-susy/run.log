@@ -1,35 +1,33 @@
-log: /home/bruno/Projects/dt/bench/results/cuda-legion-susy/run.log, started 2026-10-10 12:36:34
+log: /home/bruno/Projects/dt/bench/results/cuda-legion-susy/run.log, started 2026-10-10 19:07:57
 
-=== 12:36:34  1/5 machine check
+=== 19:07:57  1/5 machine check
 CPU governor: performance
 platform profile: max-power
 power: on AC
-GPU: NVIDIA GeForce RTX 5070 Laptop GPU, 45 MiB, 8151 MiB, [N/A], P8
-code: committed (a730d4a)
-load average: 0.07 0.08 0.08 (close browsers, chat apps, IDE indexers)
+GPU: NVIDIA GeForce RTX 5070 Laptop GPU, 41 MiB, 8151 MiB, [N/A], P0
+warning: uncommitted changes in src/, bench/ or Makefile: machine.json will say -dirty
+load average: 0.14 0.78 1.31 (close browsers, chat apps, IDE indexers)
 runs per case: 1
 
-=== 12:36:34  2/5 build ./tree (CPU + CUDA) and ./tree_cpu, the memory launcher and the Python venv
+=== 19:07:57  2/5 build ./tree (CPU + CUDA) and ./tree_cpu, the memory launcher and the Python venv
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/c45_pruning.cpp -o build/algo/c45_pruning.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/cart_pruning.cpp -o build/algo/cart_pruning.o
-g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/split_rules.cpp -o build/algo/split_rules.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/app/main.cpp -o build/app/main.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/app/trainer.cpp -o build/app/trainer.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/cpu_builder.cpp -o build/build/cpu_builder.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/cpu_grower.cpp -o build/build/cpu_grower.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/node_store.cpp -o build/build/node_store.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/core/dataset.cpp -o build/core/dataset.o
-g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/core/options.cpp -o build/core/options.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/core/tree.cpp -o build/core/tree.o
 /opt/cuda/bin/nvcc -std=c++20 -O3 -arch=native -Isrc -MMD -MP -Xcompiler -Wall -c src/build/gpu_grower.cu -o build/build/gpu_grower.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP build/algo/c45_pruning.o build/algo/cart_pruning.o build/algo/split_rules.o build/app/main.o build/app/trainer.o build/build/cpu_builder.o build/build/cpu_grower.o build/build/node_store.o build/core/dataset.o build/core/options.o build/core/thread_pool.o build/core/tree.o build/build/gpu_grower.o -L/opt/cuda/lib64 -lcudart -o tree
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/gpu_grower_stub.cpp -o build/build/gpu_grower_stub.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP build/algo/c45_pruning.o build/algo/cart_pruning.o build/algo/split_rules.o build/app/main.o build/app/trainer.o build/build/cpu_builder.o build/build/cpu_grower.o build/build/node_store.o build/core/dataset.o build/core/options.o build/core/thread_pool.o build/core/tree.o build/build/gpu_grower_stub.o -o tree_cpu
 
-=== 12:37:47  3/5 prepare the data if it is missing
-susy: 4,500,000 train / 500,000 test rows, 18 features, 2 classes (14.6 s)
+=== 19:09:49  3/5 prepare the data if it is missing
+susy: already prepared
 
-=== 12:38:01  4/5 benchmark: SUSY, pruned CART and C4.5, serial, parallel and CUDA, 1 run(s) per case
+=== 19:09:49  4/5 benchmark: SUSY, pruned CART and C4.5, serial, parallel and CUDA, 1 run(s) per case
 6 cases, 8 processes:
   susy | cart_alpha | tree | 1
   susy | cart_alpha | tree | 20
@@ -39,27 +37,27 @@ susy: 4,500,000 train / 500,000 test rows, 18 features, 2 classes (14.6 s)
   susy | c45 | tree_cuda | 20
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  susy: identical in every format (2 s)
+  susy: identical in every format (3 s)
 6 cases x 1 run(s), then 2 footprint run(s) x 1: 8 processes. Time left is shown once every case has run once.
-[1/8] 12:38:05 run 1/1: C4.5 ./tree, 20 threads, susy ...
-    ok: train 1.406 s, peak 2,386 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m01s, elapsed 0m03s
-[2/8] 12:38:08 run 1/1: CART ./tree CUDA, 20 threads, susy ...
-    ok: train 0.6192 s, peak 1,294 MiB, GPU 1,434 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m01s, elapsed 0m05s
-[3/8] 12:38:10 run 1/1: CART ./tree, 20 threads, susy ...
-    ok: train 1.297 s, peak 1,779 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m01s, elapsed 0m07s
-[4/8] 12:38:12 run 1/1: CART ./tree, 1 thread, susy ...
-    ok: train 10.15 s, peak 1,159 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m11s, elapsed 0m20s
-[5/8] 12:38:25 run 1/1: C4.5 ./tree CUDA, 20 threads, susy ...
-    ok: train 0.8187 s, peak 1,896 MiB, GPU 1,432 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m01s, elapsed 0m23s
-[6/8] 12:38:28 run 1/1: C4.5 ./tree, 1 thread, susy ...
-    ok: train 8.45 s, peak 1,760 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m10s, elapsed 0m35s, about 0m00s left
+[1/8] 19:09:55 run 1/1: C4.5 ./tree, 20 threads, susy ...
+    ok: train 1.038 s, peak 2,033 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m01s, elapsed 0m02s
+[2/8] 19:09:58 run 1/1: CART ./tree CUDA, 20 threads, susy ...
+    ok: train 0.3743 s, peak 1,312 MiB, GPU 1,454 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m04s
+[3/8] 19:10:00 run 1/1: CART ./tree, 20 threads, susy ...
+    ok: train 0.9173 s, peak 1,711 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m01s, elapsed 0m06s
+[4/8] 19:10:02 run 1/1: CART ./tree, 1 thread, susy ...
+    ok: train 6.749 s, peak 1,158 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m08s, elapsed 0m15s
+[5/8] 19:10:11 run 1/1: C4.5 ./tree CUDA, 20 threads, susy ...
+    ok: train 0.4559 s, peak 1,623 MiB, GPU 1,450 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m18s
+[6/8] 19:10:14 run 1/1: C4.5 ./tree, 1 thread, susy ...
+    ok: train 6.504 s, peak 1,467 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m08s, elapsed 0m28s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/8] 12:38:40 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0006 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m35s, about 0m00s left
-[8/8] 12:38:40 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.005 s, peak 283 MiB, GPU 138 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m35s, about 0m00s left
+[7/8] 19:10:24 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0007 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m28s, about 0m00s left
+[8/8] 19:10:24 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0116 s, peak 291 MiB, GPU 138 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m28s, about 0m00s left
 results: /home/bruno/Projects/dt/bench/results/cuda-legion-susy/results.jsonl
 
-=== 12:38:40  5/5 tables, CSV files and the charts
+=== 19:10:24  5/5 tables, CSV files and the chart (with the desktop's cpu-pc-susy as reference)
 /home/bruno/Projects/dt/bench/results/cuda-legion-susy/chart.png
 done: /home/bruno/Projects/dt/bench/results/cuda-legion-susy/report.md, summary.csv, runs.csv, chart.png

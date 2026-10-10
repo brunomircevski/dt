@@ -33,7 +33,7 @@
  "kernel": "Linux 7.2.9-arch1-1 #1 SMP PREEMPT_DYNAMIC Sat, 03 Oct 2026 11:43:28 +0000 x86_64",
  "os": "Arch Linux",
  "versions": {
-  "tree_git": "93f2c034db07",
+  "tree_git": "49b7f472da08-dirty",
   "tree_binary": "/home/bruno/Projects/dt/tree_cpu",
   "cxx": "g++ (GCC) 16.2.1 20260810",
   "cxxflags": "CXXFLAGS  := -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP",
@@ -54,5 +54,16 @@
   "reps": 1,
   "timeout": 3600.0,
   "cooldown": 0
+ },
+ "tree_rerun": {
+  "note": "./tree rows rerun on the newer code; the other tools' rows are from the first run",
+  "started": "2026-10-10T19:10:17+02:00",
+  "command": "/home/bruno/Projects/dt/bench/.venv/bin/python bench/run.py susy_500k --protocols cart_alpha,c45 --impls tree --threads 1,all --cpus 2,0,1,3-27 --reps 1 --timeout 3600 --run-id cpu-pc-susy500k/tree-rerun",
+  "tree_git": "49b7f472da08-dirty",
+  "loadavg_at_start": "0.29 0.68 0.86 1/2561 124395",
+  "governors": [
+   "performance"
+  ],
+  "replaced_tree_git": "93f2c034db07"
  }
 }

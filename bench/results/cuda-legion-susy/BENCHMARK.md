@@ -1,6 +1,6 @@
 # SUSY on the Legion laptop: ./tree serial, parallel and CUDA
 
-**Status:** run on 2026-10-10 at 12:38, one run per case, commit a730d4a, laptop on AC, platform profile `max-power`, `performance` governor, load average 0.07. The data files have the same SHA-256 as in `cpu-pc-susy` (all 9), and every case built the desktop's tree.
+**Status:** rerun on 2026-10-10 at 19:09 on the faster code (the first run, at 12:38 on commit a730d4a, is replaced), one run per case, commit 49b7f47, laptop on AC, platform profile `max-power`, `performance` governor, load average 0.9 (from updating the checkout just before). `machine.json` says `-dirty` only because the old result files had been deleted for the rerun; the code was committed. The data files have the same SHA-256 as in `cpu-pc-susy` (all 9), and every case built the desktop's tree.
 
 ## Run it
 
@@ -32,7 +32,7 @@ bench/results/cuda-legion-susy/run.sh -m 5     # each case 5 times
   bench/.venv/bin/python bench/machines_chart.py bench/results/cuda-legion-susy \
       --reference bench/results/cpu-pc-susy
   ```
-- `machine.json` got its `ram_modules` on 2026-10-10 after the run (read from udev on the same laptop), as did `cpu-pc-susy`'s.
+- `cpu-pc-susy`'s `machine.json` got its `ram_modules` on 2026-10-10 after its run (read from udev on the same PC); `run.py` records them since.
 
 ## Method
 
@@ -56,24 +56,25 @@ The same protocols, data and measurements as [`cpu-pc-susy`](../cpu-pc-susy/BENC
 
 Lenovo Legion: Intel Core i7-13650HX (6 P-cores with 2 threads each, CPUs 0–11; 8 E-cores, CPUs 12–19; 20 threads), 32 GB RAM, NVIDIA GeForce RTX 5070 Laptop GPU (8 GB), CachyOS.
 
-The desktop of `cpu-pc-susy` (i7-14700KF, 28 threads) is not rerun: its numbers are copied into the comparison chart and marked as copied.
+The desktop of `cpu-pc-susy` (i7-14700KF, 28 threads) is not run here: its ./tree numbers (rerun there on the same commit, 2026-10-10) are drawn into the comparison chart, hatched.
 
 ## Results
 
 ![Laptop vs desktop](chart.png)
 
-Training time (one run per case); the desktop rows are copied from `cpu-pc-susy`, not rerun.
+Training time (one run per case); the desktop rows come from `cpu-pc-susy` (its ./tree cases were rerun on the same commit, 2026-10-10).
 
 | | CART | C4.5 |
 |---|--:|--:|
-| Desktop serial (i7-14700KF, 1 thread) | 9.08 s | 7.58 s |
-| Laptop serial (i7-13650HX, 1 thread) | 10.15 s | 8.45 s |
-| Desktop parallel (28 threads) | 1.12 s | 1.51 s |
-| Laptop parallel (20 threads) | 1.30 s | 1.41 s |
-| Laptop CUDA (RTX 5070 Laptop + 20 threads) | **0.62 s** | **0.82 s** |
+| Desktop serial (i7-14700KF, 1 thread) | 6.18 s | 6.15 s |
+| Laptop serial (i7-13650HX, 1 thread) | 6.75 s | 6.50 s |
+| Desktop parallel (28 threads) | 0.90 s | 1.20 s |
+| Laptop parallel (20 threads) | 0.92 s | 1.04 s |
+| Laptop CUDA (RTX 5070 Laptop + 20 threads) | **0.37 s** | **0.46 s** |
 
-- **Same trees:** CART 723 nodes, depth 19, test accuracy 79.65%; C4.5 15,113 nodes, depth 38, 79.74%, on both machines and all backends.
-- **CUDA:** 16.4× (CART) and 10.3× (C4.5) faster than the laptop's serial run, and 1.8× and 1.8× faster than the desktop's 28 threads.
-- **Fits the GPU easily:** 1.40 GiB of the 8 GB, CUDA context included. Host peak RSS: 1.26 GiB (CART) and 1.85 GiB (C4.5), less than the parallel CPU runs (1.74 and 2.33 GiB).
-- **Serial:** the laptop is 11–12% slower than the desktop (4.9 vs 5.6 GHz maximum boost).
-- **Parallel:** the laptop's 20 threads come within 16% of the desktop's 28 on CART and beat them on C4.5 (1.41 vs 1.51 s); the desktop run was not on a quiet PC (load average 1.2 / 3.3 / 4.2 at its start, `cpu-pc-susy/machine.json`), so that difference is not reliable.
+- **Same trees:** CART 723 nodes, depth 19, test accuracy 79.65%; C4.5 15,113 nodes, depth 38, 79.74%, on both machines, all backends, and the same as in the first run.
+- **CUDA:** 18.0× (CART) and 14.3× (C4.5) faster than the laptop's serial run, 2.5× and 2.3× faster than its 20 threads, and 2.4× and 2.6× faster than the desktop's 28 threads.
+- **Fits the GPU easily:** 1.42 GiB of the 8 GB, CUDA context included. Host peak RSS: 1.28 GiB (CART) and 1.58 GiB (C4.5), less than the parallel CPU runs (1.67 and 1.99 GiB).
+- **Serial:** the laptop is 6–9% slower than the desktop (4.9 vs 5.6 GHz maximum boost).
+- **Parallel:** the laptop's 20 threads match the desktop's 28 on CART (0.92 vs 0.90 s) and beat them on C4.5 (1.04 vs 1.20 s): the parallel build is bound by memory bandwidth, and the laptop's DDR5 is faster (see `cuda-legion-higgs`).
+- **Against the first run (12:38, commit a730d4a):** CUDA 0.62 → 0.37 s (CART, 1.7×) and 0.82 → 0.46 s (C4.5, 1.8×); parallel 1.30 → 0.92 s and 1.41 → 1.04 s; serial 10.15 → 6.75 s and 8.45 → 6.50 s.

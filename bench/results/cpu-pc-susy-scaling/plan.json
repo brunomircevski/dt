@@ -126,7 +126,13 @@
     "rpart": {
      "mode": "fit",
      "maxdepth": 30
-    }
+    },
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ]
    }
   },
   "cart_depth12": {
@@ -145,7 +151,13 @@
     "rpart": {
      "mode": "fit",
      "maxdepth": 12
-    }
+    },
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "12"
+    ]
    }
   },
   "cart_alpha": {
@@ -167,13 +179,25 @@
      "mode": "alpha",
      "maxdepth": 30,
      "alpha": "{alpha}"
-    }
+    },
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "30",
+     "--alpha",
+     "{alpha}"
+    ]
    }
   },
   "cart_alpha_nodepth": {
    "title": "CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit",
    "impls": {
     "tree": [
+     "--cart",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_cuda": [
      "--cart",
      "--alpha",
      "{alpha}"
@@ -195,6 +219,9 @@
      "0.25",
      "-m",
      "2"
+    ],
+    "tree_cuda": [
+     "--c45"
     ]
    }
   },
@@ -212,6 +239,10 @@
      "-np",
      "-m",
      "2"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "--no-prune"
     ]
    }
   }
@@ -220,6 +251,11 @@
   "tree": {
    "label": "./tree",
    "threads": "multi",
+   "warmup": false
+  },
+  "tree_cuda": {
+   "label": "./tree CUDA",
+   "threads": "all",
    "warmup": false
   },
   "sklearn": {
