@@ -26,12 +26,13 @@ bench/results/cuda-legion-susy/run.sh -m 5     # each case 5 times
   4. Runs the benchmark:
      `bench/run.py susy --protocols cart_alpha,c45 --impls tree,tree_cuda --threads 1,all --cpus 4,0-3,5-19 --reps <-m> --timeout 3600`
   5. Writes the outputs.
-- **Outputs:** `report.md`, `summary.csv`, `runs.csv`, `chart.png`, `results.jsonl`, `machine.json` (now with the GPU and nvcc), `plan.json`, `run.log`, as in `cpu-pc-susy`.
-- **Laptop vs desktop chart** (`machines.png`), drawn afterwards; it refuses to draw if the data files or trees differ:
+- **Outputs:** `report.md`, `summary.csv`, `runs.csv`, `results.jsonl`, `machine.json` (now with the GPU, nvcc and the RAM modules), `plan.json`, `run.log`, as in `cpu-pc-susy`, and `chart.png`: this run with the desktop's `cpu-pc-susy` as hatched reference, the hardware of both machines in its header, RAM and VRAM as separate bars.
+- **The chart alone** (`run.sh` draws it; it refuses to draw if the data files or trees differ from the reference):
   ```bash
   bench/.venv/bin/python bench/machines_chart.py bench/results/cuda-legion-susy \
-      --copied bench/results/cpu-pc-susy --out bench/results/cuda-legion-susy/machines.png
+      --reference bench/results/cpu-pc-susy
   ```
+- `machine.json` got its `ram_modules` on 2026-10-10 after the run (read from udev on the same laptop), as did `cpu-pc-susy`'s.
 
 ## Method
 
@@ -59,7 +60,7 @@ The desktop of `cpu-pc-susy` (i7-14700KF, 28 threads) is not rerun: its numbers 
 
 ## Results
 
-![Laptop vs desktop](machines.png)
+![Laptop vs desktop](chart.png)
 
 Training time (one run per case); the desktop rows are copied from `cpu-pc-susy`, not rerun.
 

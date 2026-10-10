@@ -236,3 +236,60 @@ def predict_tree(tree, X):
         goes_left = X[active, f[inner]].astype(np.float64) <= threshold[current]
         node[active] = np.where(goes_left, left[current], right[current])
     return value[node]
+
+
+# ------------------------------------------------------------------ hardware
+
+def _cpu_list_count(text):
+    count = 0
+    for part in (text or "").split(","):
+        if "-" in part:
+            first, last = map(int, part.split("-"))
+            count += last - first + 1
+        elif part:
+            count += 1
+    return count
+
+
+def hardware(machine):
+    """machine.json of a run -> short descriptions: {"cpu", "ram", "gpu"} (gpu
+    None when the run recorded none), e.g. "Intel Core i7-14700KF, 8P + 12E
+    cores, 28 threads" and "32 GiB DDR4-3200 (2 × 16 GiB)"."""
+    import re
+    model = re.search(r"Model name:\s+(.*)", machine.get("lscpu", ""))
+    model = re.sub(r"\(R\)|\(TM\)|\d+th Gen |\s+CPU.*", "", model.group(1)).strip() \
+        if model else "unknown CPU"
+    p_logical = _cpu_list_count(machine.get("p_cores"))
+    e_cores = _cpu_list_count(machine.get("e_cores"))
+    if p_logical:
+        p_cores = p_logical // 2 if machine.get("smt_active") == "1" else p_logical
+        cores = f"{p_cores}P + {e_cores}E cores, "
+    else:
+        cores = ""
+    cpu = f"{model}, {cores}{machine.get('logical_cpus')} threads"
+    total = f"{machine['mem_total_kb'] / 2**20:.0f} GiB" if machine.get("mem_total_kb") else "?"
+    modules = machine.get("ram_modules") or []
+    if modules:
+        kinds = sorted({(m["type"], m["mts"]) for m in modules})
+        sizes = sorted({m["bytes"] for m in modules})
+        kind = ", ".join(f"{t}-{mts}" for t, mts in kinds)
+        layout = (f" ({len(modules)} × {sizes[0] / 2**30:.0f} GiB)" if len(sizes) == 1 else "")
+        ram = f"{sum(m['bytes'] for m in modules) / 2**30:.0f} GiB {kind}{layout}"
+    else:
+        ram = f"{total} RAM"
+    gpu = (machine.get("versions") or {}).get("gpu") or ""
+    if gpu and not gpu.startswith("unavailable"):
+        fields = [f.strip() for f in gpu.splitlines()[0].split(",")]
+        mib = re.match(r"(\d+)", fields[1]) if len(fields) > 1 else None
+        vram = f", {round(int(mib.group(1)) / 1024)} GB VRAM" if mib else ""
+        gpu = fields[0].replace("NVIDIA GeForce ", "NVIDIA ") + vram
+    else:
+        gpu = None
+    return {"cpu": cpu, "ram": ram, "gpu": gpu}
+
+
+def hardware_line(machine, gpu_used):
+    """One line for a chart: "CPU ... · RAM ... · GPU ..." (or "no GPU used")."""
+    info = hardware(machine)
+    gpu = f"GPU {info['gpu']}" if gpu_used and info["gpu"] else "no GPU used"
+    return f"CPU {info['cpu']}  ·  RAM {info['ram']}  ·  {gpu}"

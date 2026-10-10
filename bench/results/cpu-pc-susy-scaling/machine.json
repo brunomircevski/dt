@@ -16,6 +16,19 @@
  "intel_no_turbo": "0",
  "cpufreq_boost": null,
  "loadavg_at_start": "0.47 1.43 4.92 1/1460 212394",
+ "ram_modules": [
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 17179869184
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 17179869184
+  }
+ ],
+ "ram_modules_note": "added on 2026-10-10 after the run, read from udev on the same machine",
  "mem_total_kb": 32681648,
  "kernel": "Linux 7.2.9-arch1-1 #1 SMP PREEMPT_DYNAMIC Sat, 03 Oct 2026 11:43:28 +0000 x86_64",
  "os": "Arch Linux",

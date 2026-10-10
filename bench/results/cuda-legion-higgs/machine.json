@@ -16,6 +16,19 @@
  "intel_no_turbo": "0",
  "cpufreq_boost": null,
  "loadavg_at_start": "0.76 0.38 0.26 2/689 5478",
+ "ram_modules": [
+  {
+   "type": "DDR5",
+   "mts": 4800,
+   "bytes": 17179869184
+  },
+  {
+   "type": "DDR5",
+   "mts": 4800,
+   "bytes": 17179869184
+  }
+ ],
+ "ram_modules_note": "added on 2026-10-10 after the run, read from udev on the same machine",
  "mem_total_kb": 32571056,
  "kernel": "Linux 7.2.9-1-cachyos #1 SMP PREEMPT_DYNAMIC Sat, 03 Oct 2026 18:34:55 +0000 x86_64",
  "os": "CachyOS",

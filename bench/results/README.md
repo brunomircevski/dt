@@ -20,9 +20,9 @@ bench/results/cpu-pc-susy500k/run.sh -m 5     # each case 5 times
 | `cpu-pc-susy500k` | run on 2026-10-09, one run per case |
 | `cpu-pc-susy` | full SUSY (4.5M training rows), ready, not run yet |
 | `cpu-pc-susy-scaling` | ./tree only, CART and C4.5 on full SUSY with 1–28 threads (scaling curve), ready, not run yet |
-| `cuda-legion-susy` | ./tree only on the laptop, full SUSY: serial, parallel (20 threads) and CUDA, the protocols of `cpu-pc-susy`; run on 2026-10-10, one run per case; `machines.png` compares it with the desktop |
+| `cuda-legion-susy` | ./tree only on the laptop, full SUSY: serial, parallel (20 threads) and CUDA, the protocols of `cpu-pc-susy`; run on 2026-10-10, one run per case; its `chart.png` shows the desktop's `cpu-pc-susy` as reference |
 | `cpu-pc-higgs` | ./tree parallel (28 threads) on full HIGGS, the desktop half of `cuda-legion-higgs`; run on 2026-10-10 |
-| `cuda-legion-higgs` | ./tree parallel (20 threads) and CUDA on the laptop, full HIGGS; run on 2026-10-10, one run per case; `machines.png` compares it with `cpu-pc-higgs` |
+| `cuda-legion-higgs` | ./tree parallel (20 threads) and CUDA on the laptop, full HIGGS; run on 2026-10-10, one run per case; its `chart.png` shows `cpu-pc-higgs` as reference |
 
 ## A new machine
 

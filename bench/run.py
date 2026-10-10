@@ -298,6 +298,20 @@ def read_text(path):
         return None
 
 
+def ram_modules():
+    """Installed memory modules from the DMI data udev exports (no root needed):
+    [{"type": "DDR5", "mts": 4800, "bytes": ...}], empty if unknown."""
+    text = command_output(["udevadm", "info", "/sys/devices/virtual/dmi/id"])
+    found = defaultdict(dict)
+    for key, value in re.findall(r"MEMORY_DEVICE_(\d+_[A-Z_]+)=(.*)", text):
+        index, field = key.split("_", 1)
+        found[int(index)][field] = value
+    return [{"type": d["TYPE"], "mts": int(d["CONFIGURED_SPEED_MTS"]), "bytes": int(d["SIZE"])}
+            for _, d in sorted(found.items())
+            if d.get("SIZE") and d.get("TYPE") not in (None, "Unknown")
+            and d.get("CONFIGURED_SPEED_MTS")]
+
+
 def machine_info(args):
     cpus = sorted(Path("/sys/devices/system/cpu").glob("cpu[0-9]*"),
                   key=lambda p: int(p.name[3:]))
@@ -320,6 +334,7 @@ def machine_info(args):
         "intel_no_turbo": read_text("/sys/devices/system/cpu/intel_pstate/no_turbo"),
         "cpufreq_boost": read_text("/sys/devices/system/cpu/cpufreq/boost"),
         "loadavg_at_start": read_text("/proc/loadavg"),
+        "ram_modules": ram_modules(),
         "mem_total_kb": int(re.search(r"MemTotal:\s+(\d+)", meminfo).group(1)) if meminfo else None,
         "kernel": command_output(["uname", "-srvm"]),
         "os": command_output(["sh", "-c", ". /etc/os-release && echo $PRETTY_NAME"]),

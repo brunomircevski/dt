@@ -44,6 +44,7 @@ def seconds_label(value):
 def collect(run):
     rows = [json.loads(line) for line in open(run / "results.jsonl")]
     times, memory, tree, status = defaultdict(list), defaultdict(list), {}, {}
+    vram = defaultdict(list)
     for r in rows:
         key = (r["dataset"], r["protocol"], r["impl"], r["threads"])
         if r["kind"] == "baseline":
@@ -54,8 +55,10 @@ def collect(run):
         if r["kind"] == "run":
             times[key].append(r["train_seconds"])
             memory[key].append(r["peak_rss_train_bytes"])
+            if r.get("gpu_peak_bytes") is not None:
+                vram[key].append(r["gpu_peak_bytes"])
             tree.setdefault(key, r)
-    return times, memory, tree, status
+    return times, memory, tree, status, vram
 
 
 def entries(keys, protocols):
@@ -75,19 +78,20 @@ def entries(keys, protocols):
     return out, groups, y
 
 
-def figure(run, dataset, times, memory, tree, status, meta, settings, out):
+def figure(run, dataset, times, memory, tree, status, vram, meta, machine, out):
+    settings = machine["settings"]
     keys = {k for k in set(times) | set(status) if k[0] == dataset}
     protocols = [p for p in B.PROTOCOLS if any(k[1] == p for k in keys)]
     thread_rows = sorted({k[3] for k in keys})
     layouts = [entries([k for k in keys if k[3] == t], protocols) for t in thread_rows]
     fig, axes = plt.subplots(
-        len(thread_rows), 2, figsize=(12.5, 1.6 + 0.62 * sum(l[2] for l in layouts)),
+        len(thread_rows), 2, figsize=(12.5, 1.9 + 0.62 * sum(l[2] for l in layouts)),
         gridspec_kw={"width_ratios": [1.45, 1], "height_ratios": [l[2] for l in layouts],
                      "wspace": 0.14, "hspace": 0.32}, squeeze=False)
     every_time = [t for k in keys for t in times.get(k, [])]
     every_rss = [m for k in keys for m in memory.get(k, [])]
     time_limits = (min(every_time) / 2.5, max(every_time) * 4) if every_time else (0.1, 10)
-    rss_limit = max(every_rss) / 2**30 * 1.28 if every_rss else 1
+    rss_limit = max(every_rss) / 2**30 * 1.42 if every_rss else 1
 
     for row, (threads, (rows, groups, height)) in enumerate(zip(thread_rows, layouts)):
         ax_time, ax_rss = axes[row]
@@ -103,7 +107,7 @@ def figure(run, dataset, times, memory, tree, status, meta, settings, out):
         title = "1 thread" if threads == 1 else f"{threads} threads"
         ax_time.set_title(f"{title}: training time (log scale)", loc="left", fontsize=10.5,
                           color=INK, fontweight="bold")
-        ax_rss.set_title(f"{title}: peak memory (RSS)", loc="left",
+        ax_rss.set_title(f"{title}: peak memory, RAM (RSS)", loc="left",
                          fontsize=10.5, color=INK, fontweight="bold")
         for y, text in groups:
             ax_time.text(-0.02, y, text, transform=ax_time.get_yaxis_transform(), ha="right",
@@ -135,7 +139,9 @@ def figure(run, dataset, times, memory, tree, status, meta, settings, out):
             if key in memory:
                 gib = statistics.median(memory[key]) / 2**30
                 ax_rss.barh(y, gib, height=0.42, color=color, zorder=2)
-                ax_rss.text(gib + rss_limit * 0.012, y, f"{gib:.2f} GiB", va="center",
+                gpu = (f"  + {statistics.median(vram[key]) / 2**30:.2f} GiB VRAM"
+                       if vram.get(key) else "")
+                ax_rss.text(gib + rss_limit * 0.012, y, f"{gib:.2f} GiB RAM{gpu}", va="center",
                             fontsize=9, color=INK)
             else:
                 ax_rss.text(rss_limit * 0.01, y, status.get(key, "no data"), va="center",
@@ -151,19 +157,22 @@ def figure(run, dataset, times, memory, tree, status, meta, settings, out):
     shown = [impl for impl in B.IMPLS if any(k[2] == impl for k in keys)]
     handles = [Line2D([], [], marker="o", linestyle="", markersize=8, color=COLORS[impl],
                       label=B.IMPLS[impl]["label"]) for impl in shown]
-    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.21, 0.962),
+    inches = fig.get_figheight()
+    fig.text(0.215, 1 - 0.4 / inches, B.hardware_line(machine, bool(vram)), fontsize=9.2,
+             color=INK, va="top")
+    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.21, 1 - 0.62 / inches),
                ncol=len(shown), frameon=False, fontsize=9, handletextpad=0.3, columnspacing=1.4)
     reps = settings.get("reps")
     fig.suptitle(f"{NAMES.get(dataset, dataset)}: {meta['n_train']:,} training rows, {meta['n_test']:,} test rows, "
-                 f"{len(meta['features'])} features", x=0.215, y=0.99, ha="left", fontsize=12.5,
+                 f"{len(meta['features'])} features", x=0.215, y=1 - 0.1 / inches, ha="left", fontsize=12.5,
                  color=INK, fontweight="bold")
     runs = f"median of {reps} runs; line: min–max" if reps and reps > 1 else "one run"
-    fig.text(0.215, 0.012, f"Dot: {runs}. Training time excludes reading the data. Same data "
+    fig.text(0.215, 0.1 / inches, f"Dot: {runs}. Training time excludes reading the data. Same data "
              "and the same CPUs for every tool.\nPeak RSS: highest resident memory of the same "
              "process up to the end of training (runtime, data, warm-up, training).",
              fontsize=8,
              color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.215, right=0.985, top=0.87, bottom=0.08)
+    fig.subplots_adjust(left=0.215, right=0.985, top=1 - 1.35 / inches, bottom=0.8 / inches)
     fig.savefig(out, dpi=150, facecolor="white")
     return out
 
@@ -176,14 +185,14 @@ def main():
     args = parser.parse_args()
     run = Path(args.run)
     plan = json.load(open(run / "plan.json"))
-    settings = json.load(open(run / "machine.json"))["settings"]
-    times, memory, tree, status = collect(run)
+    machine = json.load(open(run / "machine.json"))
+    times, memory, tree, status, vram = collect(run)
     datasets = list(dict.fromkeys(k[0] for k in list(times) + list(status)))
     for dataset in datasets:
         out = Path(args.out) if args.out else (
             run / ("chart.png" if len(datasets) == 1 else f"chart_{dataset}.png"))
-        print(figure(run, dataset, times, memory, tree, status, plan["datasets"][dataset],
-                     settings, out))
+        print(figure(run, dataset, times, memory, tree, status, vram,
+                     plan["datasets"][dataset], machine, out))
 
 
 if __name__ == "__main__":

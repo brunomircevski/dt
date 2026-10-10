@@ -75,10 +75,11 @@ def summarise(cases):
     return [p for p in B.PROTOCOLS if p in out], out
 
 
-def figure(run, dataset, protocols, series, settings, out):
+def figure(run, dataset, protocols, series, machine, out):
+    settings = machine["settings"]
     meta = json.load(open(run / "plan.json"))["datasets"][dataset]
     threads = sorted({p["threads"] for points in series.values() for p in points})
-    fig, ax = plt.subplots(figsize=(8, 5.0))
+    fig, ax = plt.subplots(figsize=(8.6, 5.4))
     ax.set_xlim(0, max(threads) * 1.13)  # room for the end labels
     ax.set_xticks(threads)
     ax.tick_params(colors=MUTED, labelsize=8.5, length=0)
@@ -89,7 +90,7 @@ def figure(run, dataset, protocols, series, settings, out):
     ax.grid(axis="y", color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
     ax.set_xlabel("threads", fontsize=9, color=MUTED)
-    ax.set_title("Training time (solid, left) and peak memory (dashed, right)", loc="left",
+    ax.set_title("Training time (solid, left) and peak RAM, RSS (dashed, right)", loc="left",
                  fontsize=10.5, color=INK, fontweight="bold")
     mem = ax.twinx()
     mem.tick_params(colors=MUTED, labelsize=8.5, length=0)
@@ -111,7 +112,7 @@ def figure(run, dataset, protocols, series, settings, out):
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
     mem.set_ylim(0, 1.15 * max(p["peak_rss_median"] for points in series.values()
                                for p in points) / 1e9)
-    mem.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GB"))
+    mem.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GB RAM"))
 
     # Value at the last thread count, at the end of each line, pushed apart
     # vertically where two lines end close together.
@@ -134,12 +135,15 @@ def figure(run, dataset, protocols, series, settings, out):
                       f"{series[p][0]['nodes']:,} nodes, test "
                       f"{100 * series[p][0]['test_accuracy']:.2f}%")
                for p in protocols if series[p][0].get("test_accuracy") is not None]
-    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.08, 0.925),
+    fig.text(0.08, 1 - 0.4 / 5.4, B.hardware_line(machine, False), fontsize=8.6, color=INK,
+             va="top")
+    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.08, 1 - 0.62 / 5.4),
                ncol=len(handles), frameon=False, fontsize=9, handletextpad=0.4,
                columnspacing=1.6)
     fig.suptitle(f"./tree thread scaling on {NAMES.get(dataset, dataset)}: "
                  f"{meta['n_train']:,} training rows, {len(meta['features'])} features",
-                 x=0.08, y=0.995, ha="left", fontsize=12.5, color=INK, fontweight="bold")
+                 x=0.08, y=1 - 0.05 / 5.4, ha="left", fontsize=12.5, color=INK,
+                 fontweight="bold")
     reps = settings.get("reps")
     runs = f"median of {reps} runs, bar: min–max" if reps and reps > 1 else "one run per point"
     fig.text(0.08, 0.015,
@@ -147,7 +151,7 @@ def figure(run, dataset, protocols, series, settings, out):
              "every thread count builds the same tree. Training time excludes reading the data;\n"
              "peak memory is the peak RSS up to the end of training, the loaded data included.",
              fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.08, right=0.84, top=0.8, bottom=0.2)
+    fig.subplots_adjust(left=0.08, right=0.84, top=1 - 1.25 / 5.4, bottom=0.2)
     fig.savefig(out, dpi=150, facecolor="white")
     return out
 
@@ -158,7 +162,7 @@ def main():
     parser.add_argument("--out", help="output file (default: <run>/chart.png)")
     args = parser.parse_args()
     run = Path(args.run)
-    settings = json.load(open(run / "machine.json"))["settings"]
+    machine = json.load(open(run / "machine.json"))
     cases, dataset = collect(run)
     protocols, series = summarise(cases)
     fields = ["protocol", "threads", "runs", "time_median", "time_min", "time_max", "speedup",
@@ -169,7 +173,7 @@ def main():
         for protocol in protocols:
             writer.writerows(series[protocol])
     print(run / "scaling.csv")
-    print(figure(run, dataset, protocols, series, settings,
+    print(figure(run, dataset, protocols, series, machine,
                  Path(args.out) if args.out else run / "chart.png"))
 
 

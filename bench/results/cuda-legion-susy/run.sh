@@ -79,8 +79,8 @@ step "4/5 benchmark: SUSY, pruned CART and C4.5, serial, parallel and CUDA, $RUN
 "$PY" bench/run.py susy --protocols cart_alpha,c45 --impls tree,tree_cuda --threads 1,all \
   --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$RUN"
 
-step "5/5 tables, CSV files and the charts"
+step "5/5 tables, CSV files and the chart (with the desktop's cpu-pc-susy as reference)"
 "$PY" bench/report.py "$HERE" --md "$HERE/report.md" --csv "$HERE/summary.csv" \
   --runs-csv "$HERE/runs.csv"
-"$PY" bench/chart.py "$HERE"
+"$PY" bench/machines_chart.py "$HERE" --reference bench/results/cpu-pc-susy
 echo "done: $HERE/report.md, summary.csv, runs.csv, chart.png"
