@@ -25,10 +25,11 @@
 //      4. segmentBest      best cut per segment and the class counts left of
 //                          it -> host picks the split (SplitRules) and the
 //                          children
-//      5. markGoesLeft / tileLeftCount / segmentPrefix / scatter:
+//      5. markGoesLeft / partition:
 //                          stable partition of the columns of split nodes into
-//                          the other buffer (ping-pong between two copies),
-//                          skipped for nodes whose children are both leaves
+//                          the other buffer (ping-pong between two copies) in
+//                          one pass, skipped for nodes whose children are both
+//                          leaves
 //    so each level needs one round trip to the host (step 4).
 //  * Children with fewer than gpu.minRows rows are gathered into one block,
 //    copied to the host in one transfer and grown by CpuTreeBuilder tasks on
@@ -455,17 +456,16 @@ __device__ __forceinline__ bool tileRuledOut(const double *tileUpper, const doub
 }
 
 // ---------------------------------------------------------------------------
-// 2. / 5. Exclusive scan over the tiles of each segment (one block per
-// segment), `width` values per tile. Writes the per-segment totals.
+// 2. Exclusive scan over the tiles of each segment (one block per segment),
+// `width` values per tile.
 // ---------------------------------------------------------------------------
 __global__ void __launch_bounds__(kThreads)
     segmentPrefixKernel(std::uint32_t *perTile, int width, const Segment *segments,
-                        const NodeDesc *nodes, const std::uint8_t *constant,
-                        bool partitionedOnly, std::uint32_t *segmentTotals) {
+                        const std::uint8_t *constant) {
   using Scan = cub::BlockScan<std::uint32_t, kThreads>;
   __shared__ typename Scan::TempStorage scanStorage;
   const Segment segment = segments[blockIdx.x];
-  if (constant[blockIdx.x] || (partitionedOnly && !nodes[segment.node].partition)) {
+  if (constant[blockIdx.x]) {
     return;
   }
   for (int k = 0; k < width; ++k) {
@@ -483,9 +483,6 @@ __global__ void __launch_bounds__(kThreads)
       }
       carry += sum;
       __syncthreads();
-    }
-    if (segmentTotals && threadIdx.x == 0) {
-      segmentTotals[static_cast<std::size_t>(blockIdx.x) * width + k] = carry;
     }
   }
 }
@@ -879,85 +876,97 @@ __global__ void __launch_bounds__(kThreads)
   }
 }
 
+// Single pass (decoupled look-back, as in CUB's scans): each tile counts its
+// left rows and publishes the count, then adds up the counts of the tiles
+// before it in its segment, walking back to a tile that has published its
+// running total, and publishes its own. Tiles are taken in order from a
+// counter (not by blockIdx), so a tile only ever waits for tiles that have
+// started. The tile is staged in shared memory, left rows first, so that both
+// runs are written with consecutive stores.
+constexpr unsigned long long kTileLefts = 1ull << 32; // status: left rows of the tile
+constexpr unsigned long long kTileTotal = 2ull << 32; // ... of the segment up to the tile
+
 __global__ void __launch_bounds__(kThreads)
-    tileLeftCountKernel(const Entry *src, const Segment *segments,
-                        const std::uint32_t *tileSegment, const std::uint8_t *constant,
-                        const NodeDesc *nodes, EntryCodec codec, const std::uint8_t *goesLeft,
-                        std::uint32_t *tileLeft) {
-  using SumReduce = cub::BlockReduce<std::uint32_t, kThreads>;
-  __shared__ typename SumReduce::TempStorage storage;
-  const std::uint32_t tile = blockIdx.x;
+    partitionKernel(const Entry *src, Entry *dst, const Segment *segments,
+                    const std::uint32_t *tileSegment, const std::uint8_t *constant,
+                    const NodeDesc *nodes, EntryCodec codec, const std::uint8_t *goesLeft,
+                    unsigned long long *tileStatus, unsigned int *tileCounter) {
+  using Load = cub::BlockLoad<Entry, kThreads, kItems, cub::BLOCK_LOAD_WARP_TRANSPOSE>;
+  using Scan = cub::BlockScan<std::uint32_t, kThreads>;
+  __shared__ union {
+    typename Load::TempStorage load;
+    typename Scan::TempStorage scan;
+    Entry staged[kTile];
+  } storage;
+  __shared__ std::uint32_t shared;
+
+  if (threadIdx.x == 0) {
+    shared = atomicAdd(tileCounter, 1u);
+  }
+  __syncthreads();
+  const std::uint32_t tile = shared;
   const std::uint32_t segmentIndex = tileSegment[tile];
   const Segment segment = segments[segmentIndex];
   if (constant[segmentIndex] || !nodes[segment.node].partition) {
     return;
   }
-  if (segment.tileCount == 1) {
-    if (threadIdx.x == 0) {
-      tileLeft[tile] = 0; // no left rows before the only tile
-    }
-    return;
-  }
+  const std::uint32_t leftCount = nodes[segment.node].leftCount;
   std::uint32_t start;
   std::uint32_t length;
   tileRange(segment, tile, start, length);
-  const Entry *entries = src + segment.base + start;
-  std::uint32_t lefts = 0;
-  for (std::uint32_t index = threadIdx.x; index < length; index += kThreads) {
-    lefts += goesLeft[codec.row(entries[index].packed)];
-  }
-  const std::uint32_t total = SumReduce(storage).Sum(lefts);
-  if (threadIdx.x == 0) {
-    tileLeft[tile] = total;
-  }
-}
 
-__global__ void __launch_bounds__(kThreads)
-    scatterKernel(const Entry *src, Entry *dst, const Segment *segments,
-                  const std::uint32_t *tileSegment, const std::uint8_t *constant,
-                  const NodeDesc *nodes, EntryCodec codec, const std::uint8_t *goesLeft,
-                  const std::uint32_t *tileLeftPrefix) {
-  using Scan = cub::BlockScan<std::uint32_t, kThreads>;
-  __shared__ typename Scan::TempStorage storage;
-  const std::uint32_t tile = blockIdx.x;
-  const std::uint32_t segmentIndex = tileSegment[tile];
-  const Segment segment = segments[segmentIndex];
-  const NodeDesc node = nodes[segment.node];
-  if (constant[segmentIndex] || !node.partition) {
-    return;
-  }
-  std::uint32_t start;
-  std::uint32_t length;
-  tileRange(segment, tile, start, length);
-  const Entry *from = src + segment.base;
-  Entry *to = dst + segment.base;
-
-  const std::uint32_t first = threadIdx.x * kItems;
   Entry items[kItems];
+  Load(storage.load).Load(src + segment.base + start, items, length);
+  const std::uint32_t first = threadIdx.x * kItems;
   bool left[kItems];
   std::uint32_t lefts = 0;
 #pragma unroll
   for (int j = 0; j < kItems; ++j) {
-    left[j] = false;
-    if (first + j < length) {
-      items[j] = from[start + first + j];
-      left[j] = goesLeft[codec.row(items[j].packed)];
-      lefts += left[j];
-    }
+    left[j] = first + j < length && goesLeft[codec.row(items[j].packed)];
+    lefts += left[j];
   }
-  std::uint32_t leftsBefore;
-  Scan(storage).ExclusiveSum(lefts, leftsBefore);
-  leftsBefore += tileLeftPrefix[tile]; // left rows before my first entry (segment)
+  __syncthreads(); // the scan reuses the load's shared memory (and `shared`)
+  std::uint32_t leftsBefore; // in the tile, before my first entry
+  std::uint32_t tileLefts;
+  Scan(storage.scan).ExclusiveSum(lefts, leftsBefore, tileLefts);
+
+  if (threadIdx.x == 0) {
+    std::uint32_t before = 0; // left rows of the segment before this tile
+    if (tile == segment.firstTile) {
+      atomicExch(tileStatus + tile, kTileTotal | tileLefts);
+    } else {
+      atomicExch(tileStatus + tile, kTileLefts | tileLefts);
+      for (std::uint32_t previous = tile - 1;; --previous) {
+        unsigned long long status;
+        do {
+          status = *reinterpret_cast<volatile unsigned long long *>(tileStatus + previous);
+        } while (status == 0);
+        before += static_cast<std::uint32_t>(status);
+        if (status >= kTileTotal) {
+          break;
+        }
+      }
+      atomicExch(tileStatus + tile, kTileTotal | (before + tileLefts));
+    }
+    shared = before;
+  }
+  __syncthreads(); // `shared`, and the staging reuses the scan's shared memory
+  const std::uint32_t segmentLeftsBefore = shared;
+
 #pragma unroll
   for (int j = 0; j < kItems; ++j) {
-    if (first + j < length) {
-      const std::uint32_t position = start + first + j;
-      if (left[j]) {
-        to[leftsBefore++] = items[j];
-      } else {
-        to[node.leftCount + (position - leftsBefore)] = items[j];
-      }
+    const std::uint32_t index = first + j;
+    if (index < length) {
+      storage.staged[left[j] ? leftsBefore : tileLefts + (index - leftsBefore)] = items[j];
+      leftsBefore += left[j];
     }
+  }
+  __syncthreads();
+  Entry *to = dst + segment.base;
+  const std::uint32_t rightsBefore = start - segmentLeftsBefore; // in the segment
+  for (std::uint32_t index = threadIdx.x; index < length; index += kThreads) {
+    to[index < tileLefts ? segmentLeftsBefore + index
+                         : leftCount + rightsBefore + (index - tileLefts)] = storage.staged[index];
   }
 }
 
@@ -1094,6 +1103,9 @@ public:
     }
     if (arenaPinned_) {
       cudaHostUnregister(arena_.get());
+    }
+    if (valuesPinning_.valid() && valuesPinning_.get()) { // never presorted
+      cudaHostUnregister(sortedValues_.data());
     }
     if (stream_) {
       cudaStreamDestroy(stream_);
@@ -1245,28 +1257,45 @@ private:
 
     // Host memory for the columns of nodes handed to the CPU (every row is
     // handed over at most once per grow, so features * rows entries always
-    // suffice), and their partition scratch. Page-locked so the copies run at
-    // full speed; locking touches every page, so it runs in the background.
+    // suffice), and their partition scratch; for C4.5 also the sorted values
+    // that the presort hands back. Both are page-locked in the background, so
+    // the copies run at full speed: the sorted values first (needed at the
+    // end of the presort), then the arena (needed by the first node handed to
+    // the CPU).
     arena_.reset(new Entry[total]);
     arenaScratch_.reset(new Entry[rows_]);
-    arenaPinning_ = std::async(std::launch::async, [this, total]() {
-      // Touch the pages first, on all threads (the pool is idle while the GPU
-      // presorts): registering memory that is already mapped is several
-      // times faster, and a registration holds up every other CUDA call.
-      constexpr std::size_t kChunks = 256;
-      pool_.parallelFor(kChunks, [&](std::size_t chunk) {
-        const std::size_t begin = total * chunk / kChunks;
-        const std::size_t end = total * (chunk + 1) / kChunks;
-        std::memset(static_cast<void *>(arena_.get() + begin), 0, (end - begin) * sizeof(Entry));
-      });
-      if (cudaHostRegister(arena_.get(), total * sizeof(Entry), cudaHostRegisterDefault) ==
-          cudaSuccess) {
-        arenaPinned_ = true;
-      } else {
-        cudaGetLastError(); // pageable copies still work, just slower
+    if (options_.algorithm == Algorithm::C45 && !reusable_) {
+      sortedValues_.resize(total);
+      valuesPinning_ = std::async(std::launch::async, [this, total]() {
+                         return pinHostMemory(sortedValues_.data(), total * sizeof(float));
+                       }).share();
+    }
+    arenaPinning_ = std::async(std::launch::async, [this, total, values = valuesPinning_]() {
+      if (values.valid()) {
+        values.wait();
       }
+      arenaPinned_ = pinHostMemory(arena_.get(), total * sizeof(Entry));
     });
     CUDA_CHECK(cudaStreamSynchronize(stream_));
+  }
+
+  // Page-lock host memory, so that copies run at full speed. The pages are
+  // touched first, on all threads (the pool is idle while the GPU presorts):
+  // registering memory that is already mapped is several times faster, and
+  // a registration holds up every other CUDA call. False if it failed
+  // (pageable copies still work, just slower).
+  bool pinHostMemory(void *data, std::size_t bytes) {
+    constexpr std::size_t kChunks = 256;
+    pool_.parallelFor(kChunks, [&](std::size_t chunk) {
+      const std::size_t begin = bytes * chunk / kChunks;
+      const std::size_t end = bytes * (chunk + 1) / kChunks;
+      std::memset(static_cast<char *>(data) + begin, 0, end - begin);
+    });
+    if (cudaHostRegister(data, bytes, cudaHostRegisterDefault) == cudaSuccess) {
+      return true;
+    }
+    cudaGetLastError();
+    return false;
   }
 
   // Sorted columns of the selected rows in buffer 1, stride = their count.
@@ -1308,9 +1337,17 @@ private:
             sortedIds + offset, static_cast<int>(stride_), 0, 32, stream_));
       }
     });
+    // The buffer prepared by setup(), if any (the first presort of a C4.5
+    // grower), else a pageable one.
+    const bool prepared = sortedValues && valuesPinning_.valid();
+    const bool valuesPinned = prepared && valuesPinning_.get();
     if (sortedValues) {
-      // Before level 0 reuses buffer 0 (the copy is ordered on the stream).
+      if (prepared) {
+        *sortedValues = std::move(sortedValues_);
+        valuesPinning_ = {};
+      }
       sortedValues->resize(total);
+      // Before level 0 reuses buffer 0 (the copy is ordered on the stream).
       CUDA_CHECK(cudaMemcpyAsync(sortedValues->data(), sortedKeys, total * sizeof(float),
                                  cudaMemcpyDeviceToHost, stream_));
     }
@@ -1320,6 +1357,9 @@ private:
     });
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaStreamSynchronize(stream_));
+    if (valuesPinned) {
+      CUDA_CHECK(cudaHostUnregister(sortedValues->data()));
+    }
     current_ = 1;
   }
 
@@ -1516,7 +1556,7 @@ private:
       tileLower_.reserve(tiles);
       segmentLower_.reserve(segmentCount);
     }
-    tileLeft_.reserve(tiles);
+    tileStatus_.reserve(static_cast<std::size_t>(tiles) + 1);
     segmentBest_.reserve(segmentCount);
     segmentLeft_.reserve(segmentCount * classes);
 
@@ -1531,8 +1571,7 @@ private:
     dispatchHistogram(tiles);
     profile_.run("segmentPrefix", stream_, [&]() {
       segmentPrefixKernel<<<static_cast<unsigned>(segmentCount), kThreads, 0, stream_>>>(
-          tileHist_.get(), classCount_, segments_.get(), nodes_.get(), constant_.get(), false,
-          nullptr);
+          tileHist_.get(), classCount_, segments_.get(), constant_.get());
     });
     CUDA_CHECK(cudaGetLastError());
     dispatchScans(tiles, segmentCount);
@@ -1617,21 +1656,14 @@ private:
                                                           nodes_.get(), codec_, goesLeft_.get());
     });
     CUDA_CHECK(cudaGetLastError());
-    profile_.run("tileLeftCount", stream_, [&]() {
-      tileLeftCountKernel<<<tiles, kThreads, 0, stream_>>>(
-          entries_[current_].get(), segments_.get(), tileSegment_.get(), constant_.get(),
-          nodes_.get(), codec_, goesLeft_.get(), tileLeft_.get());
-    });
-    CUDA_CHECK(cudaGetLastError());
-    profile_.run("segmentPrefix", stream_, [&]() {
-      segmentPrefixKernel<<<static_cast<unsigned>(segmentCount), kThreads, 0, stream_>>>(
-          tileLeft_.get(), 1, segments_.get(), nodes_.get(), constant_.get(), true, nullptr);
-    });
-    CUDA_CHECK(cudaGetLastError());
-    profile_.run("scatter", stream_, [&]() {
-      scatterKernel<<<tiles, kThreads, 0, stream_>>>(
+    profile_.run("partition", stream_, [&]() {
+      // Tile states and the tile counter start at zero.
+      CUDA_CHECK(cudaMemsetAsync(tileStatus_.get(), 0, (tiles + 1) * sizeof(unsigned long long),
+                                 stream_));
+      partitionKernel<<<tiles, kThreads, 0, stream_>>>(
           entries_[current_].get(), entries_[other].get(), segments_.get(), tileSegment_.get(),
-          constant_.get(), nodes_.get(), codec_, goesLeft_.get(), tileLeft_.get());
+          constant_.get(), nodes_.get(), codec_, goesLeft_.get(), tileStatus_.get(),
+          reinterpret_cast<unsigned int *>(tileStatus_.get() + tiles));
     });
     CUDA_CHECK(cudaGetLastError());
 
@@ -1733,6 +1765,8 @@ private:
   std::size_t scratchUsed_ = 0;
   std::future<void> arenaPinning_;
   bool arenaPinned_ = false;
+  Dataset::Values sortedValues_;           // C4.5: for the first presort
+  std::shared_future<bool> valuesPinning_; // true once it is page-locked
 
   cudaStream_t stream_ = nullptr;
   DeviceArray<Entry> entries_[2];
@@ -1755,7 +1789,7 @@ private:
   DeviceArray<double> tileLower_;
   DeviceArray<double> segmentLower_;
   DeviceArray<std::uint32_t> tileTries_;
-  DeviceArray<std::uint32_t> tileLeft_;
+  DeviceArray<unsigned long long> tileStatus_; // partition: per tile, then the counter
   DeviceArray<CutCandidate> segmentBest_;
   DeviceArray<std::uint32_t> segmentLeft_;
   DeviceArray<CopyJob> copyJobs_;
