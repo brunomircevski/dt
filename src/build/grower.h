@@ -32,7 +32,7 @@ public:
   // rows in increasing order (column-major), a by-product of the presort that
   // C4.5's thresholds need.
   virtual Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
-                    GrowTimings &timings, std::vector<float> *sortedValues = nullptr) = 0;
+                    GrowTimings &timings, Dataset::Values *sortedValues = nullptr) = 0;
 
   // Memory the grower only uses inside grow(): the caller may use it until
   // the next grow() (it is already mapped, so no page faults). At least

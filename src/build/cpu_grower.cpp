@@ -29,7 +29,7 @@ public:
   }
 
   Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
-            GrowTimings &timings, std::vector<float> *sortedValues) override {
+            GrowTimings &timings, Dataset::Values *sortedValues) override {
     const std::size_t count = rows.empty() ? rows_ : rows.size();
     {
       ScopedTimer timer(timings.prepareSeconds);
@@ -89,7 +89,7 @@ private:
   // Fill work_ with the sorted columns of the selected rows (stride = their
   // count), and `sortedValues` (if not null) with their values. Without
   // reuse, presort straight into work_.
-  void prepare(std::span<const std::uint32_t> rows, std::vector<float> *sortedValues) {
+  void prepare(std::span<const std::uint32_t> rows, Dataset::Values *sortedValues) {
     const std::size_t count = rows.empty() ? rows_ : rows.size();
     if (sortedValues) {
       sortedValues->resize(features_ * count);

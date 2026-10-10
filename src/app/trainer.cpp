@@ -172,7 +172,7 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
 
   const SplitRules rules(options, train.classCount());
   GrowTimings growTimings;
-  std::vector<float> sortedValues; // C4.5's thresholds need them
+  Dataset::Values sortedValues; // C4.5's thresholds need them
   Tree tree = grower->grow(rules, {}, growTimings, isCart ? nullptr : &sortedValues);
   timings.presortSeconds += growTimings.prepareSeconds;
   timings.buildSeconds += growTimings.buildSeconds;

@@ -23,7 +23,7 @@ void c45CollapseUselessSplits(Tree &tree);
 // The training partition does not change; only unseen values in the gap do.
 // `sortedValues`: every feature's training values in increasing order
 // (column-major, `rowCount` per feature).
-void c45UseTrainingValueThresholds(Tree &tree, const std::vector<float> &sortedValues,
+void c45UseTrainingValueThresholds(Tree &tree, std::span<const float> sortedValues,
                                    std::size_t rowCount, ThreadPool *pool);
 
 // prune.c: error-based pruning. Each node's error is estimated with the upper

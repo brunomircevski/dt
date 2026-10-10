@@ -418,7 +418,7 @@ void c45CollapseUselessSplits(Tree &tree) {
   tree.compact();
 }
 
-void c45UseTrainingValueThresholds(Tree &tree, const std::vector<float> &sortedValues,
+void c45UseTrainingValueThresholds(Tree &tree, std::span<const float> sortedValues,
                                    std::size_t rowCount, ThreadPool *pool) {
   constexpr std::size_t kChunk = 4096;
   const std::size_t chunks = (tree.nodes.size() + kChunk - 1) / kChunk;
