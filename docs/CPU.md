@@ -40,11 +40,12 @@ node splits at "feature w, first L entries go left":
 Both children again own one range in every column, still sorted. Nothing is
 ever sorted twice, and each level of the tree costs `O(F · n)` (the SLIQ /
 SPRINT idea). The partition is done in place with a small per-thread scratch
-buffer for the right rows. The children's class counts come from the sweep of
-column `w` (it returns the counts left of its best cut); when both children
-are leaves anyway (pure, too small, at the depth limit — common at the bottom
-of the tree), steps 1–2 are skipped, and when one of them is, only the other
-child's rows are moved (in place, no buffer).
+buffer for the right rows (with `--parallel`, big nodes are partitioned out of
+place instead, see Parallelism). The children's class counts come from the
+sweep of column `w` (it returns the counts left of its best cut); when both
+children are leaves anyway (pure, too small, at the depth limit — common at the
+bottom of the tree), steps 1–2 are skipped, and when one of them is, only the
+other child's rows are moved (in place, no buffer).
 
 ## The sweep (`scanFeatureK`, `scanTwoClasses`)
 
@@ -81,8 +82,15 @@ called for a few cuts. The sweep works in two steps:
    more than the tolerance, so whatever they did to the best cut, the result
    is the same once it is reached (this keeps rising stretches cheap).
 
-Two more shortcuts never change the result:
+Three more shortcuts never change the result:
 
+* **Bounded blocks (two classes).** The cuts of a node of 64+ rows are taken
+  in blocks of 16. Within a block the left class counts stay in a box
+  `[l0lo, l0hi] × [l1lo, l1hi]`; both impurities are concave in a child's
+  class counts, so the gain is convex in them and its maximum over the box is
+  at one of the four corners. A block whose corners (with a rounding slack)
+  cannot beat the best cut so far is skipped: its rows are only counted.
+  About half the sweep time on one thread, and the same cuts are settled.
 * **Runs of equal values** (most rows of discrete features, e.g. covertype)
   only update the class counts, in a tight loop with four interleaved sets of
   counters, so rows of the same class in a row do not wait for each other.
@@ -91,7 +99,9 @@ Two more shortcuts never change the result:
   `(log2 n + log2 e)/n`. So after a cut whose estimate is far below the best,
   the next `(best - estimate)·n / bound` cuts are skipped: their rows are only
   counted (and, for C4.5, their thresholds). Only skips of at least 8 cuts are
-  taken; shorter ones cost more than they save.
+  taken; shorter ones cost more than they save. After a skipped block the
+  same bound skips further cuts without any table lookup (if it covers at
+  least 32).
 
 The boundary-point shortcut (Fayyad & Irani): if entries `cut-1` and `cut`
 have the same class and each is the only entry with its value, and the cuts
@@ -121,8 +131,22 @@ One thread pool (`ThreadPool`), two kinds of work:
   Marking `goesLeft` is split into blocks too. The threshold is low because
   C4.5's lopsided splits leave long chains of mid-size nodes on the critical
   path (SUSY 500k, 28 threads: C4.5 140 → 110 ms against 65536).
-* **Huge nodes** (> 2^18 rows) partition through the node's own range of the
-  shared scratch array. A column is partitioned in place with a buffer for
+* **Big nodes out of place** (`--parallel`, ≥ 32768 rows): the builder keeps a
+  second copy of the columns, and such a node is partitioned from the copy
+  that holds it into the other one, where its children continue (ping-pong).
+  Every entry moves once, written with non-temporal stores; the rows going
+  left are marked in a bitmap (a bit per row, 1.3 MB on HIGGS) that stays in
+  the caches while the columns stream through. With two classes, children of
+  4096+ rows are swept *during* the partition: each column passes through a
+  small staging buffer per child (in L1) where the child's sweep reads it, so
+  a big node's columns are read once per level instead of twice. These nodes
+  are bound by memory bandwidth, so this is where most of the parallel time
+  goes. Their Gini sweeps (65536+ rows) divide instead of looking up `1/n` in
+  the count tables, which are as large as the training set and cost more
+  bandwidth than the entries when many threads read them.
+* **Huge nodes without the second copy** (> 2^18 rows) partition through the
+  node's own range of the shared scratch array. A column is partitioned in
+  place with a buffer for
   the smaller child's rows only, so the range holds `count / (smaller + 1)`
   buffers and as many columns are partitioned at once, one per thread: every
   entry moves once, which matters because this part is bound by memory
@@ -143,7 +167,11 @@ tasks without deadlocks.
 The columns take `8 · F · n` bytes. Partitioning needs a buffer for the rows of
 one child: a node uses its own range of one shared `n`-entry scratch array,
 and per-thread buffers are capped at 2^18 entries, so extra memory is about
-`8 · n` bytes plus 2 MB per thread, however many threads run. The sweep's
+`8 · n` bytes plus 2 MB per thread, however many threads run. `--parallel`
+keeps a second copy of the columns (another `8 · F · n` bytes; the presort
+uses it instead of per-thread buffers): with many threads the peak is about
+the same as without it, with few it is higher (HIGGS, 4 threads: +1.9 GB).
+The sweep's
 tables of `c·log2 c` and `1/c` take another `16 · n` bytes for training sets
 of 65536 rows or more (smaller counts use shared tables).
 
@@ -163,9 +191,16 @@ copying the data and sorting again.
 ## Post-processing
 
 `src/algo/c45_pruning.cpp`: C4.5 pruning routes every training row once
-through the tree (using a row-major copy of the data, so one row's values share
-a cache line), groups rows by leaf in preorder — every subtree then owns one
-contiguous slice of rows — and only re-routes rows for subtree raising. C4.5's
-training-value thresholds are found by binary-searching each threshold among
-its feature's sorted training values (a by-product of the presort). CART
-cost-complexity pruning only needs the per-node class counts of the tree.
+through the tree, groups rows by leaf in preorder (a parallel radix sort by
+leaf) — every subtree then owns one contiguous slice of rows — and only
+re-routes rows for subtree raising. The rows are kept in that order in a
+row-major copy (one row's values share a cache line), written straight from
+the columns into leaf order and kept in the grower's memory that is free by
+then, so a subtree's rows are one contiguous block. Routing walks 16 rows
+side by side over compact 16-byte nodes (float thresholds rounded down, exact
+for float data), without branches on the data. Pruning is idempotent on a
+subtree whose rows did not change, so after a subtree is raised only the nodes
+that gained rows are pruned again. C4.5's training-value thresholds are found
+by binary-searching each threshold among its feature's sorted training values
+(a by-product of the presort). CART cost-complexity pruning only needs the
+per-node class counts of the tree.

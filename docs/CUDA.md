@@ -33,6 +33,10 @@ partition never overwrites data it still has to read.
    faster copies) and labels. All device buffers are allocated once per run.
 2. Per grown tree: build `(value, packed row/class)` pairs of the selected
    rows and sort each feature with CUB's radix sort (stable, like the CPU's).
+   For C4.5 the sorted values are copied back to the host (its thresholds
+   need them) into a buffer that was touched by all threads and page-locked
+   in the background during setup, so the copy runs at full speed and costs
+   no page faults.
 
 With cross-validation (CART `--cv K`) the raw values stay on the device in
 their own buffer, so each fold tree only uploads its row list and
@@ -51,13 +55,13 @@ anything.
 | # | Kernel | What |
 |---|--------|------|
 | 0 | `segmentConstantKernel` | Segments whose values are all equal (first vs last entry). Every later kernel skips their tiles, they are not partitioned, and the feature is dropped for the node's whole subtree (see CPU.md). |
-| 1 | `tileHistogramKernel` | Class counts of each tile (one `__ballot_sync` per class per 32 entries). |
+| 1 | `tileHistogramKernel` | Class counts of each tile (one `__ballot_sync` per class per 32 entries), and C4.5's cut counts. Only at the root: below it, the parent level's partition (5) counts them while it writes the children. |
 | 2 | `segmentPrefixKernel` | Per segment, exclusive scan over its tiles: each tile learns the class counts *before* it. |
-| 3a | `tileEstimateKernel` | Sweep all cuts of the tile in **single precision**; keep the tile's best estimate and count C4.5's `tries`. |
+| 3a | `tileEstimateKernel` | Sweep all cuts of the tile in **single precision**; keep the tile's best estimate and count C4.5's `tries`. With at most 8 classes it also keeps the tile's *candidates*: the cuts within the float error bound of the tile's own best estimate (with their class counts and values), if there are at most 8. |
 | 3b | `segmentMaxKernel` | Best estimate per segment. |
-| 3c | `tileExactKernel` | Sweep again, but compute the exact **double-precision** gain (`dt::cutGain`, the CPU's function) only for cuts whose estimate is within a proven float error bound of the segment's best. On GPUs with fast double precision (data-center parts: A100, H100, B200…, detected from the FP32:FP64 ratio) 3a and 3b are skipped and `tileExactKernel` scores every cut once (`--gpu-sweep` overrides). |
+| 3c | `tileCandidateKernel`, `tileExactKernel` | Compute the exact **double-precision** gain (`dt::cutGain`, the CPU's function) only for cuts whose estimate is within a proven float error bound of the segment's best. `tileCandidateKernel` (one warp per tile) scores the candidates 3a kept; `tileExactKernel` sweeps again only the tiles that had more (with more than 8 classes: every tile that can hold the best cut). On GPUs with fast double precision (data-center parts: A100, H100, B200…, detected from the FP32:FP64 ratio) 3a and 3b are skipped and `tileExactKernel` scores every cut once (`--gpu-sweep` overrides). |
 | 4 | `segmentBestKernel` | Best cut per (node, feature), and the class counts left of it. **Host** (the level's only round trip): `SplitRules::choose` picks each node's split exactly like the CPU; the winning feature's left counts give both children's class counts, so children that are leaves (pure, too small, depth limit) are finished on the spot. |
-| 5 | `markGoesLeftKernel`, `tileLeftCountKernel`, `segmentPrefixKernel`, `scatterKernel` | Stable partition of every non-constant column of every split node into the other buffer (skipped for nodes whose children are both leaves). |
+| 5 | `markGoesLeftKernel`, `partitionKernel` | Stable partition of every non-constant column of every split node into the other buffer (skipped for nodes whose children are both leaves), in **one pass**: each tile learns how many left and right entries come before it by decoupled look-back on its predecessors' published counts, then writes its entries coalesced. While writing, it counts the class histograms (and C4.5 cut counts) of the next level's tiles, so step 1 is not needed below the root. |
 | 6 | `copyKernel` | Children with fewer than `--gpu-min-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer; only the columns that can still split them. |
 
 Small children become `CpuTreeBuilder` tasks on the thread pool, which grow them
@@ -85,6 +89,22 @@ trees. (Comparing against the *tile's* best estimate was not enough: in a node
 with millions of rows the gain hardly changes within 2048 rows, so most cuts
 survived. The segment-wide best fixes that.)
 
+The tighter the float error bound, the fewer cuts survive. The Gini estimate
+is computed as `Σ_k (l_k·n − t_k·n_L)² / (n² · n_L · n_R)` (`l` left, `t` node
+class counts): the differences are exact in 64-bit integers and no term
+cancels another, so its error is a small fraction of the gain itself, not of
+`n` (the bound is relative: `cutoff = best − best·scale − margin`). With the
+former formula, which subtracts terms of size `n`, hundreds of cuts per
+segment survived near the optimum in big nodes. Entropy is summed as
+`c·log2(m/c)` terms, which are accurate already.
+
+The candidates of 3a are kept against the tile's own best estimate, which is
+at most the segment's, so they include every cut 3c has to score
+(`tileCandidateKernel` checks that, and sweeps the tile again otherwise).
+Few tiles have more than 8 of them, so the second sweep, which read every
+surviving tile again, mostly disappears: on HIGGS (test laptop) the exact
+pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
+
 ## Tuning
 
 * `--gpu-min-rows N` (default 512): nodes smaller than this are finished on
@@ -100,7 +120,9 @@ survived. The segment-wide best fixes that.)
 
 Device: two copies of all columns (`2 × 8 × rows × features` bytes, 1.4 GB for
 5M × 18), with cross-validation also the raw values (`4 × rows × features`),
-plus small per-level arrays. The builder checks free memory first and
+plus small per-level arrays (the largest: 3a's candidates, 8 × (16 + 4·K)
+bytes per tile with K the class count rounded up to 2, 4 or 8, e.g. 28 MB at
+HIGGS's root level). The builder checks free memory first and
 suggests `--parallel` if it does not fit.
 
 ## Building for other GPUs

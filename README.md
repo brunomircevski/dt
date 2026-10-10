@@ -15,8 +15,8 @@ interchangeable backends that produce the *same* tree (byte for byte):
 * [docs/CUDA.md](docs/CUDA.md) — the GPU builder, kernel by kernel.
 * [bench/README.md](bench/README.md) — CPU benchmark against scikit-learn,
   rpart, Weka J48 and YaDT (time and memory).
-* [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — earlier timings of the serial,
-  parallel and Cuda backends.
+* [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — timings of the serial,
+  parallel and Cuda backends, before and after each round of optimizations.
 
 ## Build
 
