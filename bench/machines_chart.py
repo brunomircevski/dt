@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""./tree on two machines: serial, parallel and (where there is a GPU) CUDA
-training time and peak memory, CART and C4.5 side by side. Colour follows the
-backend; the bars of runs given with --copied (numbers taken over from an
-earlier benchmark, not rerun) are hatched and labelled as copied.
+"""./tree on several machines: serial, parallel and (where there is a GPU) CUDA
+training time and peak memory, CART and C4.5 one above the other, whatever
+backends the runs hold. Colour follows the backend; the bars of runs given with
+--copied (numbers taken over from an earlier benchmark, not rerun) are hatched
+and labelled with the run they come from.
 
 Refuses to draw when the runs did not read the same data (SHA-256 of the
 prepared files in plan.json) or did not build the same trees.
 
   bench/.venv/bin/python bench/machines_chart.py bench/results/cuda-legion-susy \\
       --copied bench/results/cpu-pc-susy --out bench/results/cuda-legion-susy/machines.png
+  bench/.venv/bin/python bench/machines_chart.py bench/results/cpu-pc-higgs \
+      bench/results/cuda-legion-higgs --out bench/results/cuda-legion-higgs/machines.png
 """
 
 import argparse
@@ -34,6 +37,13 @@ PROTOCOLS = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, 
 # The files ./tree and the evaluation read: equal hashes = the same rows.
 DATA_FILES = ("train.csv", "train.f32", "train.y.i32", "test.f32", "test.y.i32")
 LEFT = 0.215  # figure fraction left of the panels, for the row labels
+# Result directories are <backend>-<machine>-<dataset>; what to call each machine.
+MACHINES = {"pc": "desktop", "legion": "laptop"}
+
+
+def where(run):
+    name = run.name.split("-")[1]
+    return MACHINES.get(name, name)
 
 
 def machine(run):
@@ -46,7 +56,7 @@ def machine(run):
 
 
 def bars(run, copied):
-    """-> [(protocol, backend, row label, copied, times, rss, gpu, tree)] of ./tree."""
+    """-> [(protocol, backend, row label, copied, times, rss, gpu, tree, run)] of ./tree."""
     rows = [json.loads(line) for line in open(run / "results.jsonl")]
     cpu, gpu = machine(run)
     out = []
@@ -64,7 +74,7 @@ def bars(run, copied):
             out.append((protocol, backend, label, copied,
                         [r["train_seconds"] for r in ok], [r["peak_rss_train_bytes"] for r in ok],
                         [r["gpu_peak_bytes"] for r in ok if r.get("gpu_peak_bytes") is not None],
-                        (ok[0]["nodes"], ok[0]["depth"], ok[0]["test_accuracy"])))
+                        (ok[0]["nodes"], ok[0]["depth"], ok[0]["test_accuracy"]), run))
     return out
 
 
@@ -97,16 +107,19 @@ def main():
             raise SystemExit(f"{protocol}: different trees {sorted(trees)}")
 
     order = list(BACKENDS)
-    fig, axes = plt.subplots(2, 2, figsize=(13, 8.8), squeeze=False,
+    per_panel = max(sum(e[0] == p for e in entries) for p in PROTOCOLS)
+    gaps = max(len({e[1] for e in entries if e[0] == p}) for p in PROTOCOLS) - 1
+    inches = 1.9 + 2 * 0.58 * (per_panel + 0.45 * gaps)
+    fig, axes = plt.subplots(2, 2, figsize=(13, inches), squeeze=False,
                              gridspec_kw={"width_ratios": [1.5, 1], "wspace": 0.12,
-                                          "hspace": 0.42})
+                                          "hspace": 0.42 * 8.8 / inches})
     max_time = max(statistics.median(e[4]) for e in entries)
     max_gib = max(max(statistics.median(e[5]), statistics.median(e[6]) if e[6] else 0)
                   for e in entries) / 2**30
     for row, protocol in enumerate(PROTOCOLS):
         ax_time, ax_mem = axes[row]
         mine = sorted((e for e in entries if e[0] == protocol),
-                      key=lambda e: (order.index(e[1]), not e[3]))
+                      key=lambda e: (order.index(e[1]), runs.index(e[8])))
         nodes, depth, accuracy = mine[0][7]
         y, ys, previous = 0.0, [], None
         for e in mine:
@@ -132,25 +145,27 @@ def main():
                      transform=ax_time.transAxes, fontsize=8, color=MUTED, va="bottom")
         ax_mem.set_title("peak memory", loc="left", fontsize=10.5, color=INK, fontweight="bold",
                          pad=20)
-        serial = {e[3]: statistics.median(e[4]) for e in mine if e[1] == "serial"}
+        # Speedup over the same machine's serial run, or for CUDA without one,
+        # over its parallel run.
+        reference = {(e[8], e[1]): statistics.median(e[4]) for e in mine}
         for y, e in zip(ys, mine):
-            _, backend, label, copied, times, rss, gpu, _ = e
+            _, backend, label, copied, times, rss, gpu, _, run = e
             color = COLORS[backend]
             style = dict(facecolor="white", edgecolor=color, hatch="////", linewidth=1.2) \
                 if copied else dict(color=color)
             t = statistics.median(times)
             ax_time.barh(y, t, height=0.62, zorder=2, **style)
-            speedup = serial.get(copied)
-            note = f"   {serial[copied] / t:.1f}× serial" if backend != "serial" and speedup else ""
+            base = "serial" if (run, "serial") in reference else "parallel"
+            note = (f"   {reference[(run, base)] / t:.1f}× {base}"
+                    if backend not in ("serial", base) and (run, base) in reference else "")
             ax_time.text(t + max_time * 0.012, y, f"{t:.2f} s", va="center", fontsize=9,
                          color=INK, fontweight="bold")
             ax_time.text(t + max_time * 0.012, y, f"{' ' * 11}{note}", va="center",
                          fontsize=8, color=MUTED)
-            where = "desktop" if copied else "laptop"
-            ax_time.text(-0.015, y - 0.14, f"{BACKENDS[backend]} · {where}",
+            ax_time.text(-0.015, y - 0.14, f"{BACKENDS[backend]} · {where(run)}",
                          transform=ax_time.get_yaxis_transform(), ha="right", va="center",
                          fontsize=9.5, color=INK, fontweight="bold")
-            sub = label + (" · copied from cpu-pc-susy" if copied else "")
+            sub = label + (f" · copied from {run.name}" if copied else "")
             ax_time.text(-0.015, y + 0.24, sub, transform=ax_time.get_yaxis_transform(),
                          ha="right", va="center", fontsize=7.8, color=MUTED,
                          style="italic" if copied else "normal")
@@ -173,24 +188,30 @@ def main():
         ax_mem.set_xlim(0, max_gib * 1.45)
         ax_mem.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GiB"))
 
-    handles = [Patch(color=COLORS[b], label=BACKENDS[b]) for b in BACKENDS] + [
-        Patch(facecolor="white", edgecolor=MUTED, hatch="////",
-              label="desktop: copied from cpu-pc-susy, not rerun"),
-        Patch(facecolor="white", edgecolor=MUTED, label="GPU memory (CUDA)")]
-    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(LEFT - 0.005, 0.962), ncol=5,
-               frameon=False, fontsize=8.8, handletextpad=0.4, columnspacing=1.3)
+    shown = [b for b in BACKENDS if any(e[1] == b for e in entries)]
+    handles = [Patch(color=COLORS[b], label=BACKENDS[b]) for b in shown]
+    if args.copied:
+        handles.append(Patch(facecolor="white", edgecolor=MUTED, hatch="////", label=", ".join(
+            f"{where(r)}: copied from {r.name}" for r in args.copied) + ", not rerun"))
+    if any(e[6] for e in entries):
+        handles.append(Patch(facecolor="white", edgecolor=MUTED, label="GPU memory (CUDA)"))
+    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(LEFT - 0.005, 1 - 0.33 / inches),
+               ncol=len(handles), frameon=False, fontsize=8.8, handletextpad=0.4,
+               columnspacing=1.3)
+    machines = " vs ".join(dict.fromkeys(where(r) for r in reversed(runs)))
     fig.suptitle(f"./tree on {NAMES.get(dataset, dataset)} ({meta['n_train']:,} training rows, "
-                 f"{len(meta['features'])} features): laptop vs desktop",
-                 x=LEFT, y=0.99, ha="left", fontsize=11.5, color=INK, fontweight="bold")
+                 f"{len(meta['features'])} features): {machines}",
+                 x=LEFT, y=1 - 0.09 / inches, ha="left", fontsize=11.5, color=INK,
+                 fontweight="bold")
     reps = {json.load(open(r / "machine.json"))["settings"]["reps"] for r in runs}
     runs_text = "one run per case" if reps == {1} else "median over the runs of each case"
-    fig.text(LEFT, 0.012,
+    fig.text(LEFT, 0.1 / inches,
              f"Bars: {runs_text}. Time: ./tree's 'train total' (presort, build, prune; CUDA also "
              "upload and device sort), not reading the CSV. Same data files (SHA-256) on both "
              "machines.\nRAM: peak RSS up to the end of training. GPU: peak device memory "
              "during the process above idle, CUDA context included (nvidia-smi, every 10 ms).",
              fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=LEFT, right=0.985, top=0.86, bottom=0.085)
+    fig.subplots_adjust(left=LEFT, right=0.985, top=1 - 1.23 / inches, bottom=0.75 / inches)
     fig.savefig(args.out, dpi=150, facecolor="white")
     print(args.out)
 
