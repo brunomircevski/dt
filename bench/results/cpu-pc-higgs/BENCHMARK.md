@@ -1,6 +1,6 @@
 # HIGGS on the desktop: ./tree parallel
 
-**Status:** designed 2026-10-10, not run yet. The results will be written into this directory.
+**Status:** run on 2026-10-10 at 12:46, one run per case, commit abc0a22, `performance` governor, load average 0.36. Results and chart: [`cuda-legion-higgs`](../cuda-legion-higgs/BENCHMARK.md#results).
 
 The desktop half of a laptop-vs-desktop comparison on HIGGS; the laptop half (parallel and CUDA) is [`cuda-legion-higgs`](../cuda-legion-higgs/BENCHMARK.md), which also holds the chart of both.
 

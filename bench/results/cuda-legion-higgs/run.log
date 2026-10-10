@@ -1,0 +1,46 @@
+log: /home/bruno/Projects/dt/bench/results/cuda-legion-higgs/run.log, started 2026-10-10 12:45:41
+
+=== 12:45:41  1/5 machine check
+CPU governor: performance
+platform profile: max-power
+power: on AC
+GPU: NVIDIA GeForce RTX 5070 Laptop GPU, 41 MiB, 8151 MiB, [N/A], P8
+code: committed (abc0a22)
+load average: 0.06 0.20 0.20 (close browsers, chat apps, IDE indexers)
+runs per case: 1
+
+=== 12:45:41  2/5 build ./tree (CPU + CUDA) and ./tree_cpu, the memory launcher and the Python venv
+make: 'tree' is up to date.
+make: 'tree_cpu' is up to date.
+
+=== 12:45:41  3/5 prepare the data if it is missing
+higgs: 10,500,000 train / 500,000 test rows, 28 features, 2 classes (53.1 s)
+
+=== 12:46:35  4/5 benchmark: HIGGS, pruned CART and C4.5, parallel and CUDA, 1 run(s) per case
+4 cases, 6 processes:
+  higgs | cart_alpha | tree | 20
+  higgs | cart_alpha | tree_cuda | 20
+  higgs | c45 | tree | 20
+  higgs | c45 | tree_cuda | 20
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  higgs: identical in every format (8 s)
+4 cases x 1 run(s), then 2 footprint run(s) x 1: 6 processes. Time left is shown once every case has run once.
+[1/6] 12:46:44 run 1/1: C4.5 ./tree, 20 threads, higgs ...
+    ok: train 6.648 s, peak 7,813 MiB, 1,160,123 nodes, depth 71, test acc 70.10% | process 0m07s, elapsed 0m16s
+[2/6] 12:47:01 run 1/1: CART ./tree, 20 threads, higgs ...
+    ok: train 4.598 s, peak 5,534 MiB, 1,611 nodes, depth 19, test acc 71.59% | process 0m05s, elapsed 0m24s
+[3/6] 12:47:09 run 1/1: CART ./tree CUDA, 20 threads, higgs ...
+    ok: train 2.063 s, peak 3,925 MiB, GPU 4,778 MiB, 1,611 nodes, depth 19, test acc 71.59% | process 0m02s, elapsed 0m30s
+[4/6] 12:47:15 run 1/1: C4.5 ./tree CUDA, 20 threads, higgs ...
+    ok: train 4.083 s, peak 6,201 MiB, GPU 4,770 MiB, 1,160,123 nodes, depth 71, test acc 70.10% | process 0m05s, elapsed 0m44s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[5/6] 12:47:29 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m44s, about 0m00s left
+[6/6] 12:47:29 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0052 s, peak 279 MiB, GPU 138 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m45s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cuda-legion-higgs/results.jsonl
+
+=== 12:47:29  5/5 tables, CSV files and the charts
+/home/bruno/Projects/dt/bench/results/cuda-legion-higgs/chart.png
+done: /home/bruno/Projects/dt/bench/results/cuda-legion-higgs/report.md, summary.csv, runs.csv, chart.png

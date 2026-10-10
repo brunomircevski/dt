@@ -211,7 +211,7 @@ def main():
              "machines.\nRAM: peak RSS up to the end of training. GPU: peak device memory "
              "during the process above idle, CUDA context included (nvidia-smi, every 10 ms).",
              fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=LEFT, right=0.985, top=1 - 1.23 / inches, bottom=0.75 / inches)
+    fig.subplots_adjust(left=LEFT, right=0.97, top=1 - 1.23 / inches, bottom=0.75 / inches)
     fig.savefig(args.out, dpi=150, facecolor="white")
     print(args.out)
 

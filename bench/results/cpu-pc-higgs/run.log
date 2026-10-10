@@ -1,0 +1,32 @@
+log: /home/bruno/Projects/dt/bench/results/cpu-pc-higgs/run.log, started 2026-10-10 12:45:44
+
+=== 12:45:44  1/4 machine check
+CPU governor: performance
+code: committed (abc0a22)
+load average: 0.36 0.49 0.40 (close browsers, chat apps, IDE indexers)
+runs per case: 1
+
+=== 12:45:44  2/4 build ./tree_cpu; prepare the data if it is missing
+make: Nothing to be done for 'cpu'.
+higgs: 10,500,000 train / 500,000 test rows, 28 features, 2 classes (42.3 s)
+
+=== 12:46:27  3/4 benchmark: HIGGS, pruned CART and C4.5, parallel (28 threads), 1 run(s) per case
+2 cases, 3 processes:
+  higgs | cart_alpha | tree | 28
+  higgs | c45 | tree | 28
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  higgs: identical in every format (7 s)
+2 cases x 1 run(s), then 1 footprint run(s) x 1: 3 processes. Time left is shown once every case has run once.
+[1/3] 12:46:35 run 1/1: CART ./tree, 28 threads, higgs ...
+    ok: train 4.454 s, peak 6,199 MiB, 1,611 nodes, depth 19, test acc 71.59% | process 0m04s, elapsed 0m07s
+[2/3] 12:46:42 run 1/1: C4.5 ./tree, 28 threads, higgs ...
+    ok: train 7.287 s, peak 8,475 MiB, 1,160,123 nodes, depth 71, test acc 70.10% | process 0m07s, elapsed 0m23s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[3/3] 12:46:58 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m23s, about 0m00s left
+results: /home/bruno/Projects/dt/bench/results/cpu-pc-higgs/results.jsonl
+
+=== 12:46:58  4/4 tables, CSV files and the chart
+/home/bruno/Projects/dt/bench/results/cpu-pc-higgs/chart.png
+done: /home/bruno/Projects/dt/bench/results/cpu-pc-higgs/report.md, summary.csv, runs.csv, chart.png
