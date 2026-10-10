@@ -62,7 +62,13 @@ ADAPTERS = B.BENCH / "adapters"
 
 # ------------------------------------------------------------------ measuring
 
-def measure(command, env, timeout, pin=()):
+def gpu_memory_used_mib():
+    out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits",
+                          "--id=0"], capture_output=True, text=True, timeout=30, check=True)
+    return int(out.stdout.split()[0])
+
+
+def measure(command, env, timeout, pin=(), gpu=False):
     """Run `command` to completion and measure it from the outside.
 
     The command runs under the tiny bench/.tools/rusage launcher (pinned with
@@ -74,10 +80,20 @@ def measure(command, env, timeout, pin=()):
                      (ru_maxrss from the launcher's wait4, the number GNU time's
                      %M prints), over the whole process.
     wall_seconds     from fork to exit, including start-up, loading, everything.
+    gpu_peak_bytes   (gpu=True) the most GPU memory in use while the process ran,
+                     minus what was in use just before it started: nvidia-smi
+                     samples the whole device every 10 ms, so nothing else may
+                     use the GPU during the run.
     """
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err, \
             tempfile.TemporaryDirectory() as folder:
         usage_file = Path(folder) / "rusage"
+        sampler = None
+        if gpu:
+            idle_mib = gpu_memory_used_mib()
+            sampler = subprocess.Popen(["nvidia-smi", "--query-gpu=memory.used",
+                                        "--format=csv,noheader,nounits", "--id=0", "-lms", "10"],
+                                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
         start = time.perf_counter()
         # Its own session, so a timeout (or Ctrl+C here) kills the whole tool.
         process = subprocess.Popen(list(pin) + [str(B.RUSAGE), str(usage_file)] + list(command),
@@ -97,7 +113,13 @@ def measure(command, env, timeout, pin=()):
             raise
         finally:
             timer.cancel()
+            if sampler:
+                sampler.terminate()
         wall = time.perf_counter() - start
+        gpu_peak = None
+        if sampler:
+            samples = [int(line) for line in sampler.communicate()[0].split() if line.isdigit()]
+            gpu_peak = (max(samples) - idle_mib) * 2**20 if samples else None
         process.returncode = os.waitstatus_to_exitcode(status)
         out.seek(0)
         err.seek(0)
@@ -108,7 +130,8 @@ def measure(command, env, timeout, pin=()):
                 "wall_seconds": wall,
                 "peak_rss_bytes": int(usage[0]) * 1024 if usage else None,
                 "user_seconds": float(usage[1]) if usage else None,
-                "system_seconds": float(usage[2]) if usage else None}
+                "system_seconds": float(usage[2]) if usage else None,
+                **({"gpu_peak_bytes": gpu_peak} if gpu else {})}
 
 
 # ------------------------------------------------------------------ commands
@@ -154,11 +177,15 @@ def build_command(case, kind, args, scratch):
         warmup_rows = m["n_train"] if args.warmup_rows == "all" else int(args.warmup_rows)
     data = B.DATA / dataset
 
-    if impl == "tree":
+    if impl in ("tree", "tree_cuda"):
         flags = [fill(flag, args.alpha) for flag in spec]
-        backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
+        if impl == "tree_cuda":
+            binary, backend = B.TREE_CUDA, ["--cuda", "--threads", str(threads)]
+        else:
+            binary = B.TREE
+            backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
         dump = scratch / "tree.dump"
-        argv = [str(B.TREE)] + backend + flags + (["--dump", str(dump)] if evaluate else []) \
+        argv = [str(binary)] + backend + flags + (["--dump", str(dump)] if evaluate else []) \
             + [str(data / "train.csv")]
 
         def parse(stdout):
@@ -300,6 +327,12 @@ def machine_info(args):
             "tree_git": command_output(["git", "-C", str(B.ROOT), "describe", "--always",
                                         "--dirty", "--abbrev=12"]),
             "tree_binary": str(B.TREE),
+            "tree_cuda_binary": str(B.TREE_CUDA),
+            "nvcc": command_output([os.environ.get("NVCC", "/opt/cuda/bin/nvcc"), "--version"])
+            .splitlines()[-1],
+            "gpu": command_output(["nvidia-smi", "--query-gpu=name,memory.total,driver_version,"
+                                   "power.limit,clocks.max.sm,pstate",
+                                   "--format=csv,noheader"]),
             "cxx": command_output(["g++", "--version"]).splitlines()[0],
             "cxxflags": next((line for line in (B.ROOT / "Makefile").read_text().splitlines()
                               if line.startswith("CXXFLAGS")), None),
@@ -349,13 +382,16 @@ def plan_cases(args):
                 if impl not in impls:
                     continue
                 for t in threads:
-                    if t == 1 or B.IMPLS[impl]["threads"] == "multi":
+                    mode = B.IMPLS[impl]["threads"]
+                    if (mode == "multi" or (mode == "single" and t == 1)
+                            or (mode == "all" and t == max(threads))):
                         cases.append((dataset, protocol, impl, t))
     return cases
 
 
 # Which protocol measures each tool's runtime footprint on the _baseline dataset.
-BASELINE_PROTOCOL = {"tree": "cart_full", "sklearn": "cart_full", "rpart": "cart_full",
+BASELINE_PROTOCOL = {"tree": "cart_full", "tree_cuda": "cart_full", "sklearn": "cart_full",
+                     "rpart": "cart_full",
                      "j48": "c45", "yadt": "c45"}
 
 
@@ -461,12 +497,12 @@ def main():
               f": {describe(case)} ...", flush=True)
         argv, extra_env, parse = build_command(case, kind, args, scratch)
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
-        run = measure(argv, {**env, **extra_env}, args.timeout, pin)
+        run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl == "tree_cuda")
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
                "threads": threads, "kind": kind, "rep": rep,
                "time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
                **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "user_seconds",
-                                      "system_seconds")}}
+                                      "system_seconds", "gpu_peak_bytes") if k in run}}
         if run["timed_out"]:
             row["status"] = "timeout"
         elif run["returncode"] != 0:
@@ -499,8 +535,10 @@ def main():
         if row["status"] == "ok":
             accuracy = (f", test acc {100 * row['test_accuracy']:.2f}%"
                         if row.get("test_accuracy") is not None else "")
+            gpu = (f", GPU {row['gpu_peak_bytes'] / 2**20:,.0f} MiB"
+                   if row.get("gpu_peak_bytes") is not None else "")
             print(f"    ok: train {row['train_seconds']:.4g} s, peak "
-                  f"{row['peak_rss_train_bytes'] / 2**20:,.0f} MiB, {row['nodes']:,} nodes, depth "
+                  f"{row['peak_rss_train_bytes'] / 2**20:,.0f} MiB{gpu}, {row['nodes']:,} nodes, depth "
                   f"{row['depth']}{accuracy} | process {clock(run['wall_seconds'])}, "
                   f"elapsed {clock(elapsed)}{eta}", flush=True)
         else:

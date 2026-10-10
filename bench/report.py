@@ -79,6 +79,9 @@ def summarise(run_dir):
             base_rss = baseline.get(impl)
             case.update(peak_rss=median(rss), peak_rss_min=min(rss), peak_rss_max=max(rss),
                         peak_rss_above_baseline=median(rss) - base_rss if base_rss else None)
+            gpu = [r["gpu_peak_bytes"] for r in ok if r.get("gpu_peak_bytes") is not None]
+            if gpu:
+                case["gpu_peak"] = median(gpu)
     for case in cases.values():
         reference = cases.get((case["dataset"], case["protocol"], "tree", case["threads"]), {})
         if case.get("time_median") and reference.get("time_median"):
@@ -142,7 +145,8 @@ def table(cases):
         ratio = f"{c['ratio_to_tree']:.2f}×" if c.get("ratio_to_tree") else ""
         out.write(" | ".join([
             f"| {label}" + (f" ({', '.join(flags)})" if flags else ""),
-            fmt_seconds(c["time_median"]), span, ratio, fmt_bytes(c.get("peak_rss")),
+            fmt_seconds(c["time_median"]), span, ratio, fmt_bytes(c.get("peak_rss"))
+            + (f" (+ GPU {fmt_bytes(c['gpu_peak'])})" if c.get("gpu_peak") is not None else ""),
             fmt_bytes(c.get("peak_rss_above_baseline")),
             f"{c['nodes']:,}" if c.get("nodes") is not None else "",
             f"{c['leaves']:,}" if c.get("leaves") is not None else "",
@@ -183,7 +187,7 @@ FIELDS = ["run", "dataset", "protocol", "impl", "threads", "status", "consistent
           "time_median", "time_min", "time_max", "time_mean", "time_stdev", "time_reps",
           "ratio_to_tree", "wall_median", "peak_rss", "peak_rss_min", "peak_rss_max",
           "peak_rss_above_baseline", "nodes", "leaves", "depth", "train_accuracy",
-          "test_accuracy", "test_accuracy_ci95"]
+          "test_accuracy", "test_accuracy_ci95", "gpu_peak"]
 
 
 def main():

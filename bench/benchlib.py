@@ -24,6 +24,7 @@ DATA = BENCH / "data"
 TOOLS = BENCH / ".tools"
 RESULTS = BENCH / "results"
 TREE = Path(os.environ.get("TREE_BIN", ROOT / "tree_cpu"))
+TREE_CUDA = Path(os.environ.get("TREE_CUDA_BIN", ROOT / "tree"))  # `make`: CPU + CUDA
 YADT = TOOLS / "yadt" / "dTcmd"
 RUSAGE = TOOLS / "rusage"  # adapters/rusage.c: runs every measured process
 JAVA_CLASSPATH = f"{TOOLS / 'weka.jar'}:{TOOLS / 'bounce.jar'}:{TOOLS / 'classes'}"
@@ -99,13 +100,21 @@ PROTOCOLS = {
     },
 }
 
-# threads: "multi" = runs with every thread count asked for, "single" = only 1.
+# ./tree on the GPU (--cuda) runs every protocol ./tree runs, with the same flags.
+for _protocol in PROTOCOLS.values():
+    if "tree" in _protocol["impls"]:
+        _protocol["impls"]["tree_cuda"] = _protocol["impls"]["tree"]
+
+# threads: "multi" = runs with every thread count asked for, "single" = only 1,
+#   "all" = only the largest thread count asked for (./tree --cuda: the CPU pool
+#   that grows the small subtrees gets every CPU).
 # warmup: True for the managed runtimes (Python, R, JVM): before the timed fit,
 #   the adapter fits one untimed tree on the first WARMUP_ROWS training rows in
 #   the same process (imports, first-call costs, JIT compilation). The native
 #   executables need none: loading is not timed, so the file cache does not matter.
 IMPLS = {
     "tree": {"label": "./tree", "threads": "multi", "warmup": False},
+    "tree_cuda": {"label": "./tree CUDA", "threads": "all", "warmup": False},
     "sklearn": {"label": "scikit-learn", "threads": "single", "warmup": True},
     "rpart": {"label": "rpart", "threads": "single", "warmup": True},
     "j48": {"label": "Weka J48", "threads": "single", "warmup": True},

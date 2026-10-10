@@ -26,7 +26,7 @@ import benchlib as B  # noqa: E402
 # Categorical slots 1-5 of the validated reference palette, in its fixed order
 # (bench/README.md: colour follows the implementation in every panel).
 COLORS = {"tree": "#2a78d6", "sklearn": "#eb6834", "rpart": "#1baf7a", "j48": "#eda100",
-          "yadt": "#e87ba4"}
+          "yadt": "#e87ba4", "tree_cuda": "#008300"}
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 NAMES = {"susy": "SUSY", "higgs": "HIGGS", "covertype": "Covertype", "diabetes": "Diabetes"}
 GROUP = {"cart_alpha": "CART, fixed α", "cart_full": "CART, unpruned",
@@ -115,7 +115,7 @@ def figure(run, dataset, times, memory, tree, status, meta, settings, out):
             stats = (f"{info['nodes']:,} nodes · depth {info['depth']} · test "
                      f"{100 * info['test_accuracy']:.2f}%"
                      if info and info.get("test_accuracy") is not None else "")
-            weight = "bold" if impl == "tree" else "normal"
+            weight = "bold" if impl in ("tree", "tree_cuda") else "normal"
             ax_time.text(-0.02, y - 0.13, label, transform=ax_time.get_yaxis_transform(),
                          ha="right", va="center", fontsize=9.5, color=INK, fontweight=weight)
             ax_time.text(-0.02, y + 0.24, stats, transform=ax_time.get_yaxis_transform(),
