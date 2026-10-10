@@ -181,12 +181,12 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
     ScopedTimer timer(timings.pruneSeconds);
     // Part of growing in c4.5 (done with or without pruning).
     c45CollapseUselessSplits(tree);
-    c45UseTrainingValueThresholds(tree, sortedValues, train.rowCount);
+    c45UseTrainingValueThresholds(tree, sortedValues, train.rowCount, buildPool);
     if (options.c45.prune) {
       if (verbose) {
         std::cout << "  unpruned: " << tree.nodeCount() << " nodes\n";
       }
-      c45PessimisticPrune(tree, train, options.c45.confidence, buildPool);
+      c45PessimisticPrune(tree, train, options.c45.confidence, buildPool, grower->workspace());
     }
     return tree;
   }

@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace dt {
@@ -21,12 +22,19 @@ namespace dt {
 //
 // `scratch` (stride entries) is partition workspace; a node only uses its own
 // range [begin, end) of it, so nodes can be split concurrently.
+//
+// `other` (optional) is a second copy with the layout of `data`. Big nodes
+// are then partitioned out of place: from the side that holds their columns
+// into the other side, where their children continue (ping-pong). That moves
+// every entry once, which matters because big nodes are bound by memory
+// bandwidth; in place, the rows of one child are also moved through a buffer.
 struct Columns {
   Entry *data = nullptr;
   std::size_t stride = 0;
   Entry *scratch = nullptr;
+  Entry *other = nullptr;
 
-  Entry *feature(std::size_t f) const { return data + f * stride; }
+  Entry *feature(std::size_t f, int side = 0) const { return (side ? other : data) + f * stride; }
 };
 
 // Pick the packing of (row, class) into 32 bits for this dataset.
@@ -35,18 +43,36 @@ EntryCodec makeEntryCodec(std::size_t classCount, std::size_t rowCount);
 // Fill `out` (featureCount * rowCount entries) with every feature column
 // sorted by value (LSD radix sort, stable, so equal values keep row order),
 // and `sortedValues` (if not null, as many floats) with the values alone.
+// `temp` (if not null, as many entries as `out`) is the sort's workspace;
+// otherwise every sorting thread allocates a column's worth.
 void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
-                    ThreadPool *pool, float *sortedValues = nullptr);
+                    ThreadPool *pool, float *sortedValues = nullptr, Entry *temp = nullptr);
 
 // A node that still has to be split, and the features that can still split
 // it: a feature whose values are all equal in a node is dropped for the whole
 // subtree (its column range is not partitioned any more).
+struct FeatureCuts;
+
 struct Subtree {
   std::uint32_t node = 0; // id in the NodeStore (class counts already set)
   std::uint32_t begin = 0;
   std::uint32_t count = 0;
   int depth = 0;
   std::vector<std::uint32_t> features;
+  int side = 0; // where its columns are: Columns::data (0) or Columns::other (1)
+  // If not null: the best cut of every feature, found while the parent's
+  // columns were partitioned (the node does not sweep its columns again).
+  std::shared_ptr<FeatureCuts> cuts;
+};
+
+// What a node's sweeps found, per feature (see Subtree::cuts).
+struct FeatureCuts {
+  FeatureCuts(std::size_t featureCount, std::size_t classCount)
+      : cuts(featureCount), lefts(featureCount * classCount), constant(featureCount, 0) {}
+
+  std::vector<CutCandidate> cuts;     // best cut (invalid for unswept features)
+  std::vector<std::uint32_t> lefts;   // feature * classCount + class: counts left of it
+  std::vector<std::uint8_t> constant; // all values (nearly) equal: no cut here or below
 };
 
 // Per-count tables for the sweep's gain estimates, for counts below `size`:
@@ -70,6 +96,8 @@ struct CountTables {
 void fillCountTables(std::size_t size, std::vector<double> &xlog, std::vector<double> &inverse,
                      ThreadPool *pool);
 
+struct SweepSetup; // what a threshold sweep needs from the builder (cpu_builder.cpp)
+
 // Grows (sub)trees on the CPU from presorted columns. Used by the Serial and
 // Parallel backends, and by the Cuda backend for nodes that are too small to be
 // worth a GPU launch.
@@ -90,6 +118,15 @@ private:
   // Which children of a split are grown further, i.e. need sorted columns.
   enum class Keep { Both, Left, Right };
 
+  // A child whose sweeps run while its parent's columns are partitioned.
+  struct ChildSweep {
+    std::uint32_t count = 0;
+    std::uint32_t total[2] = {0, 0}; // class counts (two classes only)
+    double parentWeighted = 0.0;
+    std::uint32_t minChild = 0;
+    FeatureCuts *out = nullptr;
+  };
+
   void split(const Columns &columns, Subtree &item, std::vector<Subtree> &stack);
   // Best cut of one feature; `bestLeft` receives the class counts left of it.
   CutCandidate scanFeature(const Entry *entries, std::uint32_t count,
@@ -99,6 +136,7 @@ private:
   CutCandidate scanFeatureFor(const Entry *entries, std::uint32_t count,
                               const std::uint32_t *total, double parentWeighted,
                               std::uint32_t minChild, std::uint32_t *bestLeft) const;
+  SweepSetup sweepSetup() const;
   template <Criterion Crit, bool HasGap>
   CutCandidate scanTwoClasses(const Entry *entries, std::uint32_t count,
                               const std::uint32_t *total, double parentWeighted,
@@ -107,8 +145,16 @@ private:
   CutCandidate scanFeatureK(const Entry *entries, std::uint32_t count,
                             const std::uint32_t *total, double parentWeighted,
                             std::uint32_t minChild, std::uint32_t *bestLeft) const;
-  void partition(const Columns &columns, const Subtree &item, int winner,
-                 std::uint32_t leftCount, Keep keep);
+  // Returns the side the children's columns are on. `children` (left,
+  // right; null entries for children without) are swept on the way.
+  int partition(const Columns &columns, const Subtree &item, int winner,
+                std::uint32_t leftCount, Keep keep, ChildSweep *const *children);
+  template <Criterion Crit, bool HasGap>
+  void partitionAndSweep(const Entry *source, Entry *target, std::uint32_t count,
+                         std::uint32_t leftCount, Keep keep, bool isWinner,
+                         std::uint32_t feature, ChildSweep *const *children) const;
+  void partitionFeatureOutOfPlace(const Entry *source, Entry *target, std::uint32_t count,
+                                  std::uint32_t leftCount, Keep keep) const;
   void partitionFeature(Entry *entries, std::uint32_t count, std::uint32_t leftCount,
                         Entry *buffer, Keep keep) const;
   void partitionFeatureInBlocks(Entry *entries, std::uint32_t count, std::uint32_t leftCount,

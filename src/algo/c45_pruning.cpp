@@ -3,7 +3,9 @@
 #include "core/thread_pool.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -176,23 +178,27 @@ private:
     std::vector<std::uint32_t> leafOfRow;
     route(root, rows, count, leafOfRow);
 
-    // Counting sort by leaf, and the class histogram of every leaf.
-    std::vector<std::size_t> offset(leaves.size() + 1, 0);
+    // Stable sort by leaf, and the class histogram of every leaf.
     std::vector<std::uint32_t> leafCounts(leaves.size() * classCount_, 0);
-    for (std::size_t index = 0; index < count; ++index) {
-      const std::uint32_t slot = leafSlot_[leafOfRow[index]];
-      leafOfRow[index] = slot;
-      ++offset[slot + 1];
-      ++leafCounts[slot * classCount_ + train_.labels[rows[index]]];
+    if (pool_ && count >= kParallelRows) {
+      sortByLeafInParallel(rows, count, leafOfRow, leaves.size(), leafCounts);
+    } else {
+      std::vector<std::size_t> offset(leaves.size() + 1, 0);
+      for (std::size_t index = 0; index < count; ++index) {
+        const std::uint32_t slot = leafSlot_[leafOfRow[index]];
+        leafOfRow[index] = slot;
+        ++offset[slot + 1];
+        ++leafCounts[slot * classCount_ + train_.labels[rows[index]]];
+      }
+      for (std::size_t slot = 0; slot < leaves.size(); ++slot) {
+        offset[slot + 1] += offset[slot];
+      }
+      std::vector<std::uint32_t> sorted(count);
+      for (std::size_t index = 0; index < count; ++index) {
+        sorted[offset[leafOfRow[index]]++] = rows[index];
+      }
+      std::copy(sorted.begin(), sorted.end(), rows);
     }
-    for (std::size_t slot = 0; slot < leaves.size(); ++slot) {
-      offset[slot + 1] += offset[slot];
-    }
-    std::vector<std::uint32_t> sorted(count);
-    for (std::size_t index = 0; index < count; ++index) {
-      sorted[offset[leafOfRow[index]]++] = rows[index];
-    }
-    std::copy(sorted.begin(), sorted.end(), rows);
     for (std::size_t slot = 0; slot < leaves.size(); ++slot) {
       setCounts(leaves[slot], leafCounts.data() + slot * classCount_);
     }
@@ -211,6 +217,83 @@ private:
       }
       setCounts(*it, sum.data());
     }
+  }
+
+  // The same as arrange()'s counting sort, for many rows: `leaves` holds the
+  // leaf of every row and receives its slot; a stable LSD radix sort of
+  // (slot, row) in 11-bit digits orders the rows exactly as the counting sort
+  // does, and the class counts are added up run by run.
+  void sortByLeafInParallel(std::uint32_t *rows, std::size_t count,
+                            std::vector<std::uint32_t> &leaves, std::size_t slotCount,
+                            std::vector<std::uint32_t> &leafCounts) {
+    constexpr unsigned kBits = 11;
+    constexpr std::size_t kBuckets = std::size_t{1} << kBits;
+    const std::size_t chunks = 4 * (pool_->workerCount() + 1);
+    auto forChunks = [&](auto &&body) {
+      parallelFor(pool_, chunks, [&](std::size_t chunk) {
+        body(chunk, count * chunk / chunks, count * (chunk + 1) / chunks);
+      });
+    };
+    forChunks([&](std::size_t, std::size_t begin, std::size_t end) {
+      for (std::size_t index = begin; index < end; ++index) {
+        leaves[index] = leafSlot_[leaves[index]];
+      }
+    });
+    std::vector<std::uint32_t> keyTemp(count);
+    std::vector<std::uint32_t> rowTemp(count);
+    std::vector<std::uint32_t> histogram(chunks * kBuckets);
+    std::uint32_t *keys = leaves.data();
+    std::uint32_t *values = rows;
+    std::uint32_t *keysOut = keyTemp.data();
+    std::uint32_t *valuesOut = rowTemp.data();
+    for (unsigned shift = 0; (std::size_t{1} << shift) < slotCount; shift += kBits) {
+      forChunks([&](std::size_t chunk, std::size_t begin, std::size_t end) {
+        std::uint32_t *counts = histogram.data() + chunk * kBuckets;
+        std::fill_n(counts, kBuckets, 0u);
+        for (std::size_t index = begin; index < end; ++index) {
+          ++counts[(keys[index] >> shift) & (kBuckets - 1)];
+        }
+      });
+      std::uint32_t sum = 0;
+      for (std::size_t digit = 0; digit < kBuckets; ++digit) {
+        for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+          const std::uint32_t size = histogram[chunk * kBuckets + digit];
+          histogram[chunk * kBuckets + digit] = sum;
+          sum += size;
+        }
+      }
+      forChunks([&](std::size_t chunk, std::size_t begin, std::size_t end) {
+        std::uint32_t *next = histogram.data() + chunk * kBuckets;
+        for (std::size_t index = begin; index < end; ++index) {
+          const std::uint32_t at = next[(keys[index] >> shift) & (kBuckets - 1)]++;
+          keysOut[at] = keys[index];
+          valuesOut[at] = values[index];
+        }
+      });
+      std::swap(keys, keysOut);
+      std::swap(values, valuesOut);
+    }
+    forChunks([&](std::size_t, std::size_t begin, std::size_t end) {
+      if (values != rows) {
+        std::copy(values + begin, values + end, rows + begin);
+      }
+      // Runs of one slot; a run may continue in the next chunk.
+      for (std::size_t index = begin; index < end;) {
+        const std::uint32_t slot = keys[index];
+        std::uint32_t *target = leafCounts.data() + std::size_t{slot} * classCount_;
+        thread_local std::vector<std::uint32_t> local;
+        local.assign(classCount_, 0);
+        for (; index < end && keys[index] == slot; ++index) {
+          ++local[train_.labels[values[index]]];
+        }
+        for (std::size_t k = 0; k < classCount_; ++k) {
+          if (local[k] > 0) {
+            std::atomic_ref<std::uint32_t>(target[k]).fetch_add(local[k],
+                                                                std::memory_order_relaxed);
+          }
+        }
+      }
+    });
   }
 
   // EstimateErrors(T, rows, UpdateTree = true). `rows` is the node's slice,
@@ -270,12 +353,16 @@ private:
     if (count == 0) {
       return errors_[root];
     }
-    std::vector<std::uint32_t> arrival;
+    // Per-thread buffers: this runs for every decision node.
+    thread_local std::vector<std::uint32_t> arrival;
+    thread_local std::vector<std::uint32_t> leaves;
+    thread_local std::vector<std::uint32_t> extraCounts;
+    thread_local std::vector<std::uint32_t> counts;
     route(root, extra, count, arrival);
     // Class counts of the extra rows per reached leaf. A leaf's slot is kept
     // in leafSlot_ (validated against `leaves`, as arrange() reuses it).
-    std::vector<std::uint32_t> leaves;
-    std::vector<std::uint32_t> extraCounts;
+    leaves.clear();
+    extraCounts.clear();
     for (std::size_t index = 0; index < count; ++index) {
       const std::uint32_t leaf = arrival[index];
       std::uint32_t &slot = leafSlot_[leaf];
@@ -287,7 +374,7 @@ private:
       ++extraCounts[std::size_t{slot} * classCount_ + train_.labels[extra[index]]];
     }
     double errors = errors_[root];
-    std::vector<std::uint32_t> counts(classCount_);
+    counts.resize(classCount_);
     for (std::size_t slot = 0; slot < leaves.size(); ++slot) {
       const std::uint32_t leaf = leaves[slot];
       const std::uint32_t *own = tree_.counts(leaf);
@@ -332,31 +419,46 @@ void c45CollapseUselessSplits(Tree &tree) {
 }
 
 void c45UseTrainingValueThresholds(Tree &tree, const std::vector<float> &sortedValues,
-                                   std::size_t rowCount) {
-  for (Node &node : tree.nodes) {
-    if (node.isLeaf()) {
-      continue;
+                                   std::size_t rowCount, ThreadPool *pool) {
+  constexpr std::size_t kChunk = 4096;
+  const std::size_t chunks = (tree.nodes.size() + kChunk - 1) / kChunk;
+  parallelFor(pool, chunks, [&](std::size_t chunk) {
+    const std::size_t end = std::min(tree.nodes.size(), (chunk + 1) * kChunk);
+    for (std::size_t id = chunk * kChunk; id < end; ++id) {
+      Node &node = tree.nodes[id];
+      if (node.isLeaf()) {
+        continue;
+      }
+      const float *begin =
+          sortedValues.data() + static_cast<std::size_t>(node.feature) * rowCount;
+      const float *above = std::upper_bound(begin, begin + rowCount, node.threshold,
+                                            [](double threshold, float value) {
+                                              return threshold < static_cast<double>(value);
+                                            });
+      // A grown tree always has a value at or below its midpoint (the one
+      // just left of the cut); keep the threshold otherwise.
+      if (above != begin) {
+        node.threshold = static_cast<double>(above[-1]);
+      }
     }
-    const float *begin = sortedValues.data() + static_cast<std::size_t>(node.feature) * rowCount;
-    const float *above = std::upper_bound(begin, begin + rowCount, node.threshold,
-                                          [](double threshold, float value) {
-                                            return threshold < static_cast<double>(value);
-                                          });
-    // A grown tree always has a value at or below its midpoint (the one just
-    // left of the cut); keep the threshold otherwise.
-    if (above != begin) {
-      node.threshold = static_cast<double>(above[-1]);
-    }
-  }
+  });
 }
 
 void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFactor,
-                         ThreadPool *pool) {
+                         ThreadPool *pool, std::span<std::byte> workspace) {
   if (tree.nodes.empty()) {
     return;
   }
-  const std::unique_ptr<float[]> rowMajor = rowMajorFeatures(train, pool);
-  C45Pruner(tree, train, rowMajor.get(), confidenceFactor, pool).run();
+  const std::size_t values = train.rowCount * train.featureCount();
+  std::unique_ptr<float[]> owned;
+  float *rowMajor = reinterpret_cast<float *>(workspace.data());
+  if (workspace.size() < values * sizeof(float) ||
+      reinterpret_cast<std::uintptr_t>(rowMajor) % alignof(float) != 0) {
+    owned.reset(new float[values]);
+    rowMajor = owned.get();
+  }
+  rowMajorFeatures(train, pool, rowMajor);
+  C45Pruner(tree, train, rowMajor, confidenceFactor, pool).run();
 }
 
 } // namespace dt

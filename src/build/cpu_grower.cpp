@@ -22,6 +22,9 @@ public:
     if (reusable_) {
       sorted_.reset(new Entry[features_ * rows_]);
     }
+    if (pool_) {
+      other_.reset(new Entry[features_ * rows_]);
+    }
   }
 
   Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
@@ -49,17 +52,23 @@ public:
       ++counts[codec_.cls(work_[index].packed)];
     }
     NodeStore store(train_.classCount(), 2 * count);
-    Subtree root{store.add(counts.data()), 0, static_cast<std::uint32_t>(count), 0,
-                 std::vector<std::uint32_t>(features_)};
+    Subtree root;
+    root.node = store.add(counts.data());
+    root.count = static_cast<std::uint32_t>(count);
+    root.features.resize(features_);
     std::iota(root.features.begin(), root.features.end(), 0u);
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
                            options_.parallel, countTables());
-    builder.grow(Columns{work_.get(), count, scratch_.get()}, std::move(root));
+    builder.grow(Columns{work_.get(), count, scratch_.get(), other_.get()}, std::move(root));
     if (pool_) {
       pool_->waitIdle();
     }
     store.toTree(tree);
     return tree;
+  }
+
+  std::span<std::byte> workspace() override {
+    return {reinterpret_cast<std::byte *>(work_.get()), features_ * rows_ * sizeof(Entry)};
   }
 
 private:
@@ -89,11 +98,11 @@ private:
       }
       used_ = true;
       presortColumns(train_, codec_, work_.get(), pool_,
-                     sortedValues ? sortedValues->data() : nullptr);
+                     sortedValues ? sortedValues->data() : nullptr, other_.get());
       return;
     }
     if (!presorted_) {
-      presortColumns(train_, codec_, sorted_.get(), pool_);
+      presortColumns(train_, codec_, sorted_.get(), pool_, nullptr, other_.get());
       presorted_ = true;
     }
     if (rows.empty()) {
@@ -133,6 +142,7 @@ private:
   EntryCodec codec_;
   std::unique_ptr<Entry[]> sorted_; // presorted columns of all rows (reusable only)
   std::unique_ptr<Entry[]> work_;   // columns being partitioned by the builder
+  std::unique_ptr<Entry[]> other_;  // parallel: their second copy (Columns::other)
   std::unique_ptr<Entry[]> scratch_;
   std::unique_ptr<std::uint8_t[]> goesLeft_;
   std::vector<double> countXlog_; // see countTables()

@@ -989,6 +989,12 @@ public:
     return tree;
   }
 
+  // The host arena: it only holds the columns of nodes handed to the CPU.
+  std::span<std::byte> workspace() override {
+    waitForArena();
+    return {reinterpret_cast<std::byte *>(arena_.get()), features_ * rows_ * sizeof(Entry)};
+  }
+
 private:
   void setup() {
     double contextSeconds = 0.0;
@@ -1155,7 +1161,7 @@ private:
     CUDA_CHECK(cudaMemcpy(arena_.get(), entries_[current_].get(),
                           features_ * stride_ * sizeof(Entry), cudaMemcpyDeviceToHost));
     cpuBuilder_->grow(Columns{arena_.get(), stride_, arenaScratch_.get()},
-                      Subtree{root.node, 0, root.count, 0, std::move(root.features)});
+                      Subtree{root.node, 0, root.count, 0, std::move(root.features), 0, {}});
   }
 
   void growLevels(LevelNode root) {
@@ -1493,7 +1499,7 @@ private:
     offset = 0;
     for (LevelNode &child : children) {
       Subtree subtree{child.node, static_cast<std::uint32_t>(offset), child.count, child.depth,
-                      std::move(child.features)};
+                      std::move(child.features), 0, {}};
       pool_.submit([this, columns, subtree = std::move(subtree)]() mutable {
         cpuBuilder_->grow(columns, std::move(subtree));
       });

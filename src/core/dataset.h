@@ -66,6 +66,8 @@ void multiplyDataset(Dataset &dataset, std::size_t multiplier);
 // The features as a row-major matrix: result[row * featureCount + feature].
 // Walking a tree for one row then touches one or two cache lines only.
 std::unique_ptr<float[]> rowMajorFeatures(const Dataset &dataset, ThreadPool *pool);
+// The same into `out` (rowCount * featureCount floats).
+void rowMajorFeatures(const Dataset &dataset, ThreadPool *pool, float *out);
 
 // Independent random streams derived from one --seed, so that e.g. changing
 // the CV folds does not change the holdout split.

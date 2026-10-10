@@ -5,9 +5,14 @@
 #include <cstring>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
+
+#if defined(__SSE2__)
+#include <immintrin.h>
+#endif
 
 namespace dt {
 
@@ -33,6 +38,15 @@ namespace {
 // per thread with a per-thread buffer of at most this size, so memory does not
 // grow with threads * rows.
 constexpr std::uint32_t kBlockPartitionRows = 1u << 18;
+
+// Nodes with at least this many rows are partitioned out of place, if the
+// builder has a second copy of the columns (Columns::other).
+constexpr std::uint32_t kOutOfPlaceRows = 1u << 15;
+
+// Children with at least this many rows are swept during the out-of-place
+// partition of their parent, through staging buffers of kStageEntries.
+constexpr std::uint32_t kSweptChildRows = 1u << 12;
+constexpr std::uint32_t kStageEntries = 1024;
 
 // Map a float to an unsigned key with the same order (negatives flipped).
 std::uint32_t sortKey(float value) {
@@ -75,7 +89,7 @@ void radixHistogram(const float *values, std::size_t count, RadixHistogram &hist
 // the buffers alternate so that the last one writes `out`.
 void sortColumn(const float *values, const std::uint16_t *labels, std::size_t count,
                 const EntryCodec &codec, RadixHistogram &histogram, Entry *out,
-                float *sortedValues) {
+                float *sortedValues, Entry *temp) {
   auto entryOf = [&](std::size_t row) {
     // +0.0f: -0.0 and 0.0 are the same value (no threshold between them).
     return Entry{values[row] + 0.0f, codec.pack(static_cast<std::uint32_t>(row), labels[row])};
@@ -89,12 +103,15 @@ void sortColumn(const float *values, const std::uint16_t *labels, std::size_t co
     }
     return;
   }
-  thread_local std::vector<Entry> temp;
-  if (histogram.activePasses > 1 && temp.size() < count) {
-    temp.resize(count);
+  thread_local std::vector<Entry> threadTemp;
+  if (!temp && histogram.activePasses > 1) {
+    if (threadTemp.size() < count) {
+      threadTemp.resize(count);
+    }
+    temp = threadTemp.data();
   }
-  Entry *target = histogram.activePasses % 2 == 1 ? out : temp.data();
-  Entry *other = target == out ? temp.data() : out;
+  Entry *target = histogram.activePasses % 2 == 1 ? out : temp;
+  Entry *other = target == out ? temp : out;
   const Entry *source = nullptr; // null: the raw values
   int remaining = histogram.activePasses;
   for (int pass = 0; pass < kRadixPasses; ++pass) {
@@ -134,7 +151,7 @@ void sortColumn(const float *values, const std::uint16_t *labels, std::size_t co
 } // namespace
 
 void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
-                    ThreadPool *pool, float *sortedValues) {
+                    ThreadPool *pool, float *sortedValues, Entry *temp) {
   const std::size_t rows = dataset.rowCount;
   const std::size_t features = dataset.featureCount();
   if (rows > std::numeric_limits<std::uint32_t>::max()) {
@@ -155,7 +172,8 @@ void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
   parallelFor(pool, features, [&](std::size_t index) {
     const std::size_t feature = order[index];
     sortColumn(dataset.column(feature), dataset.labels.data(), rows, codec, histograms[feature],
-               out + feature * rows, sortedValues ? sortedValues + feature * rows : nullptr);
+               out + feature * rows, sortedValues ? sortedValues + feature * rows : nullptr,
+               temp ? temp + feature * rows : nullptr);
   });
 }
 
@@ -217,7 +235,10 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   const double gap = rules_.minValueGap();
   std::vector<std::uint32_t> &features = item.features;
   std::erase_if(features, [&](std::uint32_t feature) {
-    const Entry *entries = columns.feature(feature) + begin;
+    if (item.cuts) {
+      return item.cuts->constant[feature] != 0;
+    }
+    const Entry *entries = columns.feature(feature, item.side) + begin;
     return !isCut(entries[0].value, entries[count - 1].value, gap);
   });
   if (features.empty()) {
@@ -225,7 +246,8 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   }
 
   // 1. Best cut of every feature: one sweep over its sorted range, which also
-  //    gives the class counts left of that cut.
+  //    gives the class counts left of that cut (unless the parent's partition
+  //    did these sweeps).
   const bool wide = pool_ && count >= options_.featureParallelRows;
   ThreadPool *const widePool = wide ? pool_ : nullptr;
   const std::uint32_t minChild = rules_.minChildRows(count);
@@ -240,11 +262,20 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   std::vector<std::uint32_t> &cutLefts = threadLefts;
   cuts.assign(featureCount_, CutCandidate{});
   cutLefts.resize(featureCount_ * classes);
-  parallelFor(widePool, features.size(), [&](std::size_t index) {
-    const std::uint32_t feature = features[index];
-    cuts[feature] = scanFeature(columns.feature(feature) + begin, count, counts, parentWeighted,
-                                minChild, cutLefts.data() + feature * classes);
-  });
+  if (item.cuts) {
+    for (const std::uint32_t feature : features) {
+      cuts[feature] = item.cuts->cuts[feature];
+      std::copy_n(item.cuts->lefts.data() + feature * classes, classes,
+                  cutLefts.data() + feature * classes);
+    }
+    item.cuts.reset();
+  } else {
+    parallelFor(widePool, features.size(), [&](std::size_t index) {
+      const std::uint32_t feature = features[index];
+      cuts[feature] = scanFeature(columns.feature(feature, item.side) + begin, count, counts,
+                                  parentWeighted, minChild, cutLefts.data() + feature * classes);
+    });
+  }
 
   // 2. Pick the feature (CART or C4.5 rule).
   const SplitRules::Decision decision = rules_.choose(cuts.data(), featureCount_, count);
@@ -252,7 +283,8 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
     return;
   }
   const std::uint32_t leftCount = decision.leftCount;
-  const Entry *winner = columns.feature(static_cast<std::size_t>(decision.feature)) + begin;
+  const Entry *winner =
+      columns.feature(static_cast<std::size_t>(decision.feature), item.side) + begin;
 
   // 3. The children's class counts: the winner's sweep counted the left side.
   thread_local std::vector<std::uint32_t> threadChildCounts;
@@ -292,12 +324,36 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
     }
   });
   const Keep keep = leftTerminal ? Keep::Right : rightTerminal ? Keep::Left : Keep::Both;
-  partition(columns, item, decision.feature, leftCount, keep);
+  // Big children (two classes) are swept while the columns are partitioned.
+  ChildSweep sweeps[2];
+  ChildSweep *swept[2] = {nullptr, nullptr};
+  std::shared_ptr<FeatureCuts> childCuts[2];
+  if (columns.other && count >= kOutOfPlaceRows && classCount_ == 2) {
+    for (int child = 0; child < 2; ++child) {
+      const std::uint32_t *total = child == 0 ? leftCounts : rightCounts;
+      const std::uint32_t rows = child == 0 ? leftCount : rightCount;
+      const std::uint32_t childMin = rules_.minChildRows(rows);
+      if ((child == 0 ? leftTerminal : rightTerminal) || rows < kSweptChildRows ||
+          rows >= tables_.size || childMin + 64 > kStageEntries) {
+        continue;
+      }
+      childCuts[child] = std::make_shared<FeatureCuts>(featureCount_, classes);
+      sweeps[child] = {rows,
+                       {total[0], total[1]},
+                       weightedImpurity(total, classCount_, rows, rules_.criterion(),
+                                        rules_.logTable()),
+                       childMin,
+                       childCuts[child].get()};
+      swept[child] = &sweeps[child];
+    }
+  }
+  const int side = partition(columns, item, decision.feature, leftCount, keep, swept);
 
   // 5. Children. A big left child becomes a pool task so idle threads can pick
   //    it up; this thread continues with the right one.
-  Subtree left{leftId, begin, leftCount, item.depth + 1, {}};
-  Subtree right{rightId, begin + leftCount, rightCount, item.depth + 1, {}};
+  Subtree left{leftId, begin, leftCount, item.depth + 1, {}, side, std::move(childCuts[0])};
+  Subtree right{rightId, begin + leftCount, rightCount, item.depth + 1, {}, side,
+                std::move(childCuts[1])};
   if (!leftTerminal && !rightTerminal) {
     left.features = features;
   }
@@ -316,9 +372,39 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   }
 }
 
-void CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int winner,
-                               std::uint32_t leftCount, Keep keep) {
+int CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int winner,
+                              std::uint32_t leftCount, Keep keep, ChildSweep *const *children) {
   const std::uint32_t count = item.count;
+  if (columns.other && count >= kOutOfPlaceRows) {
+    // Every column into the other side; the winner's is already in order.
+    const int to = 1 - item.side;
+    const std::uint32_t from = keep == Keep::Right ? leftCount : 0;
+    const std::uint32_t to_end = keep == Keep::Left ? leftCount : count;
+    const bool sweep = children[0] || children[1];
+    const bool gini = rules_.criterion() == Criterion::Gini;
+    parallelFor(pool_ && count >= options_.featureParallelRows ? pool_ : nullptr,
+                item.features.size(), [&](std::size_t index) {
+                  const std::uint32_t feature = item.features[index];
+                  const Entry *source = columns.feature(feature, item.side) + item.begin;
+                  Entry *target = columns.feature(feature, to) + item.begin;
+                  const bool isWinner = static_cast<int>(feature) == winner;
+                  if (sweep) {
+                    // CART: Gini, values must differ; C4.5: entropy, gap.
+                    if (gini) {
+                      partitionAndSweep<Criterion::Gini, false>(
+                          source, target, count, leftCount, keep, isWinner, feature, children);
+                    } else {
+                      partitionAndSweep<Criterion::Entropy, true>(
+                          source, target, count, leftCount, keep, isWinner, feature, children);
+                    }
+                  } else if (isWinner) {
+                    std::memcpy(target + from, source + from, (to_end - from) * sizeof(Entry));
+                  } else {
+                    partitionFeatureOutOfPlace(source, target, count, leftCount, keep);
+                  }
+                });
+    return to;
+  }
   thread_local std::vector<std::uint32_t> threadOthers;
   std::vector<std::uint32_t> &others = threadOthers;
   others.clear();
@@ -341,19 +427,19 @@ void CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int 
         std::min(others.size(), keep == Keep::Both ? count / bufferSize : others.size());
     if (pool_ && slots < 2) {
       for (std::uint32_t feature : others) {
-        partitionFeatureInBlocks(columns.feature(feature) + item.begin, count, leftCount,
-                                 nodeScratch);
+        partitionFeatureInBlocks(columns.feature(feature, item.side) + item.begin, count,
+                                 leftCount, nodeScratch);
       }
-      return;
+      return item.side;
     }
     parallelFor(pool_, slots, [&](std::size_t slot) {
       Entry *buffer = nodeScratch + slot * bufferSize;
       for (std::size_t index = slot; index < others.size(); index += slots) {
-        partitionFeature(columns.feature(others[index]) + item.begin, count, leftCount, buffer,
-                         keep);
+        partitionFeature(columns.feature(others[index], item.side) + item.begin, count,
+                         leftCount, buffer, keep);
       }
     });
-    return;
+    return item.side;
   }
   // Small node: a per-thread buffer (stays in cache), one column per thread
   // for wide nodes.
@@ -362,11 +448,55 @@ void CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int 
     if (keep == Keep::Both && buffer.size() < count) {
       buffer.resize(count);
     }
-    partitionFeature(columns.feature(others[index]) + item.begin, count, leftCount, buffer.data(),
-                     keep);
+    partitionFeature(columns.feature(others[index], item.side) + item.begin, count, leftCount,
+                     buffer.data(), keep);
   };
   parallelFor(pool_ && count >= options_.featureParallelRows ? pool_ : nullptr, others.size(),
               partitionOne);
+  return item.side;
+}
+
+// Stable partition of `source` into `target` by goesLeft: left rows to
+// [0, leftCount), right rows to [leftCount, count), in order (only one of the
+// two if the other child is a leaf). The columns of a big node do not fit in
+// the caches, so the stores bypass them (non-temporal: no read of the target
+// lines first, no eviction of data still needed).
+void CpuTreeBuilder::partitionFeatureOutOfPlace(const Entry *source, Entry *target,
+                                                std::uint32_t count, std::uint32_t leftCount,
+                                                Keep keep) const {
+  auto store = [](Entry *at, Entry entry) {
+#if defined(__SSE2__)
+    _mm_stream_si64(reinterpret_cast<long long *>(at), std::bit_cast<long long>(entry));
+#else
+    *at = entry;
+#endif
+  };
+  const EntryCodec codec = codec_;
+  const std::uint8_t *goesLeft = goesLeft_;
+  if (keep == Keep::Both) {
+    std::uint32_t left = 0;
+    std::uint32_t right = leftCount;
+    for (std::uint32_t index = 0; index < count; ++index) {
+      const Entry entry = source[index];
+      const std::uint32_t isLeft = goesLeft[codec.row(entry.packed)];
+      store(target + (isLeft ? left : right), entry);
+      left += isLeft;
+      right += 1 - isLeft;
+    }
+  } else {
+    // One child: usually a lopsided split, so the branch is predictable.
+    const std::uint8_t wanted = keep == Keep::Left;
+    Entry *write = target + (keep == Keep::Left ? 0 : leftCount);
+    for (std::uint32_t index = 0; index < count; ++index) {
+      const Entry entry = source[index];
+      if (goesLeft[codec.row(entry.packed)] == wanted) {
+        store(write++, entry);
+      }
+    }
+  }
+#if defined(__SSE2__)
+  _mm_sfence(); // the stores are visible before another thread reads them
+#endif
 }
 
 // Stable partition by goesLeft (`leftCount` rows go left). The larger side is
@@ -543,6 +673,19 @@ std::uint32_t skippableSteps(double bestGain, double gain, double margin, double
   return steps >= static_cast<double>(limit) ? limit : static_cast<std::uint32_t>(steps);
 }
 
+// Bounded blocks (two classes): the cuts of a node with at least
+// kBoundedSweepRows rows are taken in blocks of kBoundBlock, and a block whose
+// upper bound cannot beat the best cut so far is skipped. The bound: both
+// impurities are concave in a child's class counts (n * Gini and n * entropy
+// are perspectives of concave functions), so the gain is convex in the left
+// class counts, and its maximum over the box of counts a block passes through
+// is at one of the box's four corners. Rounding: the estimate is within
+// `margin` of cutGain(), and both are within a few roundings of the exact
+// function (entropy: of terms up to n * log2(n), the tabled c * log2(c)
+// included), which `boundSlack` covers twice.
+constexpr std::uint32_t kBoundBlock = 16;
+constexpr std::uint32_t kBoundedSweepRows = 64;
+
 } // namespace
 
 // Exact part of a sweep (see scanFeatureK()): the buffered candidates, in
@@ -551,12 +694,14 @@ std::uint32_t skippableSteps(double bestGain, double gain, double margin, double
 // estimate beats all earlier buffered estimates by more than
 // 2 * margin + kTieEps are skipped. `countsAt(i, out)` writes the class counts
 // left of candidate i into `counts` (classCount values).
+// Returns the buffer index of the last candidate kept, or -1.
 template <class CountsAt>
-void settleCandidates(const double *estimate, const std::uint32_t *position, std::uint32_t size,
-                      double margin, const std::uint32_t *total, int classCount,
-                      std::uint32_t count, double parentWeighted, Criterion criterion,
-                      LogTable logs, CountsAt &&countsAt, std::uint32_t *counts,
-                      double &bestGain, std::uint32_t &bestCut, std::uint32_t *bestLeft) {
+int settleCandidates(const double *estimate, const std::uint32_t *position, std::uint32_t size,
+                     double margin, const std::uint32_t *total, int classCount,
+                     std::uint32_t count, double parentWeighted, Criterion criterion,
+                     LogTable logs, CountsAt &&countsAt, std::uint32_t *counts,
+                     double &bestGain, std::uint32_t &bestCut, std::uint32_t *bestLeft) {
+  int kept = -1;
   std::uint32_t from = 0;
   double highest = -INFINITY;
   const double clearLead = 2.0 * margin + kTieEps;
@@ -577,145 +722,286 @@ void settleCandidates(const double *estimate, const std::uint32_t *position, std
       bestGain = gain;
       bestCut = position[index];
       std::copy_n(counts, classCount, bestLeft);
+      kept = static_cast<int>(index);
     }
   }
+  return kept;
 }
 
 // The sweep of scanFeatureK() for two classes (e.g. SUSY, HIGGS), with the
-// same estimate / candidate / skip logic but leaner: the class counts at a cut
-// follow from the number of class-1 rows left of it, the estimates need no
-// running sums (Gini: no division, with tabled reciprocals; entropy: cutGain()
-// with a multiplication by 1/n instead of the division), the boundary-point
-// shortcut is decided without a branch (on continuous features it is a coin
-// flip), and skipped stretches only add up class bits and thresholds.
-// `tables_` must cover `count` (the caller checks); HasGap: C4.5's minimum
-// gap between values (CART: values must just differ).
+// same estimate / candidate logic but leaner: the class counts at a cut follow
+// from the number of class-1 rows left of it, the estimates need no running
+// sums (Gini: no division, with tabled reciprocals; entropy: cutGain() with a
+// multiplication by 1/n instead of the division), the boundary-point shortcut
+// is decided without a branch (on continuous features it is a coin flip), and
+// whole blocks of cuts are skipped when a bound shows that none of them can
+// beat the best cut so far (see kBoundBlock).
+//
+// It can run in pieces, so that a child's sweep runs while the child's column
+// is being written by the parent's partition: advance() takes the cuts whose
+// entries are available. The count tables must cover `count`; HasGap: C4.5's
+// minimum gap between values (CART: values must just differ).
+struct SweepSetup {
+  EntryCodec codec;
+  const double *xlog = nullptr;    // CountTables
+  const double *inverse = nullptr;
+  double gap = 0.0;                // SplitRules::minValueGap()
+  LogTable logs;
+};
+
+SweepSetup CpuTreeBuilder::sweepSetup() const {
+  return {codec_, tables_.xlog, tables_.inverse, rules_.minValueGap(), rules_.logTable()};
+}
+
+template <Criterion Crit, bool HasGap> class TwoClassSweep {
+public:
+  using Setup = SweepSetup;
+
+  TwoClassSweep(const Setup &setup, std::uint32_t count, const std::uint32_t *total,
+                double parentWeighted, std::uint32_t minChild)
+      : setup_(setup), count_(count), total_{total[0], total[1]},
+        parentWeighted_(parentWeighted), minChild_(minChild), rows_(count),
+        inverseRows_(1.0 / rows_), giniBase_(parentWeighted - rows_),
+        boundSlack_(Crit == Criterion::Gini
+                        ? 4.0 * kMargin
+                        : 4.0 * kMargin + 64.0 * (std::log2(rows_) + 2.0) * kRoundoff),
+        empty_(count < 2 * minChild), lastCut_(empty_ ? 0 : count - minChild),
+        blockCuts_(count >= kBoundedSweepRows ? kBoundBlock : lastCut_ + 1), cut_(minChild) {}
+
+  // The first entry that later advance() calls still read.
+  std::uint32_t from() const { return started_ && cut_ >= 2 ? cut_ - 2 : 0; }
+
+  // Takes the cuts whose entries are among the first `available` (all cuts if
+  // available == count). entries[i] must be readable for i in
+  // [from(), available).
+  void advance(const Entry *entries, std::uint32_t available) {
+    if (empty_) {
+      return;
+    }
+    const EntryCodec codec = setup_.codec;
+    if (!started_) {
+      if (available < minChild_ + 1 && available < count_) {
+        return;
+      }
+      for (std::uint32_t index = 0; index + 1 < minChild_; ++index) {
+        ones_ += codec.cls(entries[index].packed);
+      }
+      started_ = true;
+    }
+    // Locals, so that they stay in registers (the buffers are members).
+    std::uint32_t cut = cut_;
+    std::uint32_t ones = ones_;
+    std::uint32_t tries = tries_;
+    std::uint32_t found = found_;
+    double threshold = threshold_;
+    double bestGain = bestGain_;
+    const std::uint32_t count = count_;
+    const std::uint32_t minChild = minChild_;
+    const std::uint32_t lastCut = lastCut_;
+    const std::uint32_t blockCuts = blockCuts_;
+    const bool bounded = blockCuts == kBoundBlock && count >= kBoundedSweepRows;
+    const double boundSlack = boundSlack_;
+    const double inverseRows = inverseRows_;
+    const double giniBase = giniBase_;
+    const double parentWeighted = parentWeighted_;
+    const std::uint32_t total0 = total_[0];
+    const std::uint32_t total1 = total_[1];
+    const double total0Value = total0;
+    const double total1Value = total1;
+    const double *xlog = setup_.xlog;
+    const double *inverse = setup_.inverse;
+    const double gap = setup_.gap;
+    auto distinct = [gap](float lower, float upper) {
+      if constexpr (HasGap) {
+        return isCut(lower, upper, gap);
+      } else {
+        return lower < upper; // isCut() with no gap
+      }
+    };
+    // The estimate at a cut with left class counts (left0, left1).
+    auto estimateAt = [&](std::uint32_t left0, std::uint32_t left1) {
+      const std::uint32_t leftCount = left0 + left1;
+      if constexpr (Crit == Criterion::Gini) {
+        const double l0 = left0;
+        const double l1 = left1;
+        const double r0 = total0Value - l0;
+        const double r1 = total1Value - l1;
+        return (giniBase + (l0 * l0 + l1 * l1) * inverse[leftCount] +
+                (r0 * r0 + r1 * r1) * inverse[count - leftCount]) *
+               inverseRows;
+      } else {
+        const double leftWeighted = xlog[leftCount] - (xlog[left0] + xlog[left1]);
+        const double rightWeighted =
+            xlog[count - leftCount] - (xlog[total0 - left0] + xlog[total1 - left1]);
+        return (parentWeighted - leftWeighted - rightWeighted) * inverseRows;
+      }
+    };
+    // Candidates are settled before advance() returns, so that the entries
+    // around them can still be read.
+    auto settleNow = [&]() {
+      found_ = found;
+      settle(entries);
+      found = 0;
+      threshold = threshold_;
+      bestGain = bestGain_;
+    };
+    double *estimate = estimate_;
+    std::uint32_t *position = position_;
+    std::uint32_t *onesAt = onesAt_;
+    while (cut <= lastCut) {
+      const std::uint32_t blockEnd = std::min(cut + blockCuts, lastCut + 1); // cuts [cut, blockEnd)
+      if (blockEnd >= available && available < count) {
+        break; // its last cut needs entry blockEnd
+      }
+      if (bounded) {
+        // Moving from cut `cut` to cut blockEnd - 1 moves entries [cut - 1,
+        // blockEnd - 2] left, so the block's left class counts lie in the box
+        // [l0lo, l0hi] x [l1lo, l1hi]. The gain is convex in them, so its
+        // largest value over the box is at a corner; if that cannot beat the
+        // best cut so far, no cut of the block can (see kBoundBlock).
+        std::uint32_t blockOnes = 0;
+        for (std::uint32_t index = cut - 1; index + 1 < blockEnd; ++index) {
+          blockOnes += codec.cls(entries[index].packed);
+        }
+        const std::uint32_t l1lo = ones + codec.cls(entries[cut - 1].packed);
+        const std::uint32_t l1hi = ones + blockOnes;
+        const std::uint32_t l0lo = cut - l1lo;
+        const std::uint32_t l0hi = blockEnd - 1 - l1hi;
+        const double upper =
+            std::max(std::max(estimateAt(l0lo, l1lo), estimateAt(l0hi, l1hi)),
+                     std::max(estimateAt(l0hi, l1lo), estimateAt(l0lo, l1hi))) +
+            boundSlack;
+        bool skip = upper <= bestGain + kTieEps;
+        if (!skip && found > 0) {
+          settleNow(); // the exact best so far may already be high enough
+          skip = upper <= bestGain + kTieEps;
+        }
+        if (skip) {
+          ones += blockOnes;
+          if constexpr (HasGap) { // C4.5 counts the thresholds (MDL cost)
+            std::uint32_t blockTries = 0;
+            for (std::uint32_t index = cut; index < blockEnd; ++index) {
+              blockTries += distinct(entries[index - 1].value, entries[index].value);
+            }
+            tries += blockTries;
+          }
+          cut = blockEnd;
+          continue;
+        }
+      }
+      for (; cut < blockEnd; ++cut) {
+        const Entry previous = entries[cut - 1];
+        const Entry current = entries[cut];
+        const std::uint32_t previousClass = codec.cls(previous.packed);
+        ones += previousClass;
+        if (!distinct(previous.value, current.value)) {
+          continue;
+        }
+        ++tries;
+        const bool leftDistinct = cut < 2 || distinct(entries[cut - 2].value, previous.value);
+        const bool rightDistinct =
+            cut + 1 >= count || distinct(current.value, entries[cut + 1].value);
+        const bool skippable = (previousClass == codec.cls(current.packed)) & leftDistinct &
+                               rightDistinct & (cut > minChild) & (cut + minChild < count);
+        const double gain = estimateAt(cut - ones, ones);
+        // Buffered unless skipped, without a branch on `skippable`.
+        estimate[found] = gain;
+        position[found] = cut;
+        onesAt[found] = ones;
+        found += !skippable & (gain > threshold);
+        if (found == settleAt_) {
+          settleNow();
+        }
+      }
+    }
+    if (found > 0) {
+      settleNow();
+    }
+    cut_ = cut;
+    ones_ = ones;
+    tries_ = tries;
+    found_ = found;
+  }
+
+  // The best cut, after advance(..., count); `bestLeft` receives its class
+  // counts.
+  CutCandidate finish(std::uint32_t *bestLeft) {
+    CutCandidate best;
+    if (empty_) {
+      return best;
+    }
+    best.tries = tries_;
+    if (bestCut_ > 0) {
+      best.gain = bestGain_;
+      best.leftCount = bestCut_;
+      best.leftValue = bestValues_.first;
+      best.rightValue = bestValues_.second;
+      bestLeft[0] = bestLeft_[0];
+      bestLeft[1] = bestLeft_[1];
+    }
+    return best;
+  }
+
+private:
+  static constexpr double kMargin = 256.0 * kRoundoff; // a few roundings of terms <= n, / n
+
+  void settle(const Entry *entries) {
+    std::uint32_t counts[2];
+    const int kept = settleCandidates(
+        estimate_, position_, found_, kMargin, total_, 2, count_, parentWeighted_, Crit,
+        setup_.logs,
+        [&](std::uint32_t index, std::uint32_t *out) {
+          out[0] = position_[index] - onesAt_[index];
+          out[1] = onesAt_[index];
+        },
+        counts, bestGain_, bestCut_, bestLeft_);
+    if (kept >= 0) {
+      bestValues_ = {entries[bestCut_ - 1].value, entries[bestCut_].value};
+    }
+    found_ = 0;
+    settleAt_ = std::min(2 * settleAt_, kSweepBlock);
+    threshold_ = bestGain_ + kTieEps - kMargin;
+  }
+
+  Setup setup_;
+  std::uint32_t count_;
+  std::uint32_t total_[2];
+  double parentWeighted_;
+  std::uint32_t minChild_;
+  double rows_;
+  double inverseRows_;
+  double giniBase_;
+  // Bound on |estimate - exact gain| at any count vector, the rounding of the
+  // tabled c*log2(c) (terms up to n*log2(n)) included: see kBoundBlock.
+  double boundSlack_;
+  bool empty_;
+  std::uint32_t lastCut_;
+  std::uint32_t blockCuts_;
+
+  bool started_ = false;
+  std::uint32_t cut_;      // next cut to take
+  std::uint32_t ones_ = 0; // class-1 rows among the entries before cut_ - 1
+  std::uint32_t tries_ = 0;
+  double bestGain_ = -INFINITY;
+  std::uint32_t bestCut_ = 0;
+  std::uint32_t bestLeft_[2] = {0, 0};
+  std::pair<float, float> bestValues_{0.0f, 0.0f};
+  double threshold_ = -INFINITY; // estimates at or below it cannot beat the best cut
+  std::uint32_t found_ = 0;
+  std::uint32_t settleAt_ = kFirstSettle;
+  double estimate_[kSweepBlock];
+  std::uint32_t position_[kSweepBlock];
+  std::uint32_t onesAt_[kSweepBlock];
+};
+
 template <Criterion Crit, bool HasGap>
 CutCandidate CpuTreeBuilder::scanTwoClasses(const Entry *entries, std::uint32_t count,
                                             const std::uint32_t *total, double parentWeighted,
                                             std::uint32_t minChild,
                                             std::uint32_t *bestLeft) const {
-  CutCandidate best;
-  if (count < 2 * minChild) {
-    return best;
-  }
-  // Locals, so that they stay in registers across the settle() calls.
-  const EntryCodec codec = codec_;
-  const double *xlog = tables_.xlog;
-  const double *inverse = tables_.inverse;
-  const double gap = rules_.minValueGap();
-  auto distinctValues = [gap](float lower, float upper) {
-    if constexpr (HasGap) {
-      return isCut(lower, upper, gap);
-    } else {
-      return lower < upper; // isCut() with no gap
-    }
-  };
-  const LogTable logs = rules_.logTable();
-  const double rows = static_cast<double>(count);
-  const double inverseRows = 1.0 / rows;
-  const double margin = 256.0 * kRoundoff; // a few roundings of terms <= n, divided by n
-  const double rowsPerGain = rows / maxGainStep<Crit>(count);
-  const double giniBase = parentWeighted - rows;
-  const double total0 = total[0];
-  const double total1 = total[1];
-
-  std::uint32_t ones = 0; // class-1 rows left of the current cut
-  for (std::uint32_t index = 0; index + 1 < minChild; ++index) {
-    ones += codec.cls(entries[index].packed);
-  }
-  std::uint32_t tries = 0;
-  double bestGain = -INFINITY;
-  std::uint32_t bestCut = 0;
-  double threshold = -INFINITY;     // estimates at or below it cannot beat the best cut
-  double skipThreshold = -INFINITY; // estimates below it start a skip
-  double estimate[kSweepBlock];
-  std::uint32_t position[kSweepBlock];
-  std::uint32_t onesAt[kSweepBlock];
-  std::uint32_t found = 0;
-  std::uint32_t settleAt = kFirstSettle;
-  std::uint32_t counts[2];
-  auto settle = [&]() {
-    settleCandidates(
-        estimate, position, found, margin, total, 2, count, parentWeighted, Crit, logs,
-        [&](std::uint32_t index, std::uint32_t *out) {
-          out[0] = position[index] - onesAt[index];
-          out[1] = onesAt[index];
-        },
-        counts, bestGain, bestCut, bestLeft);
-    found = 0;
-    settleAt = std::min(2 * settleAt, kSweepBlock);
-    threshold = bestGain + kTieEps - margin;
-    skipThreshold = skipBelow(bestGain, margin, rowsPerGain);
-  };
-
-  const std::uint32_t lastCut = count - minChild;
-  for (std::uint32_t cut = minChild; cut <= lastCut;) {
-    const Entry previous = entries[cut - 1];
-    const Entry current = entries[cut];
-    const std::uint32_t previousClass = codec.cls(previous.packed);
-    ones += previousClass;
-    if (!distinctValues(previous.value, current.value)) {
-      ++cut;
-      continue;
-    }
-    ++tries;
-    const bool leftDistinct = cut < 2 || distinctValues(entries[cut - 2].value, previous.value);
-    const bool rightDistinct =
-        cut + 1 >= count || distinctValues(current.value, entries[cut + 1].value);
-    const bool skippable = (previousClass == codec.cls(current.packed)) & leftDistinct &
-                           rightDistinct & (cut > minChild) & (cut + minChild < count);
-    const double l1 = ones;
-    const double l0 = static_cast<double>(cut - ones);
-    const double r0 = total0 - l0;
-    const double r1 = total1 - l1;
-    double gain;
-    if constexpr (Crit == Criterion::Gini) {
-      gain = (giniBase + (l0 * l0 + l1 * l1) * inverse[cut] +
-              (r0 * r0 + r1 * r1) * inverse[count - cut]) *
-             inverseRows;
-    } else {
-      const std::uint32_t left0 = cut - ones;
-      const double leftWeighted = xlog[cut] - (xlog[left0] + xlog[ones]);
-      const double rightWeighted =
-          xlog[count - cut] - (xlog[total[0] - left0] + xlog[total[1] - ones]);
-      gain = (parentWeighted - leftWeighted - rightWeighted) * inverseRows;
-    }
-    // Buffered unless skipped, without a branch on `skippable`.
-    estimate[found] = gain;
-    position[found] = cut;
-    onesAt[found] = ones;
-    found += !skippable & (gain > threshold);
-    if (found == settleAt) {
-      settle();
-    }
-    ++cut;
-    if (!(gain < skipThreshold)) {
-      continue;
-    }
-    // The next cuts cannot beat the best cut while their gain provably stays
-    // below it: only count their class-1 rows and their thresholds.
-    const std::uint32_t steps =
-        skippableSteps(bestGain, gain, margin, rowsPerGain, lastCut + 1 - cut);
-    std::uint32_t skippedOnes = 0;
-    std::uint32_t skippedTries = 0;
-    for (std::uint32_t index = cut; index < cut + steps; ++index) {
-      skippedOnes += codec.cls(entries[index - 1].packed);
-      skippedTries += distinctValues(entries[index - 1].value, entries[index].value);
-    }
-    ones += skippedOnes;
-    tries += skippedTries;
-    cut += steps;
-  }
-  settle();
-  best.tries = tries;
-  if (bestCut > 0) {
-    best.gain = bestGain;
-    best.leftCount = bestCut;
-    best.leftValue = entries[bestCut - 1].value;
-    best.rightValue = entries[bestCut].value;
-  }
-  return best;
+  TwoClassSweep<Crit, HasGap> sweep(sweepSetup(), count, total, parentWeighted, minChild);
+  sweep.advance(entries, count);
+  return sweep.finish(bestLeft);
 }
 
 // One left-to-right sweep. Cut i sits between entries i-1 and i and sends the
@@ -947,6 +1233,144 @@ CutCandidate CpuTreeBuilder::scanFeatureK(const Entry *entries, std::uint32_t co
     best.rightValue = entries[bestCut].value;
   }
   return best;
+}
+
+// Out-of-place partition of one column (see partitionFeatureOutOfPlace())
+// that also sweeps the column for the children in `children`: entries go
+// through a small staging buffer per child (in L1), where the child's sweep
+// reads them, and from there to the target with non-temporal stores. So a big
+// node's columns are read once per level instead of twice (partition, then
+// the children's sweeps). The winner's column is already in order: it is
+// copied, and the sweeps read it in place.
+template <Criterion Crit, bool HasGap>
+void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::uint32_t count,
+                                       std::uint32_t leftCount, Keep keep, bool isWinner,
+                                       std::uint32_t feature,
+                                       ChildSweep *const *children) const {
+  using Sweep = TwoClassSweep<Crit, HasGap>;
+  auto store = [](Entry *at, Entry entry) {
+#if defined(__SSE2__)
+    _mm_stream_si64(reinterpret_cast<long long *>(at), std::bit_cast<long long>(entry));
+#else
+    *at = entry;
+#endif
+  };
+  const SweepSetup setup = sweepSetup();
+  const bool kept[2] = {keep != Keep::Right, keep != Keep::Left};
+  const std::uint32_t childBegin[2] = {0, leftCount};
+  const std::uint32_t childCount[2] = {leftCount, count - leftCount};
+  std::optional<Sweep> sweeps[2];
+  for (int child = 0; child < 2; ++child) {
+    if (children[child]) {
+      const ChildSweep &info = *children[child];
+      sweeps[child].emplace(setup, info.count, info.total, info.parentWeighted, info.minChild);
+    }
+  }
+
+  if (isWinner) {
+    constexpr std::uint32_t kChunk = 4 * kStageEntries;
+    for (int child = 0; child < 2; ++child) {
+      if (!kept[child]) {
+        continue;
+      }
+      const Entry *from = source + childBegin[child];
+      Entry *to = target + childBegin[child];
+      for (std::uint32_t done = 0; done < childCount[child];) {
+        const std::uint32_t end = std::min(childCount[child], done + kChunk);
+        for (std::uint32_t index = done; index < end; ++index) {
+          store(to + index, from[index]);
+        }
+        if (sweeps[child]) {
+          sweeps[child]->advance(from, end);
+        }
+        done = end;
+      }
+    }
+  } else {
+    // Stage of one child: its entries [base, base + size) are in `data`
+    // (the first ones only kept for the sweep), [0, written) are in the
+    // target.
+    struct Stage {
+      Entry *data;
+      std::uint32_t base = 0;
+      std::uint32_t size = 0;
+      std::uint32_t written = 0;
+    };
+    constexpr std::uint32_t kCapacity = kStageEntries + 64;
+    thread_local std::vector<Entry> memory(2 * kCapacity);
+    Stage stages[2] = {{memory.data()}, {memory.data() + kCapacity}};
+    auto flush = [&](int child) {
+      Stage &stage = stages[child];
+      Entry *to = target + childBegin[child];
+      const std::uint32_t end = stage.base + stage.size;
+      for (std::uint32_t index = stage.written; index < end; ++index) {
+        store(to + index, stage.data[index - stage.base]);
+      }
+      stage.written = end;
+      std::uint32_t from = end;
+      if (sweeps[child]) {
+        // The sweep reads entry i at window[i]: the stage, shifted by base.
+        const Entry *window = reinterpret_cast<const Entry *>(
+            reinterpret_cast<std::uintptr_t>(stage.data) - std::uintptr_t{stage.base} * sizeof(Entry));
+        sweeps[child]->advance(window, end);
+        from = std::min(sweeps[child]->from(), end);
+      }
+      std::memmove(stage.data, stage.data + (from - stage.base), (end - from) * sizeof(Entry));
+      stage.size = end - from;
+      stage.base = from;
+    };
+    const EntryCodec codec = codec_;
+    const std::uint8_t *goesLeft = goesLeft_;
+    if (keep == Keep::Both) {
+      Stage &left = stages[0];
+      Stage &right = stages[1];
+      for (std::uint32_t index = 0; index < count; ++index) {
+        const Entry entry = source[index];
+        const std::uint32_t isLeft = goesLeft[codec.row(entry.packed)];
+        left.data[left.size] = entry;
+        right.data[right.size] = entry;
+        left.size += isLeft;
+        right.size += 1 - isLeft;
+        if (left.size == kCapacity) {
+          flush(0);
+        }
+        if (right.size == kCapacity) {
+          flush(1);
+        }
+      }
+      flush(0);
+      flush(1);
+    } else {
+      // One child: usually a lopsided split, so the branch is predictable.
+      const int child = keep == Keep::Left ? 0 : 1;
+      const std::uint8_t wanted = keep == Keep::Left;
+      Stage &stage = stages[child];
+      for (std::uint32_t index = 0; index < count; ++index) {
+        const Entry entry = source[index];
+        if (goesLeft[codec.row(entry.packed)] == wanted) {
+          stage.data[stage.size++] = entry;
+          if (stage.size == kCapacity) {
+            flush(child);
+          }
+        }
+      }
+      flush(child);
+    }
+  }
+#if defined(__SSE2__)
+  _mm_sfence(); // the stores are visible before another thread reads them
+#endif
+  const double gap = rules_.minValueGap();
+  for (int child = 0; child < 2; ++child) {
+    if (!sweeps[child]) {
+      continue;
+    }
+    FeatureCuts &out = *children[child]->out;
+    const std::size_t classes = static_cast<std::size_t>(classCount_);
+    out.cuts[feature] = sweeps[child]->finish(out.lefts.data() + feature * classes);
+    const Entry *entries = target + childBegin[child];
+    out.constant[feature] = !isCut(entries[0].value, entries[childCount[child] - 1].value, gap);
+  }
 }
 
 } // namespace dt

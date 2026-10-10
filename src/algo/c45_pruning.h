@@ -4,6 +4,7 @@
 #include "core/tree.h"
 
 #include <cstddef>
+#include <span>
 #include <vector>
 
 namespace dt {
@@ -23,13 +24,15 @@ void c45CollapseUselessSplits(Tree &tree);
 // `sortedValues`: every feature's training values in increasing order
 // (column-major, `rowCount` per feature).
 void c45UseTrainingValueThresholds(Tree &tree, const std::vector<float> &sortedValues,
-                                   std::size_t rowCount);
+                                   std::size_t rowCount, ThreadPool *pool);
 
 // prune.c: error-based pruning. Each node's error is estimated with the upper
 // limit of a binomial confidence interval (confidence factor CF). A subtree is
 // replaced by a leaf, or by its most-used branch ("subtree raising"), when that
-// is not estimated to be worse.
+// is not estimated to be worse. `workspace` (if at least 4 bytes per training
+// row and feature) is used instead of allocating the row-major copy of the
+// features.
 void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFactor,
-                         ThreadPool *pool);
+                         ThreadPool *pool, std::span<std::byte> workspace = {});
 
 } // namespace dt

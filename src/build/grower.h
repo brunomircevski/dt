@@ -6,6 +6,7 @@
 #include "core/thread_pool.h"
 #include "core/tree.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -32,6 +33,11 @@ public:
   // C4.5's thresholds need.
   virtual Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
                     GrowTimings &timings, std::vector<float> *sortedValues = nullptr) = 0;
+
+  // Memory the grower only uses inside grow(): the caller may use it until
+  // the next grow() (it is already mapped, so no page faults). At least
+  // 8 bytes per training row and feature.
+  virtual std::span<std::byte> workspace() = 0;
 };
 
 // Serial (pool == nullptr) and Parallel backends. With `reusable` false the
