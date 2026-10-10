@@ -29,9 +29,9 @@ void c45UseTrainingValueThresholds(Tree &tree, std::span<const float> sortedValu
 // prune.c: error-based pruning. Each node's error is estimated with the upper
 // limit of a binomial confidence interval (confidence factor CF). A subtree is
 // replaced by a leaf, or by its most-used branch ("subtree raising"), when that
-// is not estimated to be worse. `workspace` (if at least 4 bytes per training
-// row and feature) is used instead of allocating the row-major copy of the
-// features.
+// is not estimated to be worse. `workspace` (if at least 8 bytes per training
+// row and feature) holds the two row-major copies of the features that the
+// pruning works with, instead of allocating them.
 void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFactor,
                          ThreadPool *pool, std::span<std::byte> workspace = {});
 

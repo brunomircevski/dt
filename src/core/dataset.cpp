@@ -433,29 +433,4 @@ void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t see
   test = selectRows(dataset, testIndex, pool);
 }
 
-std::unique_ptr<float[]> rowMajorFeatures(const Dataset &dataset, ThreadPool *pool) {
-  // Not zero-filled first: the threads write (and so first touch) it.
-  std::unique_ptr<float[]> matrix(new float[dataset.rowCount * dataset.featureCount()]);
-  rowMajorFeatures(dataset, pool, matrix.get());
-  return matrix;
-}
-
-void rowMajorFeatures(const Dataset &dataset, ThreadPool *pool, float *matrix) {
-  const std::size_t rows = dataset.rowCount;
-  const std::size_t features = dataset.featureCount();
-  constexpr std::size_t kBlock = 4096;
-  const std::size_t blocks = (rows + kBlock - 1) / kBlock;
-  auto transpose = [&](std::size_t block) {
-    const std::size_t begin = block * kBlock;
-    const std::size_t end = std::min(rows, begin + kBlock);
-    for (std::size_t feature = 0; feature < features; ++feature) {
-      const float *column = dataset.column(feature);
-      for (std::size_t row = begin; row < end; ++row) {
-        matrix[row * features + feature] = column[row];
-      }
-    }
-  };
-  parallelFor(pool, blocks, transpose);
-}
-
 } // namespace dt
