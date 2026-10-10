@@ -28,11 +28,16 @@ namespace dt {
 // into the other side, where their children continue (ping-pong). That moves
 // every entry once, which matters because big nodes are bound by memory
 // bandwidth; in place, the rows of one child are also moved through a buffer.
+//
+// With `other`, `leftBits` (a bit per row id) says which rows of a node that
+// is partitioned out of place go left: 1/8 of a byte per row, so it stays in
+// the caches while the columns stream through them.
 struct Columns {
   Entry *data = nullptr;
   std::size_t stride = 0;
   Entry *scratch = nullptr;
   Entry *other = nullptr;
+  std::uint64_t *leftBits = nullptr;
 
   Entry *feature(std::size_t f, int side = 0) const { return (side ? other : data) + f * stride; }
 };
@@ -151,10 +156,12 @@ private:
                 std::uint32_t leftCount, Keep keep, ChildSweep *const *children);
   template <Criterion Crit, bool HasGap>
   void partitionAndSweep(const Entry *source, Entry *target, std::uint32_t count,
-                         std::uint32_t leftCount, Keep keep, bool isWinner,
-                         std::uint32_t feature, ChildSweep *const *children) const;
+                         std::uint32_t leftCount, Keep keep, const std::uint64_t *leftBits,
+                         bool isWinner, std::uint32_t feature,
+                         ChildSweep *const *children) const;
   void partitionFeatureOutOfPlace(const Entry *source, Entry *target, std::uint32_t count,
-                                  std::uint32_t leftCount, Keep keep) const;
+                                  std::uint32_t leftCount, Keep keep,
+                                  const std::uint64_t *leftBits) const;
   void partitionFeature(Entry *entries, std::uint32_t count, std::uint32_t leftCount,
                         Entry *buffer, Keep keep) const;
   void partitionFeatureInBlocks(Entry *entries, std::uint32_t count, std::uint32_t leftCount,

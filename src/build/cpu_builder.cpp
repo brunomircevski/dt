@@ -1,6 +1,7 @@
 #include "build/cpu_builder.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cstring>
 #include <limits>
@@ -316,11 +317,24 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
     return;
   }
   const std::size_t blocks = wide ? 4 * (pool_->workerCount() + 1) : 1;
+  const bool outOfPlace = columns.other && count >= kOutOfPlaceRows;
   parallelFor(widePool, blocks, [&](std::size_t block) {
     const std::uint32_t end = static_cast<std::uint32_t>(std::size_t{count} * (block + 1) / blocks);
     for (std::uint32_t index = static_cast<std::uint32_t>(std::size_t{count} * block / blocks);
          index < end; ++index) {
-      goesLeft_[codec_.row(winner[index].packed)] = index < leftCount;
+      const std::uint32_t row = codec_.row(winner[index].packed);
+      if (outOfPlace) {
+        // Atomic: the rows of other nodes share the words.
+        std::atomic_ref<std::uint64_t> word(columns.leftBits[row >> 6]);
+        const std::uint64_t bit = std::uint64_t{1} << (row & 63);
+        if (index < leftCount) {
+          word.fetch_or(bit, std::memory_order_relaxed);
+        } else {
+          word.fetch_and(~bit, std::memory_order_relaxed);
+        }
+      } else {
+        goesLeft_[row] = index < leftCount;
+      }
     }
   });
   const Keep keep = leftTerminal ? Keep::Right : rightTerminal ? Keep::Left : Keep::Both;
@@ -391,16 +405,19 @@ int CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int w
                   if (sweep) {
                     // CART: Gini, values must differ; C4.5: entropy, gap.
                     if (gini) {
-                      partitionAndSweep<Criterion::Gini, false>(
-                          source, target, count, leftCount, keep, isWinner, feature, children);
+                      partitionAndSweep<Criterion::Gini, false>(source, target, count,
+                                                                leftCount, keep, columns.leftBits,
+                                                                isWinner, feature, children);
                     } else {
-                      partitionAndSweep<Criterion::Entropy, true>(
-                          source, target, count, leftCount, keep, isWinner, feature, children);
+                      partitionAndSweep<Criterion::Entropy, true>(source, target, count,
+                                                                  leftCount, keep, columns.leftBits,
+                                                                  isWinner, feature, children);
                     }
                   } else if (isWinner) {
                     std::memcpy(target + from, source + from, (to_end - from) * sizeof(Entry));
                   } else {
-                    partitionFeatureOutOfPlace(source, target, count, leftCount, keep);
+                    partitionFeatureOutOfPlace(source, target, count, leftCount, keep,
+                                               columns.leftBits);
                   }
                 });
     return to;
@@ -463,7 +480,7 @@ int CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int w
 // lines first, no eviction of data still needed).
 void CpuTreeBuilder::partitionFeatureOutOfPlace(const Entry *source, Entry *target,
                                                 std::uint32_t count, std::uint32_t leftCount,
-                                                Keep keep) const {
+                                                Keep keep, const std::uint64_t *leftBits) const {
   auto store = [](Entry *at, Entry entry) {
 #if defined(__SSE2__)
     _mm_stream_si64(reinterpret_cast<long long *>(at), std::bit_cast<long long>(entry));
@@ -472,24 +489,27 @@ void CpuTreeBuilder::partitionFeatureOutOfPlace(const Entry *source, Entry *targ
 #endif
   };
   const EntryCodec codec = codec_;
-  const std::uint8_t *goesLeft = goesLeft_;
+  auto goesLeft = [leftBits, codec](Entry entry) {
+    const std::uint32_t row = codec.row(entry.packed);
+    return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
+  };
   if (keep == Keep::Both) {
     std::uint32_t left = 0;
     std::uint32_t right = leftCount;
     for (std::uint32_t index = 0; index < count; ++index) {
       const Entry entry = source[index];
-      const std::uint32_t isLeft = goesLeft[codec.row(entry.packed)];
+      const std::uint32_t isLeft = goesLeft(entry);
       store(target + (isLeft ? left : right), entry);
       left += isLeft;
       right += 1 - isLeft;
     }
   } else {
     // One child: usually a lopsided split, so the branch is predictable.
-    const std::uint8_t wanted = keep == Keep::Left;
+    const std::uint32_t wanted = keep == Keep::Left;
     Entry *write = target + (keep == Keep::Left ? 0 : leftCount);
     for (std::uint32_t index = 0; index < count; ++index) {
       const Entry entry = source[index];
-      if (goesLeft[codec.row(entry.packed)] == wanted) {
+      if (goesLeft(entry) == wanted) {
         store(write++, entry);
       }
     }
@@ -685,6 +705,14 @@ std::uint32_t skippableSteps(double bestGain, double gain, double margin, double
 // included), which `boundSlack` covers twice.
 constexpr std::uint32_t kBoundBlock = 16;
 constexpr std::uint32_t kBoundedSweepRows = 64;
+// Parallel Gini sweeps of nodes with at least this many rows divide instead
+// of looking up 1/n in the count tables: those are as big as the training set,
+// and with many threads reading them costs more memory bandwidth than the
+// entries (on one thread the lookups are faster).
+constexpr std::uint32_t kDividingSweepRows = 1u << 16;
+// After a skipped block, further cuts are skipped by the per-row bound
+// (maxGainStep) if that covers at least this many.
+constexpr std::uint32_t kMinFurtherSkip = 32;
 
 } // namespace
 
@@ -747,10 +775,12 @@ struct SweepSetup {
   const double *inverse = nullptr;
   double gap = 0.0;                // SplitRules::minValueGap()
   LogTable logs;
+  bool divide = false;             // see kDividingSweepRows
 };
 
 SweepSetup CpuTreeBuilder::sweepSetup() const {
-  return {codec_, tables_.xlog, tables_.inverse, rules_.minValueGap(), rules_.logTable()};
+  return {codec_,           tables_.xlog,      tables_.inverse, rules_.minValueGap(),
+          rules_.logTable(), pool_ != nullptr};
 }
 
 template <Criterion Crit, bool HasGap> class TwoClassSweep {
@@ -804,6 +834,7 @@ public:
     const double inverseRows = inverseRows_;
     const double giniBase = giniBase_;
     const double parentWeighted = parentWeighted_;
+    const double rowsPerGain = rows_ / maxGainStep<Crit>(count);
     const std::uint32_t total0 = total_[0];
     const std::uint32_t total1 = total_[1];
     const double total0Value = total0;
@@ -819,6 +850,7 @@ public:
       }
     };
     // The estimate at a cut with left class counts (left0, left1).
+    const bool divide = setup_.divide && count >= kDividingSweepRows;
     auto estimateAt = [&](std::uint32_t left0, std::uint32_t left1) {
       const std::uint32_t leftCount = left0 + left1;
       if constexpr (Crit == Criterion::Gini) {
@@ -826,8 +858,20 @@ public:
         const double l1 = left1;
         const double r0 = total0Value - l0;
         const double r1 = total1Value - l1;
-        return (giniBase + (l0 * l0 + l1 * l1) * inverse[leftCount] +
-                (r0 * r0 + r1 * r1) * inverse[count - leftCount]) *
+        const double leftSquares = l0 * l0 + l1 * l1;
+        const double rightSquares = r0 * r0 + r1 * r1;
+        if (divide) {
+          // S_L / n_L + S_R / n_R with one division and no table (big
+          // tables cost memory bandwidth): the squares and n_L * n_R are
+          // exact, so this is within a few roundings too.
+          const double leftRows = leftCount;
+          const double rightRows = count - leftCount;
+          return (giniBase + (leftSquares * rightRows + rightSquares * leftRows) /
+                                 (leftRows * rightRows)) *
+                 inverseRows;
+        }
+        return (giniBase + leftSquares * inverse[leftCount] +
+                rightSquares * inverse[count - leftCount]) *
                inverseRows;
       } else {
         const double leftWeighted = xlog[leftCount] - (xlog[left0] + xlog[left1]);
@@ -877,15 +921,25 @@ public:
           skip = upper <= bestGain + kTieEps;
         }
         if (skip) {
+          // Far below the best cut, the cuts after the block cannot reach it
+          // either (the gain grows by at most maxGainStep / n per row): they
+          // are skipped too, without the bound's table lookups.
+          const std::uint32_t limit = (available < count ? available - 1 : lastCut + 1) - blockEnd;
+          const std::uint32_t further =
+              skippableSteps(bestGain, upper, kMargin, rowsPerGain, limit);
+          const std::uint32_t skipEnd = blockEnd + (further >= kMinFurtherSkip ? further : 0);
+          for (std::uint32_t index = blockEnd - 1; index + 1 < skipEnd; ++index) {
+            blockOnes += codec.cls(entries[index].packed);
+          }
           ones += blockOnes;
           if constexpr (HasGap) { // C4.5 counts the thresholds (MDL cost)
             std::uint32_t blockTries = 0;
-            for (std::uint32_t index = cut; index < blockEnd; ++index) {
+            for (std::uint32_t index = cut; index < skipEnd; ++index) {
               blockTries += distinct(entries[index - 1].value, entries[index].value);
             }
             tries += blockTries;
           }
-          cut = blockEnd;
+          cut = skipEnd;
           continue;
         }
       }
@@ -1244,7 +1298,8 @@ CutCandidate CpuTreeBuilder::scanFeatureK(const Entry *entries, std::uint32_t co
 // copied, and the sweeps read it in place.
 template <Criterion Crit, bool HasGap>
 void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::uint32_t count,
-                                       std::uint32_t leftCount, Keep keep, bool isWinner,
+                                       std::uint32_t leftCount, Keep keep,
+                                       const std::uint64_t *leftBits, bool isWinner,
                                        std::uint32_t feature,
                                        ChildSweep *const *children) const {
   using Sweep = TwoClassSweep<Crit, HasGap>;
@@ -1320,13 +1375,16 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
       stage.base = from;
     };
     const EntryCodec codec = codec_;
-    const std::uint8_t *goesLeft = goesLeft_;
+    auto goesLeft = [leftBits, codec](Entry entry) {
+      const std::uint32_t row = codec.row(entry.packed);
+      return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
+    };
     if (keep == Keep::Both) {
       Stage &left = stages[0];
       Stage &right = stages[1];
       for (std::uint32_t index = 0; index < count; ++index) {
         const Entry entry = source[index];
-        const std::uint32_t isLeft = goesLeft[codec.row(entry.packed)];
+        const std::uint32_t isLeft = goesLeft(entry);
         left.data[left.size] = entry;
         right.data[right.size] = entry;
         left.size += isLeft;
@@ -1343,11 +1401,11 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
     } else {
       // One child: usually a lopsided split, so the branch is predictable.
       const int child = keep == Keep::Left ? 0 : 1;
-      const std::uint8_t wanted = keep == Keep::Left;
+      const std::uint32_t wanted = keep == Keep::Left;
       Stage &stage = stages[child];
       for (std::uint32_t index = 0; index < count; ++index) {
         const Entry entry = source[index];
-        if (goesLeft[codec.row(entry.packed)] == wanted) {
+        if (goesLeft(entry) == wanted) {
           stage.data[stage.size++] = entry;
           if (stage.size == kCapacity) {
             flush(child);

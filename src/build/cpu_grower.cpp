@@ -24,6 +24,7 @@ public:
     }
     if (pool_) {
       other_.reset(new Entry[features_ * rows_]);
+      leftBits_.reset(new std::uint64_t[rows_ / 64 + 1]);
     }
   }
 
@@ -59,7 +60,8 @@ public:
     std::iota(root.features.begin(), root.features.end(), 0u);
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
                            options_.parallel, countTables());
-    builder.grow(Columns{work_.get(), count, scratch_.get(), other_.get()}, std::move(root));
+    builder.grow(Columns{work_.get(), count, scratch_.get(), other_.get(), leftBits_.get()},
+                 std::move(root));
     if (pool_) {
       pool_->waitIdle();
     }
@@ -143,6 +145,7 @@ private:
   std::unique_ptr<Entry[]> sorted_; // presorted columns of all rows (reusable only)
   std::unique_ptr<Entry[]> work_;   // columns being partitioned by the builder
   std::unique_ptr<Entry[]> other_;  // parallel: their second copy (Columns::other)
+  std::unique_ptr<std::uint64_t[]> leftBits_; // with other_: Columns::leftBits
   std::unique_ptr<Entry[]> scratch_;
   std::unique_ptr<std::uint8_t[]> goesLeft_;
   std::vector<double> countXlog_; // see countTables()
