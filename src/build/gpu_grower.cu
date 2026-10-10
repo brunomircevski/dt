@@ -14,7 +14,8 @@
 //    only nodes that search for a split enter a level. Per level:
 //      0. segmentConstant  segments whose values are all equal (they are
 //                          skipped by every kernel, and dropped below)
-//      1. tileHistogram    class counts of every tile
+//      1. tileHistogram    class counts of every tile (and its cuts); below
+//                          the root, the parent level's partition counts them
 //      2. segmentPrefix    per segment: exclusive scan over its tiles, giving
 //                          each tile the class counts left of it
 //      3. tileEstimate / segmentMax / tileExact
@@ -883,14 +884,54 @@ __global__ void __launch_bounds__(kThreads)
 // counter (not by blockIdx), so a tile only ever waits for tiles that have
 // started. The tile is staged in shared memory, left rows first, so that both
 // runs are written with consecutive stores.
-constexpr unsigned long long kTileLefts = 1ull << 32; // status: left rows of the tile
+//
+// The partition also does step 1 of the next level for the children that
+// stay on the GPU: it knows where every entry lands in the child's column, so
+// it adds up the class histogram and the cuts ("tries") of every next-level
+// tile, instead of a tileHistogram pass over them. A cut at the start of a
+// run lies between two runs; the tiles also publish the last value of each
+// side, so the walk back finds the entry before the run too.
+//
+// Tile states start at zero. Every word carries its own flag, so a tile can
+// wait for any of them, in any order, with no memory fences.
+constexpr unsigned long long kTileLefts = 1ull << 32; // left rows of the tile
 constexpr unsigned long long kTileTotal = 2ull << 32; // ... of the segment up to the tile
+constexpr unsigned long long kValue = 1ull << 32;     // a value (float bits)
+constexpr unsigned long long kNoValue = 2ull << 32;   // no row of that side
+struct TileState {
+  unsigned long long lefts;       // kTileLefts or kTileTotal | count
+  unsigned long long last[2];     // last value of each side in the tile (if any)
+  unsigned long long lastUpTo[2]; // ... in the segment up to the tile
+};
+constexpr std::uint32_t kNoTarget = 0xFFFFFFFFu;
+
+// Where the partition of a segment sends its runs (side 0: left, 1: right):
+// the next-level segment of the child for the same feature.
+struct PartitionTarget {
+  std::uint32_t firstTile[2]; // its first tile, kNoTarget if the child leaves the GPU
+  std::uint32_t count[2];     // the child's rows
+  std::uint32_t minChild[2];  // and its NodeDesc::minChild
+};
+
+__device__ __forceinline__ unsigned long long waitFor(const unsigned long long *word) {
+  unsigned long long value;
+  do {
+    value = *reinterpret_cast<const volatile unsigned long long *>(word);
+  } while (value == 0);
+  return value;
+}
+
+__device__ __forceinline__ float valueOf(unsigned long long word) {
+  return __uint_as_float(static_cast<std::uint32_t>(word));
+}
 
 __global__ void __launch_bounds__(kThreads)
     partitionKernel(const Entry *src, Entry *dst, const Segment *segments,
                     const std::uint32_t *tileSegment, const std::uint8_t *constant,
-                    const NodeDesc *nodes, EntryCodec codec, const std::uint8_t *goesLeft,
-                    unsigned long long *tileStatus, unsigned int *tileCounter) {
+                    const NodeDesc *nodes, ScanParams params, const std::uint8_t *goesLeft,
+                    const PartitionTarget *targets, TileState *tileStates,
+                    unsigned int *tileCounter, std::uint32_t *nextHist,
+                    std::uint32_t *nextTries) {
   using Load = cub::BlockLoad<Entry, kThreads, kItems, cub::BLOCK_LOAD_WARP_TRANSPOSE>;
   using Scan = cub::BlockScan<std::uint32_t, kThreads>;
   __shared__ union {
@@ -898,7 +939,10 @@ __global__ void __launch_bounds__(kThreads)
     typename Scan::TempStorage scan;
     Entry staged[kTile];
   } storage;
+  __shared__ std::uint32_t histogram[2][2][kMaxGpuClasses]; // [side][next tile][class]
+  __shared__ std::uint32_t tries[2][2];
   __shared__ std::uint32_t shared;
+  __shared__ float previousLast[2]; // last value of each side before this tile
 
   if (threadIdx.x == 0) {
     shared = atomicAdd(tileCounter, 1u);
@@ -911,9 +955,17 @@ __global__ void __launch_bounds__(kThreads)
     return;
   }
   const std::uint32_t leftCount = nodes[segment.node].leftCount;
+  const PartitionTarget target = targets[segmentIndex];
+  const int classCount = params.classCount;
   std::uint32_t start;
   std::uint32_t length;
   tileRange(segment, tile, start, length);
+  for (std::uint32_t index = threadIdx.x; index < 4 * kMaxGpuClasses; index += kThreads) {
+    (&histogram[0][0][0])[index] = 0;
+  }
+  if (threadIdx.x < 4) {
+    (&tries[0][0])[threadIdx.x] = 0;
+  }
 
   Entry items[kItems];
   Load(storage.load).Load(src + segment.base + start, items, length);
@@ -922,37 +974,98 @@ __global__ void __launch_bounds__(kThreads)
   std::uint32_t lefts = 0;
 #pragma unroll
   for (int j = 0; j < kItems; ++j) {
-    left[j] = first + j < length && goesLeft[codec.row(items[j].packed)];
+    left[j] = first + j < length && goesLeft[params.codec.row(items[j].packed)];
     lefts += left[j];
   }
   __syncthreads(); // the scan reuses the load's shared memory (and `shared`)
   std::uint32_t leftsBefore; // in the tile, before my first entry
   std::uint32_t tileLefts;
   Scan(storage.scan).ExclusiveSum(lefts, leftsBefore, tileLefts);
+  const std::uint32_t tileRights = length - tileLefts;
+  const bool firstTile = tile == segment.firstTile;
+  TileState *state = tileStates + tile;
+
+  // Publish: the count (thread 0), then the last value of each side (the
+  // thread that holds it).
+  if (threadIdx.x == 0) {
+    atomicExch(&state->lefts, (firstTile ? kTileTotal : kTileLefts) | tileLefts);
+    if (firstTile && tileLefts == 0) {
+      atomicExch(&state->lastUpTo[0], kNoValue);
+    }
+    if (firstTile && tileRights == 0) {
+      atomicExch(&state->lastUpTo[1], kNoValue);
+    }
+  }
+  const std::uint32_t valid = first < length ? min(kItems, length - first) : 0;
+  const std::uint32_t rights = valid - lefts;
+  const bool lastLeft = lefts > 0 && leftsBefore + lefts == tileLefts;
+  const bool lastRight = rights > 0 && (first - leftsBefore) + rights == tileRights;
+  if (lastLeft || lastRight) {
+    float values[2] = {0.0f, 0.0f};
+#pragma unroll
+    for (int j = 0; j < kItems; ++j) {
+      if (static_cast<std::uint32_t>(j) < valid) {
+        values[left[j] ? 0 : 1] = items[j].value;
+      }
+    }
+#pragma unroll
+    for (int side = 0; side < 2; ++side) {
+      if (side == 0 ? lastLeft : lastRight) {
+        const unsigned long long word = kValue | __float_as_uint(values[side]);
+        atomicExch(&state->last[side], word);
+        if (firstTile) {
+          atomicExch(&state->lastUpTo[side], word);
+        }
+      }
+    }
+  }
 
   if (threadIdx.x == 0) {
     std::uint32_t before = 0; // left rows of the segment before this tile
-    if (tile == segment.firstTile) {
-      atomicExch(tileStatus + tile, kTileTotal | tileLefts);
-    } else {
-      atomicExch(tileStatus + tile, kTileLefts | tileLefts);
+    float last[2] = {0.0f, 0.0f};
+    bool have[2] = {false, false};
+    if (!firstTile) {
+      bool found[2] = {false, false};
+      // Earlier tiles of the segment are full.
       for (std::uint32_t previous = tile - 1;; --previous) {
-        unsigned long long status;
-        do {
-          status = *reinterpret_cast<volatile unsigned long long *>(tileStatus + previous);
-        } while (status == 0);
-        before += static_cast<std::uint32_t>(status);
-        if (status >= kTileTotal) {
+        const TileState *other = tileStates + previous;
+        const unsigned long long status = waitFor(&other->lefts);
+        const std::uint32_t otherLefts = static_cast<std::uint32_t>(status);
+        before += otherLefts;
+        const bool total = status >= kTileTotal;
+#pragma unroll
+        for (int side = 0; side < 2; ++side) {
+          if (found[side]) {
+            continue;
+          }
+          if (total) {
+            const unsigned long long word = waitFor(&other->lastUpTo[side]);
+            have[side] = word < kNoValue;
+            last[side] = valueOf(word);
+          } else if (side == 0 ? otherLefts > 0 : otherLefts < kTile) {
+            last[side] = valueOf(waitFor(&other->last[side]));
+            have[side] = found[side] = true;
+          }
+        }
+        if (total) {
           break;
         }
       }
-      atomicExch(tileStatus + tile, kTileTotal | (before + tileLefts));
+#pragma unroll
+      for (int side = 0; side < 2; ++side) {
+        const unsigned long long word = (side == 0 ? tileLefts : tileRights) > 0
+                                            ? waitFor(&state->last[side])
+                                        : have[side] ? kValue | __float_as_uint(last[side])
+                                                     : kNoValue;
+        atomicExch(&state->lastUpTo[side], word);
+      }
+      atomicExch(&state->lefts, kTileTotal | (before + tileLefts));
     }
     shared = before;
+    previousLast[0] = last[0];
+    previousLast[1] = last[1];
   }
-  __syncthreads(); // `shared`, and the staging reuses the scan's shared memory
-  const std::uint32_t segmentLeftsBefore = shared;
-
+  __syncthreads(); // `shared`; the staging reuses the scan's shared memory
 #pragma unroll
   for (int j = 0; j < kItems; ++j) {
     const std::uint32_t index = first + j;
@@ -962,11 +1075,68 @@ __global__ void __launch_bounds__(kThreads)
     }
   }
   __syncthreads();
-  Entry *to = dst + segment.base;
+  const std::uint32_t segmentLeftsBefore = shared;
   const std::uint32_t rightsBefore = start - segmentLeftsBefore; // in the segment
-  for (std::uint32_t index = threadIdx.x; index < length; index += kThreads) {
-    to[index < tileLefts ? segmentLeftsBefore + index
-                         : leftCount + rightsBefore + (index - tileLefts)] = storage.staged[index];
+
+  // Write both runs; count the next level's classes and cuts on the way. The
+  // entry at `index` is at `position` of its child's column.
+  Entry *to = dst + segment.base;
+  const std::uint32_t runStart[2] = {segmentLeftsBefore, rightsBefore};
+  const unsigned full = 0xFFFFFFFFu;
+  const int lane = threadIdx.x & 31;
+  for (std::uint32_t base = threadIdx.x - lane; base < length; base += kThreads) {
+    const std::uint32_t index = base + lane;
+    const bool inTile = index < length;
+    const int side = index < tileLefts ? 0 : 1;
+    const std::uint32_t run = side == 0 ? index : index - tileLefts;
+    const std::uint32_t position = runStart[side] + run;
+    Entry entry{0.0f, 0u};
+    if (inTile) {
+      entry = storage.staged[index];
+      to[side == 0 ? position : leftCount + position] = entry;
+    }
+    const bool counted = inTile && target.firstTile[side] != kNoTarget;
+    const int nextTile = static_cast<int>(position / kTile - runStart[side] / kTile);
+    const std::uint32_t key =
+        counted ? static_cast<std::uint32_t>((side * 2 + nextTile) * kMaxGpuClasses) +
+                      params.codec.cls(entry.packed)
+                : 0xFFFFFFFFu;
+    const unsigned peers = __match_any_sync(full, key);
+    if (key != 0xFFFFFFFFu && lane == __ffs(peers) - 1) {
+      atomicAdd(&histogram[0][0][0] + key, static_cast<std::uint32_t>(__popc(peers)));
+    }
+    bool cut = false;
+    if (counted && position >= 1 && position >= target.minChild[side] &&
+        position + target.minChild[side] <= target.count[side]) {
+      const float previous = run > 0 ? storage.staged[index - 1].value : previousLast[side];
+      cut = isCut(previous, entry.value, params.minGap);
+    }
+#pragma unroll
+    for (int slot = 0; slot < 4; ++slot) {
+      const unsigned cuts = __ballot_sync(full, cut && side * 2 + nextTile == slot);
+      if (lane == 0 && cuts != 0) {
+        atomicAdd(&tries[0][0] + slot, static_cast<std::uint32_t>(__popc(cuts)));
+      }
+    }
+  }
+  __syncthreads();
+  for (std::uint32_t index = threadIdx.x; index < 4u * classCount; index += kThreads) {
+    const int side = index / (2 * classCount);
+    const int nextTile = (index / classCount) % 2;
+    const int k = index % classCount;
+    const std::uint32_t count = histogram[side][nextTile][k];
+    if (count > 0) {
+      const std::size_t at = target.firstTile[side] + runStart[side] / kTile + nextTile;
+      atomicAdd(nextHist + at * classCount + k, count);
+    }
+  }
+  if (threadIdx.x < 4) {
+    const int side = threadIdx.x / 2;
+    const int nextTile = threadIdx.x % 2;
+    const std::uint32_t count = tries[side][nextTile];
+    if (count > 0) {
+      atomicAdd(nextTries + target.firstTile[side] + runStart[side] / kTile + nextTile, count);
+    }
   }
 }
 
@@ -1385,6 +1555,7 @@ private:
     }
     std::vector<LevelNode> level;
     level.push_back(std::move(root));
+    histogramReady_ = false;
     for (int depth = 0; !level.empty(); ++depth) {
       double seconds = 0.0;
       std::size_t rows = 0;
@@ -1556,7 +1727,7 @@ private:
       tileLower_.reserve(tiles);
       segmentLower_.reserve(segmentCount);
     }
-    tileStatus_.reserve(static_cast<std::size_t>(tiles) + 1);
+    tileStates_.reserve(static_cast<std::size_t>(tiles) + 1);
     segmentBest_.reserve(segmentCount);
     segmentLeft_.reserve(segmentCount * classes);
 
@@ -1568,7 +1739,10 @@ private:
                                          params_.minGap, constant_.get());
     });
     CUDA_CHECK(cudaGetLastError());
-    dispatchHistogram(tiles);
+    if (!histogramReady_) { // else counted by the previous level's partition
+      dispatchHistogram(tiles);
+    }
+    histogramReady_ = false;
     profile_.run("segmentPrefix", stream_, [&]() {
       segmentPrefixKernel<<<static_cast<unsigned>(segmentCount), kThreads, 0, stream_>>>(
           tileHist_.get(), classCount_, segments_.get(), constant_.get());
@@ -1585,6 +1759,7 @@ private:
     // Split decisions. Children that are leaves are finished right here.
     bool anyPartition = false;
     std::vector<LevelNode> next;
+    std::vector<std::pair<std::size_t, int>> nextParent; // (node, side) of each of `next`
     std::vector<LevelNode> toCpu;
     thread_local std::vector<CutCandidate> cuts;
     for (std::size_t n = 0; n < nodeCount; ++n) {
@@ -1638,7 +1813,12 @@ private:
         }
         nodes[n].partition = 1;
         LevelNode child{left ? leftId : rightId, begin, count, depth, features};
-        (count >= options_.gpu.minRows ? next : toCpu).push_back(std::move(child));
+        if (count >= options_.gpu.minRows) {
+          next.push_back(std::move(child));
+          nextParent.emplace_back(n, left ? 0 : 1);
+        } else {
+          toCpu.push_back(std::move(child));
+        }
       }
       anyPartition = anyPartition || nodes[n].partition;
     }
@@ -1647,8 +1827,38 @@ private:
     }
 
     // 5: stable partition of the non-constant columns of split nodes into the
-    //    other buffer.
+    //    other buffer. It also counts the class histogram and the cuts of
+    //    every tile of the next level, laid out as the next processLevel()
+    //    lays it out (children in order, then their features).
     upload(nodes_, nodes);
+    std::vector<PartitionTarget> targets(segmentCount,
+                                         PartitionTarget{{kNoTarget, kNoTarget}, {0, 0}, {0, 0}});
+    std::size_t nextTiles = 0;
+    for (std::size_t c = 0; c < next.size(); ++c) {
+      const LevelNode &child = next[c];
+      const auto [n, side] = nextParent[c];
+      const std::uint32_t tilesPerSegment = (child.count + kTile - 1) / kTile;
+      std::size_t s = firstSegment[n];
+      for (const std::uint32_t f : child.features) { // in the order of n's segments
+        while (segments[s].feature != f) {
+          ++s;
+        }
+        targets[s].firstTile[side] = static_cast<std::uint32_t>(nextTiles);
+        targets[s].count[side] = child.count;
+        targets[s].minChild[side] = rules_->minChildRows(child.count);
+        nextTiles += tilesPerSegment;
+      }
+    }
+    upload(partitionTargets_, targets);
+    if (nextTiles > 0) {
+      // This level is done with them (the kernels are ordered on the stream).
+      tileHist_.reserve(nextTiles * classes);
+      tileTries_.reserve(nextTiles);
+      CUDA_CHECK(cudaMemsetAsync(tileHist_.get(), 0, nextTiles * classes * sizeof(std::uint32_t),
+                                 stream_));
+      CUDA_CHECK(cudaMemsetAsync(tileTries_.get(), 0, nextTiles * sizeof(std::uint32_t), stream_));
+      histogramReady_ = true;
+    }
     const int other = 1 - current_;
     profile_.run("markGoesLeft", stream_, [&]() {
       markGoesLeftKernel<<<tiles, kThreads, 0, stream_>>>(entries_[current_].get(),
@@ -1658,12 +1868,12 @@ private:
     CUDA_CHECK(cudaGetLastError());
     profile_.run("partition", stream_, [&]() {
       // Tile states and the tile counter start at zero.
-      CUDA_CHECK(cudaMemsetAsync(tileStatus_.get(), 0, (tiles + 1) * sizeof(unsigned long long),
-                                 stream_));
+      CUDA_CHECK(cudaMemsetAsync(tileStates_.get(), 0, (tiles + 1) * sizeof(TileState), stream_));
       partitionKernel<<<tiles, kThreads, 0, stream_>>>(
           entries_[current_].get(), entries_[other].get(), segments_.get(), tileSegment_.get(),
-          constant_.get(), nodes_.get(), codec_, goesLeft_.get(), tileStatus_.get(),
-          reinterpret_cast<unsigned int *>(tileStatus_.get() + tiles));
+          constant_.get(), nodes_.get(), params_, goesLeft_.get(), partitionTargets_.get(),
+          tileStates_.get(), reinterpret_cast<unsigned int *>(tileStates_.get() + tiles),
+          tileHist_.get(), tileTries_.get());
     });
     CUDA_CHECK(cudaGetLastError());
 
@@ -1789,7 +1999,9 @@ private:
   DeviceArray<double> tileLower_;
   DeviceArray<double> segmentLower_;
   DeviceArray<std::uint32_t> tileTries_;
-  DeviceArray<unsigned long long> tileStatus_; // partition: per tile, then the counter
+  DeviceArray<TileState> tileStates_; // partition: per tile, then the tile counter
+  DeviceArray<PartitionTarget> partitionTargets_;
+  bool histogramReady_ = false; // tileHist_ / tileTries_ hold the level's step 1
   DeviceArray<CutCandidate> segmentBest_;
   DeviceArray<std::uint32_t> segmentLeft_;
   DeviceArray<CopyJob> copyJobs_;
