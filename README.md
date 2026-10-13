@@ -92,7 +92,7 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--alpha X` | 0.00001 | Prune with this fixed alpha (one tree on all rows, like scikit-learn's `ccp_alpha` and rpart's `cp`). Larger prunes more: each leaf must classify about X × rows more training rows correctly to be kept (covertype: `1e-6` 44k nodes, `1e-5` 10k, `1e-4` 0.9k, `1e-3` 37). |
+| `--alpha X` | 0.00001 | Prune with this fixed alpha (one tree on all rows, as with scikit-learn's `ccp_alpha` and rpart's `cp`, but not the same numbers: alpha here weighs the misclassification rate as in Breiman et al., `ccp_alpha` the Gini impurity, and `cp` = alpha / root error rate). Larger prunes more: each leaf must classify about X × rows more training rows correctly to be kept (covertype: `1e-6` 44k nodes, `1e-5` 10k, `1e-4` 0.9k, `1e-3` 37). |
 | `--cv K` | (off) | Choose alpha by K-fold cross-validation instead: the tree is grown on all rows, plus K fold trees. |
 
 **C4.5 post-pruning**
@@ -190,17 +190,22 @@ bench/setup.sh && bench/.venv/bin/python bench/run.py --dry-run          # CPU b
 ```
 
 `tests/golden/` holds the trees of the version that was checked node by node
-against scikit-learn and Quinlan's C4.5 (iris and diabetes are in
-`tests/data/`; covertype and SUSY samples are used when `datasets/` has them).
+against scikit-learn and Quinlan's C4.5 (iris, diabetes and `zero_gain`, a
+covertype node C4.5 must not split, are in `tests/data/`; covertype and SUSY
+samples are used when `datasets/` has them).
 
 The original C4.5 (Release 8) source is available from Ross Quinlan's site
-(`c4.5r8.tar.gz`). With a modern gcc, build it from `R8/Src` with the standard
-headers forced in (the K&R code relies on implicit declarations, which silently
-breaks `atof` and `-c`):
+(`http://www.rulequest.com/Personal/c4.5r8.tar.gz`). With a modern gcc, build
+it from `R8/Src` with the standard headers forced in (the K&R code relies on
+implicit declarations, which silently breaks `atof` and `-c`):
 
 ```bash
 gcc -std=gnu89 -O2 -w -fcommon -Dcfree=free -include stdlib.h -include math.h -include string.h -include stdio.h -o c4.5 c4.5.c besttree.c build.c info.c discr.c contin.c subset.c prune.c stats.c st-thresh.c classify.c confmat.c sort.c getnames.c getdata.c trees.c getopt.c header.c -lm
 ```
+
+c4.5 keeps the file stem of `-f` in a 100-character buffer: run it from the
+data's directory with a short stem (a longer one ends in "stack smashing
+detected" and an incomplete `.tree` file).
 
 ## Code map
 

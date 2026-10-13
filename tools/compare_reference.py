@@ -191,12 +191,14 @@ def c45_trees(features, X, y, c45_binary, workdir, extra):
     with open(stem + ".data", "w") as data:
         for row, label in zip(X, y):
             data.write(",".join(repr(float(value)) for value in row) + f",{label}\n")
-    command = [c45_binary, "-f", stem]
+    # c4.5 copies the file stem into a char[100] (trees.c, getnames.c): a long
+    # TMPDIR overflows it ("stack smashing detected"), so pass it relative.
+    command = [os.path.abspath(c45_binary), "-f", os.path.basename(stem)]
     if "--min-leaf" in extra:
         command += ["-m", extra[extra.index("--min-leaf") + 1]]
     if "--cf" in extra:
         command += ["-c", f"{float(extra[extra.index('--cf') + 1]) * 100:g}"]
-    subprocess.run(command, capture_output=True, text=True, check=True)
+    subprocess.run(command, capture_output=True, text=True, check=True, cwd=workdir)
     classes = sorted(set(y))
     return (read_c45_tree(stem + ".unpruned", features, classes),
             read_c45_tree(stem + ".tree", features, classes))

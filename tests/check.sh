@@ -8,8 +8,11 @@
 #   TREE_BIN=./tree_cpu tests/check.sh
 #   tests/check.sh --update           # rewrite the golden files (serial backend)
 #
-# iris and diabetes are part of the repository; covertype and supersymmetry
-# samples are tested when datasets/ has them.
+# iris, diabetes and zero_gain are part of the repository; covertype and
+# supersymmetry samples are tested when datasets/ has them. zero_gain is one
+# node of a covertype C4.5 tree (24:3 rows) whose only allowed cut keeps the
+# class proportions (16:2 and 8:1): its gain is exactly 0, so C4.5 must make
+# a leaf, even though rounding computes the gain as +4e-16.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -20,7 +23,7 @@ UPDATE=0
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-datasets=(tests/data/iris.csv tests/data/diabetes.csv)
+datasets=(tests/data/iris.csv tests/data/diabetes.csv tests/data/zero_gain.csv)
 for name in covertype supersymmetry; do
   if [[ -f datasets/$name.csv ]]; then
     head -n 20001 "datasets/$name.csv" > "$WORK/${name}_20k.csv"

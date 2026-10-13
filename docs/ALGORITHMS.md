@@ -57,7 +57,9 @@ training misclassification rate and `|T|` its number of leaves. For a given
 
 * By default `α` is fixed (`--alpha X`, default 0.00001), as in scikit-learn
   and rpart: one tree, grown on all rows. `α` is a rate, so it does not
-  depend on the dataset size. `--no-prune` keeps the maximal tree.
+  depend on the dataset size. `--no-prune` keeps the maximal tree. The values
+  are not interchangeable with theirs: scikit-learn's `ccp_alpha` weighs the
+  leaves' Gini impurity instead of `R(T)`, and rpart's `cp` is `α / R(root)`.
 * `--cv K` chooses `α` by Breiman's K-fold cross-validation instead: the tree
   is grown on all rows, a tree is grown on each of K folds' complement, and
   each fold tree is measured on its fold along the full tree's weakest-link
@@ -74,8 +76,10 @@ training misclassification rate and `|T|` its number of leaves. For a given
 are identical except where two splits have exactly the same impurity decrease
 (scikit-learn visits features in random order, this code takes the lowest
 feature index); the script recomputes both gains at every such node to prove it
-is a tie. The pruning sequence was checked against a direct textbook
-weakest-link implementation.
+is a tie. An exhaustive search at every node of the grown tree (largest Gini
+decrease over all features and thresholds, lowest feature on ties) agrees on
+all 24,048 decision nodes of the full covertype tree, and every subtree of the
+pruning sequence matches a direct textbook weakest-link implementation.
 
 ---
 
@@ -93,7 +97,10 @@ This follows the original C source (`contin.c`, `build.c`, `info.c`,
 * The best threshold is the one with the largest **information gain** (not gain
   ratio!). The gain is then reduced by the MDL cost of choosing a threshold:
   `gain − log₂(tries) / n`, where `tries` is the number of thresholds that were
-  allowed. A feature is usable only if this is > 0.
+  allowed. A feature is usable only if this is > 0 — by more than the `1e-12`
+  tie tolerance: a cut that keeps the node's class proportions (24:3 into 16:2
+  and 8:1) has a gain of exactly 0, which rounding can make +4e-16, and with a
+  single allowed cut the MDL cost `log₂ 1` is 0 as well.
 
 **Feature choice (`FormTree` + `Worth`).** Among usable features, only those
 whose (corrected) gain is at least the average gain minus 0.001 are candidates;
@@ -120,24 +127,38 @@ table, `AddErrs`). Bottom-up, a subtree is replaced by
   then pruned again with all rows.
 
 **Verified against** Quinlan's own `c4.5` binary (`tools/compare_reference.py
-c45`): iris, diabetes, and covertype / supersymmetry samples
-give identical unpruned and pruned trees for several `--cf` and `--min-leaf`
-values. The only differences are nodes where two features have exactly the same
-gain ratio: C4.5 computes in single precision, so the rounding of mathematically
-equal values decides there, while this code takes the first feature (what the
-C4.5 source intends with its strict `>`). Feeding C4.5's own unpruned tree to
-this code's pruning reproduced C4.5's pruned tree exactly (checked with a
-tree-loading option that has since been removed; `tests/golden/` keeps the
-verified trees).
+c45`): iris, diabetes, covertype (up to its full 465k-row training set) and
+supersymmetry samples, `--min-leaf` 1 to 300 and `--cf` 0.05 to 0.5. The trees
+are identical node by node (thresholds, row counts, classes) except where
+C4.5's single-precision arithmetic decides:
+
+* Two features, or two thresholds of one feature, with exactly the same gain
+  ratio (gain): the rounding of mathematically equal values picks one in C4.5,
+  while this code takes the first (what the C4.5 source intends with its
+  strict `>`). This is the only kind of difference on the samples.
+* On the full covertype tree, 5 more of about 15,000 nodes: C4.5 picks a
+  threshold whose gain is up to 4e-7 below the best one (3 nodes), rounds a
+  gain of 3e-8 to 0 and so leaves three features out of the average gain, or
+  rounds a gain of exactly 0 up to +1e-7 and splits on it. This code computes
+  in double precision and treats a gain within `1e-12` of 0 as 0.
+
+Pruning is the same: a direct port of `prune.c` turns C4.5's unpruned tree
+into exactly C4.5's pruned tree and this code's unpruned tree into exactly
+this code's pruned tree, so pruned trees differ only below the nodes above.
+One known difference has never changed a tree in these checks: with
+`--min-leaf` above 25, C4.5 counts `tries` (the MDL cost) of a big node from
+25 rows on each side, this code from `--min-leaf` rows. `tests/golden/` keeps
+the verified trees.
 
 ---
 
 ## Ties and CPU/GPU agreement
 
 Two gains within `1e-12` are treated as equal; the earlier threshold and then
-the lower feature index win. Gini gains are computed with exact integer sums,
-entropy uses a shared table of `c · log₂ c` for counts below 65536, so the CPU
-and GPU produce bit-identical trees (checked by `tests/check.sh`, which also compares every backend with the
+the lower feature index win; a C4.5 gain within `1e-12` of 0 is 0. Gini gains
+are computed with exact integer sums, entropy uses a shared table of
+`c · log₂ c` for counts below 65536, so the CPU and GPU produce bit-identical
+trees (checked by `tests/check.sh`, which also compares every backend with the
 verified trees in `tests/golden/`).
 
 ## What was wrong before
@@ -153,3 +174,6 @@ verified trees in `tests/golden/`).
 * "CART" rejected zero-gain splits, measured `α` in raw sample counts, and any
   impurity / selection / pruning combination could be mixed.
 * The CSV loader always dropped the first column (diabetes lost `Pregnancies`).
+* C4.5 accepted a feature whose only allowed cut keeps the class proportions:
+  the gain is exactly 0 but was computed as +4e-16 (2 of 15,318 splits of the
+  full covertype tree; `tests/data/zero_gain.csv` is one of those nodes).

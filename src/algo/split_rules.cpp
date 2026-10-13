@@ -102,7 +102,11 @@ SplitRules::Decision SplitRules::chooseC45(const CutCandidate *cuts,
                                            std::size_t featureCount,
                                            std::uint32_t n) const {
   // EvalContinuousAtt: Gain[Att] = best gain - Log(Tries) / Items, and the
-  // attribute is usable only if that is > 0.
+  // attribute is usable only if that is > 0. "> 0" means beyond kTieEps, the
+  // tolerance of every gain comparison here: a cut that keeps the node's class
+  // proportions (e.g. 24:3 into 16:2 and 8:1) has a gain of exactly 0, which
+  // double rounding can turn into +4e-16, and with a single allowed cut
+  // (Log(1) = 0) nothing else would stop such a split.
   std::vector<double> gain(featureCount, -1.0);
   double gainSum = 0.0;
   int possible = 0;
@@ -113,7 +117,7 @@ SplitRules::Decision SplitRules::chooseC45(const CutCandidate *cuts,
     }
     const double thresholdCost = std::log2(static_cast<double>(cut.tries)) / n;
     const double corrected = cut.gain - thresholdCost;
-    if (corrected > 0.0) {
+    if (corrected > kTieEps) {
       gain[feature] = corrected;
       gainSum += corrected;
       ++possible;
