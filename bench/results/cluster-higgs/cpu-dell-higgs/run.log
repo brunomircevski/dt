@@ -1,0 +1,40 @@
+log: bench/results/cluster-higgs/cpu-dell-higgs/run.log, job 237 on dell1, started 2026-10-14 17:55:22
+
+=== 17:55:22  1/3 machine check
+CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: powersave 
+load average: 9.06 2.30 1.23
+code: 7cb9fb9e8f0c (from submit.sh: hopper has no git)
+runs per case: 3
+
+=== 17:55:22  2/3 benchmark: higgs, cart_alpha_nodepth,c45, tree, 48 threads, 3 run(s) per case
+2 cases, 9 processes:
+  higgs | cart_alpha_nodepth | tree | 48
+  higgs | c45 | tree | 48
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  higgs: identical in every format (10 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
+[1/9] 17:55:33 run 1/3: CART ./tree, 48 threads, higgs ...
+    ok: train 1.253 s, peak 5,840 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m01s
+[2/9] 17:55:35 run 1/3: C4.5 ./tree, 48 threads, higgs ...
+    ok: train 2.371 s, peak 7,312 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m04s, about 0m09s left
+[3/9] 17:55:37 run 2/3: CART ./tree, 48 threads, higgs ...
+    ok: train 1.224 s, peak 5,841 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m06s, about 0m07s left
+[4/9] 17:55:39 run 2/3: C4.5 ./tree, 48 threads, higgs ...
+    ok: train 2.274 s, peak 7,300 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m08s, about 0m04s left
+[5/9] 17:55:42 run 3/3: C4.5 ./tree, 48 threads, higgs ...
+    ok: train 2.378 s, peak 7,302 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m11s, about 0m01s left
+[6/9] 17:55:44 run 3/3: CART ./tree, 48 threads, higgs ...
+    ok: train 1.236 s, peak 5,840 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m13s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[7/9] 17:55:46 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0012 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m13s, about 0m00s left
+[8/9] 17:55:46 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0012 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m13s, about 0m00s left
+[9/9] 17:55:46 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0012 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m13s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-higgs/cpu-dell-higgs/results.jsonl
+
+=== 17:55:46  3/3 tables and CSV files
+done 2026-10-14 17:55:46

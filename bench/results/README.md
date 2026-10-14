@@ -4,7 +4,7 @@ One directory per benchmark: `<backend>-<machine>-<dataset>/`.
 
 - **backend:** `cpu` or `cuda`.
 - **machine:** a short name for the computer. `pc` is the i7-14700KF desktop (8 performance + 12 efficiency cores, 28 threads); `legion` is the laptop with an i7-13650HX (6 + 8 cores, 20 threads) and an RTX 5070 Laptop GPU (8 GB).
-  The mordor3 cluster's runs are grouped by dataset in `cluster-higgs/` and `cluster-airlines/`, named after its nodes: `hopper` (2× Xeon Gold 6444Y, 4× H100 PCIe), `ampere` (2× EPYC 7402, A100 80 GB PCIe), `turing` (Threadripper 1950X, RTX 2080 Ti), `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y). Their scripts are in [bench/cluster/](../cluster/README.md), not in a `run.sh`.
+  The mordor3 cluster's runs are grouped in `cluster-*/` directories, named after its nodes. Two GPU servers run CUDA only: `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402). Two CPU servers run parallel only: `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y). Their scripts are in [bench/cluster/](../cluster/README.md), not in a `run.sh`.
 - **dataset:** the `bench/datasets.toml` entry, e.g. `susy500k` for `susy_500k`, `susy` for the full dataset.
 
 Each directory holds a `run.sh` that runs that benchmark and writes all of its results into the same directory:
@@ -16,17 +16,34 @@ bench/results/cpu-pc-susy500k/run.sh -m 5     # each case 5 times
 
 `BENCHMARK.md` next to it describes the method, and the results once the run is done. `run.sh` refuses to run where results already exist, so move them away to run again. When only ./tree changed, a run that also holds other tools can keep their rows: run `bench/run.py ... --impls tree` into a subdirectory and replace the ./tree rows of `results.jsonl` with its rows (`machine.json` → `tree_rerun` records it; `report.py` and the charts show the rerun's date).
 
-| Directory | Status |
-|---|---|
-| `cpu-pc-susy500k` | run on 2026-10-09, one run per case; ./tree cases rerun on 2026-10-10 (commit 49b7f47) |
-| `cpu-pc-susy` | full SUSY (4.5M training rows), run on 2026-10-09, one run per case; ./tree cases rerun on 2026-10-10 (commit 49b7f47) |
-| `cpu-pc-susy-scaling` | ./tree only, CART and C4.5 on full SUSY with 1–28 threads (scaling curve), run on 2026-10-10 (commit 49b7f47), one run per point |
-| `cuda-legion-susy` | ./tree only on the laptop, full SUSY: serial, parallel (20 threads) and CUDA, the protocols of `cpu-pc-susy`; run on 2026-10-10 (rerun on commit 49b7f47), one run per case; its `chart.png` shows the desktop's `cpu-pc-susy` as reference |
-| `cpu-pc-higgs` | ./tree parallel (28 threads) on full HIGGS, the desktop half of `cuda-legion-higgs`; run on 2026-10-10 (rerun on commit 49b7f47) |
-| `cuda-legion-higgs` | ./tree parallel (20 threads) and CUDA on the laptop, full HIGGS; run on 2026-10-10 (rerun on commit 49b7f47), one run per case; its `chart.png` shows `cpu-pc-higgs` as reference |
-| `cluster-higgs/` | full HIGGS on five nodes of the mordor3 SLURM cluster: `cuda-hopper-higgs` (H100), `cuda-ampere-higgs` (A100), `cuda-turing-higgs` (RTX 2080 Ti), all parallel + CUDA, and `cpu-epyc-higgs`, `cpu-dell-higgs` (parallel, 48 cores); run on 2026-10-14 with the defaults tuned for these servers (commit 16cc93b), 3 runs per case; one `chart.png` for all five, with the time spent pruning; [BENCHMARK.md](cluster-higgs/BENCHMARK.md) compares it with the first run before tuning (commit ab8ebdd) |
-| `cluster-airlines/` | the airline dataset (115M rows) on the same nodes but turing (its 11 GB GPU is too small), same commit and protocols; [BENCHMARK.md](cluster-airlines/BENCHMARK.md) |
-| `cluster-airlines-noprunning/` | airline with CART and C4.5 grown without pruning (`cart_full`, `c45_unpruned`) on hopper and ampere (CUDA only), epyc1 and dell1 (parallel); run on 2026-10-14 (commit 2ced368), 3 runs per case; [BENCHMARK.md](cluster-airlines-noprunning/BENCHMARK.md) |
+## The benchmarks
+
+Times are ./tree's training time (presort, build, pruning; not reading the data). CART is pruned at α = 1e-5, C4.5 with CF 0.25.
+
+**Against other implementations** (desktop, one run per case; ./tree rerun on 2026-10-10, commit 49b7f47). Every tool builds a comparable tree. Test accuracies agree within the confidence interval; the one exception is scikit-learn's CART on full SUSY, 0.2 points lower. CART is capped at depth 30 in every tool, because rpart cannot grow deeper.
+
+| Directory | What | Main result |
+|---|---|---|
+| [`cpu-pc-susy500k`](cpu-pc-susy500k/BENCHMARK.md) | SUSY 500k rows: ./tree against scikit-learn, rpart (CART) and Weka J48, YaDT (C4.5), 1 and 28 threads | On one thread ./tree is 17–30× faster than the CART libraries and 24–59× faster than the C4.5 ones. On 28 threads it is 32× faster than YaDT. |
+| [`cpu-pc-susy`](cpu-pc-susy/BENCHMARK.md) | the same on full SUSY (4.5M training rows) | On one thread ./tree is 59–67× faster than the CART libraries and 21–135× faster than the C4.5 ones (6.2 s against 412 s for scikit-learn and 829 s for J48). On 28 threads it is 28× faster than YaDT. It has the lowest memory for C4.5. |
+
+**./tree alone on the desktop and laptop** (2026-10-10, commit 49b7f47 or e809e97, one run per case):
+
+| Directory | What | Main result |
+|---|---|---|
+| [`cpu-pc-susy-scaling`](cpu-pc-susy-scaling/BENCHMARK.md) | full SUSY, 1–28 threads on the desktop | CART 7.06 → 0.96 s (7.4×), C4.5 6.17 → 1.17 s (5.3×). Flat beyond 12–20 threads: memory bandwidth. |
+| `cpu-legion-susy-scaling` | full SUSY, 1–20 threads on the laptop (`scaling.csv`, `chart.png`) | CART 8.05 → 1.03 s (7.8×), C4.5 6.88 → 1.04 s (6.6×). |
+| [`cuda-legion-susy`](cuda-legion-susy/BENCHMARK.md) | full SUSY: serial, parallel and CUDA on the laptop | CUDA 0.37 s (CART) and 0.46 s (C4.5): 2.4–2.6× the desktop's 28 threads. |
+| [`cuda-legion-higgs`](cuda-legion-higgs/BENCHMARK.md), [`cpu-pc-higgs`](cpu-pc-higgs/BENCHMARK.md) | full HIGGS (10.5M rows): laptop parallel and CUDA, desktop parallel | CUDA 1.37 s (CART) and 2.00 s (C4.5), 2.3–2.6× the CPUs. The laptop's 20 threads match the desktop's 28: its DDR5 is faster. |
+
+**./tree alone on the mordor3 cluster** (2026-10-14, 3 runs per case, the tuned code of 16cc93b). CART has no depth limit, like C4.5. Accuracy is ./tree's training accuracy (`run.py --train-accuracy-only`).
+
+| Directory | What | Main result |
+|---|---|---|
+| [`cluster-higgs`](cluster-higgs/BENCHMARK.md) | full HIGGS on hopper, ampere (CUDA), epyc, dell (parallel, 48 threads) | CART: H100 0.45 s, A100 0.64 s, epyc 1.06 s, dell 1.24 s. C4.5: A100 1.52 s, H100 1.67 s, epyc 1.86 s, dell 2.37 s. 1.2–2.5× faster than before the tuning. |
+| [`cluster-airlines`](cluster-airlines/BENCHMARK.md) | airline (115M rows), the same nodes | CART: H100 2.31 s, 3.2× epyc (7.34 s). C4.5: the GPUs only tie with epyc (13.2–15.8 s against 14.0 s); half of a CUDA run is the pruning, on the host CPU. |
+| [`cluster-airlines-noprunning`](cluster-airlines-noprunning/BENCHMARK.md) | airline, CART and C4.5 grown without pruning | CART's full tree is 47.1 million nodes, depth 65; C4.5's is 19.6 million, depth 74. CART takes 7.1 s (A100) to 10.5 s (dell), but 13.8 s on the H100. C4.5 takes 7.1–7.2 s on the GPUs and 11.1–12.6 s on the CPUs. |
+| [`cluster-cpu-scaling`](cluster-cpu-scaling/BENCHMARK.md) | full HIGGS, 1–48 threads on epyc and dell | 48 threads: CART 1.08 s (epyc) and 1.25 s (dell), C4.5 1.87 and 2.24 s. dell's single thread is 1.7–1.9× slower than epyc's. epyc stalls where its second socket comes in (24 → 28 threads). |
 
 ## A new machine
 

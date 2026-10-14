@@ -63,6 +63,7 @@ def summarise(cases):
             "time_median": statistics.median(times), "time_min": min(times),
             "time_max": max(times), "peak_rss_median": statistics.median(rss),
             "nodes": rows[0]["nodes"], "test_accuracy": rows[0].get("test_accuracy"),
+            "train_accuracy": rows[0].get("train_accuracy"),
             "same_tree": len({(r["nodes"], r["leaves"], r["depth"]) for r in rows}) == 1})
     for protocol, points in out.items():
         serial = next((p["time_median"] for p in points if p["threads"] == 1), None)
@@ -130,11 +131,19 @@ def figure(run, dataset, protocols, series, machine, out):
             axis.annotate(f"{y:.3g} {unit}", (x, y), xytext=(7, (pixel - wanted) * 72 / fig.dpi),
                           textcoords="offset points", va="center", fontsize=9, color=INK)
 
+    def accuracy(point):
+        """Test accuracy, or training accuracy where only that was recorded
+        (run.py --train-accuracy-only)."""
+        if point.get("test_accuracy") is not None:
+            return f", test {100 * point['test_accuracy']:.2f}%"
+        if point.get("train_accuracy") is not None:
+            return f", training accuracy {100 * point['train_accuracy']:.2f}%"
+        return ""
+
     handles = [Line2D([], [], color=COLORS.get(p, INK), linewidth=2, marker="o", markersize=7,
                       markeredgecolor="white", label=f"{LABELS.get(p, p)}: "
-                      f"{series[p][0]['nodes']:,} nodes, test "
-                      f"{100 * series[p][0]['test_accuracy']:.2f}%")
-               for p in protocols if series[p][0].get("test_accuracy") is not None]
+                      f"{series[p][0]['nodes']:,} nodes{accuracy(series[p][0])}")
+               for p in protocols]
     fig.text(0.08, 1 - 0.4 / 5.4, B.hardware_line(machine, False), fontsize=8.6, color=INK,
              va="top")
     fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.08, 1 - 0.62 / 5.4),
@@ -166,7 +175,7 @@ def main():
     cases, dataset = collect(run)
     protocols, series = summarise(cases)
     fields = ["protocol", "threads", "runs", "time_median", "time_min", "time_max", "speedup",
-              "efficiency", "peak_rss_median", "nodes", "test_accuracy", "same_tree"]
+              "efficiency", "peak_rss_median", "nodes", "test_accuracy", "train_accuracy", "same_tree"]
     with open(run / "scaling.csv", "w", newline="") as handle:
         writer = csv.DictWriter(handle, fields)
         writer.writeheader()

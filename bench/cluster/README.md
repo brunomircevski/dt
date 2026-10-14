@@ -3,15 +3,20 @@
 Scripts that build, prepare and benchmark ./tree on the faculty's mordor3
 cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 
-- [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows) on five nodes (turing: CUDA only)
-- [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows) on the same nodes but turing
-- [`bench/results/cluster-airlines-noprunning/`](../results/cluster-airlines-noprunning/BENCHMARK.md): airline, CART and C4.5 grown without pruning (GPU nodes CUDA only)
+- [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows)
+- [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows)
+- [`bench/results/cluster-airlines-noprunning/`](../results/cluster-airlines-noprunning/BENCHMARK.md): airline, CART and C4.5 grown without pruning
+- [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS with 1 to 48 threads on the two CPU nodes
+
+Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
+only, the CPU nodes (epyc1, dell1) parallel only:** a GPU node's CPU is
+there to feed the GPU and is not benchmarked on its own. turing (RTX 2080
+Ti) is not used.
 
 | Node | CPU | RAM | GPU (GPU 0 used) |
 |---|---|---|---|
 | hopper | 2× Xeon Gold 6444Y (Sapphire Rapids), 32 cores | 1 TB DDR5-4800 | 4× H100 PCIe 80 GB |
 | ampere | 2× EPYC 7402 (Zen 2), 48 cores | 1 TB DDR4-3200 | 2× A100 80 GB + 2× A100 40 GB PCIe (GPU 0: 80 GB) |
-| turing | Threadripper 1950X (Zen 1), 16 cores, SMT on (32 threads) | 128 GB DDR4-2667 | 4× RTX 2080 Ti 11 GB |
 | epyc1 | 2× EPYC 9255 (Zen 5), 48 cores | 512 GB DDR5-6400 | – |
 | dell1 | 2× Xeon Gold 6542Y (Emerald Rapids), 48 cores | 1 TB DDR5-5200 | – |
 
@@ -29,8 +34,9 @@ sbatch --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=
 sbatch bench/cluster/prepare.sh  # on a dell node: the datasets (checked by SHA-256), HIGGS prepared
 sbatch --export=ALL,PREPARE=airline -t 02:00:00 -o bench/cluster/prepare-airline.log \
     bench/cluster/prepare.sh airline
-bench/cluster/submit.sh -m 3               # HIGGS: five jobs, one per node, released together
-bench/cluster/submit.sh -m 3 -d airline    # airline, four jobs (or name single runs, e.g. cuda-turing-higgs)
+bench/cluster/submit.sh -m 3               # HIGGS: four jobs, one per node, released together
+bench/cluster/submit.sh -m 3 -d airline    # airline (or name single runs, e.g. cuda-hopper-airline)
+bench/cluster/scaling.sh -m 3              # HIGGS with 1, 2, 4, 8, 12, ... 48 threads on epyc1 and dell1
 ```
 
 Then copy `bench/results/cluster-*/` back and draw the charts:
@@ -38,17 +44,20 @@ Then copy `bench/results/cluster-*/` back and draw the charts:
 ```bash
 for d in higgs:higgs airlines:airline; do
   dir=bench/results/cluster-${d%%:*} data=${d##*:}
-  turing=$dir/cuda-turing-$data; [ -d $turing ] || turing=
   bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
-      $dir/cuda-hopper-$data $dir/cuda-ampere-$data $turing $dir/cpu-epyc-$data $dir/cpu-dell-$data \
+      $dir/cuda-hopper-$data $dir/cuda-ampere-$data $dir/cpu-epyc-$data $dir/cpu-dell-$data \
       --out $dir/chart.png
+done
+for node in epyc dell; do  # the scaling charts, one per node
+  bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling/cpu-$node-higgs \
+      --out bench/results/cluster-cpu-scaling/chart-$node.png
 done
 ```
 
-The unpruned airline run (GPU nodes CUDA only) and its chart:
+The unpruned airline run and its chart:
 
 ```bash
-bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -c -o cluster-airlines-noprunning
+bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines-noprunning
 dir=bench/results/cluster-airlines-noprunning
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45_unpruned \
     $dir/cuda-hopper-airline $dir/cuda-ampere-airline $dir/cpu-epyc-airline $dir/cpu-dell-airline \
@@ -57,15 +66,17 @@ bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45
 
 - **`build.sh`** runs on hopper because the CPU nodes have no CUDA toolkit. It
   builds with `NVCC=/usr/local/cuda/bin/nvcc` and `-gencode` for sm_75, sm_80
-  and sm_90, so one binary serves the RTX 2080 Ti, the A100 and the H100, and
+  and sm_90, so one binary serves the A100, the H100 and turing's RTX 2080 Ti, and
   rebuilds the CUDA object when that list changes. Log: `build.log`.
 - **`submit.sh`** queues one job per node (`job.sh`) with `--exclusive` and
   `--hold`, then releases them together, so on idle nodes they start in the
   same second. Each job runs
-  `bench/run.py <dataset> --protocols cart_alpha_nodepth,c45 --impls tree[,tree_cuda] --threads all --cpus 0-<cores-1> --reps <-m> --run-id cluster-<…>/<run> --train-accuracy-only`
-  and `report.py`. Its log is `<run>/run.log`. Turing runs CUDA only. Airline
-  skips turing: the CUDA backend needs 23.6 GB of GPU memory for it (two
-  copies of the presorted columns), and a 2080 Ti has 11 GB.
+  `bench/run.py <dataset> --protocols cart_alpha_nodepth,c45 --impls tree|tree_cuda --threads all --cpus 0-<cores-1> --reps <-m> --run-id cluster-<…>/<run> --train-accuracy-only`
+  and `report.py`: `tree_cuda` on the GPU nodes, `tree` (parallel) on the
+  CPU nodes. Its log is `<run>/run.log`.
+- **`scaling.sh`** queues the same job on epyc1 and dell1 with the thread list
+  `1,2,4,8,12,…,48` (1 thread: `--serial`); `run.log` records the CPU order
+  the threads take (`lscpu`).
 - **`tune.sh`** runs a list of ./tree command lines on one node, interleaved
   and repeated, and prints ./tree's phase times with the CPU time, page faults
   and context switches of every run. The default settings were tuned
@@ -88,8 +99,8 @@ differences:
 
 | Backend | Command | Threads |
 |---|---|---|
-| Parallel | `./tree_cpu --parallel --threads N` | N = every CPU (32 on hopper and turing, 48 elsewhere) |
-| CUDA | `./tree --cuda --threads N` | GPU 0, plus N CPU threads for the small subtrees and pruning |
+| Parallel (epyc1, dell1) | `./tree_cpu --parallel --threads N` | N = every CPU (48) |
+| CUDA (hopper, ampere) | `./tree --cuda --threads N` | GPU 0, plus N CPU threads (hopper 32, ampere 48) for the small subtrees and pruning |
 
 - **Whole nodes.** SLURM on mordor3 hands out cores only: it tracks no GPUs
   (no GRES) and no memory. Every job therefore takes its node with
@@ -100,7 +111,7 @@ differences:
   samples (`nvidia-smi --id=0`); on ampere it is an A100 80 GB. The other
   GPUs sit idle.
 - **CPU governors are as the admins set them.** epyc1 `performance`, dell1
-  `powersave` (intel_pstate, which still boosts), hopper and turing
+  `powersave` (intel_pstate, which still boosts), hopper
   `schedutil`, ampere `ondemand`. A user can't change them; `machine.json`
   records them. All four dell nodes are set alike (checked on 2026-10-14:
   `powersave` on all 48 CPUs, intel_pstate, energy-performance preference
