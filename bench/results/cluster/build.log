@@ -1,7 +1,6 @@
-/var/spool/slurmd/job00115/slurm_script: line 16: git: command not found
-job 115 on hopper, 16 CPUs, 2026-10-14 12:28:20, commit 
-g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP build/algo/c45_pruning.o build/algo/cart_pruning.o build/algo/split_rules.o build/app/main.o build/app/trainer.o build/build/cpu_builder.o build/build/cpu_grower.o build/build/node_store.o build/core/dataset.o build/core/options.o build/core/thread_pool.o build/core/tree.o build/build/gpu_grower_stub.o -o tree_cpu
-/usr/local/cuda/bin/nvcc -std=c++20 -O3 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -Isrc -MMD -MP -Xcompiler -Wall -c src/build/gpu_grower.cu -o build/build/gpu_grower.o
+job 152 on hopper, 16 CPUs, 2026-10-14 14:36:40, commit a4f8f6cca5ce-dirty
+make: 'tree_cpu' is up to date.
+/usr/local/cuda/bin/nvcc -std=c++20 -O3 -gencode arch=compute_75,code=sm_75 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -Isrc -MMD -MP -Xcompiler -Wall -c src/build/gpu_grower.cu -o build/build/gpu_grower.o
 src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)>; std::size_t = long unsigned int]':
 src/build/gpu_grower.cu:1730:20:   required from here
 src/core/thread_pool.h:82:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
@@ -36,6 +35,7 @@ src/core/thread_pool.h:82:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL_
    96 |   };
       |              
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP build/algo/c45_pruning.o build/algo/cart_pruning.o build/algo/split_rules.o build/app/main.o build/app/trainer.o build/build/cpu_builder.o build/build/cpu_grower.o build/build/node_store.o build/core/dataset.o build/core/options.o build/core/thread_pool.o build/core/tree.o build/build/gpu_grower.o -L/usr/local/cuda/lib64 -lcudart -o tree
-kernels: ELF file    1: tree.1.sm_80.cubin
-kernels: ELF file    2: tree.2.sm_90.cubin
-done 2026-10-14 12:31:42
+kernels: ELF file    1: tree.1.sm_75.cubin
+kernels: ELF file    2: tree.2.sm_80.cubin
+kernels: ELF file    3: tree.3.sm_90.cubin
+done 2026-10-14 14:41:47
