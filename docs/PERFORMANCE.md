@@ -2,6 +2,42 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: the node store and the GPU hand-off (mordor3 cluster)
+
+Commit `0475249` (node store) and `f495aed` (GPU hand-off), measured on the
+cluster's two GPU servers (CUDA) and two CPU servers (parallel), airline
+(115M rows), one run per case. Every tree is byte-identical before and after.
+
+- **Node store:** the builders take node ids from a shared store of
+  fixed-size chunks. Threads took ids in blocks of 64 from the same chunk,
+  so all of them reached the chunk's end together and waited while one
+  allocated the next chunk under the lock. On hopper (2 sockets, `schedutil`
+  governor) the waiting also let the clocks drop to about 0.9 GHz, and the
+  CUDA backend's CPU threads ran half as fast on both sockets as on one.
+  Now a thread takes a whole chunk (4096 nodes) and allocates it outside the
+  lock, on its own socket.
+- **GPU hand-off:** with the CPU subtrees faster, airline is fastest with
+  nodes handed to the CPU at 2-4K rows instead of 28K. The automatic
+  `--gpu-min-rows` (rows / 4096) is now capped at 4096; datasets up to
+  16.8M rows keep their value.
+
+| Airline | Node, backend | Before | Node store | + hand-off |
+|---------|---------------|-------:|-----------:|-----------:|
+| CART, unpruned | hopper cuda | 14.61 s | 4.98 s | 3.92 s |
+| CART, unpruned | ampere cuda | 7.14 s | 5.29 s | 4.66 s |
+| C4.5, unpruned | hopper cuda | 7.08 s | 4.82 s | 4.39 s |
+| C4.5, unpruned | ampere cuda | 7.13 s | 6.02 s | 5.36 s |
+| C4.5 | hopper cuda | 13.76 s | 11.38 s | 11.22 s |
+| C4.5 | ampere cuda | 13.63 s | 12.25 s | 11.95 s |
+| CART | ampere cuda | 3.34 s | 3.35 s | 2.84 s |
+| CART, unpruned | dell parallel | 10.62 s | 10.25 s | – |
+| C4.5 | dell parallel | 16.52 s | 16.04 s | – |
+
+One socket is no longer faster anywhere: hopper's unpruned CART takes
+6.13 s on one socket, 4.98 s on both. Other settings tried and left at their
+defaults (no consistent gain): `--task-rows` 16K-1G, `--feature-parallel-rows`
+8K and 128K on the CPU servers, `--gpu-min-rows` 1024 and 16384 on HIGGS.
+
 ## October 2026: tuning for many-core servers (mordor3 cluster)
 
 Commit `a8563b3` (before) against `16cc93b` (after), measured on the cluster's

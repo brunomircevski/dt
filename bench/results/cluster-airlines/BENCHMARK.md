@@ -1,12 +1,11 @@
 # Airline on the mordor3 cluster: ./tree CUDA on two GPU servers, parallel on two CPU servers, with and without pruning
 
-**Status:** run on 2026-10-14, 3 runs per case. The ./tree source is that of commit 16cc93b, with the defaults tuned for these servers ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)). Later commits changed only `bench/`.
-- **Pruned trees** (the run directories here):
-  - epyc1 and dell1 ran at 17:56 (commit 7cb9fb9), each right after its HIGGS run ([cluster-higgs](../cluster-higgs/BENCHMARK.md)).
-  - hopper and ampere ran at 18:08 (commit 67dc294), CUDA only.
-- **Unpruned trees** (`noprunning/`): all four nodes ran from 17:57 to 18:03 (commit 7cb9fb9).
+**Status:** run on 2026-10-14, 3 runs per case, at commit a83b6ec: the node store fix and the GPU hand-off of [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md).
+- **Pruned trees** (the run directories here): all four nodes from 19:53, each right after its HIGGS run ([cluster-higgs](../cluster-higgs/BENCHMARK.md)).
+- **Unpruned trees** (`noprunning/`): all four nodes from 19:55.
 - **Each node ran alone** and was used whole.
 - **Same trees:** every case built the same tree on every node and backend.
+- **Settings:** ./tree's defaults on every node. They were the best found for each machine; other values of `--task-rows`, `--feature-parallel-rows` and `--gpu-min-rows`, and running on one socket only, were no faster (docs/PERFORMANCE.md).
 
 How the runs are made, and the dataset: [bench/cluster/README.md](../../cluster/README.md).
 - **GPU servers run only CUDA, CPU servers only parallel.**
@@ -40,22 +39,24 @@ Training time, median of 3 runs (min–max):
 
 | | CART | C4.5 | of which C4.5 pruning |
 |---|--:|--:|--:|
-| CUDA · hopper (H100 PCIe + 32 threads) | **2.31 s** (2.27–2.34) | 15.83 s (14.85–16.10) | 7.55 s |
-| CUDA · ampere (A100 80GB PCIe + 48 threads) | 3.37 s (3.37–3.41) | **13.19 s** (13.11–13.28) | 6.60 s |
-| Parallel · epyc (EPYC 9255, 48 threads) | 7.34 s (7.32–7.38) | 13.96 s (13.86–14.06) | 2.87 s |
-| Parallel · dell (Xeon 6542Y, 48 threads) | 8.36 s (8.35–8.49) | 16.60 s (16.43–16.61) | 3.90 s |
+| CUDA · hopper (H100 PCIe + 32 threads) | **2.20 s** (2.08–2.20) | **11.26 s** (11.10–11.94) | 6.89 s |
+| CUDA · ampere (A100 80GB PCIe + 48 threads) | 2.84 s (2.84–2.87) | 11.60 s (11.52–11.62) | 6.53 s |
+| Parallel · epyc (EPYC 9255, 48 threads) | 7.34 s (7.31–7.40) | 13.91 s (13.76–13.92) | 2.97 s |
+| Parallel · dell (Xeon 6542Y, 48 threads) | 8.43 s (8.33–8.54) | 16.41 s (15.98–16.45) | 3.93 s |
 
 The trees:
-- **CART:** 3,013 nodes, depth 25, training accuracy 71.54%. It grows 0.1 million nodes before pruning, instead of the 21.6 million it grew before the tuning.
+- **CART:** 3,013 nodes, depth 25, training accuracy 71.54%. It grows 0.1 million nodes before pruning.
 - **C4.5:** 8,548,725 nodes (19.6 million before pruning), depth 72, training accuracy 87.42%.
 - **Accuracy:** `ActualElapsedTime` partly gives the delay away, so the accuracies say little. The dataset is here to compare speed, as in gbm-bench.
 
-Against the code before tuning, from the tuning's own comparison on hopper and epyc1 (one job each, interleaved, 3 runs; [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)):
+Against the earlier code (medians of 3): before the tuning for these servers (a8563b3, measured during the tuning, hopper and epyc only), after it (16cc93b, run at 18:08 the same day), and now.
 
-| Median of 3 | CART before → after | C4.5 before → after |
+| | CART: before → tuned → now | C4.5: before → tuned → now |
 |---|--:|--:|
-| CUDA · hopper | 11.64 s → 2.32 s (5.0×) | 26.03 s → 14.53 s (1.8×) |
-| Parallel · epyc | 15.98 s → 7.34 s (2.2×) | 24.67 s → 13.93 s (1.8×) |
+| CUDA · hopper | 11.64 → 2.31 → **2.20 s** | 26.03 → 15.83 → **11.26 s** |
+| CUDA · ampere | – → 3.37 → **2.84 s** | – → 13.19 → **11.60 s** |
+| Parallel · epyc | 15.98 → 7.34 → **7.34 s** | 24.67 → 13.96 → **13.91 s** |
+| Parallel · dell | – → 8.36 → **8.43 s** | – → 16.60 → **16.41 s** |
 
 ## Unpruned trees
 
@@ -69,44 +70,37 @@ Training time, median of 3 runs (min–max):
 
 | | CART, no pruning | C4.5, no pruning |
 |---|--:|--:|
-| CUDA · hopper (H100 PCIe + 32 threads) | 13.80 s (13.78–14.35) | 7.17 s (6.62–7.18) |
-| CUDA · ampere (A100 80GB PCIe + 48 threads) | **7.14 s** (7.08–7.18) | **7.11 s** (7.05–7.14) |
-| Parallel · epyc (EPYC 9255, 48 threads) | 8.89 s (8.88–8.93) | 11.13 s (11.11–11.16) |
-| Parallel · dell (Xeon 6542Y, 48 threads) | 10.51 s (10.47–10.59) | 12.64 s (12.59–13.00) |
+| CUDA · hopper (H100 PCIe + 32 threads) | **4.06 s** (4.04–4.07) | **4.39 s** (4.36–4.50) |
+| CUDA · ampere (A100 80GB PCIe + 48 threads) | 4.67 s (4.66–4.68) | 5.39 s (5.37–5.41) |
+| Parallel · epyc (EPYC 9255, 48 threads) | 8.76 s (8.74–8.86) | 11.08 s (10.99–11.11) |
+| Parallel · dell (Xeon 6542Y, 48 threads) | 10.07 s (10.06–10.08) | 12.58 s (12.58–12.58) |
 
 The trees:
 - **CART:** 47,146,877 nodes, depth 65, training accuracy 100.00%: every leaf is pure.
 - **C4.5:** 19,579,127 nodes, depth 74, training accuracy 90.60%. C4.5 stops earlier, at leaves of 2 rows and at splits that gain nothing.
 
-Pruned against unpruned, and CART against an earlier unpruned run (17:13) capped at depth 30 (`cart_full`, `-d 30`), whose tree had 21,600,857 nodes:
+Against the earlier code (16cc93b, run at 17:58 the same day), and CART capped at depth 30 (`cart_full`, `-d 30`, 21,600,857 nodes, run at 17:13 on that code):
 
-| Median | CART pruned → unpruned | CART unpruned, depth ≤ 30 | C4.5 pruned → unpruned |
+| Median | CART: depth ≤ 30 (old code) | CART: before → now | C4.5: before → now |
 |---|--:|--:|--:|
-| CUDA · hopper | 2.31 s → 13.80 s | 4.66 s | 15.83 s → 7.17 s |
-| CUDA · ampere | 3.37 s → 7.14 s | 5.20 s | 13.19 s → 7.11 s |
-| Parallel · epyc | 7.34 s → 8.89 s | 8.39 s | 13.96 s → 11.13 s |
-| Parallel · dell | 8.36 s → 10.51 s | 9.64 s | 16.60 s → 12.64 s |
+| CUDA · hopper | 4.66 s | 13.80 → **4.06 s** | 7.17 → **4.39 s** |
+| CUDA · ampere | 5.20 s | 7.14 → **4.67 s** | 7.11 → **5.39 s** |
+| Parallel · epyc | 8.39 s | 8.89 → **8.76 s** | 11.13 → **11.08 s** |
+| Parallel · dell | 9.64 s | 10.51 → **10.07 s** | 12.64 → **12.58 s** |
 
 ## Observations
 
-Pruned trees:
-- **CART:** CUDA wins clearly. The H100 takes 2.31 s, 3.2× the fastest CPU node (epyc, 7.34 s); the A100 takes 3.37 s. With 115M rows the GPU does most of the work. Its setup (uploading 6 GB: 0.35 s on the H100, 0.51 s on the A100) and the per-level round trips matter less than on HIGGS.
-- **C4.5:** the GPUs only tie with epyc's 48 cores (A100 13.2 s, epyc 14.0 s, H100 15.8 s).
-  - **Pruning is half of a CUDA run** (6.6–7.6 s). It runs on the host CPU, as do the small subtrees of the 19.6-million-node tree. epyc prunes in 2.9 s.
-  - **Growing alone,** without the pruning, the GPUs take 6.6 s (A100) and 8.3 s (H100) against epyc's 11.1 s.
-  - **Hopper against ampere:** hopper's 32 cores lose to ampere's 48 in pruning (7.55 against 6.60 s) and in the small subtrees. Hopper's CPU timings also drift during the day: at 16:04 the same binary took 14.19 s there.
-  - **What would help next:** C4.5's pruning is now the place to gain on the GPU nodes, through more parallelism or work on the GPU.
-- **CPU nodes:** dell takes 14–19% longer than epyc (CART 8.36 against 7.34 s, C4.5 16.60 against 13.96 s).
-
-Unpruned trees:
-- **The depth cap hid most of CART's tree.** Without it CART grows 47.1 million nodes, 2.2× as many as up to depth 30 and 2.4× C4.5's. On the CPU nodes the extra 25 million nodes cost only 6–9% (epyc 8.39 → 8.89 s). They lie deep down, with a few rows each, and are cheap to split.
-- **CART against C4.5 on the CPU nodes:** CART grows its 2.4× larger tree in 80–83% of C4.5's time (epyc 8.89 against 11.13 s). C4.5's time includes its collapse of useless splits and its thresholds (0.1–0.3 s).
-- **The GPU's gain shrinks with tiny nodes.** The GPU hands every node below 28 thousand rows to the CPU threads, so almost all of the 47 million nodes are grown by the host. The A100 is 1.2× epyc on CART and 1.6× on C4.5, against 2.2× on pruned CART, where only the first levels are grown and every node has millions of rows.
-- **Hopper is slow on unpruned CART:** 13.80 s, against 7.14 s on ampere and 4.66 s with the depth cap. All three runs agree (13.78–14.35 s). C4.5's tree is half the size and is grown as fast on hopper as on ampere (7.17 against 7.11 s). The extra time is in the build (13.4 against 6.5 s on ampere), where hopper's 32 CPU threads grow the small subtrees and ampere has 48. That alone does not explain a factor of 2, and it has not been investigated.
-- **C4.5's pruning is the big cost of a pruned C4.5 run:** on epyc it adds 2.8 s (11.13 → 13.96 s); on the GPU nodes, whose CPUs are slower, 6.1–8.7 s, as much as growing the tree.
-
-Both:
+- **Hopper's slow unpruned CART is fixed.** It took 13.80 s, twice ampere's time, because the CPU threads that grow the small subtrees kept waiting for each other in the node store: all of them reached the end of a shared 16K-node block together and waited while one allocated the next. On hopper, with two sockets and the `schedutil` governor, the clocks then fell to about 0.9 GHz, and ./tree ran faster on one socket than on two. Each thread now allocates its own blocks: 4.06 s, the fastest of the four nodes (details in [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)).
+- **The GPU now hands nodes to the CPU at 4,096 rows** instead of about 28,000. With the CPU threads no longer waiting, keeping more of the tree on the GPU was 2–15% faster on both GPUs (one run each, docs/PERFORMANCE.md).
+- **CART, pruned:** the H100 takes 2.20 s, 3.3× the fastest CPU node (epyc, 7.34 s); the A100 2.84 s. With 115M rows the GPU does most of the work. Its setup (uploading 6 GB: 0.36 s on the H100, 0.49 s on the A100) and the per-level round trips matter less than on HIGGS.
+- **C4.5, pruned:** the GPUs now beat epyc, by 1.2× (H100 11.26 s, A100 11.60 s, epyc 13.91 s). Before, they only tied with it.
+  - **Growing alone,** without the pruning, the GPUs take 4.4 s (H100) and 5.1 s (A100) against epyc's 10.9 s.
+  - **Pruning is now 56–61% of a CUDA run** (6.5–6.9 s). It runs on the host CPU, and epyc prunes in 3.0 s with its faster cores. C4.5's pruning on the GPU nodes is the next place to gain.
+- **Unpruned trees:** the GPUs are 1.9–2.2× epyc on CART (47.1 million nodes) and 2.1–2.5× on C4.5 (19.6 million). Almost all of these nodes are small and grown by the CPU threads, so the GPU node's CPU matters as much as its GPU.
+- **The depth cap hid most of CART's tree.** Without it CART grows 47.1 million nodes, 2.2× as many as up to depth 30 and 2.4× C4.5's. On the CPU nodes the extra 25 million nodes cost little (epyc 8.39 s capped on the old code, 8.76 s uncapped now): they lie deep down, with a few rows each.
+- **CART against C4.5 on the CPU nodes:** CART grows its 2.4× larger tree in 79–80% of C4.5's time (epyc 8.76 against 11.08 s).
+- **C4.5's pruning is the big cost of a pruned C4.5 run:** 2.8 s on epyc (11.08 → 13.91 s), 6.2–6.9 s on the GPU nodes, whose CPUs are slower.
+- **CPU nodes:** dell takes 15–18% longer than epyc on the pruned trees and 14–15% on the unpruned ones. The node store fix changed little there (up to 4%).
 - **Memory:** the same on every node of a kind.
-  - Parallel: pruned 29.0 GiB (CART) and 38.1 GiB (C4.5) peak RSS; unpruned 32.5 and 36.7 GiB.
-  - CUDA: pruned 17.2 / 26.3–26.5 GiB RSS, unpruned 20.7 / 24.9–25.1 GiB, plus 23.9 GiB on the GPU, CUDA context included.
-- **Wall time:** with only ./tree's own training accuracy, a whole CPU-node run (3 runs per case and the data check) took 1¼ minutes. The earlier runs predicted the training and test rows in Python and took about 1.5 minutes per C4.5 run alone.
+  - Parallel: pruned 29.0 GiB (CART) and 38.4–38.5 GiB (C4.5) peak RSS; unpruned 32.5 and 36.9–37.0 GiB.
+  - CUDA: pruned 17.2 / 26.3 GiB RSS, unpruned 20.7 / 24.9 GiB, plus 23.9–24.0 GiB on the GPU, CUDA context included.

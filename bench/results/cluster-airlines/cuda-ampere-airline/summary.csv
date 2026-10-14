@@ -1,0 +1,3 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+cuda-ampere-airline,airline,cart_alpha_nodepth,tree_cuda,48,ok,True,2.8432,2.8395,2.8698,2.8508333333333336,0.01652946863433107,3,,4.639142686966807,18473422848,18473123840,18474471424,18240528384,3013,1507,25,0.715409,,,25674383360,0.0008
+cuda-ampere-airline,airline,c45,tree_cuda,48,ok,True,11.597,11.5179,11.616100000000001,11.577,0.05206543959288242,3,,15.812108874088153,28229939200,28229804032,28257546240,27997044736,8548725,4274363,72,0.874157,,,25674383360,6.5279
