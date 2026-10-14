@@ -3,40 +3,37 @@
 # each, held until all are queued and then released together (run it on the
 # login node; it only calls sbatch). Results go to
 # bench/results/cluster-higgs/ or bench/results/cluster-airlines/:
-#   cuda-hopper-<data>  H100 PCIe (GPU 0 of 4), 2x Xeon Gold 6444Y   parallel + CUDA
-#   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          parallel + CUDA
-#   cuda-turing-higgs   RTX 2080 Ti (GPU 0), Threadripper 1950X       CUDA only
-#                       (not airline: its CUDA run needs 23.6 GB of GPU memory)
+#   cuda-hopper-<data>  H100 PCIe (GPU 0 of 4), 2x Xeon Gold 6444Y   CUDA
+#   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          CUDA
 #   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
 #   cpu-dell-<data>     dell1: 2x Xeon Gold 6542Y                     parallel
+# The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
+# on a GPU node would measure a CPU that is only there to feed the GPU.
 # The epyc and dell partitions have more nodes: the runs always take epyc1
 # and dell1, so runs of both datasets on one partition wait for each other.
 # Build and prepare first (bench/cluster/README.md).
 #
-#   bench/cluster/submit.sh                  # HIGGS, each case once, all five nodes
+#   bench/cluster/submit.sh                  # HIGGS, each case once, all four nodes
 #   bench/cluster/submit.sh -m 3             # each case 3 times
 #   bench/cluster/submit.sh -m 3 -d airline  # the airline dataset
-#   bench/cluster/submit.sh -m 3 cuda-turing-higgs   # only the named runs
-#   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -c \
-#       -o cluster-airlines-noprunning               # unpruned trees, GPU nodes CUDA only
+#   bench/cluster/submit.sh -m 3 cuda-hopper-higgs   # only the named runs
+#   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned \
+#       -o cluster-airlines-noprunning               # unpruned trees
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
-# C4.5 has none); -c: the GPU nodes run CUDA only, not also parallel; -o: the
-# directory under bench/results/.
+# C4.5 has none); -o: the directory under bench/results/.
 
 set -euo pipefail
 RUNS=1
 DATASET=higgs
 PROTOCOLS=cart_alpha_nodepth,c45
-CUDA_ONLY=0
 OUTDIR=
-while getopts "m:d:p:co:h" option; do
+while getopts "m:d:p:o:h" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
     d) DATASET="$OPTARG" ;;
     p) PROTOCOLS="$OPTARG" ;;
-    c) CUDA_ONLY=1 ;;
     o) OUTDIR="$OPTARG" ;;
-    *) sed -n '2,25p' "$0"; exit 2 ;;
+    *) sed -n '2,24p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -54,12 +51,10 @@ for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$D
 done
 
 #        name                    partition  node    impls
-JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree,tree_cuda"
-      "cuda-ampere-$DATASET  ampere     ampere  tree,tree_cuda"
+JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda"
+      "cuda-ampere-$DATASET  ampere     ampere  tree_cuda"
       "cpu-epyc-$DATASET     epyc       epyc1   tree"
       "cpu-dell-$DATASET     dell       dell1   tree")
-[ "$DATASET" = airline ] || JOBS+=("cuda-turing-higgs     turing     turing  tree_cuda")
-[ "$CUDA_ONLY" = 0 ] || JOBS=("${JOBS[@]/tree,tree_cuda/tree_cuda}")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then

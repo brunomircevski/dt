@@ -23,7 +23,7 @@ echo "log: $OUT/run.log, job $SLURM_JOB_ID on $(hostname), started $(date '+%F %
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0
 export NVCC=/usr/local/cuda/bin/nvcc LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export PYTHONUNBUFFERED=1
-CPUS="0-$(($(nproc) - 1))"  # every CPU of the node (turing: 16 cores with SMT, 32 threads)
+CPUS="0-$(($(nproc) - 1))"  # every CPU of the node
 [ "$THREADS" != scaling ] || THREADS="1,2,4,$(seq -s, 8 4 "$(nproc)")"
 
 step "1/3 machine check"
