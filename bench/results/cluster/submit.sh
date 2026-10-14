@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
-# HIGGS on the mordor3 cluster: submits four SLURM jobs that start together,
-# one whole node each (run on the login node; it only calls sbatch):
+# HIGGS on the mordor3 cluster: submits one SLURM job per node, released
+# together, one whole node each (run on the login node; it only calls sbatch):
 #   cuda-hopper-higgs  4x H100 PCIe (GPU 0 used), 2x Xeon Gold 6444Y   parallel + CUDA
 #   cuda-ampere-higgs  A100 80GB PCIe (GPU 0), 2x EPYC 7402           parallel + CUDA
+#   cuda-turing-higgs  RTX 2080 Ti (GPU 0), Threadripper 1950X        parallel + CUDA
 #   cpu-epyc-higgs     2x EPYC 9255                                   parallel
 #   cpu-dell-higgs     2x Xeon Gold 6542Y                             parallel
 # Run bench/results/cluster/prepare.sh (sbatch) first.
 #
-#   bench/results/cluster/submit.sh          # each case once
+#   bench/results/cluster/submit.sh          # each case once, all five nodes
 #   bench/results/cluster/submit.sh -m 3     # each case 3 times
+#   bench/results/cluster/submit.sh -m 3 cuda-turing-higgs   # only the named runs
 
 set -euo pipefail
 RUNS=1
 while getopts "m:h" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
-    *) sed -n '2,12p' "$0"; exit 2 ;;
+    *) sed -n '2,14p' "$0"; exit 2 ;;
   esac
 done
+shift $((OPTIND - 1))
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -29,8 +32,20 @@ done
 #        name               partition  impls
 JOBS=("cuda-hopper-higgs  hopper     tree,tree_cuda"
       "cuda-ampere-higgs  ampere     tree,tree_cuda"
+      "cuda-turing-higgs  turing     tree,tree_cuda"
       "cpu-epyc-higgs     epyc       tree"
       "cpu-dell-higgs     dell       tree")
+
+# Only the runs named on the command line, if any.
+if [ $# -gt 0 ]; then
+  selected=()
+  for job in "${JOBS[@]}"; do
+    read -r name _ _ <<<"$job"
+    for wanted in "$@"; do [ "$wanted" = "$name" ] && selected+=("$job"); done
+  done
+  [ ${#selected[@]} -eq $# ] || { echo "unknown run name in: $*" >&2; exit 2; }
+  JOBS=("${selected[@]}")
+fi
 
 # run.py appends to results.jsonl: never mix two runs in one directory.
 for job in "${JOBS[@]}"; do
@@ -47,7 +62,7 @@ git diff --quiet HEAD -- src bench Makefile ||
 export TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)"
 echo "code: $TREE_GIT_DESCRIBE, runs per case: $RUNS"
 
-# Held until all four are queued, then released together: on idle nodes they
+# Held until all are queued, then released together: on idle nodes they
 # start at the same time.
 ids=()
 for job in "${JOBS[@]}"; do
