@@ -4,8 +4,8 @@
 # rpart (CART) and Weka J48 and YaDT (C4.5), 1 and 28 threads. Everything it
 # writes goes into this directory; BENCHMARK.md explains every choice.
 #
-#   bench/results/cpu-pc-susy500k/run.sh          # each case once (~6 min)
-#   bench/results/cpu-pc-susy500k/run.sh -m 5     # each case 5 times (~12 min)
+#   bench/results/cpu-pc-susy500k-vs-others/run.sh          # each case once (~6 min)
+#   bench/results/cpu-pc-susy500k-vs-others/run.sh -m 5     # each case 5 times (~12 min)
 #
 # Every run measures training time, peak memory, tree size and accuracy in the
 # same process.

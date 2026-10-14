@@ -56,7 +56,7 @@ What changed is in [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md): CART's e
 - **C4.5:** the GPUs gain less: 1.67 s (H100) and 1.52 s (A100), against 1.86 s on epyc's 48 cores. The pruning runs on the host CPU and is 0.6–0.8 s of a CUDA run, 40–47%. The 1.16-million-node tree's small subtrees also grow on the host. Both GPU nodes have slower CPUs than epyc, which prunes in 0.27 s.
 - **Hopper against ampere on C4.5:** ampere is ahead by 0.15 s. Hopper loses it in the pruning (0.79 against 0.60 s), which runs on the host: hopper has 32 cores, ampere 48. Hopper's CPU timings also drift during the day by up to 40% (bench/cluster/README.md). At 16:03 the same binary pruned in 0.56 s there, and C4.5 took 1.37 s.
 - **CPU nodes:** dell takes 17–27% longer than epyc (CART 1.24 against 1.06 s, C4.5 2.37 against 1.86 s). How each scales with the thread count: [cluster-cpu-scaling](../cluster-cpu-scaling/BENCHMARK.md).
-- **Against the laptop and desktop** ([`cuda-legion-higgs`](../cuda-legion-higgs/BENCHMARK.md), [`cpu-pc-higgs`](../cpu-pc-higgs/BENCHMARK.md)): CART took 1.37 s on the RTX 5070 Laptop GPU, 3.22 s on the laptop's 20 threads and 3.47 s on the desktop's 28. That was before this tuning, so it is not the same code. The new defaults were not measured there.
+- **Against the laptop and desktop** ([`pc-legion-higgs`](../pc-legion-higgs/BENCHMARK.md)): CART took 1.37 s on the RTX 5070 Laptop GPU, 3.22 s on the laptop's 20 threads and 3.47 s on the desktop's 28. That was before this tuning, so it is not the same code. The new defaults were not measured there.
 - **Memory:** the same on every node of a kind.
   - Parallel: 5.7 GiB (CART) and 7.1 GiB (C4.5) peak RSS.
   - CUDA: 3.6 / 5.0 GiB RSS plus 4.9–5.0 GiB on the GPU, CUDA context included.

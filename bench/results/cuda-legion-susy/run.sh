@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ./tree on the Legion laptop (i7-13650HX, RTX 5070 Laptop GPU) on full SUSY:
 # serial (1 thread), parallel (20 threads) and CUDA (GPU + 20 CPU threads),
-# pruned CART and C4.5 with the protocols of cpu-pc-susy, so the times compare
+# pruned CART and C4.5 with the protocols of cpu-pc-susy-vs-others, so the times compare
 # with the desktop's. Everything it writes goes into this directory;
 # BENCHMARK.md explains every choice.
 #
@@ -79,8 +79,8 @@ step "4/5 benchmark: SUSY, pruned CART and C4.5, serial, parallel and CUDA, $RUN
 "$PY" bench/run.py susy --protocols cart_alpha,c45 --impls tree,tree_cuda --threads 1,all \
   --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$RUN"
 
-step "5/5 tables, CSV files and the chart (with the desktop's cpu-pc-susy as reference)"
+step "5/5 tables, CSV files and the chart (with the desktop's cpu-pc-susy-vs-others as reference)"
 "$PY" bench/report.py "$HERE" --md "$HERE/report.md" --csv "$HERE/summary.csv" \
   --runs-csv "$HERE/runs.csv"
-"$PY" bench/machines_chart.py "$HERE" --reference bench/results/cpu-pc-susy
+"$PY" bench/machines_chart.py "$HERE" --reference bench/results/cpu-pc-susy-vs-others
 echo "done: $HERE/report.md, summary.csv, runs.csv, chart.png"

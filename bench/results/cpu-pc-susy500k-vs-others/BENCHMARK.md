@@ -5,8 +5,8 @@
 ## Run it
 
 ```bash
-bench/results/cpu-pc-susy500k/run.sh          # each case once
-bench/results/cpu-pc-susy500k/run.sh -m 5     # each case 5 times
+bench/results/cpu-pc-susy500k-vs-others/run.sh          # each case once
+bench/results/cpu-pc-susy500k-vs-others/run.sh -m 5     # each case 5 times
 ```
 
 - **Time:** about 6 min with one run per case (setup and the warm-up check take ~4 min of it), about 12 min with `-m 5`. Per run: J48 ~27 s, scikit-learn ~18 s, YaDT ~14 s (1 thread) or ~5 s (28 threads), rpart ~10 s, ./tree ~1 s.

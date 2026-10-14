@@ -153,5 +153,5 @@ needs 23.6 GB of GPU memory for it, more than the laptop's 8 GB or a 2080 Ti's 1
 it is there to compare speed, as in gbm-bench.
 
 HIGGS's prepared files (`bench/data/higgs/`) have the SHA-256 recorded in
-`plan.json` of `cpu-pc-higgs` and `cuda-legion-higgs` (desktop and laptop).
+`plan.json` of `pc-legion-higgs/cpu-pc-higgs` and `pc-legion-higgs/cuda-legion-higgs` (desktop and laptop).
 Logs: `prepare-higgs.log`, `prepare-airline.log`.

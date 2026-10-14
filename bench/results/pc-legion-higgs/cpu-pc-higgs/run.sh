@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # ./tree parallel (28 threads) on the desktop (i7-14700KF) on full HIGGS: pruned
-# CART and C4.5 with the protocols of cpu-pc-susy, to compare with the laptop's
+# CART and C4.5 with the protocols of cpu-pc-susy-vs-others, to compare with the laptop's
 # parallel and CUDA runs in cuda-legion-higgs. Everything it writes goes into
-# this directory; BENCHMARK.md explains every choice.
+# this directory; ../BENCHMARK.md explains every choice.
 #
-#   bench/results/cpu-pc-higgs/run.sh          # each case once
-#   bench/results/cpu-pc-higgs/run.sh -m 5     # each case 5 times
+#   bench/results/pc-legion-higgs/cpu-pc-higgs/run.sh          # each case once
+#   bench/results/pc-legion-higgs/cpu-pc-higgs/run.sh -m 5     # each case 5 times
 
 set -euo pipefail
 RUNS=1
@@ -19,11 +19,12 @@ done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RUN="$(basename "$HERE")"
-cd "$HERE/../../.."  # repository root
+OTHER=cuda-legion-higgs  # the other machine's half
+cd "$HERE/../../../.."  # repository root
 PY=bench/.venv/bin/python
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 
-# All 28 logical CPUs of the i7-14700KF, in the order of cpu-pc-susy.
+# All 28 logical CPUs of the i7-14700KF, in the order of cpu-pc-susy-vs-others.
 CPUS=2,0,1,3-27
 
 # run.py appends to results.jsonl: never mix two runs in one directory.
@@ -61,8 +62,14 @@ step "3/4 benchmark: HIGGS, pruned CART and C4.5, parallel (28 threads), $RUNS r
 "$PY" bench/run.py higgs --protocols cart_alpha,c45 --impls tree --threads all \
   --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$RUN"
 
-step "4/4 tables, CSV files and the chart"
+step "4/4 tables, CSV files and the chart of both machines"
 "$PY" bench/report.py "$HERE" --md "$HERE/report.md" --csv "$HERE/summary.csv" \
   --runs-csv "$HERE/runs.csv"
-"$PY" bench/chart.py "$HERE"
-echo "done: $HERE/report.md, summary.csv, runs.csv, chart.png"
+# The chart of both machines, once both runs exist.
+if [ -e "$HERE/../$OTHER/results.jsonl" ]; then
+  "$PY" bench/machines_chart.py "$HERE/../cpu-pc-higgs" "$HERE/../cuda-legion-higgs" \
+    --out "$HERE/../chart.png"
+else
+  echo "no $OTHER results yet: run it there, then redraw ../chart.png (see ../BENCHMARK.md)"
+fi
+echo "done: $HERE/report.md, summary.csv, runs.csv"

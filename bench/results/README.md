@@ -4,14 +4,15 @@ One directory per benchmark: `<backend>-<machine>-<dataset>/`.
 
 - **backend:** `cpu` or `cuda`.
 - **machine:** a short name for the computer. `pc` is the i7-14700KF desktop (8 performance + 12 efficiency cores, 28 threads); `legion` is the laptop with an i7-13650HX (6 + 8 cores, 20 threads) and an RTX 5070 Laptop GPU (8 GB).
-  The mordor3 cluster's runs are grouped in `cluster-*/` directories, named after its nodes. Two GPU servers run CUDA only: `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402). Two CPU servers run parallel only: `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y). Their scripts are in [bench/cluster/](../cluster/README.md), not in a `run.sh`.
+  The desktop's and laptop's HIGGS runs are grouped in `pc-legion-higgs/`. The mordor3 cluster's runs are grouped in `cluster-*/` directories, named after its nodes. Two GPU servers run CUDA only: `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402). Two CPU servers run parallel only: `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y). Their scripts are in [bench/cluster/](../cluster/README.md), not in a `run.sh`.
 - **dataset:** the `bench/datasets.toml` entry, e.g. `susy500k` for `susy_500k`, `susy` for the full dataset.
+- **`-vs-others`:** the directory also runs other implementations (sklearn, rpart, Weka J48, YaDT) next to ./tree: `cpu-pc-susy500k-vs-others`, `cpu-pc-susy-vs-others`. Every other directory is ./tree only.
 
 Each directory holds a `run.sh` that runs that benchmark and writes all of its results into the same directory:
 
 ```bash
-bench/results/cpu-pc-susy500k/run.sh          # each case once
-bench/results/cpu-pc-susy500k/run.sh -m 5     # each case 5 times
+bench/results/cpu-pc-susy500k-vs-others/run.sh          # each case once
+bench/results/cpu-pc-susy500k-vs-others/run.sh -m 5     # each case 5 times
 ```
 
 `BENCHMARK.md` next to it describes the method, and the results once the run is done. `run.sh` refuses to run where results already exist, so move them away to run again. When only ./tree changed, a run that also holds other tools can keep their rows: run `bench/run.py ... --impls tree` into a subdirectory and replace the ./tree rows of `results.jsonl` with its rows (`machine.json` → `tree_rerun` records it; `report.py` and the charts show the rerun's date).
@@ -24,8 +25,8 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 
 | Directory | What | Main result |
 |---|---|---|
-| [`cpu-pc-susy500k`](cpu-pc-susy500k/BENCHMARK.md) | SUSY 500k rows: ./tree against scikit-learn, rpart (CART) and Weka J48, YaDT (C4.5), 1 and 28 threads | On one thread ./tree is 17–30× faster than the CART libraries and 24–59× faster than the C4.5 ones. On 28 threads it is 32× faster than YaDT. |
-| [`cpu-pc-susy`](cpu-pc-susy/BENCHMARK.md) | the same on full SUSY (4.5M training rows) | On one thread ./tree is 59–67× faster than the CART libraries and 21–135× faster than the C4.5 ones (6.2 s against 412 s for scikit-learn and 829 s for J48). On 28 threads it is 28× faster than YaDT. It has the lowest memory for C4.5. |
+| [`cpu-pc-susy500k-vs-others`](cpu-pc-susy500k-vs-others/BENCHMARK.md) | SUSY 500k rows: ./tree against scikit-learn, rpart (CART) and Weka J48, YaDT (C4.5), 1 and 28 threads | On one thread ./tree is 17–30× faster than the CART libraries and 24–59× faster than the C4.5 ones. On 28 threads it is 32× faster than YaDT. |
+| [`cpu-pc-susy-vs-others`](cpu-pc-susy-vs-others/BENCHMARK.md) | the same on full SUSY (4.5M training rows) | On one thread ./tree is 59–67× faster than the CART libraries and 21–135× faster than the C4.5 ones (6.2 s against 412 s for scikit-learn and 829 s for J48). On 28 threads it is 28× faster than YaDT. It has the lowest memory for C4.5. |
 
 **./tree alone on the desktop and laptop** (2026-10-10, commit 49b7f47 or e809e97, one run per case):
 
@@ -34,7 +35,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 | [`cpu-pc-susy-scaling`](cpu-pc-susy-scaling/BENCHMARK.md) | full SUSY, 1–28 threads on the desktop | CART 7.06 → 0.96 s (7.4×), C4.5 6.17 → 1.17 s (5.3×). Flat beyond 12–20 threads: memory bandwidth. |
 | `cpu-legion-susy-scaling` | full SUSY, 1–20 threads on the laptop (`scaling.csv`, `chart.png`) | CART 8.05 → 1.03 s (7.8×), C4.5 6.88 → 1.04 s (6.6×). |
 | [`cuda-legion-susy`](cuda-legion-susy/BENCHMARK.md) | full SUSY: serial, parallel and CUDA on the laptop | CUDA 0.37 s (CART) and 0.46 s (C4.5): 2.4–2.6× the desktop's 28 threads. |
-| [`cuda-legion-higgs`](cuda-legion-higgs/BENCHMARK.md), [`cpu-pc-higgs`](cpu-pc-higgs/BENCHMARK.md) | full HIGGS (10.5M rows): laptop parallel and CUDA, desktop parallel | CUDA 1.37 s (CART) and 2.00 s (C4.5), 2.3–2.6× the CPUs. The laptop's 20 threads match the desktop's 28: its DDR5 is faster. |
+| [`pc-legion-higgs`](pc-legion-higgs/BENCHMARK.md) | full HIGGS (10.5M rows): `cuda-legion-higgs` (laptop parallel and CUDA) and `cpu-pc-higgs` (desktop parallel) | CUDA 1.37 s (CART) and 2.00 s (C4.5), 2.3–2.6× the CPUs. The laptop's 20 threads match the desktop's 28: its DDR5 is faster. |
 
 **./tree alone on the mordor3 cluster** (2026-10-14, 3 runs per case, the tuned code of 16cc93b). CART has no depth limit, like C4.5. Accuracy is ./tree's training accuracy (`run.py --train-accuracy-only`).
 

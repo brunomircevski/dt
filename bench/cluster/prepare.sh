@@ -29,6 +29,6 @@ step "1/3 datasets from $DOWNLOADS, checked by SHA-256"
 step "2/3 prepare $PREPARE for bench/run.py"
 "$PY" bench/prepare.py "$PREPARE"
 
-step "3/3 SHA-256 of the prepared files (for higgs: compare with plan.json of cuda-legion-higgs)"
+step "3/3 SHA-256 of the prepared files (for higgs: compare with plan.json of pc-legion-higgs/cuda-legion-higgs)"
 sha256sum "bench/data/$PREPARE"/*
 echo "done $(date '+%F %T')"

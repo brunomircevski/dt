@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ./tree on the Legion laptop (i7-13650HX, RTX 5070 Laptop GPU) on full HIGGS:
 # parallel (20 threads) and CUDA (GPU + 20 CPU threads), pruned CART and C4.5
-# with the protocols of cpu-pc-susy, to compare with the desktop's parallel run
+# with the protocols of cpu-pc-susy-vs-others, to compare with the desktop's parallel run
 # in cpu-pc-higgs. Everything it writes goes into this directory;
-# BENCHMARK.md explains every choice.
+# ../BENCHMARK.md explains every choice.
 #
-#   bench/results/cuda-legion-higgs/run.sh          # each case once
-#   bench/results/cuda-legion-higgs/run.sh -m 5     # each case 5 times
+#   bench/results/pc-legion-higgs/cuda-legion-higgs/run.sh          # each case once
+#   bench/results/pc-legion-higgs/cuda-legion-higgs/run.sh -m 5     # each case 5 times
 
 set -euo pipefail
 RUNS=1
@@ -20,7 +20,8 @@ done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RUN="$(basename "$HERE")"
-cd "$HERE/../../.."  # repository root
+OTHER=cpu-pc-higgs  # the other machine's half
+cd "$HERE/../../../.."  # repository root
 PY=bench/.venv/bin/python
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 
@@ -79,8 +80,14 @@ step "4/5 benchmark: HIGGS, pruned CART and C4.5, parallel and CUDA, $RUNS run(s
 "$PY" bench/run.py higgs --protocols cart_alpha,c45 --impls tree,tree_cuda --threads all \
   --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$RUN"
 
-step "5/5 tables, CSV files and the chart (with the desktop's cpu-pc-higgs as reference)"
+step "5/5 tables, CSV files and the chart of both machines"
 "$PY" bench/report.py "$HERE" --md "$HERE/report.md" --csv "$HERE/summary.csv" \
   --runs-csv "$HERE/runs.csv"
-"$PY" bench/machines_chart.py "$HERE" --reference bench/results/cpu-pc-higgs
-echo "done: $HERE/report.md, summary.csv, runs.csv, chart.png"
+# The chart of both machines, once both runs exist.
+if [ -e "$HERE/../$OTHER/results.jsonl" ]; then
+  "$PY" bench/machines_chart.py "$HERE/../cpu-pc-higgs" "$HERE/../cuda-legion-higgs" \
+    --out "$HERE/../chart.png"
+else
+  echo "no $OTHER results yet: run it there, then redraw ../chart.png (see ../BENCHMARK.md)"
+fi
+echo "done: $HERE/report.md, summary.csv, runs.csv"
