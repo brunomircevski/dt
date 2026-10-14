@@ -36,6 +36,9 @@ BACKENDS = {"serial": "Serial", "parallel": "Parallel", "cuda": "CUDA"}
 TITLES = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25",
           "cart_full": "CART, no pruning, depth ≤ 30", "c45_unpruned": "C4.5, no pruning"}
 PROTOCOLS = {p: TITLES[p] for p in ("cart_alpha", "c45")}  # the two panels; --protocols
+# No pruning: their "prune" timer holds only C4.5's collapse of useless splits
+# and its thresholds, part of growing; the bars are not split.
+UNPRUNED = {"cart_full", "c45_unpruned"}
 # The files ./tree and the evaluation read: equal hashes = the same rows.
 DATA_FILES = ("train.csv", "train.f32", "train.y.i32", "test.f32", "test.y.i32")
 LEFT = 0.215  # figure fraction left of the panels, for the row labels
@@ -86,7 +89,8 @@ def bars(run, reference):
                         "ram": statistics.median(r["peak_rss_train_bytes"] for r in ok) / 2**30,
                         "vram": statistics.median(gpu) / 2**30 if gpu else None,
                         # Median pruning time, if every run recorded it.
-                        "prune": statistics.median(prune) if len(prune) == len(ok) else None,
+                        "prune": (statistics.median(prune)
+                                  if len(prune) == len(ok) and protocol not in UNPRUNED else None),
                         "tree": (ok[0]["nodes"], ok[0]["depth"], ok[0]["test_accuracy"])})
     return out
 

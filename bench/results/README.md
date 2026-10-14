@@ -26,6 +26,7 @@ bench/results/cpu-pc-susy500k/run.sh -m 5     # each case 5 times
 | `cuda-legion-higgs` | ./tree parallel (20 threads) and CUDA on the laptop, full HIGGS; run on 2026-10-10 (rerun on commit 49b7f47), one run per case; its `chart.png` shows `cpu-pc-higgs` as reference |
 | `cluster-higgs/` | full HIGGS on five nodes of the mordor3 SLURM cluster: `cuda-hopper-higgs` (H100), `cuda-ampere-higgs` (A100), `cuda-turing-higgs` (RTX 2080 Ti), all parallel + CUDA, and `cpu-epyc-higgs`, `cpu-dell-higgs` (parallel, 48 cores); run on 2026-10-14 with the defaults tuned for these servers (commit 16cc93b), 3 runs per case; one `chart.png` for all five, with the time spent pruning; [BENCHMARK.md](cluster-higgs/BENCHMARK.md) compares it with the first run before tuning (commit ab8ebdd) |
 | `cluster-airlines/` | the airline dataset (115M rows) on the same nodes but turing (its 11 GB GPU is too small), same commit and protocols; [BENCHMARK.md](cluster-airlines/BENCHMARK.md) |
+| `cluster-airlines-noprunning/` | airline with CART and C4.5 grown without pruning (`cart_full`, `c45_unpruned`) on hopper and ampere (CUDA only), epyc1 and dell1 (parallel); run on 2026-10-14 (commit 2ced368), 3 runs per case; [BENCHMARK.md](cluster-airlines-noprunning/BENCHMARK.md) |
 
 ## A new machine
 

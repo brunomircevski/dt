@@ -5,6 +5,7 @@ cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 
 - [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows) on five nodes
 - [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows) on the same nodes but turing
+- [`bench/results/cluster-airlines-noprunning/`](../results/cluster-airlines-noprunning/BENCHMARK.md): airline, CART and C4.5 grown without pruning (GPU nodes CUDA only)
 
 | Node | CPU | RAM | GPU (GPU 0 used) |
 |---|---|---|---|
@@ -41,6 +42,16 @@ for d in higgs:higgs airlines:airline; do
   bench/.venv/bin/python bench/machines_chart.py $dir/cuda-hopper-$data $dir/cuda-ampere-$data \
       $turing $dir/cpu-epyc-$data $dir/cpu-dell-$data --out $dir/chart.png
 done
+```
+
+The unpruned airline run (GPU nodes CUDA only) and its chart:
+
+```bash
+bench/cluster/submit.sh -m 3 -d airline -p cart_full,c45_unpruned -c -o cluster-airlines-noprunning
+dir=bench/results/cluster-airlines-noprunning
+bench/.venv/bin/python bench/machines_chart.py --protocols cart_full,c45_unpruned \
+    $dir/cuda-hopper-airline $dir/cuda-ampere-airline $dir/cpu-epyc-airline $dir/cpu-dell-airline \
+    --out $dir/chart.png
 ```
 
 - **`build.sh`** runs on hopper because the CPU nodes have no CUDA toolkit. It

@@ -1,0 +1,44 @@
+log: bench/results/cluster-airlines-noprunning/cuda-hopper-airline/run.log, job 217 on hopper, started 2026-10-14 17:12:59
+
+=== 17:12:59  1/3 machine check
+CPUs allocated: 32 (0-31), SLURM_JOB_CPUS_PER_NODE=32
+CPU governor: schedutil 
+load average: 0.00 0.00 0.21
+GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+code: 2ced36833c6c (from submit.sh: hopper has no git)
+runs per case: 3
+
+=== 17:12:59  2/3 benchmark: airline, cart_full,c45_unpruned, tree_cuda, 32 threads, 3 run(s) per case
+2 cases, 9 processes:
+  airline | cart_full | tree_cuda | 32
+  airline | c45_unpruned | tree_cuda | 32
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  airline: identical in every format (32 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
+[1/9] 17:13:33 run 1/3: CART ./tree CUDA, 32 threads, airline ...
+    ok: train 5.053 s, peak 19,265 MiB, GPU 24,517 MiB, 21,600,857 nodes, depth 30, test acc 77.14% | process 0m14s, elapsed 2m46s
+[2/9] 17:16:20 run 1/3: C4.5 ./tree CUDA, 32 threads, airline ...
+    ok: train 7.152 s, peak 25,503 MiB, GPU 24,515 MiB, 19,579,127 nodes, depth 74, test acc 77.90% | process 0m18s, elapsed 5m54s, about 1m05s left
+[3/9] 17:19:28 run 2/3: CART ./tree CUDA, 32 threads, airline ...
+    ok: train 4.661 s, peak 19,267 MiB, GPU 24,517 MiB, 21,600,857 nodes, depth 30, test acc 77.14% | process 0m15s, elapsed 8m43s, about 0m51s left
+[4/9] 17:22:17 run 2/3: C4.5 ./tree CUDA, 32 threads, airline ...
+    ok: train 6.574 s, peak 25,502 MiB, GPU 24,515 MiB, 19,579,127 nodes, depth 74, test acc 77.90% | process 0m17s, elapsed 11m50s, about 0m32s left
+[5/9] 17:25:23 run 3/3: C4.5 ./tree CUDA, 32 threads, airline ...
+    ok: train 7.266 s, peak 25,502 MiB, GPU 24,515 MiB, 19,579,127 nodes, depth 74, test acc 77.90% | process 0m17s, elapsed 15m00s, about 0m14s left
+[6/9] 17:28:34 run 3/3: CART ./tree CUDA, 32 threads, airline ...
+    ok: train 4.469 s, peak 19,264 MiB, GPU 24,517 MiB, 21,600,857 nodes, depth 30, test acc 77.14% | process 0m14s, elapsed 17m49s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[7/9] 17:31:23 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.018 s, peak 229 MiB, GPU 461 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 17m50s, about 0m00s left
+[8/9] 17:31:24 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0211 s, peak 229 MiB, GPU 461 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 17m51s, about 0m00s left
+[9/9] 17:31:25 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0212 s, peak 229 MiB, GPU 461 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 17m52s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-airlines-noprunning/cuda-hopper-airline/results.jsonl
+
+=== 17:31:26  3/3 tables and CSV files
+done 2026-10-14 17:31:26
