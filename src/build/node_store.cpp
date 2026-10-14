@@ -26,16 +26,17 @@ NodeStore::Chunk &NodeStore::ensureChunk(std::size_t index) {
   if (existing) {
     return *existing;
   }
-  std::lock_guard<std::mutex> lock(mutex_);
-  existing = chunks_[index].load(std::memory_order_acquire);
-  if (!existing) {
-    auto fresh = std::make_unique<Chunk>();
-    fresh->nodes.reset(new Node[kChunkSize]);
-    fresh->counts.reset(new std::uint32_t[std::size_t{kChunkSize} * classCount_]);
-    existing = fresh.get();
+  // Only the thread that took this chunk's ids adds to it, so it allocates
+  // the chunk on its own; the lock only guards the list of owned chunks.
+  auto fresh = std::make_unique<Chunk>();
+  fresh->nodes.reset(new Node[kChunkSize]);
+  fresh->counts.reset(new std::uint32_t[std::size_t{kChunkSize} * classCount_]);
+  existing = fresh.get();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
     owned_.push_back(std::move(fresh));
-    chunks_[index].store(existing, std::memory_order_release);
   }
+  chunks_[index].store(existing, std::memory_order_release);
   return *existing;
 }
 

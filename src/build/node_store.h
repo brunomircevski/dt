@@ -14,8 +14,10 @@ namespace dt {
 // Where the builders put nodes while they grow a tree. add() may be called
 // from many threads at once and never moves existing nodes (they live in
 // fixed-size chunks), so a builder can keep working on a node while other
-// threads add theirs. Every thread takes ids in blocks of its own, so threads
-// neither contend on one counter nor write to the same cache lines. Ids depend
+// threads add theirs. Every thread takes a whole chunk of ids at a time, so
+// threads neither contend on one counter or lock nor write to the same
+// memory, and each chunk is allocated (and its pages placed) by the thread
+// that fills it. Ids depend
 // on thread timing and may have gaps; toTree() renumbers the nodes in
 // preorder, so the result does not depend on them.
 class NodeStore {
@@ -37,10 +39,10 @@ public:
   void toTree(Tree &tree, ThreadPool *pool);
 
 private:
-  static constexpr unsigned kChunkBits = 14;
+  static constexpr unsigned kChunkBits = 12;
   static constexpr std::uint32_t kChunkSize = 1u << kChunkBits;
   static constexpr std::uint32_t kChunkMask = kChunkSize - 1;
-  static constexpr std::uint32_t kBlockSize = 64;  // ids a thread takes at once
+  static constexpr std::uint32_t kBlockSize = kChunkSize; // ids a thread takes at once
   static constexpr std::size_t kMaxThreads = 4096; // bounds the unused ids
 
   struct Chunk {
