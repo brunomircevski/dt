@@ -1,0 +1,40 @@
+job 116 on dell1, 16 CPUs, 2026-10-14 12:28:20
+
+=== 12:28:20  1/3 datasets from /home/bmircevski/downloads, checked against the desktop's SHA-256
+covertype: 85,600,038 bytes, sha256 fd7a387defeab82ea260a5be0c42b84e3426b963bb7feb490ffbafdaf89dac77 = the desktop copy
+higgs: 7,957,070,675 bytes, sha256 71f566a24e8a03ff51aa6961addc652d44ff8878b28f4198a7f8921f3c6af31c = the desktop copy
+
+=== 12:29:10  2/3 prepare HIGGS for bench/run.py
+higgs: 10,500,000 train / 500,000 test rows, 28 features, 2 classes (66.4 s)
+
+=== 12:30:16  3/3 SHA-256 of the prepared files (compare with plan.json of cuda-legion-higgs)
+4bbdc92630f2d3e2ab936d254a6be3c922fda2b182d1ee75136aa9dc6b5237f9  bench/data/higgs/meta.json
+1b20eae8ca7a0f227809eada5f733eb3f147f008fa6f16e80b87e3fb3014114b  bench/data/higgs/test.f32
+0c21368ca84b45575547a79aaca21956f3dbbb37b1edf15ffd03900bf4408a11  bench/data/higgs/test.yadt.csv
+29c8a1fbcb7c75e2ecd6c35a2d1426b8abfb6f3eae612a3ab3187cb7d4e3fe7f  bench/data/higgs/test.y.i32
+e33eebaed86d3647f2026177412f8d0010c1b7fe7b83e23eb3fac9d66785c3ef  bench/data/higgs/train.csv
+59312cd2a37b5758bcb69e1bc76a16c415b8aeee49d14866e9c92d5f020bcd70  bench/data/higgs/train.f32
+61d0e3d1a44c745958cde43f669b8f902a5f58b02fef970307cd8bbdcf2b1b67  bench/data/higgs/train.yadt.csv
+fa91205159bdf9b843eaa08aef124252fe3c3bdba8b4baa310e26a2caf7eaf6a  bench/data/higgs/train.y.i32
+20b5457c694d1d8cdd2e5cbf74a96eb3b52fe5ffa37ad5ae360f8103fbe2a24f  bench/data/higgs/yadt.names
+done 2026-10-14 12:30:22
+
+job 125 on dell2, 16 CPUs, 2026-10-14 12:43:47
+
+=== 12:43:47  1/3 datasets from /home/bmircevski/downloads, checked against the desktop's SHA-256
+supersymmetry: 1,791,676,993 bytes, sha256 85ecf105d7667d88006de9d8dfafabbc703647fe651a40df51f9a1202d31108e = the desktop copy
+
+=== 12:44:15  2/3 prepare HIGGS for bench/run.py
+higgs: already prepared
+
+=== 12:44:15  3/3 SHA-256 of the prepared files (compare with plan.json of cuda-legion-higgs)
+4bbdc92630f2d3e2ab936d254a6be3c922fda2b182d1ee75136aa9dc6b5237f9  bench/data/higgs/meta.json
+1b20eae8ca7a0f227809eada5f733eb3f147f008fa6f16e80b87e3fb3014114b  bench/data/higgs/test.f32
+0c21368ca84b45575547a79aaca21956f3dbbb37b1edf15ffd03900bf4408a11  bench/data/higgs/test.yadt.csv
+29c8a1fbcb7c75e2ecd6c35a2d1426b8abfb6f3eae612a3ab3187cb7d4e3fe7f  bench/data/higgs/test.y.i32
+e33eebaed86d3647f2026177412f8d0010c1b7fe7b83e23eb3fac9d66785c3ef  bench/data/higgs/train.csv
+59312cd2a37b5758bcb69e1bc76a16c415b8aeee49d14866e9c92d5f020bcd70  bench/data/higgs/train.f32
+61d0e3d1a44c745958cde43f669b8f902a5f58b02fef970307cd8bbdcf2b1b67  bench/data/higgs/train.yadt.csv
+fa91205159bdf9b843eaa08aef124252fe3c3bdba8b4baa310e26a2caf7eaf6a  bench/data/higgs/train.y.i32
+20b5457c694d1d8cdd2e5cbf74a96eb3b52fe5ffa37ad5ae360f8103fbe2a24f  bench/data/higgs/yadt.names
+done 2026-10-14 12:44:24

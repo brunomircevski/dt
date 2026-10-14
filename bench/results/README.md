@@ -4,6 +4,7 @@ One directory per benchmark: `<backend>-<machine>-<dataset>/`.
 
 - **backend:** `cpu` or `cuda`.
 - **machine:** a short name for the computer. `pc` is the i7-14700KF desktop (8 performance + 12 efficiency cores, 28 threads); `legion` is the laptop with an i7-13650HX (6 + 8 cores, 20 threads) and an RTX 5070 Laptop GPU (8 GB).
+  The mordor3 cluster's runs are grouped in `cluster/`, named after its nodes: `hopper` (2× Xeon Gold 6444Y, 4× H100 PCIe), `ampere` (2× EPYC 7402, A100 80 GB PCIe), `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y).
 - **dataset:** the `bench/datasets.toml` entry, e.g. `susy500k` for `susy_500k`, `susy` for the full dataset.
 
 Each directory holds a `run.sh` that runs that benchmark and writes all of its results into the same directory:
@@ -23,6 +24,7 @@ bench/results/cpu-pc-susy500k/run.sh -m 5     # each case 5 times
 | `cuda-legion-susy` | ./tree only on the laptop, full SUSY: serial, parallel (20 threads) and CUDA, the protocols of `cpu-pc-susy`; run on 2026-10-10 (rerun on commit 49b7f47), one run per case; its `chart.png` shows the desktop's `cpu-pc-susy` as reference |
 | `cpu-pc-higgs` | ./tree parallel (28 threads) on full HIGGS, the desktop half of `cuda-legion-higgs`; run on 2026-10-10 (rerun on commit 49b7f47) |
 | `cuda-legion-higgs` | ./tree parallel (20 threads) and CUDA on the laptop, full HIGGS; run on 2026-10-10 (rerun on commit 49b7f47), one run per case; its `chart.png` shows `cpu-pc-higgs` as reference |
+| `cluster/` | full HIGGS on four nodes of the mordor3 SLURM cluster, all at the same time: `cuda-hopper-higgs` (H100, parallel + CUDA), `cuda-ampere-higgs` (A100, parallel + CUDA), `cpu-epyc-higgs` and `cpu-dell-higgs` (parallel, 48 cores); run on 2026-10-14 (commit ab8ebdd), 3 runs per case; one `chart.png` for all four; [BENCHMARK.md](cluster/BENCHMARK.md) also covers the SLURM scripts and the datasets rebuilt from public downloads |
 
 ## A new machine
 
