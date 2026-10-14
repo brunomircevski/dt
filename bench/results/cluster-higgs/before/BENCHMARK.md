@@ -1,4 +1,6 @@
-# HIGGS on the mordor3 cluster: ./tree parallel and CUDA on five servers
+# HIGGS on the mordor3 cluster: ./tree parallel and CUDA on five servers (before tuning)
+
+> **The first cluster run, before ./tree was tuned for these servers.** The current results are in [../BENCHMARK.md](../BENCHMARK.md). The scripts named below have since moved to [bench/cluster/](../../../cluster/README.md), and this directory was `bench/results/cluster/`.
 
 **Status:** run on 2026-10-14 at 12:45, all four jobs at the same time (each on its own node), 3 runs per case, commit ab8ebdd (627bcc9 plus these scripts). Turing was added at 14:42 (job alone on its node, commit ae0eba0: the same source, built with sm_75 as well). Every case built the same tree on every node and backend, and the prepared data files have the same SHA-256 as on the desktop and the laptop (`cpu-pc-higgs`, `cuda-legion-higgs`).
 
@@ -46,7 +48,7 @@ bench/.venv/bin/python bench/machines_chart.py bench/results/cluster/cuda-hopper
 
 ## Method
 
-The protocols, data and measurements of [`cpu-pc-higgs`](../cpu-pc-higgs/BENCHMARK.md), with every core of each node:
+The protocols, data and measurements of [`cpu-pc-higgs`](../../cpu-pc-higgs/BENCHMARK.md), with every core of each node:
 
 | Backend | Command | Threads |
 |---|---|---|

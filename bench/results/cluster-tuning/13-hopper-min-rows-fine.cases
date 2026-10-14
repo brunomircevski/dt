@@ -1,0 +1,12 @@
+airline-c45-min8192 | | ./tree --cuda --threads 32 --gpu-min-rows 8192 --c45 bench/data/airline/train.csv
+airline-c45-min16384 | | ./tree --cuda --threads 32 --gpu-min-rows 16384 --c45 bench/data/airline/train.csv
+airline-c45-min32768 | | ./tree --cuda --threads 32 --gpu-min-rows 32768 --c45 bench/data/airline/train.csv
+airline-c45-min65536 | | ./tree --cuda --threads 32 --gpu-min-rows 65536 --c45 bench/data/airline/train.csv
+airline-cart-min8192 | | ./tree --cuda --threads 32 --gpu-min-rows 8192 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
+airline-cart-min16384 | | ./tree --cuda --threads 32 --gpu-min-rows 16384 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
+higgs-cart-min1024 | | ./tree --cuda --threads 32 --gpu-min-rows 1024 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+higgs-c45-min1024 | | ./tree --cuda --threads 32 --gpu-min-rows 1024 --c45 bench/data/higgs/train.csv
+higgs-cart-min1536 | | ./tree --cuda --threads 32 --gpu-min-rows 1536 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+higgs-c45-min1536 | | ./tree --cuda --threads 32 --gpu-min-rows 1536 --c45 bench/data/higgs/train.csv
+higgs-cart-min2048 | | ./tree --cuda --threads 32 --gpu-min-rows 2048 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+higgs-c45-min2048 | | ./tree --cuda --threads 32 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv

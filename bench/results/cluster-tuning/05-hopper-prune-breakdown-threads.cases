@@ -1,0 +1,3 @@
+c45-t32 | DT_PP=1 | ./tree --cuda --threads 32 --gpu-min-rows 1024 --c45 bench/data/higgs/train.csv
+c45-t16 | DT_PP=1 | ./tree --cuda --threads 16 --gpu-min-rows 1024 --c45 bench/data/higgs/train.csv
+c45-t8 | DT_PP=1 | ./tree --cuda --threads 8 --gpu-min-rows 1024 --c45 bench/data/higgs/train.csv

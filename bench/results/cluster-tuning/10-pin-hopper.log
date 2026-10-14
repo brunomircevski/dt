@@ -1,0 +1,6 @@
+readOnlySupported 0 pageableMemoryAccess 1
+huge 0 flags 8: register operation not supported 0.1 ms, copy 228.5 ms (5.5 GB/s), unregister 0.0 ms
+huge 0 flags 0: register no error 48.5 ms, copy 22.7 ms (55.5 GB/s), unregister 17.4 ms
+huge 1 flags 8: register operation not supported 0.0 ms, copy 102.9 ms (12.2 GB/s), unregister 0.0 ms
+huge 1 flags 0: register no error 17.9 ms, copy 22.6 ms (55.7 GB/s), unregister 14.3 ms
+32970276

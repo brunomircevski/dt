@@ -1,0 +1,5 @@
+# hopper, 32 CPUs, job 195, 2026-10-14 15:35:22, load 14.01 11.71 8.47
+label,rep,load_ms,setup_ms,presort_ms,build_ms,prune_ms,train_ms,nodes,depth,real_s,user_s,sys_s,minor_faults,voluntary_cs,involuntary_cs
+air-c45-cuda,0,1138.7,355.7,524.2,11894.5,9143.1,21917.5,8548725,72,27.06,449.10,18.39,682100,121052,1601
+air-c45-par,0,1123.6,,2121.7,14007.3,8712.5,24841.5,8548725,72,28.21,591.81,15.20,346987,199049,2090
+# done 2026-10-14 15:36:17

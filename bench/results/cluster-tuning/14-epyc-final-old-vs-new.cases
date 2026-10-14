@@ -1,0 +1,8 @@
+higgs-cart-old | | old/tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+higgs-cart-new | | ./tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+higgs-c45-old | | old/tree_cpu --parallel --threads 48 --c45 bench/data/higgs/train.csv
+higgs-c45-new | | ./tree_cpu --parallel --threads 48 --c45 bench/data/higgs/train.csv
+airline-cart-old | | old/tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
+airline-cart-new | | ./tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
+airline-c45-old | | old/tree_cpu --parallel --threads 48 --c45 bench/data/airline/train.csv
+airline-c45-new | | ./tree_cpu --parallel --threads 48 --c45 bench/data/airline/train.csv

@@ -1,0 +1,156 @@
+  [air-c45-prof] GS context          0.0 ms
+  [air-c45-prof]   gpu NVIDIA H100 PCIe (sm_90), fp32:fp64 = 2:1, one-pass sweep
+  [air-c45-prof]   setup context          0.02 ms
+  [air-c45-prof] GS meminfo          1.1 ms
+  [air-c45-prof] GS reserve          1.1 ms
+  [air-c45-prof] GS register         0.0 ms
+  [air-c45-prof] GS copy           612.3 ms
+  [air-c45-prof] GS unregister       0.0 ms
+  [air-c45-prof] GS cubtemp         14.9 ms
+  [air-c45-prof] GS logs             0.6 ms
+  [air-c45-prof] GS arena+values     0.1 ms
+  [air-c45-prof] GS final sync       0.0 ms
+  [air-c45-prof]   gpu level  0:      1 nodes 114569017 rows      13 segments    18.86 ms
+  [air-c45-prof]   gpu level  1:      2 nodes 114569017 rows      24 segments    70.99 ms
+  [air-c45-prof]   gpu level  2:      4 nodes 114569017 rows      48 segments    78.19 ms
+  [air-c45-prof]   gpu level  3:      8 nodes 114569017 rows      96 segments    78.14 ms
+  [air-c45-prof]   gpu level  4:     16 nodes 114569017 rows     192 segments    84.77 ms
+  [air-c45-prof]   gpu level  5:     32 nodes 114569017 rows     384 segments    87.18 ms
+  [air-c45-prof]   gpu level  6:     64 nodes 114569017 rows     764 segments   172.19 ms
+  [air-c45-prof]   gpu level  7:    124 nodes 114552347 rows    1474 segments    94.03 ms
+  [air-c45-prof]   gpu level  8:    235 nodes 114547633 rows    2782 segments    92.87 ms
+  [air-c45-prof]   gpu level  9:    441 nodes 114526071 rows    5208 segments    91.31 ms
+  [air-c45-prof]   gpu level 10:    777 nodes 114449928 rows    9122 segments    87.01 ms
+  [air-c45-prof]   gpu level 11:   1315 nodes 114195262 rows   15398 segments    85.60 ms
+  [air-c45-prof]   gpu level 12:   2112 nodes 113874123 rows   24603 segments    84.53 ms
+  [air-c45-prof]   gpu level 13:   3108 nodes 113184005 rows   36128 segments    84.81 ms
+  [air-c45-prof]   gpu level 14:   4349 nodes 112095127 rows   50519 segments    78.96 ms
+  [air-c45-prof]   gpu level 15:   5764 nodes 110543618 rows   66829 segments    80.35 ms
+  [air-c45-prof]   gpu level 16:   7360 nodes 108378990 rows   85102 segments    81.25 ms
+  [air-c45-prof]   gpu level 17:   8911 nodes 105308653 rows  102832 segments    81.21 ms
+  [air-c45-prof]   gpu level 18:  10414 nodes 101539957 rows  120079 segments    80.30 ms
+  [air-c45-prof]   gpu level 19:  11832 nodes  96993466 rows  136333 segments    84.06 ms
+  [air-c45-prof]   gpu level 20:  12998 nodes  91765542 rows  149668 segments    81.38 ms
+  [air-c45-prof]   gpu level 21:  13995 nodes  85998135 rows  161224 segments    79.46 ms
+  [air-c45-prof]   gpu level 22:  14665 nodes  79590687 rows  169177 segments    80.99 ms
+  [air-c45-prof]   gpu level 23:  15113 nodes  72944016 rows  174514 segments    76.03 ms
+  [air-c45-prof]   gpu level 24:  15121 nodes  65934368 rows  174801 segments    72.47 ms
+  [air-c45-prof]   gpu level 25:  14683 nodes  58679081 rows  170077 segments    70.58 ms
+  [air-c45-prof]   gpu level 26:  14071 nodes  51546079 rows  163121 segments    64.72 ms
+  [air-c45-prof]   gpu level 27:  13136 nodes  44590796 rows  152457 segments    59.30 ms
+  [air-c45-prof]   gpu level 28:  11998 nodes  37971612 rows  139535 segments    52.61 ms
+  [air-c45-prof]   gpu level 29:  10741 nodes  31814546 rows  125001 segments    46.25 ms
+  [air-c45-prof]   gpu level 30:   9357 nodes  26117758 rows  108983 segments    38.37 ms
+  [air-c45-prof]   gpu level 31:   7960 nodes  21055711 rows   92766 segments    31.79 ms
+  [air-c45-prof]   gpu level 32:   6672 nodes  16775272 rows   77796 segments    28.15 ms
+  [air-c45-prof]   gpu level 33:   5443 nodes  13086832 rows   63511 segments    21.25 ms
+  [air-c45-prof]   gpu level 34:   4324 nodes  10026155 rows   50480 segments    16.72 ms
+  [air-c45-prof]   gpu level 35:   3436 nodes   7618441 rows   40136 segments    13.46 ms
+  [air-c45-prof]   gpu level 36:   2624 nodes   5644867 rows   30680 segments     9.67 ms
+  [air-c45-prof]   gpu level 37:   1970 nodes   4109691 rows   23076 segments     7.86 ms
+  [air-c45-prof]   gpu level 38:   1475 nodes   2966369 rows   17296 segments     5.50 ms
+  [air-c45-prof]   gpu level 39:   1069 nodes   2084485 rows   12535 segments     3.99 ms
+  [air-c45-prof]   gpu level 40:    749 nodes   1434974 rows    8769 segments     2.80 ms
+  [air-c45-prof]   gpu level 41:    513 nodes    973132 rows    6005 segments     1.92 ms
+  [air-c45-prof]   gpu level 42:    369 nodes    680686 rows    4316 segments     1.47 ms
+  [air-c45-prof]   gpu level 43:    248 nodes    455482 rows    2893 segments     1.90 ms
+  [air-c45-prof]   gpu level 44:    162 nodes    294790 rows    1902 segments     0.76 ms
+  [air-c45-prof]   gpu level 45:    113 nodes    197144 rows    1337 segments     0.59 ms
+  [air-c45-prof]   gpu level 46:     74 nodes    124987 rows     879 segments     0.43 ms
+  [air-c45-prof]   gpu level 47:     51 nodes     83032 rows     600 segments     0.36 ms
+  [air-c45-prof]   gpu level 48:     29 nodes     49061 rows     345 segments     0.27 ms
+  [air-c45-prof]   gpu level 49:     17 nodes     29646 rows     202 segments     0.24 ms
+  [air-c45-prof]   gpu level 50:     10 nodes     18451 rows     119 segments     1.50 ms
+  [air-c45-prof]   gpu level 51:      6 nodes     11701 rows      71 segments     0.19 ms
+  [air-c45-prof]   gpu level 52:      5 nodes      9595 rows      59 segments     0.18 ms
+  [air-c45-prof]   gpu level 53:      5 nodes      7547 rows      60 segments     0.18 ms
+  [air-c45-prof]   gpu level 54:      2 nodes      3388 rows      24 segments     0.17 ms
+  [air-c45-prof]   gpu level 55:      2 nodes      3266 rows      24 segments     0.16 ms
+  [air-c45-prof]   gpu level 56:      2 nodes      2997 rows      24 segments     0.17 ms
+  [air-c45-prof]   gpu level 57:      1 nodes      1456 rows      12 segments     0.17 ms
+  [air-c45-prof]   waiting for CPU subtrees: 7398.06 ms
+  [air-c45-prof]   presortGather            13.25 ms
+  [air-c45-prof]   presortSort              60.54 ms
+  [air-c45-prof]   presortInterleave        13.28 ms
+  [air-c45-prof]   segmentConstant           1.07 ms
+  [air-c45-prof]   tileHistogram             6.19 ms
+  [air-c45-prof]   segmentPrefix             7.17 ms
+  [air-c45-prof]   tileBound                 2.72 ms
+  [air-c45-prof]   segmentLower              4.40 ms
+  [air-c45-prof]   tileExact               447.40 ms
+  [air-c45-prof]   segmentBest              17.07 ms
+  [air-c45-prof]   markGoesLeft            328.43 ms
+  [air-c45-prof]   partition              1204.13 ms
+  [air-c45-prof]   handOffGather            12.14 ms
+  [air-c45-prof]   handOffCopy             189.31 ms
+  [air-c45-prof] C4.5 on bench/data/airline/train.csv (backend cuda)
+  [air-c45-prof]   rows 114569017 train, 13 features, 2 classes
+  [air-c45-prof]   pruning CF 0.250000 + raising
+  [air-c45-prof]   unpruned: 19579127 nodes
+  [air-c45-prof] Tree:
+  [air-c45-prof]   nodes 8548725, leaves 4274363, depth 72
+  [air-c45-prof]   train accuracy 87.4157%
+  [air-c45-prof] Timings:
+  [air-c45-prof]   load                  1157.8 ms
+  [air-c45-prof]   gpu setup              630.3 ms
+  [air-c45-prof]   presort                517.2 ms
+  [air-c45-prof]   build                11451.1 ms
+  [air-c45-prof]   prune                 8190.6 ms
+  [air-c45-prof]   train total          20789.2 ms
+  [air-c45-prof]   evaluate              2727.0 ms
+  [air-c45-prof] Memory:
+  [air-c45-prof]   peak after training 28473724 KiB
+  [higgs-cart-gs] GS context          0.0 ms
+  [higgs-cart-gs] GS meminfo          0.2 ms
+  [higgs-cart-gs] GS reserve          0.7 ms
+  [higgs-cart-gs] GS register         0.0 ms
+  [higgs-cart-gs] GS copy           152.8 ms
+  [higgs-cart-gs] GS unregister       0.0 ms
+  [higgs-cart-gs] GS cubtemp         15.8 ms
+  [higgs-cart-gs] GS logs             0.6 ms
+  [higgs-cart-gs] GS arena+values     0.0 ms
+  [higgs-cart-gs] GS final sync       0.0 ms
+  [higgs-cart-gs] CART on bench/data/higgs/train.csv (backend cuda)
+  [higgs-cart-gs]   rows 10500000 train, 28 features, 2 classes
+  [higgs-cart-gs]   pruning alpha 0.000010
+  [higgs-cart-gs]   unpruned: 116455 nodes
+  [higgs-cart-gs] Tree:
+  [higgs-cart-gs]   nodes 1611, leaves 806, depth 19
+  [higgs-cart-gs]   train accuracy 71.7907%
+  [higgs-cart-gs] Timings:
+  [higgs-cart-gs]   load                   416.3 ms
+  [higgs-cart-gs]   gpu setup              170.2 ms
+  [higgs-cart-gs]   presort                 19.8 ms
+  [higgs-cart-gs]   build                  311.6 ms
+  [higgs-cart-gs]   prune                    0.6 ms
+  [higgs-cart-gs]   train total            502.2 ms
+  [higgs-cart-gs]   evaluate                45.6 ms
+  [higgs-cart-gs] Memory:
+  [higgs-cart-gs]   peak after training 3736344 KiB
+  [higgs-c45-gs] GS context          0.0 ms
+  [higgs-c45-gs] GS meminfo          0.2 ms
+  [higgs-c45-gs] GS reserve          0.6 ms
+  [higgs-c45-gs] GS register         0.0 ms
+  [higgs-c45-gs] GS copy           147.0 ms
+  [higgs-c45-gs] GS unregister       0.0 ms
+  [higgs-c45-gs] GS cubtemp         15.4 ms
+  [higgs-c45-gs] GS logs             0.5 ms
+  [higgs-c45-gs] GS arena+values     0.1 ms
+  [higgs-c45-gs] GS final sync       0.0 ms
+  [higgs-c45-gs] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [higgs-c45-gs]   rows 10500000 train, 28 features, 2 classes
+  [higgs-c45-gs]   pruning CF 0.250000 + raising
+  [higgs-c45-gs]   unpruned: 1317065 nodes
+  [higgs-c45-gs] Tree:
+  [higgs-c45-gs]   nodes 1159295, leaves 579648, depth 71
+  [higgs-c45-gs]   train accuracy 87.8790%
+  [higgs-c45-gs] Timings:
+  [higgs-c45-gs]   load                   407.8 ms
+  [higgs-c45-gs]   gpu setup              163.9 ms
+  [higgs-c45-gs]   presort                113.0 ms
+  [higgs-c45-gs]   build                  734.3 ms
+  [higgs-c45-gs]   prune                 1040.0 ms
+  [higgs-c45-gs]   train total           2051.1 ms
+  [higgs-c45-gs]   evaluate               235.0 ms
+  [higgs-c45-gs] Memory:
+  [higgs-c45-gs]   peak after training 5262544 KiB

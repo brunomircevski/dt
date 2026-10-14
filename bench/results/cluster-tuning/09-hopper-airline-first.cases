@@ -1,0 +1,4 @@
+air-cart-cuda-new | | ./tree --cuda --threads 32 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
+air-c45-cuda-new | | ./tree --cuda --threads 32 --c45 bench/data/airline/train.csv
+air-cart-cuda-old | | old/tree --cuda --threads 32 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
+air-c45-cuda-old | | old/tree --cuda --threads 32 --c45 bench/data/airline/train.csv

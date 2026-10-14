@@ -1,0 +1,15 @@
+== golden tests 15:12:31
+All backends match the golden trees.
+--cart -d 30 --alpha 1e-5  old/tree_cpu --parallel  9b25f5a0daecce33   nodes 1611, leaves 806, depth 19
+--cart -d 30 --alpha 1e-5  ./tree_cpu --parallel    9b25f5a0daecce33   nodes 1611, leaves 806, depth 19
+--cart -d 30 --alpha 1e-5  old/tree --cuda          9b25f5a0daecce33   nodes 1611, leaves 806, depth 19
+--cart -d 30 --alpha 1e-5  ./tree --cuda            9b25f5a0daecce33   nodes 1611, leaves 806, depth 19
+--c45                      old/tree_cpu --parallel  8f7df2d270ecfbae   nodes 1159295, leaves 579648, depth 71
+--c45                      ./tree_cpu --parallel    8f7df2d270ecfbae   nodes 1159295, leaves 579648, depth 71
+--c45                      old/tree --cuda          8f7df2d270ecfbae   nodes 1159295, leaves 579648, depth 71
+--c45                      ./tree --cuda            8f7df2d270ecfbae   nodes 1159295, leaves 579648, depth 71
+--cart --alpha 1e-5        old/tree_cpu --parallel  9b25f5a0daecce33   nodes 1611, leaves 806, depth 19
+--cart --alpha 1e-5        ./tree_cpu --parallel    9b25f5a0daecce33   nodes 1611, leaves 806, depth 19
+--cart --alpha 1e-5        old/tree --cuda          9b25f5a0daecce33   nodes 1611, leaves 806, depth 19
+--cart --alpha 1e-5        ./tree --cuda            9b25f5a0daecce33   nodes 1611, leaves 806, depth 19
+== done 15:16:41

@@ -1,0 +1,43 @@
+  [air-c45-cuda] PP collapse 815.6 thresholds 119.2
+  [air-c45-cuda] PP construct 215.5
+  [air-c45-cuda] PP arrange 3053.8 prune 4549.3 compact 387.0
+  [air-c45-cuda] PP bigArrange preorder 399.1 route 1210.0 sort 734.8 permute 610.4 counts 283.5
+  [air-c45-cuda] PP bigExtra route 8121.9 accum 4210.0
+  [air-c45-cuda] C4.5 on bench/data/airline/train.csv (backend cuda)
+  [air-c45-cuda]   rows 114569017 train, 13 features, 2 classes
+  [air-c45-cuda]   pruning CF 0.250000 + raising
+  [air-c45-cuda]   unpruned: 19579127 nodes
+  [air-c45-cuda] Tree:
+  [air-c45-cuda]   nodes 8548725, leaves 4274363, depth 72
+  [air-c45-cuda]   train accuracy 87.4157%
+  [air-c45-cuda] Timings:
+  [air-c45-cuda]   load                  1138.7 ms
+  [air-c45-cuda]   gpu setup              355.7 ms
+  [air-c45-cuda]   presort                524.2 ms
+  [air-c45-cuda]   build                11894.5 ms
+  [air-c45-cuda]   prune                 9143.1 ms
+  [air-c45-cuda]   train total          21917.5 ms
+  [air-c45-cuda]   evaluate              3424.6 ms
+  [air-c45-cuda] Memory:
+  [air-c45-cuda]   peak after training 28442324 KiB
+  [air-c45-par] PP collapse 715.5 thresholds 51.9
+  [air-c45-par] PP construct 149.1
+  [air-c45-par] PP arrange 2383.5 prune 5046.7 compact 361.0
+  [air-c45-par] PP bigArrange preorder 288.9 route 841.7 sort 538.4 permute 609.3 counts 302.7
+  [air-c45-par] PP bigExtra route 8009.2 accum 4541.7
+  [air-c45-par] C4.5 on bench/data/airline/train.csv (backend parallel)
+  [air-c45-par]   rows 114569017 train, 13 features, 2 classes
+  [air-c45-par]   pruning CF 0.250000 + raising
+  [air-c45-par]   unpruned: 19579127 nodes
+  [air-c45-par] Tree:
+  [air-c45-par]   nodes 8548725, leaves 4274363, depth 72
+  [air-c45-par]   train accuracy 87.4157%
+  [air-c45-par] Timings:
+  [air-c45-par]   load                  1123.6 ms
+  [air-c45-par]   presort               2121.7 ms
+  [air-c45-par]   build                14007.3 ms
+  [air-c45-par]   prune                 8712.5 ms
+  [air-c45-par]   train total          24841.5 ms
+  [air-c45-par]   evaluate              2044.7 ms
+  [air-c45-par] Memory:
+  [air-c45-par]   peak after training 40185116 KiB

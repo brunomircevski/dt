@@ -1,0 +1,4 @@
+# epyc1, 48 CPUs, job 194, 2026-10-14 15:33:55, load 37.17 26.06 16.04
+label,rep,load_ms,setup_ms,presort_ms,build_ms,prune_ms,train_ms,nodes,depth,real_s,user_s,sys_s,minor_faults,voluntary_cs,involuntary_cs
+air-c45-par,0,723.4,,765.4,11322.6,3730.4,15818.4,8548725,72,17.90,611.98,11.83,350687,444057,5761
+# done 2026-10-14 15:34:13

@@ -1,0 +1,68 @@
+  [air-cart-cuda-new] CART on bench/data/airline/train.csv (backend cuda)
+  [air-cart-cuda-new]   rows 114569017 train, 13 features, 2 classes
+  [air-cart-cuda-new]   pruning alpha 0.000010
+  [air-cart-cuda-new]   unpruned: 100183 nodes
+  [air-cart-cuda-new] Tree:
+  [air-cart-cuda-new]   nodes 3013, leaves 1507, depth 25
+  [air-cart-cuda-new]   train accuracy 71.5409%
+  [air-cart-cuda-new] Timings:
+  [air-cart-cuda-new]   load                  9094.2 ms
+  [air-cart-cuda-new]   gpu setup              716.3 ms
+  [air-cart-cuda-new]   presort                 87.0 ms
+  [air-cart-cuda-new]   build                 1645.5 ms
+  [air-cart-cuda-new]   prune                    0.7 ms
+  [air-cart-cuda-new]   train total           2449.5 ms
+  [air-cart-cuda-new]   evaluate              1553.1 ms
+  [air-cart-cuda-new] Memory:
+  [air-cart-cuda-new]   peak after training 17938596 KiB
+  [air-c45-cuda-new] C4.5 on bench/data/airline/train.csv (backend cuda)
+  [air-c45-cuda-new]   rows 114569017 train, 13 features, 2 classes
+  [air-c45-cuda-new]   pruning CF 0.250000 + raising
+  [air-c45-cuda-new]   unpruned: 19579127 nodes
+  [air-c45-cuda-new] Tree:
+  [air-c45-cuda-new]   nodes 8548725, leaves 4274363, depth 72
+  [air-c45-cuda-new]   train accuracy 87.4157%
+  [air-c45-cuda-new] Timings:
+  [air-c45-cuda-new]   load                  1109.5 ms
+  [air-c45-cuda-new]   gpu setup              656.1 ms
+  [air-c45-cuda-new]   presort                513.7 ms
+  [air-c45-cuda-new]   build                12522.1 ms
+  [air-c45-cuda-new]   prune                 9668.7 ms
+  [air-c45-cuda-new]   train total          23360.6 ms
+  [air-c45-cuda-new]   evaluate              2827.4 ms
+  [air-c45-cuda-new] Memory:
+  [air-c45-cuda-new]   peak after training 28251048 KiB
+  [air-cart-cuda-old] CART on bench/data/airline/train.csv (backend cuda)
+  [air-cart-cuda-old]   rows 114569017 train, 13 features, 2 classes
+  [air-cart-cuda-old]   pruning alpha 0.000010
+  [air-cart-cuda-old]   unpruned: 21600857 nodes
+  [air-cart-cuda-old] Tree:
+  [air-cart-cuda-old]   nodes 3013, leaves 1507, depth 25
+  [air-cart-cuda-old]   train accuracy 71.5409%
+  [air-cart-cuda-old] Timings:
+  [air-cart-cuda-old]   load                  1279.8 ms
+  [air-cart-cuda-old]   gpu setup              681.9 ms
+  [air-cart-cuda-old]   presort                 87.0 ms
+  [air-cart-cuda-old]   build                10008.4 ms
+  [air-cart-cuda-old]   prune                  230.2 ms
+  [air-cart-cuda-old]   train total          11007.6 ms
+  [air-cart-cuda-old]   evaluate              1116.6 ms
+  [air-cart-cuda-old] Memory:
+  [air-cart-cuda-old]   peak after training 20139264 KiB
+  [air-c45-cuda-old] C4.5 on bench/data/airline/train.csv (backend cuda)
+  [air-c45-cuda-old]   rows 114569017 train, 13 features, 2 classes
+  [air-c45-cuda-old]   pruning CF 0.250000 + raising
+  [air-c45-cuda-old]   unpruned: 19579127 nodes
+  [air-c45-cuda-old] Tree:
+  [air-c45-cuda-old]   nodes 8548725, leaves 4274363, depth 72
+  [air-c45-cuda-old]   train accuracy 87.4157%
+  [air-c45-cuda-old] Timings:
+  [air-c45-cuda-old]   load                  1337.3 ms
+  [air-c45-cuda-old]   gpu setup              681.0 ms
+  [air-c45-cuda-old]   presort                842.2 ms
+  [air-c45-cuda-old]   build                12676.2 ms
+  [air-c45-cuda-old]   prune                17016.8 ms
+  [air-c45-cuda-old]   train total          31216.2 ms
+  [air-c45-cuda-old]   evaluate              3853.0 ms
+  [air-c45-cuda-old] Memory:
+  [air-c45-cuda-old]   peak after training 27887144 KiB

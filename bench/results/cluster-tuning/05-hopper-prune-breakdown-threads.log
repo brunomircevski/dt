@@ -1,0 +1,126 @@
+  [c45-t32] PP collapse 43.2 thresholds 17.4
+  [c45-t32] PP arrange 246.6 prune 428.7 compact 50.3
+  [c45-t32] PP bigArrange n=1 rows=10500000 preorder 23.7 route 87.9 sort 38.5 permute 75.8 counts 20.3 | smallArrange(sum) 112.4
+  [c45-t32] PP bigExtra n=93 rows=18583680 route 284.5 accum 322.5 | smallExtra(sum) 2246.7 | settleBig 1140.0
+  [c45-t32] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-t32]   rows 10500000 train, 28 features, 2 classes
+  [c45-t32]   pruning CF 0.250000 + raising
+  [c45-t32]   unpruned: 1317065 nodes
+  [c45-t32] Tree:
+  [c45-t32]   nodes 1159295, leaves 579648, depth 71
+  [c45-t32]   train accuracy 87.8790%
+  [c45-t32] Timings:
+  [c45-t32]   load                   417.5 ms
+  [c45-t32]   gpu setup              123.5 ms
+  [c45-t32]   presort                113.5 ms
+  [c45-t32]   build                  630.3 ms
+  [c45-t32]   prune                  795.9 ms
+  [c45-t32]   train total           1663.2 ms
+  [c45-t32]   evaluate               200.6 ms
+  [c45-t32] Memory:
+  [c45-t32]   peak after training 5242320 KiB
+  [c45-t16] PP collapse 55.5 thresholds 42.2
+  [c45-t16] PP arrange 457.8 prune 538.3 compact 48.3
+  [c45-t16] PP bigArrange n=1 rows=10500000 preorder 20.8 route 168.1 sort 61.2 permute 181.6 counts 25.6 | smallArrange(sum) 117.6
+  [c45-t16] PP bigExtra n=93 rows=18583680 route 416.6 accum 304.1 | smallExtra(sum) 1851.8 | settleBig 1174.3
+  [c45-t16] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-t16]   rows 10500000 train, 28 features, 2 classes
+  [c45-t16]   pruning CF 0.250000 + raising
+  [c45-t16]   unpruned: 1317065 nodes
+  [c45-t16] Tree:
+  [c45-t16]   nodes 1159295, leaves 579648, depth 71
+  [c45-t16]   train accuracy 87.8790%
+  [c45-t16] Timings:
+  [c45-t16]   load                   557.8 ms
+  [c45-t16]   gpu setup              159.8 ms
+  [c45-t16]   presort                 76.7 ms
+  [c45-t16]   build                 1085.2 ms
+  [c45-t16]   prune                 1154.7 ms
+  [c45-t16]   train total           2476.5 ms
+  [c45-t16]   evaluate               355.2 ms
+  [c45-t16] Memory:
+  [c45-t16]   peak after training 5240404 KiB
+  [c45-t8] PP collapse 58.6 thresholds 42.5
+  [c45-t8] PP arrange 838.2 prune 1279.8 compact 48.2
+  [c45-t8] PP bigArrange n=1 rows=10500000 preorder 22.1 route 337.8 sort 98.1 permute 356.1 counts 23.9 | smallArrange(sum) 126.6
+  [c45-t8] PP bigExtra n=93 rows=18583680 route 833.9 accum 276.3 | smallExtra(sum) 2131.8 | settleBig 1597.5
+  [c45-t8] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-t8]   rows 10500000 train, 28 features, 2 classes
+  [c45-t8]   pruning CF 0.250000 + raising
+  [c45-t8]   unpruned: 1317065 nodes
+  [c45-t8] Tree:
+  [c45-t8]   nodes 1159295, leaves 579648, depth 71
+  [c45-t8]   train accuracy 87.8790%
+  [c45-t8] Timings:
+  [c45-t8]   load                  1037.9 ms
+  [c45-t8]   gpu setup              187.0 ms
+  [c45-t8]   presort                 83.4 ms
+  [c45-t8]   build                 1731.2 ms
+  [c45-t8]   prune                 2281.4 ms
+  [c45-t8]   train total           4283.1 ms
+  [c45-t8]   evaluate               726.1 ms
+  [c45-t8] Memory:
+  [c45-t8]   peak after training 5239444 KiB
+  [c45-t32] PP collapse 65.7 thresholds 30.0
+  [c45-t32] PP arrange 375.7 prune 450.9 compact 51.3
+  [c45-t32] PP bigArrange n=1 rows=10500000 preorder 24.1 route 127.4 sort 62.0 permute 135.9 counts 25.3 | smallArrange(sum) 149.0
+  [c45-t32] PP bigExtra n=93 rows=18583680 route 313.7 accum 346.6 | smallExtra(sum) 2719.9 | settleBig 1311.4
+  [c45-t32] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-t32]   rows 10500000 train, 28 features, 2 classes
+  [c45-t32]   pruning CF 0.250000 + raising
+  [c45-t32]   unpruned: 1317065 nodes
+  [c45-t32] Tree:
+  [c45-t32]   nodes 1159295, leaves 579648, depth 71
+  [c45-t32]   train accuracy 87.8790%
+  [c45-t32] Timings:
+  [c45-t32]   load                   400.9 ms
+  [c45-t32]   gpu setup              174.3 ms
+  [c45-t32]   presort                112.6 ms
+  [c45-t32]   build                  728.2 ms
+  [c45-t32]   prune                  988.2 ms
+  [c45-t32]   train total           2003.3 ms
+  [c45-t32]   evaluate               208.6 ms
+  [c45-t32] Memory:
+  [c45-t32]   peak after training 5243476 KiB
+  [c45-t16] PP collapse 58.2 thresholds 43.9
+  [c45-t16] PP arrange 464.3 prune 579.2 compact 51.5
+  [c45-t16] PP bigArrange n=1 rows=10500000 preorder 21.3 route 170.8 sort 58.7 permute 187.1 counts 25.9 | smallArrange(sum) 115.8
+  [c45-t16] PP bigExtra n=93 rows=18583680 route 438.7 accum 299.4 | smallExtra(sum) 1750.5 | settleBig 1158.6
+  [c45-t16] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-t16]   rows 10500000 train, 28 features, 2 classes
+  [c45-t16]   pruning CF 0.250000 + raising
+  [c45-t16]   unpruned: 1317065 nodes
+  [c45-t16] Tree:
+  [c45-t16]   nodes 1159295, leaves 579648, depth 71
+  [c45-t16]   train accuracy 87.8790%
+  [c45-t16] Timings:
+  [c45-t16]   load                   567.5 ms
+  [c45-t16]   gpu setup              158.3 ms
+  [c45-t16]   presort                 76.4 ms
+  [c45-t16]   build                 1037.5 ms
+  [c45-t16]   prune                 1209.1 ms
+  [c45-t16]   train total           2481.3 ms
+  [c45-t16]   evaluate               338.8 ms
+  [c45-t16] Memory:
+  [c45-t16]   peak after training 5243948 KiB
+  [c45-t8] PP collapse 65.8 thresholds 45.4
+  [c45-t8] PP arrange 869.9 prune 1063.8 compact 51.5
+  [c45-t8] PP bigArrange n=1 rows=10500000 preorder 23.0 route 359.1 sort 111.1 permute 352.8 counts 23.5 | smallArrange(sum) 117.9
+  [c45-t8] PP bigExtra n=93 rows=18583680 route 695.3 accum 273.1 | smallExtra(sum) 1956.0 | settleBig 1414.8
+  [c45-t8] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-t8]   rows 10500000 train, 28 features, 2 classes
+  [c45-t8]   pruning CF 0.250000 + raising
+  [c45-t8]   unpruned: 1317065 nodes
+  [c45-t8] Tree:
+  [c45-t8]   nodes 1159295, leaves 579648, depth 71
+  [c45-t8]   train accuracy 87.8790%
+  [c45-t8] Timings:
+  [c45-t8]   load                  1040.2 ms
+  [c45-t8]   gpu setup              197.7 ms
+  [c45-t8]   presort                 85.0 ms
+  [c45-t8]   build                 1717.5 ms
+  [c45-t8]   prune                 2112.1 ms
+  [c45-t8]   train total           4112.4 ms
+  [c45-t8]   evaluate               647.0 ms
+  [c45-t8] Memory:
+  [c45-t8]   peak after training 5240976 KiB

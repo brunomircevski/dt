@@ -1,0 +1,16 @@
+cart-fp8192 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 8192 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-fp12288 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 12288 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-fp16384 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 16384 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-fp24576 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 24576 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-fp32768 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 32768 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-fp16384-tr8192 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 16384 --task-rows 8192 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-fp16384-tr2048 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 16384 --task-rows 2048 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-fp16384-nothp | | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 16384 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+c45-fp8192 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 8192 --c45 bench/data/higgs/train.csv
+c45-fp12288 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 12288 --c45 bench/data/higgs/train.csv
+c45-fp16384 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 16384 --c45 bench/data/higgs/train.csv
+c45-fp24576 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 24576 --c45 bench/data/higgs/train.csv
+c45-fp32768 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 32768 --c45 bench/data/higgs/train.csv
+c45-fp16384-tr8192 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 16384 --task-rows 8192 --c45 bench/data/higgs/train.csv
+c45-fp16384-tr2048 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 16384 --task-rows 2048 --c45 bench/data/higgs/train.csv
+c45-fp16384-nothp | | ./tree_cpu --parallel --threads 48 --feature-parallel-rows 16384 --c45 bench/data/higgs/train.csv

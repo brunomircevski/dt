@@ -1,0 +1,6 @@
+c45-pr50000-rc64 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 DT_PP=1 DT_PR=50000 DT_RC=64 | ./tree --cuda --threads 32 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv
+c45-pr50000-rc256 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 DT_PP=1 DT_PR=50000 DT_RC=256 | ./tree --cuda --threads 32 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv
+c45-pr12500-rc64 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 DT_PP=1 DT_PR=12500 DT_RC=64 | ./tree --cuda --threads 32 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv
+c45-pr12500-rc256 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 DT_PP=1 DT_PR=12500 DT_RC=256 | ./tree --cuda --threads 32 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv
+c45-pr200000-rc64 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 DT_PP=1 DT_PR=200000 DT_RC=64 | ./tree --cuda --threads 32 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv
+c45-pr200000-rc256 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 DT_PP=1 DT_PR=200000 DT_RC=256 | ./tree --cuda --threads 32 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv

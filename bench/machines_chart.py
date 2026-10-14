@@ -128,7 +128,8 @@ def main():
     per_panel = max(sum(e["protocol"] == p for e in entries) for p in PROTOCOLS)
     gaps = max(len({e["backend"] for e in entries if e["protocol"] == p}) for p in PROTOCOLS) - 1
     header = 0.42 + 0.2 * len(runs)  # inches of the hardware lines
-    inches = 1.9 + header + 2 * 0.58 * (per_panel + 0.45 * gaps)
+    footer = 0.18 if any(e["prune"] is not None and not e["reference"] for e in entries) else 0
+    inches = 1.9 + header + footer + 2 * 0.58 * (per_panel + 0.45 * gaps)
     fig, axes = plt.subplots(2, 2, figsize=(13, inches), squeeze=False,
                              gridspec_kw={"width_ratios": [1.5, 1], "wspace": 0.12,
                                           "hspace": 0.42 * 8.8 / inches})
@@ -176,7 +177,8 @@ def main():
             # Pruning's share; speedup over the same machine's serial run; CUDA
             # also over the same machine's parallel run and the fastest other
             # machine's.
-            notes = [f"prune {prune:.2f} s ({100 * prune / t:.0f}%)"] if prune is not None else []
+            notes = ([f"prune {prune:.2f} s ({100 * prune / t:.0f}%)"]
+                     if prune is not None and prune >= 0.01 * t else [])
             if backend != "serial" and (run, "serial") in times:
                 notes.append(f"{times[(run, 'serial')] / t:.1f}× {where(run)} serial")
             if backend == "cuda":
@@ -206,7 +208,7 @@ def main():
                 ax_mem.barh(y, e["ram"], height=0.62, zorder=2, **style(e))
                 ax_mem.text(e["ram"] + max_gib * 0.015, y, f"{e['ram']:.2f} GiB RAM",
                             va="center", fontsize=8.5, color=INK)
-        ax_time.set_xlim(0, max_time * 1.6)
+        ax_time.set_xlim(0, max_time * 1.75)
         ax_time.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
         ax_mem.set_xlim(0, max_gib * 1.45)
         ax_mem.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GiB"))
@@ -249,14 +251,15 @@ def main():
     runs_text = "one run per case" if reps == {1} else "median over the runs of each case"
     fig.text(LEFT, 0.1 / inches,
              f"Bars: {runs_text}. Time: ./tree's 'train total' (presort, build, prune; CUDA also "
-             "upload and device sort), not reading the CSV"
-             + (": darker = growing the tree (setup, presort, build), lighter = pruning it"
-                if split else "") + ".\nSame data files (SHA-256) on every "
+             "upload and device sort), not reading the CSV."
+             + ("\nDarker: growing the tree (setup, presort, build); lighter: pruning it "
+                "(shown when it takes 1% or more)." if split else "")
+             + "\nSame data files (SHA-256) on every "
              "machine. RAM: peak RSS of the process up to the end of training.\nVRAM: peak GPU "
              "memory during the process above idle, CUDA context included (nvidia-smi, every 10 ms).",
              fontsize=8, color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=LEFT, right=0.97, top=1 - (header + 1.05) / inches,
-                        bottom=0.9 / inches)
+                        bottom=(1.08 if split else 0.9) / inches)
     fig.savefig(out, dpi=150, facecolor="white")
     print(out)
 

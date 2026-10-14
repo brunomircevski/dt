@@ -1,0 +1,3 @@
+air-c45-prof | DT_GS=1 | ./tree --cuda --threads 32 --gpu-profile --c45 bench/data/airline/train.csv
+higgs-cart-gs | DT_GS=1 | ./tree --cuda --threads 32 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+higgs-c45-gs | DT_GS=1 | ./tree --cuda --threads 32 --c45 bench/data/higgs/train.csv

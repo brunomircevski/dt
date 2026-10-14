@@ -1,0 +1,240 @@
+  [c45-pr50000-rc64] PP collapse 60.0 thresholds 29.3
+  [c45-pr50000-rc64] PP construct 10.7
+  [c45-pr50000-rc64] PP arrange 336.9 prune 582.1 compact 54.1 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr50000-rc64] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr50000-rc64]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr50000-rc64]   pruning CF 0.250000 + raising
+  [c45-pr50000-rc64]   unpruned: 1317065 nodes
+  [c45-pr50000-rc64] Tree:
+  [c45-pr50000-rc64]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr50000-rc64]   train accuracy 87.8790%
+  [c45-pr50000-rc64] Timings:
+  [c45-pr50000-rc64]   load                   436.0 ms
+  [c45-pr50000-rc64]   gpu setup              167.8 ms
+  [c45-pr50000-rc64]   presort                122.2 ms
+  [c45-pr50000-rc64]   build                  722.4 ms
+  [c45-pr50000-rc64]   prune                 1073.9 ms
+  [c45-pr50000-rc64]   train total           2086.3 ms
+  [c45-pr50000-rc64]   evaluate               202.9 ms
+  [c45-pr50000-rc64] Memory:
+  [c45-pr50000-rc64]   peak after training 5225096 KiB
+  [c45-pr50000-rc256] PP collapse 60.1 thresholds 28.8
+  [c45-pr50000-rc256] PP construct 10.5
+  [c45-pr50000-rc256] PP arrange 334.8 prune 558.2 compact 54.7 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr50000-rc256] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr50000-rc256]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr50000-rc256]   pruning CF 0.250000 + raising
+  [c45-pr50000-rc256]   unpruned: 1317065 nodes
+  [c45-pr50000-rc256] Tree:
+  [c45-pr50000-rc256]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr50000-rc256]   train accuracy 87.8790%
+  [c45-pr50000-rc256] Timings:
+  [c45-pr50000-rc256]   load                   419.1 ms
+  [c45-pr50000-rc256]   gpu setup              164.1 ms
+  [c45-pr50000-rc256]   presort                116.5 ms
+  [c45-pr50000-rc256]   build                  718.7 ms
+  [c45-pr50000-rc256]   prune                 1047.9 ms
+  [c45-pr50000-rc256]   train total           2047.2 ms
+  [c45-pr50000-rc256]   evaluate               197.1 ms
+  [c45-pr50000-rc256] Memory:
+  [c45-pr50000-rc256]   peak after training 5225056 KiB
+  [c45-pr12500-rc64] PP collapse 62.4 thresholds 30.2
+  [c45-pr12500-rc64] PP construct 11.5
+  [c45-pr12500-rc64] PP arrange 338.5 prune 660.2 compact 56.9 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr12500-rc64] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr12500-rc64]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr12500-rc64]   pruning CF 0.250000 + raising
+  [c45-pr12500-rc64]   unpruned: 1317065 nodes
+  [c45-pr12500-rc64] Tree:
+  [c45-pr12500-rc64]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr12500-rc64]   train accuracy 87.8790%
+  [c45-pr12500-rc64] Timings:
+  [c45-pr12500-rc64]   load                   425.7 ms
+  [c45-pr12500-rc64]   gpu setup              159.4 ms
+  [c45-pr12500-rc64]   presort                119.1 ms
+  [c45-pr12500-rc64]   build                  723.6 ms
+  [c45-pr12500-rc64]   prune                 1160.3 ms
+  [c45-pr12500-rc64]   train total           2162.4 ms
+  [c45-pr12500-rc64]   evaluate               206.9 ms
+  [c45-pr12500-rc64] Memory:
+  [c45-pr12500-rc64]   peak after training 5223640 KiB
+  [c45-pr12500-rc256] PP collapse 54.6 thresholds 20.1
+  [c45-pr12500-rc256] PP construct 7.7
+  [c45-pr12500-rc256] PP arrange 256.1 prune 659.8 compact 50.5 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr12500-rc256] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr12500-rc256]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr12500-rc256]   pruning CF 0.250000 + raising
+  [c45-pr12500-rc256]   unpruned: 1317065 nodes
+  [c45-pr12500-rc256] Tree:
+  [c45-pr12500-rc256]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr12500-rc256]   train accuracy 87.8790%
+  [c45-pr12500-rc256] Timings:
+  [c45-pr12500-rc256]   load                   419.8 ms
+  [c45-pr12500-rc256]   gpu setup              166.5 ms
+  [c45-pr12500-rc256]   presort                122.6 ms
+  [c45-pr12500-rc256]   build                  717.7 ms
+  [c45-pr12500-rc256]   prune                 1049.3 ms
+  [c45-pr12500-rc256]   train total           2056.1 ms
+  [c45-pr12500-rc256]   evaluate               197.9 ms
+  [c45-pr12500-rc256] Memory:
+  [c45-pr12500-rc256]   peak after training 5223476 KiB
+  [c45-pr200000-rc64] PP collapse 58.9 thresholds 29.0
+  [c45-pr200000-rc64] PP construct 10.0
+  [c45-pr200000-rc64] PP arrange 327.7 prune 735.7 compact 54.3 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr200000-rc64] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr200000-rc64]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr200000-rc64]   pruning CF 0.250000 + raising
+  [c45-pr200000-rc64]   unpruned: 1317065 nodes
+  [c45-pr200000-rc64] Tree:
+  [c45-pr200000-rc64]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr200000-rc64]   train accuracy 87.8790%
+  [c45-pr200000-rc64] Timings:
+  [c45-pr200000-rc64]   load                   399.3 ms
+  [c45-pr200000-rc64]   gpu setup              162.1 ms
+  [c45-pr200000-rc64]   presort                124.7 ms
+  [c45-pr200000-rc64]   build                  712.3 ms
+  [c45-pr200000-rc64]   prune                 1216.2 ms
+  [c45-pr200000-rc64]   train total           2215.4 ms
+  [c45-pr200000-rc64]   evaluate               219.5 ms
+  [c45-pr200000-rc64] Memory:
+  [c45-pr200000-rc64]   peak after training 5227412 KiB
+  [c45-pr200000-rc256] PP collapse 62.9 thresholds 29.3
+  [c45-pr200000-rc256] PP construct 11.6
+  [c45-pr200000-rc256] PP arrange 326.8 prune 655.3 compact 54.4 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr200000-rc256] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr200000-rc256]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr200000-rc256]   pruning CF 0.250000 + raising
+  [c45-pr200000-rc256]   unpruned: 1317065 nodes
+  [c45-pr200000-rc256] Tree:
+  [c45-pr200000-rc256]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr200000-rc256]   train accuracy 87.8790%
+  [c45-pr200000-rc256] Timings:
+  [c45-pr200000-rc256]   load                   407.7 ms
+  [c45-pr200000-rc256]   gpu setup              159.8 ms
+  [c45-pr200000-rc256]   presort                122.0 ms
+  [c45-pr200000-rc256]   build                  722.3 ms
+  [c45-pr200000-rc256]   prune                 1141.0 ms
+  [c45-pr200000-rc256]   train total           2145.2 ms
+  [c45-pr200000-rc256]   evaluate               412.6 ms
+  [c45-pr200000-rc256] Memory:
+  [c45-pr200000-rc256]   peak after training 5223576 KiB
+  [c45-pr50000-rc64] PP collapse 54.8 thresholds 20.0
+  [c45-pr50000-rc64] PP construct 8.1
+  [c45-pr50000-rc64] PP arrange 277.8 prune 579.4 compact 56.6 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr50000-rc64] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr50000-rc64]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr50000-rc64]   pruning CF 0.250000 + raising
+  [c45-pr50000-rc64]   unpruned: 1317065 nodes
+  [c45-pr50000-rc64] Tree:
+  [c45-pr50000-rc64]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr50000-rc64]   train accuracy 87.8790%
+  [c45-pr50000-rc64] Timings:
+  [c45-pr50000-rc64]   load                   419.4 ms
+  [c45-pr50000-rc64]   gpu setup              172.8 ms
+  [c45-pr50000-rc64]   presort                123.0 ms
+  [c45-pr50000-rc64]   build                  720.6 ms
+  [c45-pr50000-rc64]   prune                  997.4 ms
+  [c45-pr50000-rc64]   train total           2013.7 ms
+  [c45-pr50000-rc64]   evaluate               362.4 ms
+  [c45-pr50000-rc64] Memory:
+  [c45-pr50000-rc64]   peak after training 5224660 KiB
+  [c45-pr50000-rc256] PP collapse 56.5 thresholds 29.2
+  [c45-pr50000-rc256] PP construct 9.9
+  [c45-pr50000-rc256] PP arrange 308.3 prune 589.6 compact 54.4 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr50000-rc256] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr50000-rc256]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr50000-rc256]   pruning CF 0.250000 + raising
+  [c45-pr50000-rc256]   unpruned: 1317065 nodes
+  [c45-pr50000-rc256] Tree:
+  [c45-pr50000-rc256]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr50000-rc256]   train accuracy 87.8790%
+  [c45-pr50000-rc256] Timings:
+  [c45-pr50000-rc256]   load                   402.9 ms
+  [c45-pr50000-rc256]   gpu setup              159.5 ms
+  [c45-pr50000-rc256]   presort                124.2 ms
+  [c45-pr50000-rc256]   build                  725.9 ms
+  [c45-pr50000-rc256]   prune                 1048.4 ms
+  [c45-pr50000-rc256]   train total           2058.0 ms
+  [c45-pr50000-rc256]   evaluate               195.8 ms
+  [c45-pr50000-rc256] Memory:
+  [c45-pr50000-rc256]   peak after training 5224880 KiB
+  [c45-pr12500-rc64] PP collapse 58.3 thresholds 28.7
+  [c45-pr12500-rc64] PP construct 10.6
+  [c45-pr12500-rc64] PP arrange 311.6 prune 711.3 compact 53.2 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr12500-rc64] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr12500-rc64]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr12500-rc64]   pruning CF 0.250000 + raising
+  [c45-pr12500-rc64]   unpruned: 1317065 nodes
+  [c45-pr12500-rc64] Tree:
+  [c45-pr12500-rc64]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr12500-rc64]   train accuracy 87.8790%
+  [c45-pr12500-rc64] Timings:
+  [c45-pr12500-rc64]   load                   446.4 ms
+  [c45-pr12500-rc64]   gpu setup              172.9 ms
+  [c45-pr12500-rc64]   presort                121.9 ms
+  [c45-pr12500-rc64]   build                  720.6 ms
+  [c45-pr12500-rc64]   prune                 1174.5 ms
+  [c45-pr12500-rc64]   train total           2189.8 ms
+  [c45-pr12500-rc64]   evaluate               213.9 ms
+  [c45-pr12500-rc64] Memory:
+  [c45-pr12500-rc64]   peak after training 5225140 KiB
+  [c45-pr12500-rc256] PP collapse 54.8 thresholds 20.3
+  [c45-pr12500-rc256] PP construct 8.1
+  [c45-pr12500-rc256] PP arrange 261.4 prune 666.8 compact 51.0 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr12500-rc256] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr12500-rc256]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr12500-rc256]   pruning CF 0.250000 + raising
+  [c45-pr12500-rc256]   unpruned: 1317065 nodes
+  [c45-pr12500-rc256] Tree:
+  [c45-pr12500-rc256]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr12500-rc256]   train accuracy 87.8790%
+  [c45-pr12500-rc256] Timings:
+  [c45-pr12500-rc256]   load                   427.2 ms
+  [c45-pr12500-rc256]   gpu setup              178.9 ms
+  [c45-pr12500-rc256]   presort                133.4 ms
+  [c45-pr12500-rc256]   build                  715.1 ms
+  [c45-pr12500-rc256]   prune                 1062.9 ms
+  [c45-pr12500-rc256]   train total           2090.3 ms
+  [c45-pr12500-rc256]   evaluate               279.5 ms
+  [c45-pr12500-rc256] Memory:
+  [c45-pr12500-rc256]   peak after training 5223052 KiB
+  [c45-pr200000-rc64] PP collapse 59.7 thresholds 28.1
+  [c45-pr200000-rc64] PP construct 10.4
+  [c45-pr200000-rc64] PP arrange 319.5 prune 652.9 compact 55.0 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr200000-rc64] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr200000-rc64]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr200000-rc64]   pruning CF 0.250000 + raising
+  [c45-pr200000-rc64]   unpruned: 1317065 nodes
+  [c45-pr200000-rc64] Tree:
+  [c45-pr200000-rc64]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr200000-rc64]   train accuracy 87.8790%
+  [c45-pr200000-rc64] Timings:
+  [c45-pr200000-rc64]   load                   403.9 ms
+  [c45-pr200000-rc64]   gpu setup              162.8 ms
+  [c45-pr200000-rc64]   presort                117.8 ms
+  [c45-pr200000-rc64]   build                  724.4 ms
+  [c45-pr200000-rc64]   prune                 1126.1 ms
+  [c45-pr200000-rc64]   train total           2131.2 ms
+  [c45-pr200000-rc64]   evaluate               202.6 ms
+  [c45-pr200000-rc64] Memory:
+  [c45-pr200000-rc64]   peak after training 5225120 KiB
+  [c45-pr200000-rc256] PP collapse 53.5 thresholds 25.4
+  [c45-pr200000-rc256] PP construct 8.1
+  [c45-pr200000-rc256] PP arrange 250.9 prune 704.3 compact 53.4 raises 15633 raisedRows 1543614 extraRows 57152001
+  [c45-pr200000-rc256] C4.5 on bench/data/higgs/train.csv (backend cuda)
+  [c45-pr200000-rc256]   rows 10500000 train, 28 features, 2 classes
+  [c45-pr200000-rc256]   pruning CF 0.250000 + raising
+  [c45-pr200000-rc256]   unpruned: 1317065 nodes
+  [c45-pr200000-rc256] Tree:
+  [c45-pr200000-rc256]   nodes 1159295, leaves 579648, depth 71
+  [c45-pr200000-rc256]   train accuracy 87.8790%
+  [c45-pr200000-rc256] Timings:
+  [c45-pr200000-rc256]   load                   412.5 ms
+  [c45-pr200000-rc256]   gpu setup              161.5 ms
+  [c45-pr200000-rc256]   presort                123.5 ms
+  [c45-pr200000-rc256]   build                  726.0 ms
+  [c45-pr200000-rc256]   prune                 1096.3 ms
+  [c45-pr200000-rc256]   train total           2107.2 ms
+  [c45-pr200000-rc256]   evaluate               294.0 ms
+  [c45-pr200000-rc256] Memory:
+  [c45-pr200000-rc256]   peak after training 5224912 KiB

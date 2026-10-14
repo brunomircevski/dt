@@ -1,0 +1,14 @@
+cart-thp | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-thp-min1024 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-min-rows 1024 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-thp-min2048 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-min-rows 2048 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-thp-min4096 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-min-rows 4096 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-thp-min8192 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-min-rows 8192 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-thp-t16 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 16 --gpu-min-rows 2048 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+cart-thp-par32 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 32 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+c45-thp | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --c45 bench/data/higgs/train.csv
+c45-thp-min1024 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-min-rows 1024 --c45 bench/data/higgs/train.csv
+c45-thp-min2048 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv
+c45-thp-min4096 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-min-rows 4096 --c45 bench/data/higgs/train.csv
+c45-thp-min8192 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-min-rows 8192 --c45 bench/data/higgs/train.csv
+c45-thp-t16 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 16 --gpu-min-rows 2048 --c45 bench/data/higgs/train.csv
+c45-thp-par32 | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree_cpu --parallel --threads 32 --c45 bench/data/higgs/train.csv
