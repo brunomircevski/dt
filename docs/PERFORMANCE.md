@@ -2,6 +2,43 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: tuning for many-core servers (mordor3 cluster)
+
+Commit `a8563b3` (before) against `16cc93b` (after), measured on the cluster's
+epyc1 node (2× EPYC 9255, 48 cores, `--parallel`) and hopper (H100 PCIe + 32
+Xeon cores, `--cuda`). Before and after ran in the same job, interleaved, 3
+runs each. Times are medians of `train total`. Every tree is byte-identical
+before and after, on both backends.
+
+| Dataset | Algorithm | Node, backend | Before | After | Speed-up |
+|---------|-----------|---------------|-------:|------:|--------:|
+| HIGGS (10.5M rows) | CART | epyc parallel | 1.95 s | 1.07 s | 1.8× |
+| HIGGS | C4.5 | epyc parallel | 2.55 s | 1.86 s | 1.4× |
+| airline (115M rows) | CART | epyc parallel | 15.98 s | 7.34 s | 2.2× |
+| airline | C4.5 | epyc parallel | 24.67 s | 13.93 s | 1.8× |
+| HIGGS | CART | hopper cuda | 1.48 s | 0.54 s | 2.8× |
+| HIGGS | C4.5 | hopper cuda | 2.61 s | 1.65 s | 1.6× |
+| airline | CART | hopper cuda | 11.64 s | 2.32 s | 5.0× |
+| airline | C4.5 | hopper cuda | 26.03 s | 14.53 s | 1.8× |
+
+What changed:
+- **CART with a fixed α** does not grow nodes that pruning would cut back
+  (docs/ALGORITHMS.md).
+- **`--feature-parallel-rows` 4096 → 32768:** fewer thread wake-ups. A 48-core
+  build had spent a third of its CPU time in the kernel.
+- **Huge pages** for large blocks (`src/core/memory.cpp`).
+- **`--gpu-min-rows`:** rows / 4096, at least 1024 (was 512).
+- **GPU upload:** a page-locked dataset upload that works on the H100 node.
+- **Parallel tree passes:** the copy, compaction and C4.5 bookkeeping run on
+  all threads.
+
+Every sweep is in
+[bench/results/cluster-tuning/](../bench/results/cluster-tuning/README.md),
+and the benchmarks on five nodes are in
+[cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
+[cluster-airlines](../bench/results/cluster-airlines/BENCHMARK.md). The
+laptop and desktop were not re-measured.
+
 ## October 2026: sweep, partition and pruning
 
 Commit `d1cde64` (before) against `be8b236` (after), one run each, on the
