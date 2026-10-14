@@ -1,0 +1,40 @@
+log: bench/results/cluster-airlines/cpu-dell-airline/run.log, job 215 on dell1, started 2026-10-14 16:05:25
+
+=== 16:05:25  1/3 machine check
+CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: powersave 
+load average: 4.80 1.61 0.57
+code: 36c6b7c99dca (from submit.sh: hopper has no git)
+runs per case: 3
+
+=== 16:05:25  2/3 benchmark: airline, pruned CART and C4.5, tree, 48 threads, 3 run(s) per case
+2 cases, 9 processes:
+  airline | cart_alpha | tree | 48
+  airline | c45 | tree | 48
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  airline: identical in every format (31 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
+[1/9] 16:05:57 run 1/3: CART ./tree, 48 threads, airline ...
+    ok: train 8.285 s, peak 29,666 MiB, 3,013 nodes, depth 25, test acc 71.59% | process 0m09s, elapsed 0m57s
+[2/9] 16:06:54 run 1/3: C4.5 ./tree, 48 threads, airline ...
+    ok: train 16.16 s, peak 38,977 MiB, 8,548,725 nodes, depth 72, test acc 79.70% | process 0m20s, elapsed 3m31s, about 0m59s left
+[3/9] 16:09:28 run 2/3: CART ./tree, 48 threads, airline ...
+    ok: train 8.915 s, peak 29,665 MiB, 3,013 nodes, depth 25, test acc 71.59% | process 0m10s, elapsed 4m29s, about 0m50s left
+[4/9] 16:10:26 run 2/3: C4.5 ./tree, 48 threads, airline ...
+    ok: train 16.72 s, peak 38,994 MiB, 8,548,725 nodes, depth 72, test acc 79.70% | process 0m20s, elapsed 7m03s, about 0m30s left
+[5/9] 16:13:00 run 3/3: C4.5 ./tree, 48 threads, airline ...
+    ok: train 16.49 s, peak 38,994 MiB, 8,548,725 nodes, depth 72, test acc 79.70% | process 0m20s, elapsed 9m37s, about 0m09s left
+[6/9] 16:15:34 run 3/3: CART ./tree, 48 threads, airline ...
+    ok: train 8.506 s, peak 29,665 MiB, 3,013 nodes, depth 25, test acc 71.59% | process 0m09s, elapsed 10m35s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[7/9] 16:16:32 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0012 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 10m35s, about 0m00s left
+[8/9] 16:16:32 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0013 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 10m35s, about 0m00s left
+[9/9] 16:16:32 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0011 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 10m35s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-airlines/cpu-dell-airline/results.jsonl
+
+=== 16:16:32  3/3 tables and CSV files
+done 2026-10-14 16:16:32

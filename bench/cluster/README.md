@@ -38,8 +38,9 @@ Then copy `bench/results/cluster-*/` back and draw the charts:
 ```bash
 for d in higgs:higgs airlines:airline; do
   dir=bench/results/cluster-${d%%:*} data=${d##*:}
+  turing=cuda-turing-$data; [ $data = airline ] && turing=cpu-turing-airline
   bench/.venv/bin/python bench/machines_chart.py $dir/cuda-hopper-$data $dir/cuda-ampere-$data \
-      $dir/cuda-turing-$data $dir/cpu-epyc-$data $dir/cpu-dell-$data --out $dir/chart.png
+      $dir/$turing $dir/cpu-epyc-$data $dir/cpu-dell-$data --out $dir/chart.png
 done
 ```
 
