@@ -155,14 +155,16 @@ def main():
         for y, e in zip(ys, mine):
             run, backend, t = e["run"], e["backend"], e["time"]
             ax_time.barh(y, t, height=0.62, zorder=2, **style(e))
-            # Speedup over the same machine's serial run; CUDA also over every
-            # machine's parallel run (the fastest CPU result).
+            # Speedup over the same machine's serial run; CUDA also over the same
+            # machine's parallel run and the fastest other machine's.
             notes = []
             if backend != "serial" and (run, "serial") in times:
                 notes.append(f"{times[(run, 'serial')] / t:.1f}× {where(run)} serial")
             if backend == "cuda":
+                others = [o for o in runs if o != run and (o, "parallel") in times]
+                fastest = min(others, key=lambda o: times[(o, "parallel")], default=None)
                 notes += [f"{times[(other, 'parallel')] / t:.1f}× {where(other)} parallel"
-                          for other in reversed(runs) if (other, "parallel") in times]
+                          for other in (run, fastest) if (other, "parallel") in times]
             ax_time.text(t + max_time * 0.012, y, f"{t:.2f} s", va="center", fontsize=9,
                          color=INK, fontweight="bold")
             ax_time.annotate(" · ".join(notes), (t, y), xytext=(52, 0),
@@ -225,12 +227,12 @@ def main():
     runs_text = "one run per case" if reps == {1} else "median over the runs of each case"
     fig.text(LEFT, 0.1 / inches,
              f"Bars: {runs_text}. Time: ./tree's 'train total' (presort, build, prune; CUDA also "
-             "upload and device sort), not reading the CSV. Same data files (SHA-256) on every "
-             "machine.\nRAM: peak RSS of the process up to the end of training. VRAM: peak GPU "
+             "upload and device sort), not reading the CSV.\nSame data files (SHA-256) on every "
+             "machine. RAM: peak RSS of the process up to the end of training.\nVRAM: peak GPU "
              "memory during the process above idle, CUDA context included (nvidia-smi, every 10 ms).",
              fontsize=8, color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=LEFT, right=0.97, top=1 - (header + 1.05) / inches,
-                        bottom=0.75 / inches)
+                        bottom=0.9 / inches)
     fig.savefig(out, dpi=150, facecolor="white")
     print(out)
 

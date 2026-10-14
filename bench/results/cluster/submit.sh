@@ -58,4 +58,4 @@ for job in "${JOBS[@]}"; do
   echo "$name: job ${ids[-1]} on partition $partition"
 done
 scontrol release "${ids[@]}"
-squeue -u "$USER" -o "%.8i %.10P %.20j %.2t %.10M %R"
+squeue -a -u "$USER" -o "%.8i %.10P %.20j %.2t %.10M %R"

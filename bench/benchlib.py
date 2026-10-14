@@ -257,7 +257,8 @@ def hardware(machine):
     cores, 28 threads" and "32 GiB DDR4-3200 (2 × 16 GiB)"."""
     import re
     model = re.search(r"Model name:\s+(.*)", machine.get("lscpu", ""))
-    model = re.sub(r"\(R\)|\(TM\)|\d+th Gen |\s+CPU.*", "", model.group(1)).strip() \
+    model = re.sub(r"\(R\)|\(TM\)|\d+th Gen |\s+CPU.*|\s+\d+-Core Processor", "",
+                   model.group(1)).strip() \
         if model else "unknown CPU"
     p_logical = _cpu_list_count(machine.get("p_cores"))
     e_cores = _cpu_list_count(machine.get("e_cores"))
@@ -275,6 +276,10 @@ def hardware(machine):
         kind = ", ".join(f"{t}-{mts}" for t, mts in kinds)
         layout = (f" ({len(modules)} × {sizes[0] / 2**30:.0f} GiB)" if len(sizes) == 1 else "")
         ram = f"{sum(m['bytes'] for m in modules) / 2**30:.0f} GiB {kind}{layout}"
+        if sum(m["bytes"] for m in modules) < machine.get("mem_total_kb", 0) * 1024:
+            # Fewer modules than the memory the kernel has: udev's DMI list is cut
+            # short on boards with many slots (e.g. 24), so give the kernel's total.
+            ram = f"{total} {kind}"
     else:
         ram = f"{total} RAM"
     gpu = (machine.get("versions") or {}).get("gpu") or ""
