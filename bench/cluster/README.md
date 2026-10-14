@@ -1,0 +1,123 @@
+# ./tree on the mordor3 cluster
+
+Scripts that build, prepare and benchmark ./tree on the faculty's mordor3
+cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
+
+- [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows) on five nodes
+- [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows) on the same nodes
+- [`bench/results/cluster-tuning/`](../results/cluster-tuning/README.md): the sweeps behind ./tree's default settings
+
+| Node | CPU | RAM | GPU (GPU 0 used) |
+|---|---|---|---|
+| hopper | 2× Xeon Gold 6444Y (Sapphire Rapids), 32 cores | 1 TB DDR5-4800 | 4× H100 PCIe 80 GB |
+| ampere | 2× EPYC 7402 (Zen 2), 48 cores | 1 TB DDR4-3200 | 2× A100 80 GB + 2× A100 40 GB PCIe (GPU 0: 80 GB) |
+| turing | Threadripper 1950X (Zen 1), 16 cores, SMT on (32 threads) | 128 GB DDR4-2667 | 4× RTX 2080 Ti 11 GB |
+| epyc1 | 2× EPYC 9255 (Zen 5), 48 cores | 512 GB DDR5-6400 | – |
+| dell1 | 2× Xeon Gold 6542Y (Emerald Rapids), 48 cores | 1 TB DDR5-5200 | – |
+
+## Run it
+
+On mordor3, in a clone of this repository (`~/dt`). Nothing heavy runs on the
+login node: every step is a SLURM job.
+
+```bash
+# once: the Python venv (python3-venv is missing there; virtualenv is installed)
+virtualenv -p python3 bench/.venv && bench/.venv/bin/pip install -r bench/requirements.txt
+# once: the downloads, see "Data" below, into ~/downloads
+sbatch --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)" \
+    bench/cluster/build.sh       # on hopper: ./tree for sm_75 + sm_80 + sm_90, ./tree_cpu, rusage
+sbatch bench/cluster/prepare.sh  # on a dell node: the datasets (checked by SHA-256), HIGGS prepared
+sbatch --export=ALL,PREPARE=airline -t 02:00:00 -o bench/cluster/prepare-airline.log \
+    bench/cluster/prepare.sh airline
+bench/cluster/submit.sh -m 3               # HIGGS: five jobs, one per node, released together
+bench/cluster/submit.sh -m 3 -d airline    # airline (or name single runs, e.g. cuda-turing-higgs)
+```
+
+Then copy `bench/results/cluster-*/` back and draw the charts:
+
+```bash
+for d in higgs:higgs airlines:airline; do
+  dir=bench/results/cluster-${d%%:*} data=${d##*:}
+  bench/.venv/bin/python bench/machines_chart.py $dir/cuda-hopper-$data $dir/cuda-ampere-$data \
+      $dir/cuda-turing-$data $dir/cpu-epyc-$data $dir/cpu-dell-$data --out $dir/chart.png
+done
+```
+
+- **`build.sh`** runs on hopper because the CPU nodes have no CUDA toolkit. It
+  builds with `NVCC=/usr/local/cuda/bin/nvcc` and `-gencode` for sm_75, sm_80
+  and sm_90, so one binary serves the RTX 2080 Ti, the A100 and the H100, and
+  rebuilds the CUDA object when that list changes. Log: `build.log`.
+- **`submit.sh`** queues one job per node (`job.sh`) with `--exclusive` and
+  `--hold`, then releases them together, so on idle nodes they start in the
+  same second. Each job runs
+  `bench/run.py <dataset> --protocols cart_alpha,c45 --impls tree[,tree_cuda] --threads all --cpus 0-<cores-1> --reps <-m> --run-id cluster-<…>/<run>`
+  and `report.py`. Its log is `<run>/run.log`. Turing runs airline on the CPU
+  only: the CUDA backend needs about 25 GB of GPU memory for it.
+- **`tune.sh`** runs a list of ./tree command lines on one node, interleaved
+  and repeated, and prints ./tree's phase times with the CPU time, page faults
+  and context switches of every run. The sweeps in
+  [cluster-tuning](../results/cluster-tuning/README.md) were made with it.
+
+## Settings specific to the cluster
+
+The protocols, data and measurements are those of the other benchmarks
+([bench/README.md](../README.md)), with every CPU of each node:
+
+| Backend | Command | Threads |
+|---|---|---|
+| Parallel | `./tree_cpu --parallel --threads N` | N = every CPU (32 on hopper and turing, 48 elsewhere) |
+| CUDA | `./tree --cuda --threads N` | GPU 0, plus N CPU threads for the small subtrees and pruning |
+
+- **Whole nodes.** SLURM on mordor3 hands out cores only: it tracks no GPUs
+  (no GRES) and no memory. Every job therefore takes its node with
+  `--exclusive`, so no other job shares its cores, memory bandwidth or GPUs.
+  `run.log` records the load average and the GPU processes at the start.
+- **One GPU.** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0`: ./tree
+  uses GPU 0 in nvidia-smi's order. That is the GPU whose memory `run.py`
+  samples (`nvidia-smi --id=0`); on ampere it is an A100 80 GB. The other
+  GPUs sit idle.
+- **CPU governors are as the admins set them.** epyc1 `performance`, dell1
+  `powersave` (intel_pstate, which still boosts), hopper and turing
+  `schedutil`, ampere `ondemand`. A user can't change them; `machine.json`
+  records them. All four dell nodes are set alike (checked on 2026-10-14:
+  `powersave` on all 48 CPUs, intel_pstate, energy-performance preference
+  `balance_performance`, turbo on), so dell1 stands for all of them. With
+  intel_pstate, `powersave` is the dynamic governor that still reaches turbo,
+  not acpi-cpufreq's `powersave`, which holds the lowest frequency.
+- **Hopper's CPU times drift** over a day by up to 40% (the same binary: CART
+  parallel 2.2 s at 12:45, 3.2 s at 15:15, with no other process on the node).
+  Comparisons of two versions there are therefore made in one job, the runs
+  interleaved (`tune.sh`).
+- **Hopper has no git.** `submit.sh` records the commit on the login node, and
+  `run.py` takes it from `TREE_GIT_DESCRIBE`.
+- **Data over NFS.** /home is mordor3's RAID, NFS-mounted on every node; SLURM
+  copies nothing. Reading the CSV is not timed, so this only lengthens the
+  wall time.
+- **RAM in the chart** is the kernel's MemTotal with the module type and
+  speed. udev's DMI list, the usual source, is cut short on these boards
+  (11–15 of 16 modules).
+
+## Data
+
+The cluster gets its data from the internet, not from the desktop (whose
+upload is slow). `make_datasets.py` (run by `prepare.sh`) rebuilds
+`datasets/*.csv` byte for byte as the desktop copies, makes `airline.csv`, and
+stops on any SHA-256 difference:
+
+| File | Source | SHA-256 (= desktop; airline: first build) |
+|---|---|---|
+| `covertype.csv` | UCI 31 `covertype.zip` (same rows and order; `Id`, header and class names added) | `fd7a387d…` |
+| `higgs.csv` | OpenML 45570 parquet: UCI HIGGS, same rows and order. UCI's own zip downloads at 0.5 MB/s, OpenML's at 19 MB/s. The parquet's doubles are slightly off the float32 values, so they are rounded back to float32 and printed as UCI does (`%.18e`, CRLF line ends, `Id`, label last as signal/background) | `71f566a2…` |
+| `supersymmetry.csv` | UCI 279 `susy.zip`: the same float32 values and labels, but the desktop copy's rows are shuffled (no common seed reproduces the order) and its doubles are UCI's text read by an unknown parser, 0–6 ulps off. Two files made from the desktop copy carry what is not public: `susy_order.u64` (40 MB, a hash of every row in the desktop's order) and `susy_delta.i8` (90 MB, every value's offset in float64 ulps; 21 MB zstd) | `85ecf105…` |
+| `airline.csv` | gbm-bench's airline dataset (also in the XGBoost GPU paper): US flights from October 1987 to April 2008, `airline_14col.data.bz2` from kt.ijs.si (1.09 GB, SHA-256 `1f13460f…`). 115,069,017 rows, 13 integer features; the carrier and the airports become codes in sorted order, as in gbm-bench, and the label is `ArrDelay > 0` (`delayed` 47.5%, `on_time` 52.5%). Rows in file (date) order, so `datasets.toml` takes a random 500,000-row test set. There is no desktop copy: the hash is that of its first build. It takes about 3 minutes, and `prepare.py` 5 more | `25542603…` |
+
+Airline has 10.5× HIGGS's rows and 4.9× its values (1.49 G against 0.31 G;
+6.0 GB as float32 against 1.2 GB). Its CSV is smaller than HIGGS's only
+because its values are short integers. It is cluster-only: the CUDA backend
+needs about 25 GB of GPU memory for it, more than the laptop's 8 GB.
+`ActualElapsedTime` partly gives the delay away, so its accuracy says little;
+it is there to compare speed, as in gbm-bench.
+
+HIGGS's prepared files (`bench/data/higgs/`) have the SHA-256 recorded in
+`plan.json` of `cpu-pc-higgs` and `cuda-legion-higgs` (desktop and laptop).
+Logs: `prepare-higgs.log`, `prepare-airline.log`.

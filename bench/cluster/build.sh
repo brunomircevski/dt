@@ -3,18 +3,18 @@
 # CUDA for RTX 2080 Ti, A100 and H100), ./tree_cpu and the rusage launcher. Submit it from
 # the repository root (never build on the login node):
 #
-#   sbatch bench/results/cluster/build.sh
+#   sbatch bench/cluster/build.sh
 #
 #SBATCH -J dt-build
 #SBATCH -p hopper
 #SBATCH -c 16
 #SBATCH -t 00:20:00
-#SBATCH -o bench/results/cluster/build.log
+#SBATCH -o bench/cluster/build.log
 
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 # hopper has no git: the commit comes from the login node, if given
-#   sbatch --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)" bench/results/cluster/build.sh
+#   sbatch --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)" bench/cluster/build.sh
 echo "job $SLURM_JOB_ID on $(hostname), $SLURM_CPUS_PER_TASK CPUs, $(date '+%F %T'), commit ${TREE_GIT_DESCRIBE:-unknown}"
 CUDA_ARCH="-gencode arch=compute_75,code=sm_75 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90"
 # make does not see a changed CUDA_ARCH: rebuild the CUDA object when it changes.

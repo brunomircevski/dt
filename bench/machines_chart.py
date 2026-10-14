@@ -3,7 +3,9 @@
 training time and peak memory of every backend the runs hold (serial, parallel,
 CUDA), CART above C4.5. Colour follows the backend; the reference run's bars
 are hatched. The header names every machine's CPU, RAM and GPU; memory is split
-into RAM (host, peak RSS) and VRAM (GPU) bars.
+into RAM (host, peak RSS) and VRAM (GPU) bars. When the runs recorded ./tree's
+phases, a time bar is split into growing the tree (setup, presort, build) and,
+lighter, pruning it.
 
 Refuses to draw when the runs did not read the same data (SHA-256 of the
 prepared files in plan.json) or did not build the same trees.
@@ -39,6 +41,12 @@ LEFT = 0.215  # figure fraction left of the panels, for the row labels
 MACHINES = {"pc": "desktop", "legion": "laptop"}
 
 
+def lighter(color, amount=0.55):
+    """`color` mixed with white: the pruning part of a time bar."""
+    rgb = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(c + (255 - c) * amount):02x}" for c in rgb)
+
+
 def where(run):
     name = run.name.split("-")[1]
     return MACHINES.get(name, name)
@@ -69,11 +77,14 @@ def bars(run, reference):
             hardware = (f"{short_gpu(info)} + {threads} CPU threads" if backend == "cuda"
                         else f"{short_cpu(info)}, {threads} thread{'s' if threads > 1 else ''}")
             gpu = [r["gpu_peak_bytes"] for r in ok if r.get("gpu_peak_bytes") is not None]
+            prune = [r["prune_seconds"] for r in ok if r.get("prune_seconds") is not None]
             out.append({"protocol": protocol, "backend": backend, "hardware": hardware,
                         "run": run, "reference": reference,
                         "time": statistics.median(r["train_seconds"] for r in ok),
                         "ram": statistics.median(r["peak_rss_train_bytes"] for r in ok) / 2**30,
                         "vram": statistics.median(gpu) / 2**30 if gpu else None,
+                        # Median pruning time, if every run recorded it.
+                        "prune": statistics.median(prune) if len(prune) == len(ok) else None,
                         "tree": (ok[0]["nodes"], ok[0]["depth"], ok[0]["test_accuracy"])})
     return out
 
@@ -154,10 +165,18 @@ def main():
         times = {(e["run"], e["backend"]): e["time"] for e in mine}
         for y, e in zip(ys, mine):
             run, backend, t = e["run"], e["backend"], e["time"]
-            ax_time.barh(y, t, height=0.62, zorder=2, **style(e))
-            # Speedup over the same machine's serial run; CUDA also over the same
-            # machine's parallel run and the fastest other machine's.
-            notes = []
+            prune = e["prune"]
+            if prune is not None and not e["reference"]:
+                # Growing (everything but pruning), then pruning in a lighter shade.
+                ax_time.barh(y, t - prune, height=0.62, zorder=2, **style(e))
+                ax_time.barh(y, prune, left=t - prune, height=0.62, zorder=2,
+                             color=lighter(COLORS[backend]))
+            else:
+                ax_time.barh(y, t, height=0.62, zorder=2, **style(e))
+            # Pruning's share; speedup over the same machine's serial run; CUDA
+            # also over the same machine's parallel run and the fastest other
+            # machine's.
+            notes = [f"prune {prune:.2f} s ({100 * prune / t:.0f}%)"] if prune is not None else []
             if backend != "serial" and (run, "serial") in times:
                 notes.append(f"{times[(run, 'serial')] / t:.1f}× {where(run)} serial")
             if backend == "cuda":
@@ -212,6 +231,9 @@ def main():
                  fontsize=9.2, color=INK, va="top")
     handles = [Patch(color=COLORS[b], label=BACKENDS[b]) for b in BACKENDS
                if any(e["backend"] == b for e in entries)]
+    split = any(e["prune"] is not None and not e["reference"] for e in entries)
+    if split:
+        handles.append(Patch(color=lighter(MUTED), label="lighter: pruning"))
     if args.reference:
         handles.append(Patch(facecolor="white", edgecolor=MUTED, hatch="////",
                              label="reference machine (hatched)"))
@@ -227,7 +249,9 @@ def main():
     runs_text = "one run per case" if reps == {1} else "median over the runs of each case"
     fig.text(LEFT, 0.1 / inches,
              f"Bars: {runs_text}. Time: ./tree's 'train total' (presort, build, prune; CUDA also "
-             "upload and device sort), not reading the CSV.\nSame data files (SHA-256) on every "
+             "upload and device sort), not reading the CSV"
+             + (": darker = growing the tree (setup, presort, build), lighter = pruning it"
+                if split else "") + ".\nSame data files (SHA-256) on every "
              "machine. RAM: peak RSS of the process up to the end of training.\nVRAM: peak GPU "
              "memory during the process above idle, CUDA context included (nvidia-smi, every 10 ms).",
              fontsize=8, color=MUTED, linespacing=1.5)

@@ -3,7 +3,7 @@
 byte for byte as the copies on the desktop, make datasets/airline.csv, and
 check them all by SHA-256.
 
-  bench/.venv/bin/python -I bench/results/cluster/make_datasets.py ~/downloads [names...]
+  bench/.venv/bin/python -I bench/cluster/make_datasets.py ~/downloads [names...]
 
 Sources, in <downloads>:
   covertype.zip            UCI 31 (covtype.data.gz): same rows and order

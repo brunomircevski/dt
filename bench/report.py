@@ -72,6 +72,9 @@ def summarise(run_dir):
                         time_mean=statistics.fmean(times),
                         time_stdev=statistics.stdev(times) if len(times) > 1 else None,
                         time_reps=len(times), wall_median=median([r["wall_seconds"] for r in ok]))
+            prune = [r["prune_seconds"] for r in ok if r.get("prune_seconds") is not None]
+            if len(prune) == len(ok):
+                case["prune_median"] = median(prune)
             accuracy, n_test = case.get("test_accuracy"), metas[dataset]["n_test"]
             if accuracy is not None:
                 case["test_accuracy_ci95"] = 1.96 * math.sqrt(accuracy * (1 - accuracy) / n_test)
@@ -190,7 +193,7 @@ FIELDS = ["run", "dataset", "protocol", "impl", "threads", "status", "consistent
           "time_median", "time_min", "time_max", "time_mean", "time_stdev", "time_reps",
           "ratio_to_tree", "wall_median", "peak_rss", "peak_rss_min", "peak_rss_max",
           "peak_rss_above_baseline", "nodes", "leaves", "depth", "train_accuracy",
-          "test_accuracy", "test_accuracy_ci95", "gpu_peak"]
+          "test_accuracy", "test_accuracy_ci95", "gpu_peak", "prune_median"]
 
 
 def main():

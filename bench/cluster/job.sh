@@ -2,15 +2,16 @@
 # One benchmark on one whole node of mordor3, as a SLURM job; submit.sh submits
 # it with the partition, --exclusive and the log file:
 #
-#   job.sh <run name> <impls> <runs per case>
+#   job.sh <results directory> <run name> <dataset> <impls> <runs per case>
 #
-# e.g. job.sh cuda-hopper-higgs tree,tree_cuda 3 -> bench/results/cluster/cuda-hopper-higgs/
+# e.g. job.sh cluster-higgs cuda-hopper-higgs higgs tree,tree_cuda 3
+#   -> bench/results/cluster-higgs/cuda-hopper-higgs/
 
 set -euo pipefail
-NAME="$1" IMPLS="$2" RUNS="$3"
+DIR="$1" NAME="$2" DATASET="$3" IMPLS="$4" RUNS="$5"
 cd "$SLURM_SUBMIT_DIR"  # repository root
 PY=bench/.venv/bin/python
-OUT="bench/results/cluster/$NAME"
+OUT="bench/results/$DIR/$NAME"
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 echo "log: $OUT/run.log, job $SLURM_JOB_ID on $(hostname), started $(date '+%F %T')"
 
@@ -36,9 +37,9 @@ fi
 echo "code: $TREE_GIT_DESCRIBE (from submit.sh: hopper has no git)"
 echo "runs per case: $RUNS"
 
-step "2/3 benchmark: HIGGS, pruned CART and C4.5, $IMPLS, $(nproc) threads, $RUNS run(s) per case"
-"$PY" bench/run.py higgs --protocols cart_alpha,c45 --impls "$IMPLS" --threads all \
-  --cpus "$CPUS" --reps "$RUNS" --timeout 1800 --run-id "cluster/$NAME"
+step "2/3 benchmark: $DATASET, pruned CART and C4.5, $IMPLS, $(nproc) threads, $RUNS run(s) per case"
+"$PY" bench/run.py "$DATASET" --protocols cart_alpha,c45 --impls "$IMPLS" --threads all \
+  --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$DIR/$NAME"
 
 step "3/3 tables and CSV files"
 "$PY" bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"
