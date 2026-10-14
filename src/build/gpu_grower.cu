@@ -34,7 +34,7 @@
 //                          one pass, skipped for nodes whose children are both
 //                          leaves
 //    so each level needs one round trip to the host (step 4).
-//  * Children with fewer than gpu.minRows rows are gathered into one block,
+//  * Children with fewer than minRows_ (gpu.minRows) rows are gathered into one block,
 //    copied to the host in one transfer and grown by CpuTreeBuilder tasks on
 //    the thread pool while the GPU continues with the next level.
 //  * A grower used for cross-validation keeps the raw feature values on the
@@ -1588,7 +1588,10 @@ public:
     std::iota(allFeatures.begin(), allFeatures.end(), 0u);
     LevelNode root{store.add(counts.data()), 0, static_cast<std::uint32_t>(stride_), 0,
                    std::move(allFeatures)};
-    if (stride_ < options_.gpu.minRows) {
+    minRows_ = options_.gpu.minRows > 0
+                   ? options_.gpu.minRows
+                   : std::max(GpuOptions::kAutoMinRows, stride_ / GpuOptions::kAutoMinRowsShare);
+    if (stride_ < minRows_) {
       growOnCpu(std::move(root));
     } else {
       growLevels(std::move(root));
@@ -1602,7 +1605,7 @@ public:
       std::fprintf(stderr, "  waiting for CPU subtrees: %.2f ms\n", waitSeconds * 1000.0);
       profile_.report();
     }
-    store.toTree(tree);
+    store.toTree(tree, &pool_);
     rules_ = nullptr;
     store_ = nullptr;
     cpuBuilder_ = nullptr;
@@ -1663,12 +1666,14 @@ private:
 
     // Raw values: kept in their own buffer for repeated use, otherwise
     // uploaded straight into the key area of the presort (buffer 1).
-    // Page-locking the source first makes the copy ~4x faster, which more than
-    // pays for the registration.
+    // Page-locking the source first makes the copy 2-5x faster, which more than
+    // pays for the registration (H100 PCIe: 55 instead of 10 GB/s). A plain
+    // registration: the read-only kind is not supported everywhere (H100 with
+    // HMM), and failing it meant a pageable copy.
     float *target = reusable_ ? values_.get() : reinterpret_cast<float *>(entries_[1].get());
     void *source = const_cast<float *>(train_.values.data());
     const bool pinned =
-        cudaHostRegister(source, total * sizeof(float), cudaHostRegisterReadOnly) == cudaSuccess;
+        cudaHostRegister(source, total * sizeof(float), cudaHostRegisterDefault) == cudaSuccess;
     if (!pinned) {
       cudaGetLastError(); // fall back to a pageable copy
     }
@@ -2116,7 +2121,7 @@ private:
         }
         nodes[n].partition = 1;
         LevelNode child{left ? leftId : rightId, begin, count, depth, features};
-        if (count >= options_.gpu.minRows) {
+        if (count >= minRows_) {
           next.push_back(std::move(child));
           nextParent.emplace_back(n, left ? 0 : 1);
         } else {
@@ -2267,6 +2272,7 @@ private:
 
   // Per grow.
   std::size_t stride_ = 0; // rows of the current grow (column stride)
+  std::size_t minRows_ = 0; // smaller nodes go to the CPU (gpu.minRows, or auto)
   const SplitRules *rules_ = nullptr;
   NodeStore *store_ = nullptr;
   CpuTreeBuilder *cpuBuilder_ = nullptr;

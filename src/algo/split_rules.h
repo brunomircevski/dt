@@ -17,7 +17,8 @@ std::vector<double> xlog2xTable();
 // Every backend calls these same functions, so they all grow the same tree.
 class SplitRules {
 public:
-  SplitRules(const Options &options, std::size_t classCount);
+  // `rowCount`: the training rows of the tree (its root's rows).
+  SplitRules(const Options &options, std::size_t classCount, std::size_t rowCount);
 
   Algorithm algorithm() const { return algorithm_; }
   Criterion criterion() const { return criterion_; }
@@ -39,6 +40,12 @@ public:
   std::uint32_t minChildRows(std::uint32_t n) const;
 
   // True if the node must become a leaf without looking for a split.
+  //   Both: pure, at the depth limit, or too few rows for two children.
+  //   CART with a fixed alpha (--alpha): fewer training errors than
+  //   alpha * rowCount. Cost-complexity pruning would cut any subtree of
+  //   such a node back to the node: a leaf costs errors + alpha * rowCount,
+  //   a subtree at least 2 * alpha * rowCount (two leaves). The pruned tree
+  //   is the same, and the nodes below it are never grown.
   bool isTerminal(const std::uint32_t *classCounts, std::uint32_t n, int depth) const;
 
   struct Decision {
@@ -66,6 +73,7 @@ private:
   int classCount_;
   int maxDepth_;
   std::uint32_t minLeaf_;
+  double leafErrors_ = 0.0; // CART, fixed alpha: alpha * rowCount
   std::vector<double> xlog2xTable_;
 };
 

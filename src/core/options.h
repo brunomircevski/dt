@@ -56,13 +56,22 @@ struct ParallelOptions {
   // Nodes with at least this many rows build their left child as a pool task.
   std::size_t nodeTaskRows = 4096;
   // Nodes with at least this many rows scan / partition features in parallel.
-  std::size_t featureParallelRows = 4096;
+  // Below it, waking the other threads costs more than they save: at 4096,
+  // a 48-core server spent a third of the build in the kernel (futex). 16K-64K
+  // were best on 10.5M and 115M rows.
+  std::size_t featureParallelRows = 32768;
 };
 
 struct GpuOptions {
   // Nodes with fewer rows are copied back and finished by the CPU pool while
-  // the GPU keeps working on the large nodes of the next level.
-  std::size_t minRows = 512;
+  // the GPU keeps working on the large nodes of the next level. 0 = auto:
+  // the training rows / kAutoMinRowsShare, at least kAutoMinRows. A GPU level
+  // costs about the same for a thousand mid-size nodes as for a few big ones,
+  // so on big datasets the CPU takes over earlier (measured on an H100 with
+  // 32 CPU cores: 10.5M rows best at 1-2.5K, 115M rows at 16-64K).
+  std::size_t minRows = 0;
+  static constexpr std::size_t kAutoMinRows = 1024;
+  static constexpr std::size_t kAutoMinRowsShare = 4096;
   GpuSweep sweep = GpuSweep::Auto;
   // Print per-level and per-kernel GPU times. Synchronises after every
   // kernel, so it slows the build down.

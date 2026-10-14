@@ -170,7 +170,7 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
     grower = makeCpuGrower(train, options, buildPool, crossValidate);
   }
 
-  const SplitRules rules(options, train.classCount());
+  const SplitRules rules(options, train.classCount(), train.rowCount);
   GrowTimings growTimings;
   Dataset::Values sortedValues; // C4.5's thresholds need them
   Tree tree = grower->grow(rules, {}, growTimings, isCart ? nullptr : &sortedValues);
@@ -180,7 +180,7 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   if (!isCart) {
     ScopedTimer timer(timings.pruneSeconds);
     // Part of growing in c4.5 (done with or without pruning).
-    c45CollapseUselessSplits(tree);
+    c45CollapseUselessSplits(tree, buildPool);
     c45UseTrainingValueThresholds(tree, sortedValues, train.rowCount, buildPool);
     if (options.c45.prune) {
       if (verbose) {

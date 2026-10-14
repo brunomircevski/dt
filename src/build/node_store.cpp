@@ -67,7 +67,7 @@ std::uint32_t NodeStore::add(const std::uint32_t *counts) {
   return id;
 }
 
-void NodeStore::toTree(Tree &tree) {
+void NodeStore::toTree(Tree &tree, ThreadPool *pool) {
   if (size_.load() == 0) {
     tree.nodes.clear();
     tree.classCounts.clear();
@@ -75,7 +75,7 @@ void NodeStore::toTree(Tree &tree) {
   }
   tree.assignPreorder(
       0, [&](std::uint32_t id) -> const Node & { return node(id); },
-      [&](std::uint32_t id) { return counts(id); });
+      [&](std::uint32_t id) { return counts(id); }, pool);
 }
 
 } // namespace dt

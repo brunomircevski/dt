@@ -29,8 +29,11 @@ partition never overwrites data it still has to read.
 
 ## Setup
 
-1. Upload the feature columns (through temporarily page-locked memory: 4×
-   faster copies) and labels. All device buffers are allocated once per run.
+1. Upload the feature columns (through temporarily page-locked memory: 2-5×
+   faster copies, 55 GB/s on the H100 PCIe) and labels. All device buffers are
+   allocated once per run. The registration is a plain one: the read-only kind
+   is not supported everywhere (H100 with HMM), and the copy then ran pageable
+   at 10 GB/s.
 2. Per grown tree: build `(value, packed row/class)` pairs of the selected
    rows and sort each feature with CUB's radix sort (stable, like the CPU's).
    For C4.5 the sorted values are copied back to the host (its thresholds
@@ -107,12 +110,16 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
 
 ## Tuning
 
-* `--gpu-min-rows N` (default 512): nodes smaller than this are finished on
-  the CPU. Lower values keep more of the tree on the GPU (more, smaller levels);
-  higher values hand over earlier and keep the CPU pool busier. The best value
-  depends on the balance between the GPU and the CPU: on the test laptop
-  (power-limited GPU) full CART trees on SUSY were fastest around 512,
-  covertype (54 features, 7 classes) around 4096, and C4.5 barely cared.
+* `--gpu-min-rows N` (default: training rows / 4096, at least 1024): nodes
+  smaller than this are finished on the CPU. Lower values keep more of the
+  tree on the GPU (more, smaller levels); higher values hand over earlier and
+  keep the CPU pool busier. A level costs the GPU about as much for thousands
+  of mid-size nodes as for a few big ones, so the best value grows with the
+  dataset: on the H100 with 32 CPU cores, HIGGS (10.5M rows) was fastest at
+  1-2.5K, airline's C4.5 (115M rows) at 16-64K (18 s instead of 22 s at 1K).
+  On the test laptop (power-limited GPU) full CART trees on SUSY were fastest
+  around 512, covertype (54 features, 7 classes) around 4096. Measurements:
+  [bench/results/cluster-tuning/](../bench/results/cluster-tuning/).
 * `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
   profile and the setup phases.
 

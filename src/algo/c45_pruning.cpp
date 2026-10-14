@@ -112,6 +112,10 @@ public:
         estimator_(confidenceFactor), pool_(pool), labels_(train.labels),
         errors_(tree.nodes.size(), 0.0), leafSlot_(tree.nodes.size(), 0),
         fresh_(tree.nodes.size(), 0), hops_(tree.nodes.size()) {
+    if (pool_ && train.rowCount >= kParallelRows) { // see errorsWithExtraRowsInParallel()
+      extraCounts_.reset(new std::uint32_t[tree.nodes.size() * classCount_]());
+      firstExtra_.reset(new std::uint32_t[tree.nodes.size()]());
+    }
     constexpr std::size_t kChunk = 4096;
     parallelFor(pool_, (hops_.size() + kChunk - 1) / kChunk, [&](std::size_t chunk) {
       const std::size_t end = std::min(hops_.size(), (chunk + 1) * kChunk);
@@ -124,7 +128,7 @@ public:
   void run() {
     arrange(0, 0, train_.rowCount);
     prune(0, 0, train_.rowCount);
-    tree_.compact();
+    tree_.compact(pool_);
   }
 
 private:
@@ -243,14 +247,23 @@ private:
   // the class distribution of every node in it, and reorder the rows by leaf
   // (preorder, stably) so that the rows of each node are contiguous: the left
   // child's rows come first.
+  //
+  // The first call is for the whole tree, still in the layout compact() left
+  // it in: its preorder is simply the order of the ids, and the leaves and
+  // the bottom-up counts are done in parallel.
   void arrange(std::uint32_t root, std::size_t begin, std::size_t count) {
+    const bool whole = !arranged_;
     std::vector<std::uint32_t> order;
-    subtreePreorder(tree_, root, order);
     std::vector<std::uint32_t> leaves;
-    for (std::uint32_t id : order) {
-      if (tree_.nodes[id].isLeaf()) {
-        leafSlot_[id] = static_cast<std::uint32_t>(leaves.size());
-        leaves.push_back(id);
+    if (whole) {
+      leavesInPreorder(leaves);
+    } else {
+      subtreePreorder(tree_, root, order);
+      for (std::uint32_t id : order) {
+        if (tree_.nodes[id].isLeaf()) {
+          leafSlot_[id] = static_cast<std::uint32_t>(leaves.size());
+          leaves.push_back(id);
+        }
       }
     }
     std::vector<std::uint32_t> leafOfRow;
@@ -283,11 +296,33 @@ private:
     } else {
       transposeArranged(source);
     }
-    for (std::size_t slot = 0; slot < leaves.size(); ++slot) {
-      setCounts(leaves[slot], leafCounts.data() + slot * classCount_);
-    }
+    constexpr std::size_t kChunk = 4096;
+    parallelFor(whole ? pool_ : nullptr, (leaves.size() + kChunk - 1) / kChunk,
+                [&](std::size_t chunk) {
+                  const std::size_t end = std::min(leaves.size(), (chunk + 1) * kChunk);
+                  for (std::size_t slot = chunk * kChunk; slot < end; ++slot) {
+                    setCounts(leaves[slot], leafCounts.data() + slot * classCount_);
+                  }
+                });
 
     // Decision nodes: sum of their children, bottom-up.
+    if (whole) {
+      tree_.bottomUp(pool_, [&](std::uint32_t id) {
+        const Node &node = tree_.nodes[id];
+        if (node.isLeaf()) {
+          return;
+        }
+        thread_local std::vector<std::uint32_t> sum;
+        sum.resize(classCount_);
+        const std::uint32_t *left = tree_.counts(node.left);
+        const std::uint32_t *right = tree_.counts(node.right);
+        for (std::size_t k = 0; k < classCount_; ++k) {
+          sum[k] = left[k] + right[k];
+        }
+        setCounts(id, sum.data());
+      });
+      return;
+    }
     std::vector<std::uint32_t> sum(classCount_);
     for (auto it = order.rbegin(); it != order.rend(); ++it) {
       const Node &node = tree_.nodes[*it];
@@ -301,6 +336,35 @@ private:
       }
       setCounts(*it, sum.data());
     }
+  }
+
+  // Every leaf of the tree in preorder (= by id, see arrange()), with its
+  // slot in leafSlot_.
+  void leavesInPreorder(std::vector<std::uint32_t> &leaves) {
+    const std::size_t nodeCount = tree_.nodes.size();
+    constexpr std::size_t kChunk = 1 << 16;
+    const std::size_t chunks = (nodeCount + kChunk - 1) / kChunk;
+    std::vector<std::uint32_t> before(chunks + 1, 0); // leaves in earlier chunks
+    parallelFor(pool_, chunks, [&](std::size_t chunk) {
+      const std::size_t end = std::min(nodeCount, (chunk + 1) * kChunk);
+      for (std::size_t id = chunk * kChunk; id < end; ++id) {
+        before[chunk + 1] += tree_.nodes[id].isLeaf();
+      }
+    });
+    for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+      before[chunk + 1] += before[chunk];
+    }
+    leaves.resize(before[chunks]);
+    parallelFor(pool_, chunks, [&](std::size_t chunk) {
+      std::uint32_t slot = before[chunk];
+      const std::size_t end = std::min(nodeCount, (chunk + 1) * kChunk);
+      for (std::size_t id = chunk * kChunk; id < end; ++id) {
+        if (tree_.nodes[id].isLeaf()) {
+          leafSlot_[id] = slot;
+          leaves[slot++] = static_cast<std::uint32_t>(id);
+        }
+      }
+    });
   }
 
   // The row-major copy, written in the arranged order: the row at `position`
@@ -551,6 +615,9 @@ private:
     thread_local std::vector<std::uint32_t> extraCounts;
     thread_local std::vector<std::uint32_t> counts;
     route(root, begin, count, arrival);
+    if (extraCounts_ && count >= kParallelRows) {
+      return errorsWithExtraRowsInParallel(root, begin, arrival);
+    }
     // Class counts of the extra rows per reached leaf. A leaf's slot is kept
     // in leafSlot_ (validated against `leaves`, as arrange() reuses it).
     leaves.clear();
@@ -579,6 +646,67 @@ private:
     return errors;
   }
 
+  // The same for many rows (`arrival`: the leaf each one reaches): the class
+  // counts of the extra rows are added up by all threads, per leaf, in
+  // extraCounts_. Only `root`'s leaves are touched, and concurrent calls are
+  // for disjoint subtrees. The leaves' changes are then summed in the order
+  // the serial loop sums them (by each leaf's first row), so the estimate is
+  // the same to the last bit, and every backend prunes alike.
+  double errorsWithExtraRowsInParallel(std::uint32_t root, std::size_t begin,
+                                       const std::vector<std::uint32_t> &arrival) {
+    const std::size_t count = arrival.size();
+    const std::size_t parts = 4 * (pool_->workerCount() + 1);
+    std::vector<std::vector<std::uint32_t>> reached(parts);
+    pool_->parallelFor(parts, [&](std::size_t part) {
+      const std::size_t end = count * (part + 1) / parts;
+      for (std::size_t index = count * part / parts; index < end; ++index) {
+        const std::uint32_t leaf = arrival[index];
+        std::atomic_ref<std::uint32_t>(
+            extraCounts_[std::size_t{leaf} * classCount_ + labels_[begin + index]])
+            .fetch_add(1, std::memory_order_relaxed);
+        // firstExtra_: 1 + the leaf's first row (0: not reached yet).
+        std::atomic_ref<std::uint32_t> first(firstExtra_[leaf]);
+        const auto row = static_cast<std::uint32_t>(index + 1);
+        std::uint32_t seen = first.load(std::memory_order_relaxed);
+        if (seen == 0 && first.compare_exchange_strong(seen, row, std::memory_order_relaxed)) {
+          reached[part].push_back(leaf);
+          continue;
+        }
+        while (row < seen && !first.compare_exchange_weak(seen, row, std::memory_order_relaxed)) {
+        }
+      }
+    });
+    std::vector<std::uint32_t> leaves;
+    for (const std::vector<std::uint32_t> &part : reached) {
+      leaves.insert(leaves.end(), part.begin(), part.end());
+    }
+    std::sort(leaves.begin(), leaves.end(), [&](std::uint32_t a, std::uint32_t b) {
+      return firstExtra_[a] < firstExtra_[b];
+    });
+    std::vector<double> change(leaves.size());
+    pool_->parallelFor(parts, [&](std::size_t part) {
+      std::vector<std::uint32_t> counts(classCount_);
+      const std::size_t end = leaves.size() * (part + 1) / parts;
+      for (std::size_t slot = leaves.size() * part / parts; slot < end; ++slot) {
+        const std::uint32_t leaf = leaves[slot];
+        const std::uint32_t *own = tree_.counts(leaf);
+        std::uint32_t *extra = extraCounts_.get() + std::size_t{leaf} * classCount_;
+        for (std::size_t k = 0; k < classCount_; ++k) {
+          counts[k] = own[k] + extra[k];
+          extra[k] = 0;
+        }
+        firstExtra_[leaf] = 0;
+        change[slot] = estimator_.leafErrors(counts.data(), classCount_, tree_.nodes[leaf].label) -
+                       (tree_.nodes[leaf].count > 0 ? errors_[leaf] : 0.0);
+      }
+    });
+    double errors = errors_[root];
+    for (const double value : change) {
+      errors += value;
+    }
+    return errors;
+  }
+
   Tree &tree_;
   const Dataset &train_;
   float *data_;  // row-major features, in the arranged order
@@ -593,26 +721,30 @@ private:
   std::vector<std::uint32_t> leafSlot_; // per leaf: scratch slot number
   std::vector<std::uint8_t> fresh_;     // per node: pruned, for its current rows
   std::vector<Hop> hops_;               // per node, kept in step with tree_.nodes
+  // Parallel pool, many rows: per node, class counts of extra rows and 1 +
+  // the first of them (see errorsWithExtraRowsInParallel), zero between calls.
+  std::unique_ptr<std::uint32_t[]> extraCounts_;
+  std::unique_ptr<std::uint32_t[]> firstExtra_;
 };
 
 } // namespace
 
-void c45CollapseUselessSplits(Tree &tree) {
-  // Bottom-up (preorder ids: children have larger ids than their parent).
+void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool) {
+  // Bottom-up: a node's children are settled before it.
   std::vector<double> subtreeErrors(tree.nodes.size());
-  for (std::size_t id = tree.nodes.size(); id-- > 0;) {
+  tree.bottomUp(pool, [&](std::uint32_t id) {
     Node &node = tree.nodes[id];
-    const double leafErrors = node.count - tree.counts(static_cast<std::uint32_t>(id))[node.label];
+    const double leafErrors = node.count - tree.counts(id)[node.label];
     if (node.isLeaf()) {
       subtreeErrors[id] = leafErrors;
-      continue;
+      return;
     }
     subtreeErrors[id] = subtreeErrors[node.left] + subtreeErrors[node.right];
     if (subtreeErrors[id] >= leafErrors - kEpsilon) { // build.c: Errors >= Cases - NoBestClass - Epsilon
       node.makeLeaf();
     }
-  }
-  tree.compact();
+  });
+  tree.compact(pool);
 }
 
 void c45UseTrainingValueThresholds(Tree &tree, std::span<const float> sortedValues,

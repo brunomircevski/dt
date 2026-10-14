@@ -16,7 +16,7 @@ class ThreadPool;
 
 // build.c, end of FormTree: a subtree that makes as many training errors as a
 // single leaf would is collapsed into that leaf.
-void c45CollapseUselessSplits(Tree &tree);
+void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool);
 
 // contin.c, ContinTest: a threshold is the largest training value of the
 // feature (over the whole training set) that is <= the cut's midpoint.

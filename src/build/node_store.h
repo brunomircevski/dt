@@ -32,8 +32,9 @@ public:
     return chunk(id).counts.get() + std::size_t{id & kChunkMask} * classCount_;
   }
 
-  // The tree below node 0 (the first node added), in preorder.
-  void toTree(Tree &tree);
+  // The tree below node 0 (the first node added), in preorder. `pool` may
+  // be null.
+  void toTree(Tree &tree, ThreadPool *pool);
 
 private:
   static constexpr unsigned kChunkBits = 14;

@@ -114,7 +114,7 @@ void Tree::print(std::ostream &output) const {
   }
 }
 
-void Tree::compact() {
+void Tree::compact(ThreadPool *pool) {
   if (nodes.empty()) {
     return;
   }
@@ -123,7 +123,7 @@ void Tree::compact() {
   const std::size_t classes = classCount();
   assignPreorder(
       0, [&](std::uint32_t id) -> const Node & { return oldNodes[id]; },
-      [&](std::uint32_t id) { return oldCounts.data() + std::size_t{id} * classes; });
+      [&](std::uint32_t id) { return oldCounts.data() + std::size_t{id} * classes; }, pool);
 }
 
 } // namespace dt

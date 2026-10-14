@@ -126,11 +126,16 @@ belong to such columns.
 
 One thread pool (`ThreadPool`), two kinds of work:
 
-* **Big nodes** (≥ `featureParallelRows` = 4096 rows): `parallelFor` over
+* **Big nodes** (≥ `featureParallelRows` = 32768 rows): `parallelFor` over
   features for the sweep, and the partition runs one column per thread.
-  Marking `goesLeft` is split into blocks too. The threshold is low because
-  C4.5's lopsided splits leave long chains of mid-size nodes on the critical
-  path (SUSY 500k, 28 threads: C4.5 140 → 110 ms against 65536).
+  Marking `goesLeft` is split into blocks too. Each `parallelFor` wakes the
+  other threads, and below this size that costs more than they save: with
+  4096 (the old default) a 48-core server spent a third of the CPU time of a
+  HIGGS build in the kernel (futex wake-ups), and 16K-64K rows were best on
+  HIGGS and airline ([cluster-tuning](../bench/results/cluster-tuning/)).
+  Smaller machines and smaller datasets can prefer a lower value: C4.5's
+  lopsided splits leave chains of mid-size nodes on the critical path (SUSY
+  500k on 28 desktop threads: 140 → 110 ms with 4096 against 65536).
 * **Big nodes out of place** (`--parallel`, ≥ 32768 rows): the builder keeps a
   second copy of the columns, and such a node is partitioned from the copy
   that holds it into the other one, where its children continue (ping-pong).
@@ -179,7 +184,17 @@ Nodes are created in a `NodeStore` (fixed-size chunks, an atomic counter, safe
 for concurrent use). At the end the tree is copied into a `Tree`: flat arrays
 of nodes and class counts in preorder, so the result does not depend on which
 thread created which node, and serial and parallel builds give byte-identical
-trees.
+trees. The copy runs in parallel: the tree is cut into subtrees of at most
+1/(8 · threads) of the rows, whose sizes are counted and whose nodes are copied
+by one task each, into the place preorder gives them.
+
+Every block of 2 MiB or more is allocated on transparent huge pages
+(`src/core/memory.cpp` replaces `operator new`: 2 MiB aligned and
+`madvise(MADV_HUGEPAGE)`, which most distributions require). The big arrays
+are first written by many threads at once and later read at random rows; with
+4 KiB pages that is a page fault per 4 KiB and a TLB miss on most reads. On
+the cluster this saved 0.2 s of a HIGGS run on the 48-core EPYC (1.5-2.1 s)
+and 0.3-0.5 s on the H100 node (CUDA, 1.4-2.4 s).
 
 ## Cross-validation
 
@@ -204,3 +219,13 @@ that gained rows are pruned again. C4.5's training-value thresholds are found
 by binary-searching each threshold among its feature's sorted training values
 (a by-product of the presort). CART cost-complexity pruning only needs the
 per-node class counts of the tree.
+
+The passes over the whole tree run in parallel too, which matters for trees
+of millions of nodes (airline's C4.5 tree has 19.6M before pruning):
+`Tree::bottomUp` visits disjoint subtrees (contiguous id ranges in preorder)
+on different threads and the few nodes above them last, which serves C4.5's
+collapse of useless splits and the class counts of the first arrangement;
+`Tree::compact` copies subtrees in parallel. Subtree raising asks how many
+errors a branch would make with its sibling's rows; for big siblings those
+rows are counted per leaf by all threads, and the leaves' changes are summed
+in the order the serial loop sums them, so the result is the same to the bit.

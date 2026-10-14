@@ -65,7 +65,7 @@ public:
     if (pool_) {
       pool_->waitIdle();
     }
-    store.toTree(tree);
+    store.toTree(tree, pool_);
     return tree;
   }
 

@@ -108,13 +108,15 @@ Subtree raising is always on, as in the original program.
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--task-rows N` | 4096 | `--parallel` / `--cuda` CPU side: nodes with at least N rows grow a child as a separate pool task. |
-| `--feature-parallel-rows N` | 4096 | Nodes with at least N rows scan and partition their features in parallel. |
-| `--gpu-min-rows N` | 512 | `--cuda`: nodes with fewer rows are finished by the CPU pool while the GPU grows the big ones. |
+| `--feature-parallel-rows N` | 32768 | Nodes with at least N rows scan and partition their features in parallel. |
+| `--gpu-min-rows N` | rows / 4096, at least 1024 | `--cuda`: nodes with fewer rows are finished by the CPU pool while the GPU grows the big ones. |
 | `--gpu-sweep auto\|one-pass\|two-pass` | `auto` | `--cuda`: score every cut in double precision (`one-pass`), or filter in single precision first and use double precision only for the candidates (`two-pass`). `auto` picks one-pass on GPUs with fast double precision (A100, H100, B200…). |
 | `--gpu-profile` | off | Print per-level and per-kernel GPU times. Synchronises after every kernel, so it slows the build; do not use it for timing. |
 
 The best values depend on the hardware and the data (`docs/CPU.md`,
-`docs/CUDA.md` explain what each threshold does).
+`docs/CUDA.md` explain what each threshold does). The defaults were tuned on
+48-core servers and an H100 with HIGGS (10.5M rows) and airline (115M rows):
+[bench/results/cluster-tuning/](bench/results/cluster-tuning/).
 
 ### How CART chooses its pruning strength
 

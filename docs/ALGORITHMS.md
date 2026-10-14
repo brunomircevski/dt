@@ -60,6 +60,14 @@ training misclassification rate and `|T|` its number of leaves. For a given
   depend on the dataset size. `--no-prune` keeps the maximal tree. The values
   are not interchangeable with theirs: scikit-learn's `ccp_alpha` weighs the
   leaves' Gini impurity instead of `R(T)`, and rpart's `cp` is `α / R(root)`.
+* With a fixed `α` a node that misclassifies fewer than `α · n` training rows
+  (`n` = all training rows) is not split: in `T(α)` it is a leaf anyway. As a
+  leaf it costs its errors `e < α · n` plus `α · n`; any subtree under it
+  costs at least `2 α · n` (two leaves), so pruning would cut it back. The
+  pruned tree is the same, but most of the maximal tree is never grown: on
+  HIGGS (`-d 30`) 116 thousand nodes instead of 2.2 million, and 0.1 million
+  instead of 21.6 million on airline. `--cv` grows the maximal tree, since it
+  needs the whole pruning sequence.
 * `--cv K` chooses `α` by Breiman's K-fold cross-validation instead: the tree
   is grown on all rows, a tree is grown on each of K folds' complement, and
   each fold tree is measured on its fold along the full tree's weakest-link

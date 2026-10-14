@@ -27,7 +27,7 @@ std::vector<double> xlog2xTable() {
   return table;
 }
 
-SplitRules::SplitRules(const Options &options, std::size_t classCount)
+SplitRules::SplitRules(const Options &options, std::size_t classCount, std::size_t rowCount)
     : algorithm_(options.algorithm),
       criterion_(options.algorithm == Algorithm::C45 ? Criterion::Entropy : Criterion::Gini),
       classCount_(static_cast<int>(classCount)),
@@ -35,7 +35,12 @@ SplitRules::SplitRules(const Options &options, std::size_t classCount)
       minLeaf_(static_cast<std::uint32_t>(
           options.minLeaf > 0 ? options.minLeaf
                               : (options.algorithm == Algorithm::C45 ? 2 : 1))),
-      xlog2xTable_(xlog2xTable()) {}
+      xlog2xTable_(xlog2xTable()) {
+  if (options.algorithm == Algorithm::Cart && options.cart.pruning == CartPruning::Alpha) {
+    // The same product as cartCostComplexityPrune()'s penalty per leaf.
+    leafErrors_ = options.cart.alpha * static_cast<double>(rowCount);
+  }
+}
 
 std::uint32_t SplitRules::minChildRows(std::uint32_t n) const {
   if (algorithm_ == Algorithm::Cart) {
@@ -63,6 +68,9 @@ bool SplitRules::isTerminal(const std::uint32_t *classCounts, std::uint32_t n,
   }
   if (maxDepth_ >= 0 && depth >= maxDepth_) {
     return true;
+  }
+  if (static_cast<double>(n - largest) < leafErrors_) {
+    return true; // pruned back to this node anyway (CART, fixed alpha)
   }
   // No cut can give both children enough rows (for C4.5 this includes
   // build.c's "Cases < 2 * MINOBJS").
