@@ -60,3 +60,12 @@ split = "tail"
 test_rows = 500_000
 train_rows = 500_000
 max_test_rows = 100_000
+
+# US flights 1987-2008 (gbm-bench's airline, 115M rows, 13 integer features,
+# carrier and airports as codes; label: arrival delayed). Made from the public
+# download by bench/results/cluster/make_datasets.py. The rows are in date
+# order, so the test set is a random sample.
+[airline]
+source = "datasets/airline.csv"
+split = "random"
+test_rows = 500_000

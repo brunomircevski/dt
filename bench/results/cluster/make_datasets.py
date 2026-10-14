@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild datasets/{covertype,higgs,supersymmetry}.csv from public downloads,
-byte for byte as the copies on the desktop, and check them by SHA-256.
+byte for byte as the copies on the desktop, make datasets/airline.csv, and
+check them all by SHA-256.
 
   bench/.venv/bin/python -I bench/results/cluster/make_datasets.py ~/downloads [names...]
 
@@ -20,8 +21,13 @@ Sources, in <downloads>:
                            features and label byte (1 = signal), in file order
   susy_delta.i8            every value's double minus its float32, in float64
                            ulps, row-major in the desktop's order
+  airline_14col.data.bz2   US flights 1987-2008 as in gbm-bench and the XGBoost
+                           GPU paper: 115M rows, 13 features, from
+                           https://kt.ijs.si/elena_ikonomovska/datasets/airline/
+                           (SHA-256 1f13460f...). There is no desktop copy: the
+                           expected SHA-256 is that of the first build (mordor3, 2026-10-14)
 
-A file whose SHA-256 differs from the desktop's is left as <name>.csv.mismatch
+A file whose SHA-256 differs from the expected one is left as <name>.csv.mismatch
 and the script fails.
 """
 
@@ -38,11 +44,12 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / "datasets"
-# sha256sum of the desktop's datasets/ (2026-10-14).
+# sha256sum of the desktop's datasets/ (2026-10-14); airline: of its first build.
 EXPECTED = {
     "covertype": "fd7a387defeab82ea260a5be0c42b84e3426b963bb7feb490ffbafdaf89dac77",
     "higgs": "71f566a24e8a03ff51aa6961addc652d44ff8878b28f4198a7f8921f3c6af31c",
     "supersymmetry": "85ecf105d7667d88006de9d8dfafabbc703647fe651a40df51f9a1202d31108e",
+    "airline": "255426039068522c2a5fb780b6fe4b31179bdc8988013d15db22ba914a742bcb",
 }
 
 COVERTYPE_HEADER = ",".join(
@@ -145,7 +152,43 @@ def supersymmetry(downloads, out):
             out.write(text)
 
 
-BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmetry}
+AIRLINE_COLUMNS = ["Year", "Month", "DayofMonth", "DayofWeek", "CRSDepTime", "CRSArrTime",
+                   "UniqueCarrier", "FlightNum", "ActualElapsedTime", "Origin", "Dest",
+                   "Distance", "Diverted", "ArrDelay"]
+AIRLINE_CODES = ["UniqueCarrier", "Origin", "Dest"]
+
+
+def airline(downloads, out):
+    """gbm-bench's airline: the carrier and airports become integer codes in
+    sorted order (pandas' category codes), the label is ArrDelay > 0. Rows in
+    file order."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    stream = pa.input_stream(downloads / "airline_14col.data.bz2", compression="bz2")
+    table = pacsv.read_csv(stream, read_options=pacsv.ReadOptions(column_names=AIRLINE_COLUMNS),
+                           convert_options=pacsv.ConvertOptions(column_types={
+                               name: pa.string() if name in AIRLINE_CODES else pa.int32()
+                               for name in AIRLINE_COLUMNS}))
+    assert not any(column.null_count for column in table.columns)
+    for name in AIRLINE_CODES:
+        encoded = pc.dictionary_encode(table[name].combine_chunks())
+        rank = np.argsort(np.argsort(np.array(encoded.dictionary.to_pylist())))
+        codes = rank.astype(np.int32)[encoded.indices.to_numpy()]
+        table = table.set_column(table.column_names.index(name), name, pa.array(codes))
+    delayed = pc.greater(table["ArrDelay"], 0)
+    table = table.drop_columns(["ArrDelay"]).append_column(
+        "Label", pc.if_else(delayed, "delayed", "on_time"))
+    out.write(",".join(table.column_names) + "\n")  # Arrow would quote the names
+    for batch in table.to_batches(max_chunksize=CHUNK * 4):
+        text = pa.BufferOutputStream()
+        pacsv.write_csv(batch, text, pacsv.WriteOptions(include_header=False,
+                                                        quoting_style="none"))
+        out.write(text.getvalue().to_pybytes().decode())
+
+
+BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmetry,
+            "airline": airline}
 
 
 def main():
@@ -168,7 +211,7 @@ def main():
                 digest.update(block)
         same = digest.hexdigest() == EXPECTED[name]
         print(f"{name}: {path.stat().st_size:,} bytes, sha256 {digest.hexdigest()} "
-              f"{'= the desktop copy' if same else '!= the desktop copy ' + EXPECTED[name]}")
+              f"{'= the expected' if same else '!= the expected ' + EXPECTED[name]}")
         if not same:
             path.rename(path.with_suffix(".csv.mismatch"))
             failed = True

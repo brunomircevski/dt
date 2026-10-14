@@ -23,6 +23,9 @@ virtualenv -p python3 bench/.venv && bench/.venv/bin/pip install -r bench/requir
 # once: the downloads, see "Data" below, into ~/downloads
 sbatch bench/results/cluster/build.sh          # on hopper: ./tree for sm_80 + sm_90, ./tree_cpu, rusage
 sbatch bench/results/cluster/prepare.sh        # on a dell node: the datasets (checked by SHA-256), HIGGS prepared
+# airline (see "Data") is prepared on its own:
+sbatch --export=ALL,PREPARE=airline -t 02:00:00 -o bench/results/cluster/prepare-airline.log \
+    bench/results/cluster/prepare.sh airline
 bench/results/cluster/submit.sh -m 3           # the four benchmark jobs, released together
 ```
 
@@ -59,15 +62,18 @@ Settings and caveats that are specific to the cluster:
 
 ## Data
 
-The cluster gets its data from the internet, not from the desktop (whose upload is slow). `make_datasets.py` (run by `prepare.sh`) rebuilds `datasets/*.csv` byte for byte as the desktop copies and stops on any SHA-256 difference:
+The cluster gets its data from the internet, not from the desktop (whose upload is slow). `make_datasets.py` (run by `prepare.sh`) rebuilds `datasets/*.csv` byte for byte as the desktop copies, makes `airline.csv`, and stops on any SHA-256 difference:
 
-| File | Source | SHA-256 (= desktop) |
+| File | Source | SHA-256 (= desktop; airline: first build) |
 |---|---|---|
 | `covertype.csv` | UCI 31 `covertype.zip` (same rows and order; `Id`, header and class names added) | `fd7a387d…` |
 | `higgs.csv` | OpenML 45570 parquet: UCI HIGGS, same rows and order. UCI's own zip downloads at 0.5 MB/s, OpenML's at 19 MB/s. The parquet's doubles are slightly off the float32 values, so they are rounded back to float32 and printed as UCI does (`%.18e`, CRLF line ends, `Id`, label last as signal/background) | `71f566a2…` |
 | `supersymmetry.csv` | UCI 279 `susy.zip`: the same float32 values and labels, but the desktop copy's rows are shuffled (no common seed reproduces the order) and its doubles are UCI's text read by an unknown parser, 0–6 ulps off. Two files made from the desktop copy carry what is not public: `susy_order.u64` (40 MB, a hash of every row in the desktop's order) and `susy_delta.i8` (90 MB, every value's offset in float64 ulps; 21 MB zstd) | `85ecf105…` |
+| `airline.csv` | gbm-bench's airline dataset (also in the XGBoost GPU paper): US flights from October 1987 to April 2008, `airline_14col.data.bz2` from kt.ijs.si (1.09 GB, SHA-256 `1f13460f…`). 115,069,017 rows, 13 integer features; the carrier and the airports become codes in sorted order, as in gbm-bench, and the label is `ArrDelay > 0` (`delayed` 47.5%, `on_time` 52.5%). Rows in file (date) order, so `datasets.toml` takes a random 500,000-row test set. There is no desktop copy: the hash is that of its first build. It takes about 3 minutes, and `prepare.py` 5 more | `25542603…` |
 
-Only HIGGS is used here. Its prepared files (`bench/data/higgs/`) have the SHA-256 recorded in `plan.json` of `cpu-pc-higgs` and `cuda-legion-higgs`.
+Airline has 10.5× HIGGS's rows and 4.9× its values (1.49 G against 0.31 G; 6.0 GB as float32 against 1.2 GB). Its CSV is smaller than HIGGS's only because its values are short integers. It is cluster-only: a GPU run needs roughly 20–25 GB of GPU memory (estimated from HIGGS's 5 GB), more than the laptop's 8 GB. `ActualElapsedTime` partly gives the delay away, so its accuracy says little; it is there to compare speed, as in gbm-bench.
+
+The results below use only HIGGS. Its prepared files (`bench/data/higgs/`) have the SHA-256 recorded in `plan.json` of `cpu-pc-higgs` and `cuda-legion-higgs`.
 
 ## Results
 

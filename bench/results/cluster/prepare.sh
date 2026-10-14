@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # SLURM job on a CPU node of mordor3: rebuild the datasets from the public
-# downloads (checked against the desktop's SHA-256) and prepare HIGGS for
-# bench/run.py. Submit it from the repository root (never run it on the login
-# node); arguments choose the datasets (default: all):
+# downloads (checked by SHA-256) and prepare one of them for bench/run.py
+# (PREPARE, a name in bench/datasets.toml; default higgs). Submit it from the
+# repository root (never run it on the login node); arguments choose the
+# datasets to rebuild (default: all):
 #
-#   sbatch bench/results/cluster/prepare.sh [covertype higgs supersymmetry]
+#   sbatch bench/results/cluster/prepare.sh [covertype higgs supersymmetry airline]
+#   sbatch --export=ALL,PREPARE=airline -t 02:00:00 \
+#       -o bench/results/cluster/prepare-airline.log bench/results/cluster/prepare.sh airline
 #
 #SBATCH -J dt-prepare
 #SBATCH -p dell
@@ -16,15 +19,16 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 PY=bench/.venv/bin/python
 DOWNLOADS="${DOWNLOADS:-$HOME/downloads}"
+PREPARE="${PREPARE:-higgs}"
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 echo "job $SLURM_JOB_ID on $(hostname), $SLURM_CPUS_PER_TASK CPUs, $(date '+%F %T')"
 
-step "1/3 datasets from $DOWNLOADS, checked against the desktop's SHA-256"
+step "1/3 datasets from $DOWNLOADS, checked by SHA-256"
 "$PY" -I bench/results/cluster/make_datasets.py "$DOWNLOADS" "$@"
 
-step "2/3 prepare HIGGS for bench/run.py"
-"$PY" bench/prepare.py higgs
+step "2/3 prepare $PREPARE for bench/run.py"
+"$PY" bench/prepare.py "$PREPARE"
 
-step "3/3 SHA-256 of the prepared files (compare with plan.json of cuda-legion-higgs)"
-sha256sum bench/data/higgs/*
+step "3/3 SHA-256 of the prepared files (for higgs: compare with plan.json of cuda-legion-higgs)"
+sha256sum "bench/data/$PREPARE"/*
 echo "done $(date '+%F %T')"

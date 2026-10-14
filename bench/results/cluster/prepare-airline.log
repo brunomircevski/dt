@@ -1,0 +1,19 @@
+job 147 on dell1, 16 CPUs, 2026-10-14 14:13:17
+
+=== 14:13:17  1/3 datasets from /home/bmircevski/downloads, checked by SHA-256
+airline: 6,163,329,292 bytes, sha256 255426039068522c2a5fb780b6fe4b31179bdc8988013d15db22ba914a742bcb (nothing to compare with)
+
+=== 14:16:03  2/3 prepare airline for bench/run.py
+airline: 114,569,017 train / 500,000 test rows, 13 features, 2 classes (293.9 s)
+
+=== 14:20:57  3/3 SHA-256 of the prepared files (for higgs: compare with plan.json of cuda-legion-higgs)
+dfe41f9d65026bf0158a316dbee4c636a83461bf6b0e4c7c12dc208a81b348f5  bench/data/airline/meta.json
+ef0520dbaee3b5e6245122b9c3163d2391ac0e01f3a7ce521fb62797e0bc3e44  bench/data/airline/test.f32
+4bff70d1a70cf89bb35307251287fb1284af912927e59dc5a04cbbb0411150e5  bench/data/airline/test.yadt.csv
+1ccaf4337b445795cb6485e903736f50d80f34e0ee32d4d4d80ca4578456bad4  bench/data/airline/test.y.i32
+829ebeb673c3a91797fc8e20394c32c94cf5ce8923aa4943186e7f5c483a2c8b  bench/data/airline/train.csv
+5b7864baa764bf42d6c797e900c4958cb65d384eac438bfb0d2605660cb825db  bench/data/airline/train.f32
+71bc2ceea8fe93038a865d03740d783d88d85905874993cd29881a1ae3354d9b  bench/data/airline/train.yadt.csv
+d1eb07be68ded6333cb4d8ed94834d1d432669b56f6f12299459c63d9796d14d  bench/data/airline/train.y.i32
+21b440c6d7525a4a543c73d35f24caf3ced8d7a38284f3793e6eb2785134de57  bench/data/airline/yadt.names
+done 2026-10-14 14:21:08
