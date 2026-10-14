@@ -1590,7 +1590,8 @@ public:
                    std::move(allFeatures)};
     minRows_ = options_.gpu.minRows > 0
                    ? options_.gpu.minRows
-                   : std::max(GpuOptions::kAutoMinRows, stride_ / GpuOptions::kAutoMinRowsShare);
+                   : std::clamp(stride_ / GpuOptions::kAutoMinRowsShare, GpuOptions::kAutoMinRows,
+                                GpuOptions::kAutoMaxMinRows);
     if (stride_ < minRows_) {
       growOnCpu(std::move(root));
     } else {

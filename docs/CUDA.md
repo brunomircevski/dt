@@ -110,13 +110,15 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
 
 ## Tuning
 
-* `--gpu-min-rows N` (default: training rows / 4096, at least 1024): nodes
-  smaller than this are finished on the CPU. Lower values keep more of the
-  tree on the GPU (more, smaller levels); higher values hand over earlier and
-  keep the CPU pool busier. A level costs the GPU about as much for thousands
-  of mid-size nodes as for a few big ones, so the best value grows with the
-  dataset: on the H100 with 32 CPU cores, HIGGS (10.5M rows) was fastest at
-  1-2.5K, airline's C4.5 (115M rows) at 16-64K (18 s instead of 22 s at 1K).
+* `--gpu-min-rows N` (default: training rows / 4096, between 1024 and 4096):
+  nodes smaller than this are finished on the CPU. Lower values keep more of
+  the tree on the GPU (more, smaller levels); higher values hand over earlier
+  and keep the CPU pool busier. A level costs the GPU about as much for
+  thousands of mid-size nodes as for a few big ones, so the best value grows
+  with the dataset, but slowly: on the H100 (32 CPU cores) and the A100 (48),
+  HIGGS (10.5M rows) was fastest at about 2.5K and airline (115M rows) at
+  2-4K, 10-15% faster than at 28K. (Airline's best was 16-64K while the CPU
+  threads still waited on the node store; see docs/PERFORMANCE.md.)
   On the test laptop (power-limited GPU) full CART trees on SUSY were fastest
   around 512, covertype (54 features, 7 classes) around 4096.
 * `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
