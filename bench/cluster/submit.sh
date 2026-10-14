@@ -5,8 +5,8 @@
 # bench/results/cluster-higgs/ or bench/results/cluster-airlines/:
 #   cuda-hopper-<data>  H100 PCIe (GPU 0 of 4), 2x Xeon Gold 6444Y   parallel + CUDA
 #   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          parallel + CUDA
-#   cuda-turing-<data>  RTX 2080 Ti (GPU 0), Threadripper 1950X       parallel + CUDA
-#                       (airline: parallel only, it needs ~25 GB of GPU memory)
+#   cuda-turing-higgs   RTX 2080 Ti (GPU 0), Threadripper 1950X       parallel + CUDA
+#   cpu-turing-airline  (airline: parallel only, CUDA needs ~25 GB of GPU memory)
 #   cpu-epyc-<data>     2x EPYC 9255                                  parallel
 #   cpu-dell-<data>     2x Xeon Gold 6542Y                            parallel
 # Build and prepare first (bench/cluster/README.md).
@@ -29,8 +29,8 @@ done
 shift $((OPTIND - 1))
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 case "$DATASET" in
-  higgs) DIR=cluster-higgs; TURING=tree,tree_cuda; LIMIT=01:00:00 ;;
-  airline) DIR=cluster-airlines; TURING=tree; LIMIT=04:00:00 ;;
+  higgs) DIR=cluster-higgs; TURING="cuda-turing-higgs  turing tree,tree_cuda"; LIMIT=01:00:00 ;;
+  airline) DIR=cluster-airlines; TURING="cpu-turing-airline turing tree"; LIMIT=04:00:00 ;;
   *) echo "-d: higgs or airline" >&2; exit 2 ;;
 esac
 
@@ -42,7 +42,7 @@ done
 #        name                    partition  impls
 JOBS=("cuda-hopper-$DATASET  hopper     tree,tree_cuda"
       "cuda-ampere-$DATASET  ampere     tree,tree_cuda"
-      "cuda-turing-$DATASET  turing     $TURING"
+      "$TURING"
       "cpu-epyc-$DATASET     epyc       tree"
       "cpu-dell-$DATASET     dell       tree")
 

@@ -52,7 +52,7 @@ done
   same second. Each job runs
   `bench/run.py <dataset> --protocols cart_alpha,c45 --impls tree[,tree_cuda] --threads all --cpus 0-<cores-1> --reps <-m> --run-id cluster-<…>/<run>`
   and `report.py`. Its log is `<run>/run.log`. Turing runs airline on the CPU
-  only: the CUDA backend needs about 25 GB of GPU memory for it.
+  only (`cpu-turing-airline`): the CUDA backend needs about 25 GB of GPU memory for it.
 - **`tune.sh`** runs a list of ./tree command lines on one node, interleaved
   and repeated, and prints ./tree's phase times with the CPU time, page faults
   and context switches of every run. The sweeps in
