@@ -1,0 +1,40 @@
+log: bench/results/cluster-higgs/cpu-epyc-higgs/run.log, job 205 on epyc1, started 2026-10-14 16:03:13
+
+=== 16:03:13  1/3 machine check
+CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: performance 
+load average: 0.00 1.29 5.97
+code: 5f4f955be4a2 (from submit.sh: hopper has no git)
+runs per case: 3
+
+=== 16:03:13  2/3 benchmark: higgs, pruned CART and C4.5, tree, 48 threads, 3 run(s) per case
+2 cases, 9 processes:
+  higgs | cart_alpha | tree | 48
+  higgs | c45 | tree | 48
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  higgs: identical in every format (7 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
+[1/9] 16:03:20 run 1/3: CART ./tree, 48 threads, higgs ...
+    ok: train 1.051 s, peak 5,842 MiB, 1,611 nodes, depth 19, test acc 71.59% | process 0m01s, elapsed 0m03s
+[2/9] 16:03:24 run 1/3: C4.5 ./tree, 48 threads, higgs ...
+    ok: train 1.812 s, peak 7,301 MiB, 1,159,295 nodes, depth 71, test acc 70.10% | process 0m02s, elapsed 0m13s, about 0m07s left
+[3/9] 16:03:34 run 2/3: CART ./tree, 48 threads, higgs ...
+    ok: train 1.029 s, peak 5,842 MiB, 1,611 nodes, depth 19, test acc 71.59% | process 0m01s, elapsed 0m17s, about 0m05s left
+[4/9] 16:03:38 run 2/3: C4.5 ./tree, 48 threads, higgs ...
+    ok: train 1.824 s, peak 7,311 MiB, 1,159,295 nodes, depth 71, test acc 70.10% | process 0m02s, elapsed 0m27s, about 0m03s left
+[5/9] 16:03:48 run 3/3: C4.5 ./tree, 48 threads, higgs ...
+    ok: train 1.848 s, peak 7,296 MiB, 1,159,295 nodes, depth 71, test acc 70.10% | process 0m02s, elapsed 0m38s, about 0m01s left
+[6/9] 16:03:58 run 3/3: CART ./tree, 48 threads, higgs ...
+    ok: train 1.026 s, peak 5,842 MiB, 1,611 nodes, depth 19, test acc 71.59% | process 0m01s, elapsed 0m41s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[7/9] 16:04:02 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0005 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m41s, about 0m00s left
+[8/9] 16:04:02 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0005 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m41s, about 0m00s left
+[9/9] 16:04:02 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0005 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m41s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-higgs/cpu-epyc-higgs/results.jsonl
+
+=== 16:04:02  3/3 tables and CSV files
+done 2026-10-14 16:04:02
