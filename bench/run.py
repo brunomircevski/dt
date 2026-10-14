@@ -339,8 +339,9 @@ def machine_info(args):
         "kernel": command_output(["uname", "-srvm"]),
         "os": command_output(["sh", "-c", ". /etc/os-release && echo $PRETTY_NAME"]),
         "versions": {
-            "tree_git": command_output(["git", "-C", str(B.ROOT), "describe", "--always",
-                                        "--dirty", "--abbrev=12"]),
+            # A node without git (hopper on mordor3) gets it from the submitting shell.
+            "tree_git": os.environ.get("TREE_GIT_DESCRIBE") or command_output(
+                ["git", "-C", str(B.ROOT), "describe", "--always", "--dirty", "--abbrev=12"]),
             "tree_binary": str(B.TREE),
             "tree_cuda_binary": str(B.TREE_CUDA),
             "nvcc": command_output([os.environ.get("NVCC", "/opt/cuda/bin/nvcc"), "--version"])
