@@ -3,7 +3,7 @@
 Scripts that build, prepare and benchmark ./tree on the faculty's mordor3
 cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 
-- [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows) on five nodes
+- [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows) on five nodes (turing: CUDA only)
 - [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows) on the same nodes but turing
 - [`bench/results/cluster-airlines-noprunning/`](../results/cluster-airlines-noprunning/BENCHMARK.md): airline, CART and C4.5 grown without pruning (GPU nodes CUDA only)
 
@@ -39,17 +39,18 @@ Then copy `bench/results/cluster-*/` back and draw the charts:
 for d in higgs:higgs airlines:airline; do
   dir=bench/results/cluster-${d%%:*} data=${d##*:}
   turing=$dir/cuda-turing-$data; [ -d $turing ] || turing=
-  bench/.venv/bin/python bench/machines_chart.py $dir/cuda-hopper-$data $dir/cuda-ampere-$data \
-      $turing $dir/cpu-epyc-$data $dir/cpu-dell-$data --out $dir/chart.png
+  bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
+      $dir/cuda-hopper-$data $dir/cuda-ampere-$data $turing $dir/cpu-epyc-$data $dir/cpu-dell-$data \
+      --out $dir/chart.png
 done
 ```
 
 The unpruned airline run (GPU nodes CUDA only) and its chart:
 
 ```bash
-bench/cluster/submit.sh -m 3 -d airline -p cart_full,c45_unpruned -c -o cluster-airlines-noprunning
+bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -c -o cluster-airlines-noprunning
 dir=bench/results/cluster-airlines-noprunning
-bench/.venv/bin/python bench/machines_chart.py --protocols cart_full,c45_unpruned \
+bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45_unpruned \
     $dir/cuda-hopper-airline $dir/cuda-ampere-airline $dir/cpu-epyc-airline $dir/cpu-dell-airline \
     --out $dir/chart.png
 ```
@@ -61,10 +62,10 @@ bench/.venv/bin/python bench/machines_chart.py --protocols cart_full,c45_unprune
 - **`submit.sh`** queues one job per node (`job.sh`) with `--exclusive` and
   `--hold`, then releases them together, so on idle nodes they start in the
   same second. Each job runs
-  `bench/run.py <dataset> --protocols cart_alpha,c45 --impls tree[,tree_cuda] --threads all --cpus 0-<cores-1> --reps <-m> --run-id cluster-<…>/<run>`
-  and `report.py`. Its log is `<run>/run.log`. Airline skips turing: the CUDA
-  backend needs 23.6 GB of GPU memory for it (two copies of the presorted
-  columns), and a 2080 Ti has 11 GB.
+  `bench/run.py <dataset> --protocols cart_alpha_nodepth,c45 --impls tree[,tree_cuda] --threads all --cpus 0-<cores-1> --reps <-m> --run-id cluster-<…>/<run> --train-accuracy-only`
+  and `report.py`. Its log is `<run>/run.log`. Turing runs CUDA only. Airline
+  skips turing: the CUDA backend needs 23.6 GB of GPU memory for it (two
+  copies of the presorted columns), and a 2080 Ti has 11 GB.
 - **`tune.sh`** runs a list of ./tree command lines on one node, interleaved
   and repeated, and prints ./tree's phase times with the CPU time, page faults
   and context switches of every run. The default settings were tuned
@@ -72,8 +73,18 @@ bench/.venv/bin/python bench/machines_chart.py --protocols cart_full,c45_unprune
 
 ## Settings specific to the cluster
 
-The protocols, data and measurements are those of the other benchmarks
-([bench/README.md](../README.md)), with every CPU of each node:
+The data and measurements are those of the other benchmarks
+([bench/README.md](../README.md)), with every CPU of each node, and two
+differences:
+
+- **No depth limit for CART** (`cart_alpha_nodepth`, `cart_full_nodepth`).
+  The other benchmarks cap CART at depth 30 because rpart cannot grow deeper
+  and they compare ./tree with rpart; here only ./tree runs, and C4.5 has no
+  cap either.
+- **Training accuracy only** (`run.py --train-accuracy-only`): ./tree's own,
+  printed after its timers. The test rows are not classified: predicting them
+  in Python from the dumped tree took minutes per run on airline.
+
 
 | Backend | Command | Threads |
 |---|---|---|

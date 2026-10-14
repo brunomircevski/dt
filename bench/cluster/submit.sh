@@ -5,7 +5,7 @@
 # bench/results/cluster-higgs/ or bench/results/cluster-airlines/:
 #   cuda-hopper-<data>  H100 PCIe (GPU 0 of 4), 2x Xeon Gold 6444Y   parallel + CUDA
 #   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          parallel + CUDA
-#   cuda-turing-higgs   RTX 2080 Ti (GPU 0), Threadripper 1950X       parallel + CUDA
+#   cuda-turing-higgs   RTX 2080 Ti (GPU 0), Threadripper 1950X       CUDA only
 #                       (not airline: its CUDA run needs 23.6 GB of GPU memory)
 #   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
 #   cpu-dell-<data>     dell1: 2x Xeon Gold 6542Y                     parallel
@@ -17,15 +17,16 @@
 #   bench/cluster/submit.sh -m 3             # each case 3 times
 #   bench/cluster/submit.sh -m 3 -d airline  # the airline dataset
 #   bench/cluster/submit.sh -m 3 cuda-turing-higgs   # only the named runs
-#   bench/cluster/submit.sh -m 3 -d airline -p cart_full,c45_unpruned -c \
+#   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -c \
 #       -o cluster-airlines-noprunning               # unpruned trees, GPU nodes CUDA only
-# -p: run.py's protocols (default cart_alpha,c45); -c: the GPU nodes run CUDA
-# only, not also parallel; -o: the directory under bench/results/.
+# -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
+# C4.5 has none); -c: the GPU nodes run CUDA only, not also parallel; -o: the
+# directory under bench/results/.
 
 set -euo pipefail
 RUNS=1
 DATASET=higgs
-PROTOCOLS=cart_alpha,c45
+PROTOCOLS=cart_alpha_nodepth,c45
 CUDA_ONLY=0
 OUTDIR=
 while getopts "m:d:p:co:h" option; do
@@ -57,7 +58,7 @@ JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree,tree_cuda"
       "cuda-ampere-$DATASET  ampere     ampere  tree,tree_cuda"
       "cpu-epyc-$DATASET     epyc       epyc1   tree"
       "cpu-dell-$DATASET     dell       dell1   tree")
-[ "$DATASET" = airline ] || JOBS+=("cuda-turing-higgs     turing     turing  tree,tree_cuda")
+[ "$DATASET" = airline ] || JOBS+=("cuda-turing-higgs     turing     turing  tree_cuda")
 [ "$CUDA_ONLY" = 0 ] || JOBS=("${JOBS[@]/tree,tree_cuda/tree_cuda}")
 
 # Only the runs named on the command line, if any.

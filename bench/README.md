@@ -91,7 +91,7 @@ The reported time is **training time**: from the data being in memory to the fin
 
 **Repetitions and run order:**
 - **One kind of run.** `--reps` fresh processes per case; each one gives training time, peak memory, tree size and accuracy. Report the median and the min–max range.
-- **Tree size and accuracy come from every run.** After its timer stops, each process reports nodes, leaves, depth, and training and test accuracy (each tool predicts with its own code; ./tree's dumped tree is evaluated by `benchlib.predict_tree`, checked against ./tree's own training accuracy). They must be the same in every repetition; `report.py` marks a case where they are not.
+- **Tree size and accuracy come from every run.** After its timer stops, each process reports nodes, leaves, depth, and training and test accuracy (each tool predicts with its own code; ./tree's dumped tree is evaluated by `benchlib.predict_tree`, checked against ./tree's own training accuracy; with `run.py --train-accuracy-only`, used on the mordor3 cluster, ./tree reports only its own training accuracy). They must be the same in every repetition; `report.py` marks a case where they are not.
 - **One warm-up rule for the managed runtimes** (scikit-learn, rpart, J48): one untimed fit on the first `--warmup-rows` training rows, in the same process, before the timed fit. It loads code paths, and the JVM's JIT compiles the same methods on 50,000 rows as on millions. The native tools (./tree, YaDT) need none: loading is not timed, so the page cache does not matter.
 - **Order:** shuffled anew on each repetition, so slow drift (heat, background load) is spread over all cases.
 

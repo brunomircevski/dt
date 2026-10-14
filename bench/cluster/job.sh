@@ -8,7 +8,7 @@
 #   -> bench/results/cluster-higgs/cuda-hopper-higgs/
 
 set -euo pipefail
-DIR="$1" NAME="$2" DATASET="$3" IMPLS="$4" RUNS="$5" PROTOCOLS="${6:-cart_alpha,c45}"
+DIR="$1" NAME="$2" DATASET="$3" IMPLS="$4" RUNS="$5" PROTOCOLS="${6:-cart_alpha_nodepth,c45}"
 cd "$SLURM_SUBMIT_DIR"  # repository root
 PY=bench/.venv/bin/python
 OUT="bench/results/$DIR/$NAME"
@@ -39,7 +39,7 @@ echo "runs per case: $RUNS"
 
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, $(nproc) threads, $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads all \
-  --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$DIR/$NAME"
+  --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$DIR/$NAME" --train-accuracy-only
 
 step "3/3 tables and CSV files"
 "$PY" bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"

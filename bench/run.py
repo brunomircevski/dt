@@ -185,7 +185,8 @@ def build_command(case, kind, args, scratch):
             binary = B.TREE
             backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
         dump = scratch / "tree.dump"
-        argv = [str(binary)] + backend + flags + (["--dump", str(dump)] if evaluate else []) \
+        predict = evaluate and not args.train_accuracy_only
+        argv = [str(binary)] + backend + flags + (["--dump", str(dump)] if predict else []) \
             + [str(data / "train.csv")]
 
         def parse(stdout):
@@ -203,7 +204,11 @@ def build_command(case, kind, args, scratch):
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features),
                       "peak_rss_train_bytes": peak * 1024}
-            if evaluate:
+            if evaluate and not predict:
+                # --train-accuracy-only: ./tree's own training accuracy, no test rows.
+                result["train_accuracy"] = float(
+                    re.search(r"train accuracy\s+([\d.]+)%", stdout).group(1)) / 100
+            elif evaluate:
                 # Both accuracies from the dumped tree, so ./tree is measured like the
                 # others: by predicting every row. ./tree's own training accuracy
                 # (printed to 4 decimals) must agree.
@@ -440,6 +445,9 @@ def main():
     parser.add_argument("--seed", type=int, default=0, help="seed of the shuffled order")
     parser.add_argument("--no-baseline", action="store_true",
                         help="skip the runtime-footprint runs on the _baseline dataset")
+    parser.add_argument("--train-accuracy-only", action="store_true",
+                        help="./tree: record only its own training accuracy, skip predicting "
+                             "the training and test rows from its dumped tree (minutes on big trees)")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
     args.cpu_list = parse_cpus(args.cpus) if args.cpus else None
@@ -555,7 +563,9 @@ def main():
         eta = f", about {clock(left)} left" if left is not None else ""
         if row["status"] == "ok":
             accuracy = (f", test acc {100 * row['test_accuracy']:.2f}%"
-                        if row.get("test_accuracy") is not None else "")
+                        if row.get("test_accuracy") is not None else
+                        f", train acc {100 * row['train_accuracy']:.2f}%"
+                        if row.get("train_accuracy") is not None else "")
             gpu = (f", GPU {row['gpu_peak_bytes'] / 2**20:,.0f} MiB"
                    if row.get("gpu_peak_bytes") is not None else "")
             print(f"    ok: train {row['train_seconds']:.4g} s, peak "

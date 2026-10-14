@@ -34,11 +34,12 @@ from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "cuda": "#1baf7a"}
 BACKENDS = {"serial": "Serial", "parallel": "Parallel", "cuda": "CUDA"}
 TITLES = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25",
-          "cart_full": "CART, no pruning, depth ≤ 30", "c45_unpruned": "C4.5, no pruning"}
+          "cart_full": "CART, no pruning, depth ≤ 30", "c45_unpruned": "C4.5, no pruning",
+          "cart_alpha_nodepth": "CART, fixed α = 1e-5", "cart_full_nodepth": "CART, no pruning"}
 PROTOCOLS = {p: TITLES[p] for p in ("cart_alpha", "c45")}  # the two panels; --protocols
 # No pruning: their "prune" timer holds only C4.5's collapse of useless splits
 # and its thresholds, part of growing; the bars are not split.
-UNPRUNED = {"cart_full", "c45_unpruned"}
+UNPRUNED = {"cart_full", "c45_unpruned", "cart_full_nodepth"}
 # The files ./tree and the evaluation read: equal hashes = the same rows.
 DATA_FILES = ("train.csv", "train.f32", "train.y.i32", "test.f32", "test.y.i32")
 LEFT = 0.215  # figure fraction left of the panels, for the row labels
@@ -91,7 +92,12 @@ def bars(run, reference):
                         # Median pruning time, if every run recorded it.
                         "prune": (statistics.median(prune)
                                   if len(prune) == len(ok) and protocol not in UNPRUNED else None),
-                        "tree": (ok[0]["nodes"], ok[0]["depth"], ok[0]["test_accuracy"])})
+                        # Test accuracy, or training accuracy where only that was
+                        # recorded (run.py --train-accuracy-only).
+                        "tree": (ok[0]["nodes"], ok[0]["depth"],
+                                 *((ok[0]["test_accuracy"], "test")
+                                   if ok[0].get("test_accuracy") is not None
+                                   else (ok[0]["train_accuracy"], "training")))})
     return out
 
 
@@ -149,7 +155,7 @@ def main():
         ax_time, ax_mem = axes[row]
         mine = sorted((e for e in entries if e["protocol"] == protocol),
                       key=lambda e: (order.index(e["backend"]), runs.index(e["run"])))
-        nodes, depth, accuracy = mine[0]["tree"]
+        nodes, depth, accuracy, accuracy_part = mine[0]["tree"]
         y, ys, previous = 0.0, [], None
         for e in mine:
             if previous is not None and e["backend"] != previous:
@@ -169,7 +175,7 @@ def main():
         ax_time.set_title(f"{PROTOCOLS[protocol]}: training time", loc="left", fontsize=10.5,
                           color=INK, fontweight="bold", pad=20)
         ax_time.text(0, 1.02, f"the same tree on every machine and backend: {nodes:,} nodes, "
-                     f"depth {depth}, test accuracy {100 * accuracy:.2f}%",
+                     f"depth {depth}, {accuracy_part} accuracy {100 * accuracy:.2f}%",
                      transform=ax_time.transAxes, fontsize=8, color=MUTED, va="bottom")
         ax_mem.set_title("peak memory: RAM (host) and VRAM (GPU)", loc="left", fontsize=10.5,
                          color=INK, fontweight="bold", pad=20)
