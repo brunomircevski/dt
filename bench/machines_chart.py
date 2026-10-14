@@ -33,7 +33,9 @@ from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 # >= 9.2); slot 3 is below 3:1 on white, so every bar carries a value label.
 COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "cuda": "#1baf7a"}
 BACKENDS = {"serial": "Serial", "parallel": "Parallel", "cuda": "CUDA"}
-PROTOCOLS = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25"}
+TITLES = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25",
+          "cart_full": "CART, no pruning, depth ≤ 30", "c45_unpruned": "C4.5, no pruning"}
+PROTOCOLS = {p: TITLES[p] for p in ("cart_alpha", "c45")}  # the two panels; --protocols
 # The files ./tree and the evaluation read: equal hashes = the same rows.
 DATA_FILES = ("train.csv", "train.f32", "train.y.i32", "test.f32", "test.y.i32")
 LEFT = 0.215  # figure fraction left of the panels, for the row labels
@@ -114,7 +116,11 @@ def main():
     parser.add_argument("--reference", nargs="*", type=Path, default=[],
                         help="runs drawn hatched as reference (another machine's run)")
     parser.add_argument("--out", type=Path, help="default: <first run>/chart.png")
+    parser.add_argument("--protocols", default="cart_alpha,c45",
+                        help=f"the CART and the C4.5 protocol to draw, of: {', '.join(TITLES)}")
     args = parser.parse_args()
+    PROTOCOLS.clear()
+    PROTOCOLS.update((p, TITLES[p]) for p in args.protocols.split(","))
     runs = list(args.reference) + list(args.runs)
     out = args.out or args.runs[0] / "chart.png"
     dataset, meta = check_same(runs)
