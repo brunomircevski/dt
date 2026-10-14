@@ -42,8 +42,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 | Directory | What | Main result |
 |---|---|---|
 | [`cluster-higgs`](cluster-higgs/BENCHMARK.md) | full HIGGS on hopper, ampere (CUDA), epyc, dell (parallel, 48 threads) | CART: H100 0.45 s, A100 0.64 s, epyc 1.06 s, dell 1.24 s. C4.5: A100 1.52 s, H100 1.67 s, epyc 1.86 s, dell 2.37 s. 1.2–2.5× faster than before the tuning. |
-| [`cluster-airlines`](cluster-airlines/BENCHMARK.md) | airline (115M rows), the same nodes | CART: H100 2.31 s, 3.2× epyc (7.34 s). C4.5: the GPUs only tie with epyc (13.2–15.8 s against 14.0 s); half of a CUDA run is the pruning, on the host CPU. |
-| [`cluster-airlines-noprunning`](cluster-airlines-noprunning/BENCHMARK.md) | airline, CART and C4.5 grown without pruning | CART's full tree is 47.1 million nodes, depth 65; C4.5's is 19.6 million, depth 74. CART takes 7.1 s (A100) to 10.5 s (dell), but 13.8 s on the H100. C4.5 takes 7.1–7.2 s on the GPUs and 11.1–12.6 s on the CPUs. |
+| [`cluster-airlines`](cluster-airlines/BENCHMARK.md) | airline (115M rows), the same nodes; pruned trees, and in `noprunning/` the trees grown without pruning (a second chart) | Pruned CART: H100 2.31 s, 3.2× epyc (7.34 s). Pruned C4.5: the GPUs only tie with epyc (13.2–15.8 s against 14.0 s); half of a CUDA run is the pruning, on the host CPU. Unpruned, CART grows 47.1 million nodes (depth 65) in 7.1 s (A100) to 10.5 s (dell), but 13.8 s on the H100; C4.5 grows 19.6 million in 7.1–7.2 s on the GPUs and 11.1–12.6 s on the CPUs. |
 | [`cluster-cpu-scaling`](cluster-cpu-scaling/BENCHMARK.md) | full HIGGS, 1–48 threads on epyc and dell | 48 threads: CART 1.08 s (epyc) and 1.25 s (dell), C4.5 1.87 and 2.24 s. dell's single thread is 1.7–1.9× slower than epyc's. epyc stalls where its second socket comes in (24 → 28 threads). |
 
 ## A new machine

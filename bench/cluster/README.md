@@ -4,8 +4,7 @@ Scripts that build, prepare and benchmark ./tree on the faculty's mordor3
 cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 
 - [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows)
-- [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows)
-- [`bench/results/cluster-airlines-noprunning/`](../results/cluster-airlines-noprunning/BENCHMARK.md): airline, CART and C4.5 grown without pruning
+- [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees
 - [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS with 1 to 48 threads on the two CPU nodes
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
@@ -57,11 +56,11 @@ done
 The unpruned airline run and its chart:
 
 ```bash
-bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines-noprunning
-dir=bench/results/cluster-airlines-noprunning
+bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines/noprunning
+dir=bench/results/cluster-airlines/noprunning
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45_unpruned \
     $dir/cuda-hopper-airline $dir/cuda-ampere-airline $dir/cpu-epyc-airline $dir/cpu-dell-airline \
-    --out $dir/chart.png
+    --out bench/results/cluster-airlines/chart-noprunning.png
 ```
 
 - **`build.sh`** runs on hopper because the CPU nodes have no CUDA toolkit. It

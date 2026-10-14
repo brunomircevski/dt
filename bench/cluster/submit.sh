@@ -18,7 +18,7 @@
 #   bench/cluster/submit.sh -m 3 -d airline  # the airline dataset
 #   bench/cluster/submit.sh -m 3 cuda-hopper-higgs   # only the named runs
 #   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned \
-#       -o cluster-airlines-noprunning               # unpruned trees
+#       -o cluster-airlines/noprunning               # unpruned trees
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/.
 
