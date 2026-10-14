@@ -1,4 +1,0 @@
-cart-old | | old/tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
-cart-new | | ./tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
-c45-old | | old/tree_cpu --parallel --threads 48 --c45 bench/data/higgs/train.csv
-c45-new | | ./tree_cpu --parallel --threads 48 --c45 bench/data/higgs/train.csv

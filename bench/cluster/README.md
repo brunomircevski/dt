@@ -4,8 +4,7 @@ Scripts that build, prepare and benchmark ./tree on the faculty's mordor3
 cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 
 - [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows) on five nodes
-- [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows) on the same nodes
-- [`bench/results/cluster-tuning/`](../results/cluster-tuning/README.md): the sweeps behind ./tree's default settings
+- [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows) on the same nodes but turing
 
 | Node | CPU | RAM | GPU (GPU 0 used) |
 |---|---|---|---|
@@ -30,7 +29,7 @@ sbatch bench/cluster/prepare.sh  # on a dell node: the datasets (checked by SHA-
 sbatch --export=ALL,PREPARE=airline -t 02:00:00 -o bench/cluster/prepare-airline.log \
     bench/cluster/prepare.sh airline
 bench/cluster/submit.sh -m 3               # HIGGS: five jobs, one per node, released together
-bench/cluster/submit.sh -m 3 -d airline    # airline (or name single runs, e.g. cuda-turing-higgs)
+bench/cluster/submit.sh -m 3 -d airline    # airline, four jobs (or name single runs, e.g. cuda-turing-higgs)
 ```
 
 Then copy `bench/results/cluster-*/` back and draw the charts:
@@ -38,9 +37,9 @@ Then copy `bench/results/cluster-*/` back and draw the charts:
 ```bash
 for d in higgs:higgs airlines:airline; do
   dir=bench/results/cluster-${d%%:*} data=${d##*:}
-  turing=cuda-turing-$data; [ $data = airline ] && turing=cpu-turing-airline
+  turing=$dir/cuda-turing-$data; [ -d $turing ] || turing=
   bench/.venv/bin/python bench/machines_chart.py $dir/cuda-hopper-$data $dir/cuda-ampere-$data \
-      $dir/$turing $dir/cpu-epyc-$data $dir/cpu-dell-$data --out $dir/chart.png
+      $turing $dir/cpu-epyc-$data $dir/cpu-dell-$data --out $dir/chart.png
 done
 ```
 
@@ -52,12 +51,13 @@ done
   `--hold`, then releases them together, so on idle nodes they start in the
   same second. Each job runs
   `bench/run.py <dataset> --protocols cart_alpha,c45 --impls tree[,tree_cuda] --threads all --cpus 0-<cores-1> --reps <-m> --run-id cluster-<…>/<run>`
-  and `report.py`. Its log is `<run>/run.log`. Turing runs airline on the CPU
-  only (`cpu-turing-airline`): the CUDA backend needs about 25 GB of GPU memory for it.
+  and `report.py`. Its log is `<run>/run.log`. Airline skips turing: the CUDA
+  backend needs 23.6 GB of GPU memory for it (two copies of the presorted
+  columns), and a 2080 Ti has 11 GB.
 - **`tune.sh`** runs a list of ./tree command lines on one node, interleaved
   and repeated, and prints ./tree's phase times with the CPU time, page faults
-  and context switches of every run. The sweeps in
-  [cluster-tuning](../results/cluster-tuning/README.md) were made with it.
+  and context switches of every run. The default settings were tuned
+  with it ([docs/PERFORMANCE.md](../../docs/PERFORMANCE.md)).
 
 ## Settings specific to the cluster
 
@@ -115,7 +115,7 @@ stops on any SHA-256 difference:
 Airline has 10.5× HIGGS's rows and 4.9× its values (1.49 G against 0.31 G;
 6.0 GB as float32 against 1.2 GB). Its CSV is smaller than HIGGS's only
 because its values are short integers. It is cluster-only: the CUDA backend
-needs about 25 GB of GPU memory for it, more than the laptop's 8 GB.
+needs 23.6 GB of GPU memory for it, more than the laptop's 8 GB or a 2080 Ti's 11 GB.
 `ActualElapsedTime` partly gives the delay away, so its accuracy says little;
 it is there to compare speed, as in gbm-bench.
 

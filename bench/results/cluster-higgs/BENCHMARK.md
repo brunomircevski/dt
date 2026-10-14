@@ -1,9 +1,9 @@
 # HIGGS on the mordor3 cluster: ./tree parallel and CUDA on five servers
 
-**Status:** run on 2026-10-14 from 16:03, 3 runs per case, at commit 16cc93b, with the defaults tuned for these servers ([cluster-tuning](../cluster-tuning/README.md)).
+**Status:** run on 2026-10-14 from 16:03, 3 runs per case, at commit 16cc93b, with the defaults tuned for these servers ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)).
 - **Nodes:** each node ran alone and was used whole. The runs started together on hopper, ampere, turing and epyc1; dell1 started a minute later.
 - **Commits:** machine.json records 5f4f955, or 36c6b7c for dell1. Both are 16cc93b plus changes to `bench/cluster/` only.
-- **Same trees:** every case built the same tree on every node and backend as the first cluster run ([before/](before/BENCHMARK.md)) and as the desktop and laptop.
+- **Same trees:** every case built the same tree on every node and backend as the first cluster run (before tuning, below) and as the desktop and laptop.
 
 How the runs are made and what is specific to the cluster: [bench/cluster/README.md](../../cluster/README.md).
 
@@ -38,7 +38,7 @@ CART prunes in 1–2 ms: its tree is no longer grown beyond what pruning keeps (
 
 ### Before and after tuning
 
-The first cluster run ([before/](before/BENCHMARK.md)) was made at 12:45 on the same nodes, with the code before tuning. Turing was added at 14:42.
+The first cluster run was made at 12:45 on the same nodes, 3 runs per case, with the code before tuning (commit ab8ebdd); turing was added at 14:42. Its files are no longer in the repository: commit 781f28b still has them (`bench/results/cluster-higgs/before/`).
 
 | Median of 3 | CART before → after | C4.5 before → after |
 |---|--:|--:|
@@ -51,9 +51,9 @@ The first cluster run ([before/](before/BENCHMARK.md)) was made at 12:45 on the 
 | CUDA · ampere | 1.34 s → **0.60 s** (2.2×) | 2.48 s → **1.43 s** (1.7×) |
 | CUDA · turing | 2.76 s → **1.91 s** (1.4×) | 4.42 s → **3.75 s** (1.2×) |
 
-Hopper's CPU times drift during the day (bench/cluster/README.md). The same comparison inside one job, old and new binaries interleaved, gave 1.6–2.8× on hopper (CUDA) and 1.4–1.8× on epyc ([cluster-tuning](../cluster-tuning/README.md)).
+Hopper's CPU times drift during the day (bench/cluster/README.md). The same comparison inside one job, old and new binaries interleaved, gave 1.6–2.8× on hopper (CUDA) and 1.4–1.8× on epyc ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)).
 
-What changed (details and measurements in [cluster-tuning](../cluster-tuning/README.md)):
+What changed:
 - **CART stops early.** With a fixed α, a node with fewer than α · n training errors is not split, because pruning would cut it back anyway. This grows 116 thousand instead of 2.2 million nodes, and gives the same pruned tree.
 - **Fewer thread wake-ups.** Features are scanned in parallel only from 32768 rows (was 4096): the 48-core nodes spent a third of their CPU time in the kernel waking threads.
 - **Huge pages** for every large array (`madvise`, which these nodes require).
@@ -64,7 +64,7 @@ What changed (details and measurements in [cluster-tuning](../cluster-tuning/REA
 
 - **Same trees:** CART 1,611 nodes, depth 19, test accuracy 71.59%; C4.5 1,159,295 nodes, depth 71, test accuracy 70.10%. These hold on every node and backend, before and after tuning.
 - **CART:** the H100 takes 0.42 s, 3.4× hopper's own 32 cores and 2.5× the fastest CPU node (epyc, 1.03 s). The A100 is close behind (0.60 s). Only 1.2 GB of data moves to the GPU, so the GPU setup (0.1 s) and the per-level round trips are a large part of these times.
-- **C4.5:** the H100 and the A100 take 1.37 and 1.43 s, 1.3× epyc's 48 Zen 5 cores (1.82 s). About 40% of a CUDA run is now pruning, 0.55 s on the host CPU. The 1.16-million-node tree's small subtrees also grow on the host. Both GPU nodes have slower CPUs than epyc: hopper's single thread is half as fast as epyc's (cluster-tuning, round 05).
+- **C4.5:** the H100 and the A100 take 1.37 and 1.43 s, 1.3× epyc's 48 Zen 5 cores (1.82 s). About 40% of a CUDA run is now pruning, 0.55 s on the host CPU. The 1.16-million-node tree's small subtrees also grow on the host. Both GPU nodes have slower CPUs than epyc: in a serial CART build, hopper's single thread was about half as fast as epyc's (18.2 against 9.5 s).
 - **CPU nodes:** epyc is the fastest CPU node: CART 1.03 s, C4.5 1.82 s. Dell is 15–30% behind, and the older nodes far behind: ampere's Zen 2 at 2.0–2.2× epyc's time, turing's Zen 1 (16 cores) at 3.6–3.7×. Turing gained the least from the tuning (1.1–1.4×). The likely reason is that it has the fewest cores, so waking threads cost it the least to begin with.
 - **Against the laptop and desktop** (CART, before this tuning, so not the same code: [`cuda-legion-higgs`](../cuda-legion-higgs/), [`cpu-pc-higgs`](../cpu-pc-higgs/)): they took 1.37 s on the RTX 5070 Laptop GPU, 3.22 s on the laptop's 20 threads and 3.47 s on the desktop's 28. The tuning was done on the cluster; the new defaults were not measured on them.
 - **Memory:** the same on every node. Parallel: 5.7 GiB (CART) and 7.1 GiB (C4.5) peak RSS. CUDA: 3.5 / 5.0 GiB RSS plus 4.7–5.0 GiB on the GPU, CUDA context included.

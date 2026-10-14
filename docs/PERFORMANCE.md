@@ -32,9 +32,7 @@ What changed:
 - **Parallel tree passes:** the copy, compaction and C4.5 bookkeeping run on
   all threads.
 
-Every sweep is in
-[bench/results/cluster-tuning/](../bench/results/cluster-tuning/README.md),
-and the benchmarks on five nodes are in
+The benchmarks on the cluster nodes are in
 [cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
 [cluster-airlines](../bench/results/cluster-airlines/BENCHMARK.md). The
 laptop and desktop were not re-measured.

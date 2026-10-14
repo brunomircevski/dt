@@ -1,2 +1,0 @@
-air-c45-cuda | DT_PP=1 | ../dt-inst/tree --cuda --threads 32 --c45 bench/data/airline/train.csv
-air-c45-par | DT_PP=1 | ../dt-inst/tree_cpu --parallel --threads 32 --c45 bench/data/airline/train.csv

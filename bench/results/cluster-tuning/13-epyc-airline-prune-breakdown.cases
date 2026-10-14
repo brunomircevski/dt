@@ -1,1 +1,0 @@
-air-c45-par | DT_PP=1 | ../dt-inst/tree_cpu --parallel --threads $CORES --c45 bench/data/airline/train.csv

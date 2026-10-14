@@ -1,5 +1,0 @@
-# hopper, 32 CPUs, job 160, 2026-10-14 14:49:36, load 16.81 9.84 4.34
-label,rep,load_ms,setup_ms,presort_ms,build_ms,prune_ms,train_ms,nodes,depth,real_s,user_s,sys_s,minor_faults,voluntary_cs,involuntary_cs
-cart-prof,0,408.7,130.1,19.8,956.3,14.3,1120.4,1611,19,2.18,28.82,3.37,40622,9763,367
-c45-prof,0,421.4,177.0,124.3,744.6,861.3,1907.2,1159295,71,2.98,43.52,3.71,40360,8203,442
-# done 2026-10-14 14:49:41

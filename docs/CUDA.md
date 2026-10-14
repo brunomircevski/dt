@@ -118,8 +118,7 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
   dataset: on the H100 with 32 CPU cores, HIGGS (10.5M rows) was fastest at
   1-2.5K, airline's C4.5 (115M rows) at 16-64K (18 s instead of 22 s at 1K).
   On the test laptop (power-limited GPU) full CART trees on SUSY were fastest
-  around 512, covertype (54 features, 7 classes) around 4096. Measurements:
-  [bench/results/cluster-tuning/](../bench/results/cluster-tuning/).
+  around 512, covertype (54 features, 7 classes) around 4096.
 * `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
   profile and the setup phases.
 

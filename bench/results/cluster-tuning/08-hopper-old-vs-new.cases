@@ -1,8 +1,0 @@
-cart-cuda-old | | old/tree --cuda --threads 32 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
-cart-cuda-new | | ./tree --cuda --threads 32 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
-cart-par-old | | old/tree_cpu --parallel --threads 32 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
-cart-par-new | | ./tree_cpu --parallel --threads 32 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
-c45-cuda-old | | old/tree --cuda --threads 32 --c45 bench/data/higgs/train.csv
-c45-cuda-new | | ./tree --cuda --threads 32 --c45 bench/data/higgs/train.csv
-c45-par-old | | old/tree_cpu --parallel --threads 32 --c45 bench/data/higgs/train.csv
-c45-par-new | | ./tree_cpu --parallel --threads 32 --c45 bench/data/higgs/train.csv

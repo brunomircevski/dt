@@ -1,8 +1,0 @@
-air-cart-fp8192 | | ./tree_cpu.v2 --parallel --threads 48 --feature-parallel-rows 8192 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
-air-cart-fp16384 | | ./tree_cpu.v2 --parallel --threads 48 --feature-parallel-rows 16384 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
-air-cart-fp65536 | | ./tree_cpu.v2 --parallel --threads 48 --feature-parallel-rows 65536 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
-air-cart-fp16384-tr16384 | | ./tree_cpu.v2 --parallel --threads 48 --task-rows 16384 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
-air-c45-fp8192 | | ./tree_cpu.v2 --parallel --threads 48 --feature-parallel-rows 8192 --c45 bench/data/airline/train.csv
-air-c45-fp16384 | | ./tree_cpu.v2 --parallel --threads 48 --feature-parallel-rows 16384 --c45 bench/data/airline/train.csv
-air-c45-fp65536 | | ./tree_cpu.v2 --parallel --threads 48 --feature-parallel-rows 65536 --c45 bench/data/airline/train.csv
-air-c45-fp16384-tr16384 | | ./tree_cpu.v2 --parallel --threads 48 --task-rows 16384 --c45 bench/data/airline/train.csv

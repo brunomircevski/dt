@@ -1,4 +1,0 @@
-air-cart-par-new | | ./tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
-air-c45-par-new | | ./tree_cpu --parallel --threads 48 --c45 bench/data/airline/train.csv
-air-cart-par-old | | old/tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/airline/train.csv
-air-c45-par-old | | old/tree_cpu --parallel --threads 48 --c45 bench/data/airline/train.csv

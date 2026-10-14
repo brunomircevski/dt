@@ -115,8 +115,8 @@ Subtree raising is always on, as in the original program.
 
 The best values depend on the hardware and the data (`docs/CPU.md`,
 `docs/CUDA.md` explain what each threshold does). The defaults were tuned on
-48-core servers and an H100 with HIGGS (10.5M rows) and airline (115M rows):
-[bench/results/cluster-tuning/](bench/results/cluster-tuning/).
+48-core servers and an H100 with HIGGS (10.5M rows) and airline (115M rows); what changed is in
+[docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ### How CART chooses its pruning strength
 

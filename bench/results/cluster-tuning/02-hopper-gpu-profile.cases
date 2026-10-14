@@ -1,2 +1,0 @@
-cart-prof | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-profile --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
-c45-prof | GLIBC_TUNABLES=glibc.malloc.hugetlb=1 | ./tree --cuda --threads 32 --gpu-profile --c45 bench/data/higgs/train.csv

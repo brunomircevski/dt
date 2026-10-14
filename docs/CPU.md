@@ -132,7 +132,7 @@ One thread pool (`ThreadPool`), two kinds of work:
   other threads, and below this size that costs more than they save: with
   4096 (the old default) a 48-core server spent a third of the CPU time of a
   HIGGS build in the kernel (futex wake-ups), and 16K-64K rows were best on
-  HIGGS and airline ([cluster-tuning](../bench/results/cluster-tuning/)).
+  HIGGS and airline.
   Smaller machines and smaller datasets can prefer a lower value: C4.5's
   lopsided splits leave chains of mid-size nodes on the critical path (SUSY
   500k on 28 desktop threads: 140 → 110 ms with 4096 against 65536).

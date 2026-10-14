@@ -1,6 +1,0 @@
-# hopper, 32 CPUs, job 185, 2026-10-14 15:23:46, load 1.87 5.79 5.56
-label,rep,load_ms,setup_ms,presort_ms,build_ms,prune_ms,train_ms,nodes,depth,real_s,user_s,sys_s,minor_faults,voluntary_cs,involuntary_cs
-air-c45-prof,0,1157.8,630.3,517.2,11451.1,8190.6,20789.2,8548725,72,25.26,414.19,17.41,555484,132118,1728
-higgs-cart-gs,0,416.3,170.2,19.8,311.6,0.6,502.2,1611,19,1.30,14.21,2.92,21924,939,201
-higgs-c45-gs,0,407.8,163.9,113.0,734.3,1040.0,2051.1,1159295,71,3.09,47.25,3.72,50723,9064,732
-# done 2026-10-14 15:24:16

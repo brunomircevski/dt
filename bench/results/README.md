@@ -24,9 +24,8 @@ bench/results/cpu-pc-susy500k/run.sh -m 5     # each case 5 times
 | `cuda-legion-susy` | ./tree only on the laptop, full SUSY: serial, parallel (20 threads) and CUDA, the protocols of `cpu-pc-susy`; run on 2026-10-10 (rerun on commit 49b7f47), one run per case; its `chart.png` shows the desktop's `cpu-pc-susy` as reference |
 | `cpu-pc-higgs` | ./tree parallel (28 threads) on full HIGGS, the desktop half of `cuda-legion-higgs`; run on 2026-10-10 (rerun on commit 49b7f47) |
 | `cuda-legion-higgs` | ./tree parallel (20 threads) and CUDA on the laptop, full HIGGS; run on 2026-10-10 (rerun on commit 49b7f47), one run per case; its `chart.png` shows `cpu-pc-higgs` as reference |
-| `cluster-higgs/` | full HIGGS on five nodes of the mordor3 SLURM cluster: `cuda-hopper-higgs` (H100), `cuda-ampere-higgs` (A100), `cuda-turing-higgs` (RTX 2080 Ti), all parallel + CUDA, and `cpu-epyc-higgs`, `cpu-dell-higgs` (parallel, 48 cores); run on 2026-10-14 with the defaults tuned for these servers (commit 16cc93b), 3 runs per case; one `chart.png` for all five, with the time spent pruning; [BENCHMARK.md](cluster-higgs/BENCHMARK.md) compares it with the first run before tuning (`before/`, commit ab8ebdd) |
-| `cluster-airlines/` | the airline dataset (115M rows) on the same five nodes (turing: parallel only), same commit and protocols; [BENCHMARK.md](cluster-airlines/BENCHMARK.md) |
-| `cluster-tuning/` | the sweeps behind the defaults (thread wake-ups, huge pages, GPU hand-off, pruning), made on hopper and epyc1 with `bench/cluster/tune.sh`; [README.md](cluster-tuning/README.md) |
+| `cluster-higgs/` | full HIGGS on five nodes of the mordor3 SLURM cluster: `cuda-hopper-higgs` (H100), `cuda-ampere-higgs` (A100), `cuda-turing-higgs` (RTX 2080 Ti), all parallel + CUDA, and `cpu-epyc-higgs`, `cpu-dell-higgs` (parallel, 48 cores); run on 2026-10-14 with the defaults tuned for these servers (commit 16cc93b), 3 runs per case; one `chart.png` for all five, with the time spent pruning; [BENCHMARK.md](cluster-higgs/BENCHMARK.md) compares it with the first run before tuning (commit ab8ebdd) |
+| `cluster-airlines/` | the airline dataset (115M rows) on the same nodes but turing (its 11 GB GPU is too small), same commit and protocols; [BENCHMARK.md](cluster-airlines/BENCHMARK.md) |
 
 ## A new machine
 
