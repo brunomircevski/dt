@@ -7,8 +7,10 @@
 #   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          parallel + CUDA
 #   cuda-turing-higgs   RTX 2080 Ti (GPU 0), Threadripper 1950X       parallel + CUDA
 #   cpu-turing-airline  (airline: parallel only, CUDA needs ~25 GB of GPU memory)
-#   cpu-epyc-<data>     2x EPYC 9255                                  parallel
-#   cpu-dell-<data>     2x Xeon Gold 6542Y                            parallel
+#   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
+#   cpu-dell-<data>     dell1: 2x Xeon Gold 6542Y                     parallel
+# The epyc and dell partitions have more nodes: the runs always take epyc1
+# and dell1, so runs of both datasets on one partition wait for each other.
 # Build and prepare first (bench/cluster/README.md).
 #
 #   bench/cluster/submit.sh                  # HIGGS, each case once, all five nodes
@@ -23,14 +25,14 @@ while getopts "m:d:h" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
     d) DATASET="$OPTARG" ;;
-    *) sed -n '2,19p' "$0"; exit 2 ;;
+    *) sed -n '2,21p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 case "$DATASET" in
-  higgs) DIR=cluster-higgs; TURING="cuda-turing-higgs  turing tree,tree_cuda"; LIMIT=01:00:00 ;;
-  airline) DIR=cluster-airlines; TURING="cpu-turing-airline turing tree"; LIMIT=04:00:00 ;;
+  higgs) DIR=cluster-higgs; TURING="cuda-turing-higgs  turing turing tree,tree_cuda"; LIMIT=01:00:00 ;;
+  airline) DIR=cluster-airlines; TURING="cpu-turing-airline turing turing tree"; LIMIT=04:00:00 ;;
   *) echo "-d: higgs or airline" >&2; exit 2 ;;
 esac
 
@@ -39,12 +41,12 @@ for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$D
   [ -e "$f" ] || { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 
-#        name                    partition  impls
-JOBS=("cuda-hopper-$DATASET  hopper     tree,tree_cuda"
-      "cuda-ampere-$DATASET  ampere     tree,tree_cuda"
+#        name                    partition  node    impls
+JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree,tree_cuda"
+      "cuda-ampere-$DATASET  ampere     ampere  tree,tree_cuda"
       "$TURING"
-      "cpu-epyc-$DATASET     epyc       tree"
-      "cpu-dell-$DATASET     dell       tree")
+      "cpu-epyc-$DATASET     epyc       epyc1   tree"
+      "cpu-dell-$DATASET     dell       dell1   tree")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then
@@ -74,11 +76,11 @@ echo "code: $TREE_GIT_DESCRIBE, $DATASET, runs per case: $RUNS"
 
 ids=()
 for job in "${JOBS[@]}"; do
-  read -r name partition impls <<<"$job"
+  read -r name partition node impls <<<"$job"
   mkdir -p "bench/results/$DIR/$name"
-  ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" --exclusive -N 1 -t "$LIMIT" \
+  ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "$LIMIT" \
     -o "bench/results/$DIR/$name/run.log" bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS")")
-  echo "$name: job ${ids[-1]} on partition $partition"
+  echo "$name: job ${ids[-1]} on $node"
 done
 scontrol release "${ids[@]}"
 squeue -a -u "$USER" -o "%.8i %.10P %.20j %.2t %.10M %R"
