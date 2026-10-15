@@ -45,6 +45,12 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 | [`cluster-airlines`](cluster-airlines/BENCHMARK.md) | airline (115M rows), the same nodes; pruned trees, and in `noprunning/` the trees grown without pruning (a second chart) | Pruned CART: H100 1.19 s, 6.2× epyc (7.35 s). Pruned C4.5: H100 7.5 s, A100 8.7 s, epyc 12.3 s; the pruning, on the host CPU, is 45% of a CUDA run. Unpruned, CART grows 47.1 million nodes (depth 65) in 3.4 s (H100) to 10.1 s (dell); C4.5 grows 19.6 million in 3.7 s (H100) to 12.5 s (dell). |
 | [`cluster-cpu-scaling`](cluster-cpu-scaling/BENCHMARK.md) | full HIGGS, 1–48 threads on epyc and dell | 48 threads: CART 1.11 s (epyc) and 1.23 s (dell), C4.5 1.77 and 2.20 s. dell's single thread is 1.8–1.9× slower than epyc's. epyc stalls where its second socket comes in (24 → 32 threads). |
 
+**Against other GPU libraries on the mordor3 cluster** (2026-10-15, 3 runs per case, commit 35cf315). One unpruned Gini tree, depth ≤ 12 and ≤ 19, on GPU 0 of hopper and ampere. No public CUDA C4.5 was found, so only CART is compared. The other libraries' code lives outside this repository.
+
+| Directory | What | Main result |
+|---|---|---|
+| [`cluster-higgs-vs-gpu-libs`](cluster-higgs-vs-gpu-libs/BENCHMARK.md) | full HIGGS: ./tree CUDA against cuML (`RandomForestClassifier`, 1 tree) and XGBoost (1 round, Gini-equivalent gain), 128–1024 histogram bins | ./tree is 1.7–2.3× faster than cuML and 8–13× faster than XGBoost (depth 19, H100: 0.42 s against 0.96 s and 5.08 s). Test accuracy is the same within 0.1 points; the histogram libraries' trees classify 83–96% of test rows like ./tree's exact tree. |
+
 ## A new machine
 
 1. Copy a directory and rename it for the machine, e.g. `cpu-server-susy500k`.
