@@ -1,16 +1,20 @@
-job 287 on hopper, 16 CPUs, 2026-10-14 19:41:37, commit f495aeddebb8-dirty
+job 393 on hopper, 16 CPUs, 2026-10-15 16:37:58, commit 35cf315
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/c45_pruning.cpp -o build/algo/c45_pruning.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/cart_pruning.cpp -o build/algo/cart_pruning.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/algo/split_rules.cpp -o build/algo/split_rules.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/app/main.cpp -o build/app/main.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/app/trainer.cpp -o build/app/trainer.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/cpu_builder.cpp -o build/build/cpu_builder.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/cpu_grower.cpp -o build/build/cpu_grower.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/node_store.cpp -o build/build/node_store.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/core/options.cpp -o build/core/options.o
-/usr/local/cuda/bin/nvcc -std=c++20 -O3 -gencode arch=compute_75,code=sm_75 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -Isrc -MMD -MP -Xcompiler -Wall -c src/build/gpu_grower.cu -o build/build/gpu_grower.o
+g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/core/tree.cpp -o build/core/tree.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP -c src/build/gpu_grower_stub.cpp -o build/build/gpu_grower_stub.o
+/usr/local/cuda/bin/nvcc -std=c++20 -O3 -gencode arch=compute_75,code=sm_75 -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -Isrc -MMD -MP -Xcompiler -Wall -c src/build/gpu_grower.cu -o build/build/gpu_grower.o
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP build/algo/c45_pruning.o build/algo/cart_pruning.o build/algo/split_rules.o build/app/main.o build/app/trainer.o build/build/cpu_builder.o build/build/cpu_grower.o build/build/node_store.o build/core/dataset.o build/core/memory.o build/core/options.o build/core/thread_pool.o build/core/tree.o build/build/gpu_grower_stub.o -o tree_cpu
-src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)>; std::size_t = long unsigned int]':
-src/build/gpu_grower.cu:1736:20:   required from here
-src/core/thread_pool.h:82:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::pinHostMemory(void*, std::size_t)::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
+src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t)::<lambda(std::size_t)>; std::size_t = long unsigned int]':
+src/build/gpu_grower.cu:1844:20:   required from here
+src/core/thread_pool.h:82:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t)::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t)::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
    82 |   auto work = [state, bodyPtr]() {
       |             ^~~~~~~~~~~~~~~~~~~~~~
    83 |     for (std::size_t index; (index = state->next.fetch_add(1)) < state->count;) {
@@ -41,8 +45,14 @@ src/core/thread_pool.h:82:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL_
       |     ~        
    96 |   };
       |              
+src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::touchHostMemory(void*, std::size_t)::<lambda(std::size_t)>; std::size_t = long unsigned int]':
+src/build/gpu_grower.cu:1868:20:   required from here
+src/core/thread_pool.h:82:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::touchHostMemory(void*, std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::touchHostMemory(void*, std::size_t)::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::touchHostMemory(void*, std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::touchHostMemory(void*, std::size_t)::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
+src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(dt::LeafIds&)::<lambda(std::size_t)>; std::size_t = long unsigned int]':
+src/build/gpu_grower.cu:2438:20:   required from here
+src/core/thread_pool.h:82:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(dt::LeafIds&)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(dt::LeafIds&)::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(dt::LeafIds&)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__c1369738_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(dt::LeafIds&)::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
 g++ -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP build/algo/c45_pruning.o build/algo/cart_pruning.o build/algo/split_rules.o build/app/main.o build/app/trainer.o build/build/cpu_builder.o build/build/cpu_grower.o build/build/node_store.o build/core/dataset.o build/core/memory.o build/core/options.o build/core/thread_pool.o build/core/tree.o build/build/gpu_grower.o -L/usr/local/cuda/lib64 -lcudart -o tree
 kernels: ELF file    1: tree.1.sm_75.cubin
 kernels: ELF file    2: tree.2.sm_80.cubin
 kernels: ELF file    3: tree.3.sm_90.cubin
-done 2026-10-14 19:46:40
+done 2026-10-15 16:43:01
