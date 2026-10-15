@@ -19,6 +19,9 @@ struct GrowTimings {
   double buildSeconds = 0.0;   // growing the tree
 };
 
+// Per training row: the id of the leaf it reaches (Grower::grow).
+using LeafIds = std::vector<std::uint32_t, UninitializedAllocator<std::uint32_t>>;
+
 // Grows unpruned trees on (subsets of) one training set with one backend.
 // It is created once per training run, so cross-validation reuses the
 // presorted columns and (Cuda) the device buffers.
@@ -30,9 +33,11 @@ public:
   // all rows if `rows` is empty. `rules` must be made for that many rows.
   // If `sortedValues` is not null it receives every feature's values of those
   // rows in increasing order (column-major), a by-product of the presort that
-  // C4.5's thresholds need.
+  // C4.5's thresholds need. If `leafOfRow` is not null (only with all rows)
+  // it receives, for every training row, the id of the leaf it ends in.
   virtual Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
-                    GrowTimings &timings, Dataset::Values *sortedValues = nullptr) = 0;
+                    GrowTimings &timings, Dataset::Values *sortedValues = nullptr,
+                    LeafIds *leafOfRow = nullptr) = 0;
 
   // Memory the grower only uses inside grow(): the caller may use it until
   // the next grow() (it is already mapped, so no page faults). At least

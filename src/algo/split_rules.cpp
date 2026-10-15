@@ -36,6 +36,12 @@ SplitRules::SplitRules(const Options &options, std::size_t classCount, std::size
           options.minLeaf > 0 ? options.minLeaf
                               : (options.algorithm == Algorithm::C45 ? 2 : 1))),
       xlog2xTable_(xlog2xTable()) {
+  if (algorithm_ == Algorithm::C45) {
+    log2Table_.resize(kLogTableSize);
+    for (std::uint32_t count = 0; count < kLogTableSize; ++count) {
+      log2Table_[count] = std::log2(static_cast<double>(count));
+    }
+  }
   if (options.algorithm == Algorithm::Cart && options.cart.pruning == CartPruning::Alpha) {
     // The same product as cartCostComplexityPrune()'s penalty per leaf.
     leafErrors_ = options.cart.alpha * static_cast<double>(rowCount);
@@ -115,7 +121,16 @@ SplitRules::Decision SplitRules::chooseC45(const CutCandidate *cuts,
   // proportions (e.g. 24:3 into 16:2 and 8:1) has a gain of exactly 0, which
   // double rounding can turn into +4e-16, and with a single allowed cut
   // (Log(1) = 0) nothing else would stop such a split.
-  std::vector<double> gain(featureCount, -1.0);
+  // Called for every node: no allocation for up to kStackFeatures features.
+  constexpr std::size_t kStackFeatures = 64;
+  double stackGain[kStackFeatures];
+  thread_local std::vector<double> heapGain;
+  double *gain = stackGain;
+  if (featureCount > kStackFeatures) {
+    heapGain.resize(featureCount);
+    gain = heapGain.data();
+  }
+  std::fill_n(gain, featureCount, -1.0);
   double gainSum = 0.0;
   int possible = 0;
   for (std::size_t feature = 0; feature < featureCount; ++feature) {
@@ -123,7 +138,10 @@ SplitRules::Decision SplitRules::chooseC45(const CutCandidate *cuts,
     if (!cut.valid()) {
       continue;
     }
-    const double thresholdCost = std::log2(static_cast<double>(cut.tries)) / n;
+    const double thresholdCost =
+        (cut.tries < kLogTableSize ? log2Table_[cut.tries]
+                                   : std::log2(static_cast<double>(cut.tries))) /
+        n;
     const double corrected = cut.gain - thresholdCost;
     if (corrected > kTieEps) {
       gain[feature] = corrected;

@@ -66,15 +66,20 @@ struct GpuOptions {
   // Nodes with fewer rows are copied back and finished by the CPU pool while
   // the GPU keeps working on the large nodes of the next level. 0 = auto:
   // the training rows / kAutoMinRowsShare, between kAutoMinRows and
-  // kAutoMaxMinRows. A GPU level costs about the same for a thousand mid-size
-  // nodes as for a few big ones, so on bigger datasets the CPU takes over
-  // somewhat earlier, but not much: measured on an H100 (32 CPU cores) and an
-  // A100 (48), 10.5M rows were best at about 2.5K and 115M rows at 2-4K
-  // (16-64K before the CPU subtrees stopped waiting on the node store).
+  // kAutoMaxMinRows (CART: rows / kAutoMinRowsShareCart, between kAutoMinRows
+  // and kAutoMaxMinRowsCart).
+  // A GPU level costs about the same for a thousand mid-size nodes as for a
+  // few big ones, so on bigger datasets the CPU takes over somewhat earlier,
+  // but not much: measured on an H100 (32 CPU cores) and an A100 (48), C4.5
+  // was best at about 2.5K rows on 10.5M rows and at 4K on 115M; CART, whose
+  // CPU subtrees are few, at 1-2.5K and 2K (16-64K before the CPU subtrees
+  // stopped waiting on the node store).
   std::size_t minRows = 0;
   static constexpr std::size_t kAutoMinRows = 1024;
   static constexpr std::size_t kAutoMaxMinRows = 4096;
   static constexpr std::size_t kAutoMinRowsShare = 4096;
+  static constexpr std::size_t kAutoMaxMinRowsCart = 2048;
+  static constexpr std::size_t kAutoMinRowsShareCart = 8192;
   GpuSweep sweep = GpuSweep::Auto;
   // Print per-level and per-kernel GPU times. Synchronises after every
   // kernel, so it slows the build down.

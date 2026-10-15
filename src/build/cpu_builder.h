@@ -110,10 +110,12 @@ class CpuTreeBuilder {
 public:
   // `goesLeft` is a scratch byte per row id (rows of different nodes never
   // collide). `pool` may be null (serial build). Without `tables`, tables
-  // for counts below kLogTableSize are used.
+  // for counts below kLogTableSize are used. `leafOfRow` (optional, a value
+  // per row id) receives the NodeStore id of the leaf each row ends in.
   CpuTreeBuilder(const SplitRules &rules, const EntryCodec &codec, std::size_t featureCount,
                  NodeStore &store, std::uint8_t *goesLeft, ThreadPool *pool,
-                 const ParallelOptions &options, CountTables tables = {});
+                 const ParallelOptions &options, CountTables tables = {},
+                 std::uint32_t *leafOfRow = nullptr);
 
   // Grow the subtree under `root`. With a pool, parts of it are grown by pool
   // tasks: call pool->waitIdle() before using the tree.
@@ -133,6 +135,8 @@ private:
   };
 
   void split(const Columns &columns, Subtree &item, std::vector<Subtree> &stack);
+  // leafOfRow_[row] = leaf for the rows of `count` entries (any order).
+  void recordLeaf(const Entry *entries, std::uint32_t count, std::uint32_t leaf) const;
   // Best cut of one feature; `bestLeft` receives the class counts left of it.
   CutCandidate scanFeature(const Entry *entries, std::uint32_t count,
                            const std::uint32_t *total, double parentWeighted,
@@ -176,6 +180,7 @@ private:
   ThreadPool *pool_;
   ParallelOptions options_;
   CountTables tables_;
+  std::uint32_t *leafOfRow_;
 };
 
 } // namespace dt

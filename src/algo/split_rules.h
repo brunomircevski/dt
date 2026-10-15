@@ -75,6 +75,7 @@ private:
   std::uint32_t minLeaf_;
   double leafErrors_ = 0.0; // CART, fixed alpha: alpha * rowCount
   std::vector<double> xlog2xTable_;
+  std::vector<double> log2Table_; // C4.5: std::log2(c) for c < kLogTableSize
 };
 
 } // namespace dt

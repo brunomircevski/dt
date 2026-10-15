@@ -29,11 +29,14 @@ partition never overwrites data it still has to read.
 
 ## Setup
 
-1. Upload the feature columns (through temporarily page-locked memory: 2-5×
-   faster copies, 55 GB/s on the H100 PCIe) and labels. All device buffers are
-   allocated once per run. The registration is a plain one: the read-only kind
-   is not supported everywhere (H100 with HMM), and the copy then ran pageable
-   at 10 GB/s.
+1. Upload the feature columns and labels at the speed of page-locked memory
+   (55 GB/s on the H100 PCIe, against 10 GB/s pageable) without page-locking
+   them, which is slow with HMM (both cluster GPU nodes): the pool's threads
+   copy 32 MB chunks into four page-locked staging buffers while the previous
+   chunks upload. Airline's 6 GB take 0.2 s on the H100 node, against 0.35 s
+   page-locked; the A100 node takes 0.5 s either way. The staging buffers are
+   allocated while the CSV loads. All device buffers are allocated once per
+   run.
 2. Per grown tree: build `(value, packed row/class)` pairs of the selected
    rows and sort each feature with CUB's radix sort (stable, like the CPU's).
    For C4.5 the sorted values are copied back to the host (its thresholds
@@ -69,7 +72,22 @@ anything.
 
 Small children become `CpuTreeBuilder` tasks on the thread pool, which grow them
 while the GPU continues with the next level. The host buffer they read from is
-page-locked once, in the background, so these copies run at full speed.
+page-locked in the background, so these copies run at full speed: all at once
+during the presort, or, for CART with a fixed `--alpha` (which stops early and
+hands over only a sixth of airline's rows), in 1 GB chunks just ahead of the
+hand-offs. Page-locking takes the driver's lock and stalls the level loop's
+CUDA calls, so less of it is better; but chunks registered during the levels
+made C4.5, which hands over nearly every row, slower.
+
+The goes-left flags of step 5 are a bitmap (one bit per row, set with
+`atomicOr` for the left rows only, cleared every level): 14 MB for airline,
+which stays in L2, against 115 MB of bytes that did not. The H100's CART build
+on airline went from 1.73 to 1.09 s.
+
+For C4.5 with pruning the grower also records the leaf of every row: a
+kernel writes them for the nodes finished on the GPU, the CPU tasks for
+theirs, and they are merged at the end. Pruning then does not route the rows
+down the tree again (see CPU.md).
 
 ### Inside the sweep (kernels 3a / 3c)
 
@@ -110,19 +128,20 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
 
 ## Tuning
 
-* `--gpu-min-rows N` (default: training rows / 4096, between 1024 and 4096):
-  nodes smaller than this are finished on the CPU. Lower values keep more of
-  the tree on the GPU (more, smaller levels); higher values hand over earlier
-  and keep the CPU pool busier. A level costs the GPU about as much for
-  thousands of mid-size nodes as for a few big ones, so the best value grows
-  with the dataset, but slowly: on the H100 (32 CPU cores) and the A100 (48),
-  HIGGS (10.5M rows) was fastest at about 2.5K and airline (115M rows) at
-  2-4K, 10-15% faster than at 28K. (Airline's best was 16-64K while the CPU
-  threads still waited on the node store; see docs/PERFORMANCE.md.)
-  On the test laptop (power-limited GPU) full CART trees on SUSY were fastest
-  around 512, covertype (54 features, 7 classes) around 4096.
+* `--gpu-min-rows N` (default: CART training rows / 8192, between 1024 and
+  2048; C4.5 rows / 4096, between 1024 and 4096): nodes smaller than this are
+  finished on the CPU. Lower values keep more of the tree on the GPU (more,
+  smaller levels); higher values hand over earlier and keep the CPU pool
+  busier. A level costs the GPU about as much for thousands of mid-size nodes
+  as for a few big ones, so the best value grows with the dataset, but
+  slowly: on the H100 (32 CPU cores) and the A100 (48), HIGGS (10.5M rows) was
+  fastest at 1-2.5K and airline (115M rows) at 2K for CART and 2-4K for C4.5,
+  10-15% faster than at 28K. (Airline's best was 16-64K while the CPU threads
+  still waited on the node store; see docs/PERFORMANCE.md.) On the test laptop
+  (power-limited GPU) full CART trees on SUSY were fastest around 512,
+  covertype (54 features, 7 classes) around 4096.
 * `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
-  profile and the setup phases.
+  profile and the setup phases (allocation, upload, page-locking).
 
 ## Memory
 

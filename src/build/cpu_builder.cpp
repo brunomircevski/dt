@@ -208,10 +208,33 @@ CountTables defaultCountTables() {
 CpuTreeBuilder::CpuTreeBuilder(const SplitRules &rules, const EntryCodec &codec,
                                std::size_t featureCount, NodeStore &store,
                                std::uint8_t *goesLeft, ThreadPool *pool,
-                               const ParallelOptions &options, CountTables tables)
+                               const ParallelOptions &options, CountTables tables,
+                               std::uint32_t *leafOfRow)
     : rules_(rules), codec_(codec), featureCount_(featureCount),
       classCount_(rules.classCount()), store_(store), goesLeft_(goesLeft), pool_(pool),
-      options_(options), tables_(tables.xlog ? tables : defaultCountTables()) {}
+      options_(options), tables_(tables.xlog ? tables : defaultCountTables()),
+      leafOfRow_(leafOfRow) {}
+
+void CpuTreeBuilder::recordLeaf(const Entry *entries, std::uint32_t count,
+                                std::uint32_t leaf) const {
+  if (!leafOfRow_) {
+    return;
+  }
+  auto range = [&](std::uint32_t from, std::uint32_t to) {
+    for (std::uint32_t index = from; index < to; ++index) {
+      leafOfRow_[codec_.row(entries[index].packed)] = leaf;
+    }
+  };
+  if (pool_ && count >= options_.featureParallelRows) {
+    const std::size_t blocks = 4 * (pool_->workerCount() + 1);
+    pool_->parallelFor(blocks, [&](std::size_t block) {
+      range(static_cast<std::uint32_t>(std::size_t{count} * block / blocks),
+            static_cast<std::uint32_t>(std::size_t{count} * (block + 1) / blocks));
+    });
+  } else {
+    range(0, count);
+  }
+}
 
 void CpuTreeBuilder::grow(const Columns &columns, Subtree root) {
   std::vector<Subtree> stack;
@@ -227,7 +250,10 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   const std::uint32_t begin = item.begin;
   const std::uint32_t count = item.count;
   const std::uint32_t *counts = store_.counts(item.node);
+  // Every column of item.features holds the node's rows in its range.
+  const Entry *rows = columns.feature(item.features.front(), item.side) + begin;
   if (rules_.isTerminal(counts, count, item.depth)) {
+    recordLeaf(rows, count, item.node);
     return;
   }
 
@@ -243,6 +269,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
     return !isCut(entries[0].value, entries[count - 1].value, gap);
   });
   if (features.empty()) {
+    recordLeaf(rows, count, item.node);
     return;
   }
 
@@ -281,6 +308,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   // 2. Pick the feature (CART or C4.5 rule).
   const SplitRules::Decision decision = rules_.choose(cuts.data(), featureCount_, count);
   if (decision.feature < 0) {
+    recordLeaf(rows, count, item.node);
     return;
   }
   const std::uint32_t leftCount = decision.leftCount;
@@ -313,6 +341,12 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   const std::uint32_t rightCount = count - leftCount;
   const bool leftTerminal = rules_.isTerminal(leftCounts, leftCount, item.depth + 1);
   const bool rightTerminal = rules_.isTerminal(rightCounts, rightCount, item.depth + 1);
+  if (leftTerminal) {
+    recordLeaf(winner, leftCount, leftId);
+  }
+  if (rightTerminal) {
+    recordLeaf(winner + leftCount, rightCount, rightId);
+  }
   if (leftTerminal && rightTerminal) {
     return;
   }

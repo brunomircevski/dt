@@ -173,20 +173,24 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   const SplitRules rules(options, train.classCount(), train.rowCount);
   GrowTimings growTimings;
   Dataset::Values sortedValues; // C4.5's thresholds need them
-  Tree tree = grower->grow(rules, {}, growTimings, isCart ? nullptr : &sortedValues);
+  LeafIds leafOfRow;            // C4.5's pruning starts from them
+  const bool c45Prune = !isCart && options.c45.prune;
+  Tree tree = grower->grow(rules, {}, growTimings, isCart ? nullptr : &sortedValues,
+                           c45Prune ? &leafOfRow : nullptr);
   timings.presortSeconds += growTimings.prepareSeconds;
   timings.buildSeconds += growTimings.buildSeconds;
 
   if (!isCart) {
     ScopedTimer timer(timings.pruneSeconds);
     // Part of growing in c4.5 (done with or without pruning).
-    c45CollapseUselessSplits(tree, buildPool);
+    c45CollapseUselessSplits(tree, buildPool, leafOfRow);
     c45UseTrainingValueThresholds(tree, sortedValues, train.rowCount, buildPool);
     if (options.c45.prune) {
       if (verbose) {
         std::cout << "  unpruned: " << tree.nodeCount() << " nodes\n";
       }
-      c45PessimisticPrune(tree, train, options.c45.confidence, buildPool, grower->workspace());
+      c45PessimisticPrune(tree, train, options.c45.confidence, buildPool, grower->workspace(),
+                          leafOfRow);
     }
     return tree;
   }

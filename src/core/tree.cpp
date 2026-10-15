@@ -114,7 +114,7 @@ void Tree::print(std::ostream &output) const {
   }
 }
 
-void Tree::compact(ThreadPool *pool) {
+void Tree::compact(ThreadPool *pool, std::uint32_t *newIdOf) {
   if (nodes.empty()) {
     return;
   }
@@ -123,7 +123,19 @@ void Tree::compact(ThreadPool *pool) {
   const std::size_t classes = classCount();
   assignPreorder(
       0, [&](std::uint32_t id) -> const Node & { return oldNodes[id]; },
-      [&](std::uint32_t id) { return oldCounts.data() + std::size_t{id} * classes; }, pool);
+      [&](std::uint32_t id) { return oldCounts.data() + std::size_t{id} * classes; }, pool,
+      newIdOf);
+}
+
+void remapIds(std::uint32_t *ids, std::size_t count, const std::uint32_t *newIdOf,
+              ThreadPool *pool) {
+  constexpr std::size_t kChunk = 1 << 16;
+  parallelFor(pool, (count + kChunk - 1) / kChunk, [&](std::size_t chunk) {
+    const std::size_t end = std::min(count, (chunk + 1) * kChunk);
+    for (std::size_t index = chunk * kChunk; index < end; ++index) {
+      ids[index] = newIdOf[ids[index]];
+    }
+  });
 }
 
 } // namespace dt

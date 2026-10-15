@@ -29,7 +29,11 @@ public:
   }
 
   Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
-            GrowTimings &timings, Dataset::Values *sortedValues) override {
+            GrowTimings &timings, Dataset::Values *sortedValues,
+            LeafIds *leafOfRow) override {
+    if (leafOfRow && !rows.empty()) {
+      throw std::logic_error("CpuGrower: leaves of rows only with all rows");
+    }
     const std::size_t count = rows.empty() ? rows_ : rows.size();
     {
       ScopedTimer timer(timings.prepareSeconds);
@@ -58,14 +62,18 @@ public:
     root.count = static_cast<std::uint32_t>(count);
     root.features.resize(features_);
     std::iota(root.features.begin(), root.features.end(), 0u);
+    if (leafOfRow) {
+      leafOfRow->resize(count);
+    }
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
-                           options_.parallel, countTables());
+                           options_.parallel, countTables(),
+                           leafOfRow ? leafOfRow->data() : nullptr);
     builder.grow(Columns{work_.get(), count, scratch_.get(), other_.get(), leftBits_.get()},
                  std::move(root));
     if (pool_) {
       pool_->waitIdle();
     }
-    store.toTree(tree, pool_);
+    store.toTree(tree, pool_, leafOfRow ? leafOfRow->data() : nullptr, count);
     return tree;
   }
 

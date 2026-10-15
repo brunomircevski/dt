@@ -4,6 +4,7 @@
 #include "core/tree.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <vector>
 
@@ -15,8 +16,10 @@ class ThreadPool;
 // be null (serial).
 
 // build.c, end of FormTree: a subtree that makes as many training errors as a
-// single leaf would is collapsed into that leaf.
-void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool);
+// single leaf would is collapsed into that leaf. `leafOfRow` (optional: the
+// leaf of every training row) is changed to the leaves of the new tree.
+void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool,
+                              std::span<std::uint32_t> leafOfRow = {});
 
 // contin.c, ContinTest: a threshold is the largest training value of the
 // feature (over the whole training set) that is <= the cut's midpoint.
@@ -31,8 +34,11 @@ void c45UseTrainingValueThresholds(Tree &tree, std::span<const float> sortedValu
 // replaced by a leaf, or by its most-used branch ("subtree raising"), when that
 // is not estimated to be worse. `workspace` (if at least 8 bytes per training
 // row and feature) holds the two row-major copies of the features that the
-// pruning works with, instead of allocating them.
+// pruning works with, instead of allocating them. `leafOfRow` (optional) is
+// the leaf of every training row, which saves sending them through the tree;
+// the pruning uses it up (as scratch).
 void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFactor,
-                         ThreadPool *pool, std::span<std::byte> workspace = {});
+                         ThreadPool *pool, std::span<std::byte> workspace = {},
+                         std::span<std::uint32_t> leafOfRow = {});
 
 } // namespace dt

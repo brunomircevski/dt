@@ -72,7 +72,10 @@ void printUsage(const char *program) {
       << "Cuda:\n"
       << "  --gpu-min-rows N         smaller nodes go to the CPU pool (default: training\n"
       << "                           rows / " << GpuOptions::kAutoMinRowsShare << ", between "
-      << GpuOptions::kAutoMinRows << " and " << GpuOptions::kAutoMaxMinRows << ")\n"
+      << GpuOptions::kAutoMinRows << " and " << GpuOptions::kAutoMaxMinRows << ";\n"
+      << "                           CART: rows / " << GpuOptions::kAutoMinRowsShareCart
+      << ", between " << GpuOptions::kAutoMinRows << " and "
+      << GpuOptions::kAutoMaxMinRowsCart << ")\n"
       << "  --gpu-sweep MODE         auto | one-pass | two-pass (default auto: one-pass\n"
       << "                           on GPUs with fast double precision)\n"
       << "  --gpu-profile            print per-level / per-kernel GPU times (slower)\n";

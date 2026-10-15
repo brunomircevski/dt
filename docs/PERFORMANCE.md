@@ -2,6 +2,58 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: C4.5 pruning, the GPU partition and the upload (mordor3 cluster)
+
+Commit `93920b9` (before) against the merge of this work (after), on airline
+(115M rows, 18 features), measured on hopper (H100 PCIe + 32 Xeon cores,
+`--cuda`), ampere (A100 80 GB + 48 EPYC 7402 cores, `--cuda`) and epyc1
+(2× EPYC 9255, 48 cores, `--parallel`). Before and after ran in the same job,
+interleaved, 3 runs each; times are medians of `train total` (build and prune
+in brackets). Every tree is byte-identical before and after, on all three
+nodes.
+
+| Algorithm | Node, backend | Before | After | Speed-up |
+|-----------|---------------|-------:|------:|--------:|
+| C4.5 | hopper cuda | 11.08 s (3.61 + 6.66) | 7.11 s (3.30 + 3.09) | 1.56× |
+| C4.5 | ampere cuda | 11.72 s (3.89 + 6.65) | 8.59 s (3.39 + 3.88) | 1.37× |
+| C4.5 | epyc1 parallel | 13.78 s (10.16 + 2.90) | 12.33 s (10.26 + 1.37) | 1.12× |
+| CART | hopper cuda | 2.17 s (1.72) | 1.21 s (0.92) | 1.79× |
+| CART | ampere cuda | 2.88 s (2.28) | 1.86 s (1.24) | 1.55× |
+| CART | epyc1 parallel | 7.36 s (6.66) | 7.40 s (6.69) | – |
+
+CART is `--cart --alpha 1e-5`. What changed:
+- **The growers record each row's leaf.** C4.5 pruning needed every row's
+  leaf and routed all 115M rows through the 19.6M-node tree for it. The
+  builders know a node's rows when
+  it becomes a leaf, and the ids now follow the tree through its renumbering
+  and the collapse of useless splits.
+- **C4.5 pruning without blocking joins:** a node is settled by whichever of
+  its branches finishes last, so no thread waits. The rows are grouped by
+  leaf with a radix sort whose passes have equal digits (two 12-bit passes
+  for airline's 4.3M leaves instead of 11 + 11 + 1 bits), and the counts of a
+  sibling's rows per leaf go through a small per-thread cache.
+- **GPU goes-left flags as a bitmap:** one bit per row (14 MB for airline,
+  in L2) instead of a byte (115 MB). The partition kernel runs at about
+  1.2 TB/s on the H100; hopper's CART build went from 1.72 to 0.92 s with the
+  hand-off below.
+- **Staged upload:** with HMM (both GPU nodes) page-locking is slow, so the
+  columns go through four page-locked 32 MB staging buffers instead: 6 GB in
+  0.2 s instead of 0.35 s on the H100 node, the same 0.5 s on the A100 node.
+- **Hand-off arena page-locked as needed:** CART with a fixed α hands only 2
+  of airline's 12 GB to the CPU, so its arena is page-locked in 1 GB chunks
+  ahead of the hand-offs instead of all at once (0.1-0.3 s). C4.5 keeps the
+  single registration: chunks registered during the levels stall the GPU
+  loop and made it 0.4 s slower.
+- **`--gpu-min-rows` for CART:** rows / 8192, between 1024 and 2048 (airline:
+  2048 instead of 4096). C4.5 keeps rows / 4096.
+- **`chooseC45`** looks up `log2` in a table and allocates nothing.
+- **`DT_PROFILE=1`** prints where C4.5 pruning spends its time.
+
+The parallel CPU build is unchanged (its code is the same; epyc1's C4.5 build
+is 1% slower in every binary built after the pruning changes, which we put
+down to code layout). The benchmark directories in
+[bench/results/](../bench/results/) were not rerun.
+
 ## October 2026: the node store and the GPU hand-off (mordor3 cluster)
 
 Commit `0475249` (node store) and `f495aed` (GPU hand-off), measured on the

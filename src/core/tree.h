@@ -64,16 +64,18 @@ public:
   void print(std::ostream &output) const;
 
   // After pruning: drop the nodes that are no longer reachable from the root
-  // and renumber the others in preorder. `pool` may be null.
-  void compact(ThreadPool *pool = nullptr);
+  // and renumber the others in preorder. `pool` may be null. `newIdOf` (if
+  // not null, a value per old id) receives the new id of every kept node.
+  void compact(ThreadPool *pool = nullptr, std::uint32_t *newIdOf = nullptr);
 
   // Replace the nodes by the tree under `root` of another node storage,
   // renumbered in preorder. nodeAt(id) -> const Node&, countsAt(id) -> const
   // uint32_t* (classCount() values); with a pool both are called from several
-  // threads at once. `pool` may be null.
+  // threads at once. `pool` may be null. `newIdOf` (if not null, indexed by
+  // the other storage's ids) receives the new id of every copied node.
   template <class NodeAt, class CountsAt>
   void assignPreorder(std::uint32_t root, NodeAt &&nodeAt, CountsAt &&countsAt,
-                      ThreadPool *pool = nullptr);
+                      ThreadPool *pool = nullptr, std::uint32_t *newIdOf = nullptr);
 
   // Call visit(id) for every node, children before their parent. Subtrees are
   // visited in parallel (nodes of different subtrees at the same time), the
@@ -82,13 +84,24 @@ public:
   // next id, and its subtree is a contiguous range of ids. `pool` may be null.
   template <class Visit> void bottomUp(ThreadPool *pool, Visit &&visit) const;
 
+  // Call visit(id) for every id, parents before their children: the nodes
+  // above the subtrees of bottomUp() first, then the subtrees in parallel,
+  // each by increasing id. A node made a leaf whose children's ids are still
+  // in place (makeLeaf) is visited with its old subtree.
+  template <class Visit> void topDown(ThreadPool *pool, Visit &&visit) const;
+
 private:
   // Copy the subtree under `root` (of another node storage) to the ids
   // [first, first + its size) in preorder; returns the next free id.
   template <class NodeAt, class CountsAt>
   std::uint32_t copyPreorder(std::uint32_t root, std::uint32_t first, NodeAt &nodeAt,
-                             CountsAt &countsAt);
+                             CountsAt &countsAt, std::uint32_t *newIdOf);
 };
+
+// ids[i] = newIdOf[ids[i]] for the `count` ids, in parallel (`pool` may be
+// null).
+void remapIds(std::uint32_t *ids, std::size_t count, const std::uint32_t *newIdOf,
+              ThreadPool *pool);
 
 // The parallel tree passes split a tree into subtrees of at most this share of
 // the work (rows or nodes) per thread, so threads finish together.
@@ -96,7 +109,7 @@ inline constexpr std::size_t kSubtreesPerThread = 8;
 
 template <class NodeAt, class CountsAt>
 std::uint32_t Tree::copyPreorder(std::uint32_t root, std::uint32_t first, NodeAt &nodeAt,
-                                 CountsAt &countsAt) {
+                                 CountsAt &countsAt, std::uint32_t *newIdOf) {
   const std::size_t classes = classCount();
   // A child's new id is only known when it is visited; it patches its parent.
   struct Visit {
@@ -112,6 +125,9 @@ std::uint32_t Tree::copyPreorder(std::uint32_t root, std::uint32_t first, NodeAt
     const std::uint32_t newId = next++;
     const Node &node = nodeAt(visit.id);
     nodes[newId] = node;
+    if (newIdOf) {
+      newIdOf[visit.id] = newId;
+    }
     const std::uint32_t *counts = countsAt(visit.id);
     std::copy(counts, counts + classes, classCounts.data() + std::size_t{newId} * classes);
     if (visit.parent >= 0) {
@@ -128,7 +144,7 @@ std::uint32_t Tree::copyPreorder(std::uint32_t root, std::uint32_t first, NodeAt
 
 template <class NodeAt, class CountsAt>
 void Tree::assignPreorder(std::uint32_t root, NodeAt &&nodeAt, CountsAt &&countsAt,
-                          ThreadPool *pool) {
+                          ThreadPool *pool, std::uint32_t *newIdOf) {
   // The tree is cut into blocks: subtrees of at most `grain` training rows
   // (a subtree has fewer than twice as many nodes as rows), copied by one
   // task each. The few nodes above them ("top" nodes) are copied by this
@@ -203,29 +219,28 @@ void Tree::assignPreorder(std::uint32_t root, NodeAt &&nodeAt, CountsAt &&counts
       node.left = first[items[item].children[0]];
       node.right = first[items[item].children[1]];
       nodes[first[item]] = node;
+      if (newIdOf) {
+        newIdOf[items[item].id] = first[item];
+      }
       const std::uint32_t *counts = countsAt(items[item].id);
       std::copy(counts, counts + classCount(),
                 classCounts.data() + std::size_t{first[item]} * classCount());
     }
   }
   parallelFor(pool, blocks.size(), [&](std::size_t index) {
-    copyPreorder(items[blocks[index]].id, first[blocks[index]], nodeAt, countsAt);
+    copyPreorder(items[blocks[index]].id, first[blocks[index]], nodeAt, countsAt, newIdOf);
   });
 }
 
-template <class Visit> void Tree::bottomUp(ThreadPool *pool, Visit &&visit) const {
-  if (nodes.empty()) {
-    return;
-  }
-  // Blocks: subtrees of at most `grain` nodes, as ranges of ids, visited by
-  // decreasing id (children have larger ids than their parent). Top nodes:
-  // the nodes above them, in preorder.
-  const std::size_t threads = pool ? pool->workerCount() + 1 : 1;
+// The blocks and top nodes of bottomUp() and topDown(): blocks are subtrees of
+// at most `grain` nodes, as ranges of ids; top nodes are the nodes above them,
+// in preorder.
+inline void splitIntoBlocks(const std::vector<Node> &nodes, std::size_t threads,
+                            std::vector<std::pair<std::uint32_t, std::uint32_t>> &blocks,
+                            std::vector<std::uint32_t> &top) {
   const std::size_t grain =
       threads > 1 ? std::max<std::size_t>(4096, nodes.size() / (kSubtreesPerThread * threads))
                   : nodes.size();
-  std::vector<std::pair<std::uint32_t, std::uint32_t>> blocks;
-  std::vector<std::uint32_t> top;
   std::vector<std::pair<std::uint32_t, std::uint32_t>> stack{
       {0, static_cast<std::uint32_t>(nodes.size())}};
   while (!stack.empty()) {
@@ -240,6 +255,15 @@ template <class Visit> void Tree::bottomUp(ThreadPool *pool, Visit &&visit) cons
     stack.emplace_back(node.right, end);
     stack.emplace_back(node.left, node.right); // left == id + 1
   }
+}
+
+template <class Visit> void Tree::bottomUp(ThreadPool *pool, Visit &&visit) const {
+  if (nodes.empty()) {
+    return;
+  }
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> blocks;
+  std::vector<std::uint32_t> top;
+  splitIntoBlocks(nodes, pool ? pool->workerCount() + 1 : 1, blocks, top);
   parallelFor(pool, blocks.size(), [&](std::size_t index) {
     for (std::uint32_t id = blocks[index].second; id-- > blocks[index].first;) {
       visit(id);
@@ -248,6 +272,23 @@ template <class Visit> void Tree::bottomUp(ThreadPool *pool, Visit &&visit) cons
   for (auto it = top.rbegin(); it != top.rend(); ++it) {
     visit(*it);
   }
+}
+
+template <class Visit> void Tree::topDown(ThreadPool *pool, Visit &&visit) const {
+  if (nodes.empty()) {
+    return;
+  }
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> blocks;
+  std::vector<std::uint32_t> top;
+  splitIntoBlocks(nodes, pool ? pool->workerCount() + 1 : 1, blocks, top);
+  for (const std::uint32_t id : top) {
+    visit(id);
+  }
+  parallelFor(pool, blocks.size(), [&](std::size_t index) {
+    for (std::uint32_t id = blocks[index].first; id < blocks[index].second; ++id) {
+      visit(id);
+    }
+  });
 }
 
 } // namespace dt

@@ -48,6 +48,7 @@
 #include <cuda_runtime.h>
 
 #include <algorithm>
+#include <optional>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -56,6 +57,9 @@
 #include <cstring>
 #include <future>
 #include <memory>
+#include <condition_variable>
+#include <thread>
+#include <mutex>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -215,6 +219,13 @@ struct CopyJob {
   unsigned long long from;
   unsigned long long to;
   std::uint32_t count;
+};
+
+// The rows of `count` entries from `from` (one column of a node) are in leaf `leaf`.
+struct LeafJob {
+  unsigned long long from;
+  std::uint32_t count;
+  std::uint32_t leaf;
 };
 
 // Best cut found by part of the block, with tie-breaking on position.
@@ -1130,7 +1141,7 @@ __global__ void __launch_bounds__(kThreads)
 __global__ void __launch_bounds__(kThreads)
     markGoesLeftKernel(const Entry *src, const Segment *segments,
                        const std::uint32_t *tileSegment, const NodeDesc *nodes,
-                       EntryCodec codec, std::uint8_t *goesLeft) {
+                       EntryCodec codec, std::uint32_t *goesLeft) {
   const std::uint32_t tile = blockIdx.x;
   const Segment segment = segments[tileSegment[tile]];
   const NodeDesc node = nodes[segment.node];
@@ -1141,9 +1152,11 @@ __global__ void __launch_bounds__(kThreads)
   std::uint32_t length;
   tileRange(segment, tile, start, length);
   const Entry *column = src + segment.base;
-  for (std::uint32_t index = threadIdx.x; index < length; index += kThreads) {
-    const std::uint32_t position = start + index;
-    goesLeft[codec.row(column[position].packed)] = position < node.leftCount;
+  // Only the left rows: the bits start at zero on every level.
+  const std::uint32_t end = min(length, node.leftCount > start ? node.leftCount - start : 0u);
+  for (std::uint32_t index = threadIdx.x; index < end; index += kThreads) {
+    const std::uint32_t row = codec.row(column[start + index].packed);
+    atomicOr(goesLeft + (row >> 5), 1u << (row & 31));
   }
 }
 
@@ -1198,7 +1211,7 @@ __device__ __forceinline__ float valueOf(unsigned long long word) {
 __global__ void __launch_bounds__(kThreads)
     partitionKernel(const Entry *src, Entry *dst, const Segment *segments,
                     const std::uint32_t *tileSegment, const std::uint8_t *constant,
-                    const NodeDesc *nodes, ScanParams params, const std::uint8_t *goesLeft,
+                    const NodeDesc *nodes, ScanParams params, const std::uint32_t *goesLeft,
                     const PartitionTarget *targets, TileState *tileStates,
                     unsigned int *tileCounter, std::uint32_t *nextHist,
                     std::uint32_t *nextTries) {
@@ -1244,7 +1257,8 @@ __global__ void __launch_bounds__(kThreads)
   std::uint32_t lefts = 0;
 #pragma unroll
   for (int j = 0; j < kItems; ++j) {
-    left[j] = first + j < length && goesLeft[params.codec.row(items[j].packed)];
+    const std::uint32_t row = params.codec.row(items[j].packed);
+    left[j] = first + j < length && ((goesLeft[row >> 5] >> (row & 31)) & 1u);
     lefts += left[j];
   }
   __syncthreads(); // the scan reuses the load's shared memory (and `shared`)
@@ -1420,6 +1434,15 @@ __global__ void copyKernel(const Entry *src, Entry *dst, const CopyJob *jobs) {
   }
 }
 
+// Record the leaf of the rows of every job (GpuGrower::recordLeaves).
+__global__ void leafKernel(const Entry *src, const LeafJob *jobs, EntryCodec codec,
+                           std::uint32_t *leafOfRow) {
+  const LeafJob job = jobs[blockIdx.x];
+  for (std::uint32_t index = threadIdx.x; index < job.count; index += blockDim.x) {
+    leafOfRow[codec.row(src[job.from + index].packed)] = job.leaf;
+  }
+}
+
 template <typename T> class DeviceArray {
 public:
   DeviceArray() = default;
@@ -1508,6 +1531,34 @@ private:
   std::vector<std::pair<std::string, float>> totals_;
 };
 
+// Page-locked staging buffers for uploads from pageable memory
+// (GpuGrower::uploadStaged). Allocating them takes tens of milliseconds, so
+// gpuPrepare() does it while the dataset loads. They live as long as the
+// process (freeing them at exit would race with the CUDA runtime's teardown).
+struct Staging {
+  static constexpr int kBuffers = 4;
+  static constexpr std::size_t kBytes = std::size_t{32} << 20;
+  char *buffers[kBuffers] = {};
+  cudaEvent_t done[kBuffers] = {};
+  std::once_flag once;
+
+  void prepare() {
+    std::call_once(once, [this]() {
+      for (int buffer = 0; buffer < kBuffers; ++buffer) {
+        void *memory = nullptr;
+        CUDA_CHECK(cudaMallocHost(&memory, kBytes));
+        buffers[buffer] = static_cast<char *>(memory);
+        CUDA_CHECK(cudaEventCreateWithFlags(&done[buffer], cudaEventDisableTiming));
+      }
+    });
+  }
+};
+
+Staging &staging() {
+  static Staging *instance = new Staging; // never destroyed, see above
+  return *instance;
+}
+
 // One node of the current GPU level, on the host side.
 struct LevelNode {
   std::uint32_t node; // NodeStore id
@@ -1538,11 +1589,9 @@ public:
   }
 
   ~GpuGrower() override {
-    if (arenaPinning_.valid()) {
-      arenaPinning_.wait();
-    }
-    if (arenaPinned_) {
-      cudaHostUnregister(arena_.get());
+    stopPinning();
+    for (const std::size_t chunk : pinnedChunks_) {
+      cudaHostUnregister(reinterpret_cast<char *>(arena_.get()) + chunk * kPinChunkBytes);
     }
     if (valuesPinning_.valid() && valuesPinning_.get()) { // never presorted
       cudaHostUnregister(sortedValues_.data());
@@ -1553,7 +1602,10 @@ public:
   }
 
   Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
-            GrowTimings &timings, Dataset::Values *sortedValues) override {
+            GrowTimings &timings, Dataset::Values *sortedValues, LeafIds *leafOfRow) override {
+    if (leafOfRow && !rows.empty()) {
+      throw std::logic_error("GpuGrower: leaves of rows only with all rows");
+    }
     stride_ = rows.empty() ? rows_ : rows.size();
     params_.minGap = rules.minValueGap();
     params_.criterion = rules.criterion();
@@ -1566,8 +1618,18 @@ public:
     tree.classNames = train_.classNames;
     ScopedTimer timer(timings.buildSeconds);
     NodeStore store(train_.classCount(), 2 * stride_);
+    // Leaves of rows: the CPU tasks write theirs into `leafOfRow`, the GPU
+    // levels into leafOfRow_ (all ones elsewhere), merged at the end.
+    leafJobs_.clear();
+    if (leafOfRow) {
+      leafOfRow->resize(stride_);
+      leafOfRow_.reserve(stride_);
+      CUDA_CHECK(cudaMemsetAsync(leafOfRow_.get(), 0xff, stride_ * sizeof(std::uint32_t),
+                                 stream_));
+    }
+    recordLeaves_ = leafOfRow != nullptr;
     CpuTreeBuilder cpuBuilder(rules, codec_, features_, store, hostGoesLeft_.get(), &pool_,
-                              options_.parallel);
+                              options_.parallel, {}, leafOfRow ? leafOfRow->data() : nullptr);
     rules_ = &rules;
     store_ = &store;
     cpuBuilder_ = &cpuBuilder;
@@ -1590,8 +1652,11 @@ public:
                    std::move(allFeatures)};
     minRows_ = options_.gpu.minRows > 0
                    ? options_.gpu.minRows
-                   : std::clamp(stride_ / GpuOptions::kAutoMinRowsShare, GpuOptions::kAutoMinRows,
-                                GpuOptions::kAutoMaxMinRows);
+                   : options_.algorithm == Algorithm::Cart
+                       ? std::clamp(stride_ / GpuOptions::kAutoMinRowsShareCart,
+                                    GpuOptions::kAutoMinRows, GpuOptions::kAutoMaxMinRowsCart)
+                       : std::clamp(stride_ / GpuOptions::kAutoMinRowsShare,
+                                    GpuOptions::kAutoMinRows, GpuOptions::kAutoMaxMinRows);
     if (stride_ < minRows_) {
       growOnCpu(std::move(root));
     } else {
@@ -1606,7 +1671,10 @@ public:
       std::fprintf(stderr, "  waiting for CPU subtrees: %.2f ms\n", waitSeconds * 1000.0);
       profile_.report();
     }
-    store.toTree(tree, &pool_);
+    if (leafOfRow) {
+      mergeLeaves(*leafOfRow);
+    }
+    store.toTree(tree, &pool_, leafOfRow ? leafOfRow->data() : nullptr, stride_);
     rules_ = nullptr;
     store_ = nullptr;
     cpuBuilder_ = nullptr;
@@ -1615,7 +1683,7 @@ public:
 
   // The host arena: it only holds the columns of nodes handed to the CPU.
   std::span<std::byte> workspace() override {
-    waitForArena();
+    stopPinning(); // the caller writes all of it
     return {reinterpret_cast<std::byte *>(arena_.get()), features_ * rows_ * sizeof(Entry)};
   }
 
@@ -1648,17 +1716,21 @@ private:
     std::size_t freeBytes = 0;
     std::size_t totalBytes = 0;
     CUDA_CHECK(cudaMemGetInfo(&freeBytes, &totalBytes));
+    const bool leaves = options_.algorithm == Algorithm::C45 && options_.c45.prune;
     const std::size_t needed = 2 * total * sizeof(Entry) +
-                               (reusable_ ? total * sizeof(float) : 0) + rows_ * 7 + (64u << 20);
+                               (reusable_ ? total * sizeof(float) : 0) + rows_ * 7 +
+                               (leaves ? rows_ * sizeof(std::uint32_t) : 0) + (64u << 20);
     if (needed > freeBytes) {
       throw std::runtime_error("Not enough GPU memory: need about " +
                                std::to_string(needed >> 20) + " MiB, " +
                                std::to_string(freeBytes >> 20) +
                                " MiB free. Use --parallel instead.");
     }
+    double allocSeconds = 0.0;
+    std::optional<ScopedTimer> allocTimer(std::in_place, allocSeconds);
     entries_[0].reserve(total);
     entries_[1].reserve(total);
-    goesLeft_.reserve(rows_);
+    goesLeft_.reserve(rows_ / 32 + 1);
     labels_.reserve(rows_);
     if (reusable_) {
       values_.reserve(total);
@@ -1673,18 +1745,16 @@ private:
     // HMM), and failing it meant a pageable copy.
     float *target = reusable_ ? values_.get() : reinterpret_cast<float *>(entries_[1].get());
     void *source = const_cast<float *>(train_.values.data());
-    const bool pinned =
-        cudaHostRegister(source, total * sizeof(float), cudaHostRegisterDefault) == cudaSuccess;
-    if (!pinned) {
-      cudaGetLastError(); // fall back to a pageable copy
+    allocTimer.reset();
+    double uploadSeconds = 0.0;
+    {
+      ScopedTimer timer(uploadSeconds);
+      uploadStaged(target, train_.values.data(), total * sizeof(float));
+      uploadStaged(labels_.get(), train_.labels.data(), rows_ * sizeof(std::uint16_t));
     }
-    CUDA_CHECK(cudaMemcpyAsync(target, train_.values.data(), total * sizeof(float),
-                               cudaMemcpyHostToDevice, stream_));
-    CUDA_CHECK(cudaMemcpyAsync(labels_.get(), train_.labels.data(),
-                               rows_ * sizeof(std::uint16_t), cudaMemcpyHostToDevice, stream_));
-    CUDA_CHECK(cudaStreamSynchronize(stream_));
-    if (pinned) {
-      CUDA_CHECK(cudaHostUnregister(source));
+    if (profile_.enabled()) {
+      std::fprintf(stderr, "  setup alloc %.2f ms, upload %.2f ms\n", allocSeconds * 1e3,
+                   uploadSeconds * 1e3);
     }
 
     std::size_t tempBytes = 0;
@@ -1707,8 +1777,8 @@ private:
     // suffice), and their partition scratch; for C4.5 also the sorted values
     // that the presort hands back. Both are page-locked in the background, so
     // the copies run at full speed: the sorted values first (needed at the
-    // end of the presort), then the arena (needed by the first node handed to
-    // the CPU).
+    // end of the presort), then the arena, only as far as the hand-offs get
+    // (see ensurePinned()).
     arena_.reset(new Entry[total]);
     arenaScratch_.reset(new Entry[rows_]);
     if (options_.algorithm == Algorithm::C45 && !reusable_) {
@@ -1717,12 +1787,68 @@ private:
                          return pinHostMemory(sortedValues_.data(), total * sizeof(float));
                        }).share();
     }
-    arenaPinning_ = std::async(std::launch::async, [this, total, values = valuesPinning_]() {
+    // CART with a fixed alpha stops early and hands few rows to the CPU
+    // (airline: 2 of 12 GB); otherwise nearly every row is handed over.
+    const bool fewHandOffs = options_.algorithm == Algorithm::Cart &&
+                             options_.cart.pruning == CartPruning::Alpha;
+    pinDemand_ = fewHandOffs ? kPinAheadBytes : arenaBytes();
+    pinner_ = std::thread([this, fewHandOffs, values = valuesPinning_]() {
       if (values.valid()) {
         values.wait();
       }
-      arenaPinned_ = pinHostMemory(arena_.get(), total * sizeof(Entry));
+      if (!fewHandOffs) {
+        // All of it at once, while the pool is still idle (the GPU presorts):
+        // the pages are touched by all threads, so they are spread over the
+        // NUMA nodes, and a single registration stalls the GPU loop least
+        // (12 chunks of 1 GB made C4.5 on airline 0.4 s slower on the H100).
+        const bool pinned = pinHostMemory(arena_.get(), arenaBytes());
+        std::lock_guard<std::mutex> lock(pinMutex_);
+        if (pinned) {
+          pinnedChunks_.push_back(0);
+        }
+        pinnedBytes_ = arenaBytes();
+        pinCv_.notify_all();
+        return;
+      }
+      pinArena();
     });
+    CUDA_CHECK(cudaStreamSynchronize(stream_));
+  }
+
+  // Copy `bytes` from pageable host memory to the device at the speed of
+  // page-locked memory, without page-locking the source: the pool's threads
+  // copy chunks into a few page-locked staging buffers while the previous
+  // chunks are uploaded from them. Page-locking is slow with HMM (both
+  // cluster GPU nodes): on the H100 node 6 GB took 0.17-0.22 s this way,
+  // 0.32 s page-locked in pipelined chunks and 0.35 s page-locked at once; on
+  // the A100 node 0.45-0.55 s either way. Smaller chunks cost more per chunk
+  // than they gain, more threads gained nothing.
+  void uploadStaged(void *target, const void *source, std::size_t bytes) {
+    constexpr std::size_t kChunk = Staging::kBytes;
+    constexpr std::size_t kCopyThreads = 32;
+    if (bytes <= kChunk) {
+      CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyHostToDevice, stream_));
+      CUDA_CHECK(cudaStreamSynchronize(stream_));
+      return;
+    }
+    staging().prepare();
+    Staging &staging = dt::staging();
+    const char *from = static_cast<const char *>(source);
+    char *to = static_cast<char *>(target);
+    const std::size_t parts = std::min<std::size_t>(kCopyThreads, pool_.workerCount() + 1);
+    for (std::size_t offset = 0, chunk = 0; offset < bytes; offset += kChunk, ++chunk) {
+      const int buffer = static_cast<int>(chunk % Staging::kBuffers);
+      const std::size_t size = std::min(kChunk, bytes - offset);
+      CUDA_CHECK(cudaEventSynchronize(staging.done[buffer])); // its last upload is done
+      char *stage = staging.buffers[buffer];
+      pool_.parallelFor(parts, [&](std::size_t part) {
+        const std::size_t begin = size * part / parts;
+        const std::size_t end = size * (part + 1) / parts;
+        std::memcpy(stage + begin, from + offset + begin, end - begin);
+      });
+      CUDA_CHECK(cudaMemcpyAsync(to + offset, stage, size, cudaMemcpyHostToDevice, stream_));
+      CUDA_CHECK(cudaEventRecord(staging.done[buffer], stream_));
+    }
     CUDA_CHECK(cudaStreamSynchronize(stream_));
   }
 
@@ -1732,13 +1858,35 @@ private:
   // a registration holds up every other CUDA call. False if it failed
   // (pageable copies still work, just slower).
   bool pinHostMemory(void *data, std::size_t bytes) {
+    touchHostMemory(data, bytes);
+    return registerHostMemory(data, bytes);
+  }
+
+  void touchHostMemory(void *data, std::size_t bytes) {
     constexpr std::size_t kChunks = 256;
+    const auto started = std::chrono::steady_clock::now();
     pool_.parallelFor(kChunks, [&](std::size_t chunk) {
       const std::size_t begin = bytes * chunk / kChunks;
       const std::size_t end = bytes * (chunk + 1) / kChunks;
       std::memset(static_cast<char *>(data) + begin, 0, end - begin);
     });
-    if (cudaHostRegister(data, bytes, cudaHostRegisterDefault) == cudaSuccess) {
+    if (profile_.enabled()) {
+      std::fprintf(stderr, "  touch %.1f MB: %.2f ms\n", bytes / 1e6,
+                   std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
+                           .count() * 1e3);
+    }
+  }
+
+  bool registerHostMemory(void *data, std::size_t bytes) {
+    const auto started = std::chrono::steady_clock::now();
+    const bool registered =
+        cudaHostRegister(data, bytes, cudaHostRegisterDefault) == cudaSuccess;
+    if (profile_.enabled()) {
+      std::fprintf(stderr, "  page-lock %.1f MB: %.2f ms\n", bytes / 1e6,
+                   std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
+                           .count() * 1e3);
+    }
+    if (registered) {
       return true;
     }
     cudaGetLastError();
@@ -1810,16 +1958,68 @@ private:
     current_ = 1;
   }
 
-  // The arena is page-locked in the background; wait before the first copy.
-  void waitForArena() {
-    if (arenaPinning_.valid()) {
-      arenaPinning_.get();
+  // The arena is page-locked by a background thread. Page-locking takes the
+  // CUDA driver's lock, so it stalls the GPU loop's CUDA calls. When few rows
+  // will be handed over, it is page-locked in chunks of kPinChunkBytes, in
+  // order, and only kPinAheadBytes beyond what the hand-offs have asked for
+  // (CART on airline: 2 of 12 GB, 0.1-0.3 s faster); otherwise all at once
+  // (see setup()). Hand-offs fill the arena from the start.
+  static constexpr std::size_t kPinChunkBytes = std::size_t{1} << 30;
+  static constexpr std::size_t kPinAheadBytes = 2 * kPinChunkBytes;
+
+  std::size_t arenaBytes() const { return features_ * rows_ * sizeof(Entry); }
+
+  void pinArena() {
+    std::unique_lock<std::mutex> lock(pinMutex_);
+    for (;;) {
+      pinCv_.wait(lock, [&]() {
+        return pinStop_ || (pinDemand_ > pinnedBytes_ && pinnedBytes_ < arenaBytes());
+      });
+      if (pinStop_) {
+        return;
+      }
+      const std::size_t begin = pinnedBytes_;
+      const std::size_t end = std::min(arenaBytes(), begin + kPinChunkBytes);
+      lock.unlock();
+      const bool pinned =
+          pinHostMemory(reinterpret_cast<char *>(arena_.get()) + begin, end - begin);
+      lock.lock();
+      if (pinned) {
+        pinnedChunks_.push_back(begin / kPinChunkBytes);
+      }
+      // A chunk that could not be page-locked is copied to pageably.
+      pinnedBytes_ = end;
+      pinCv_.notify_all();
+    }
+  }
+
+  // Wait until the first `bytes` of the arena are ready for copies (and ask
+  // for kPinAheadBytes more).
+  void ensurePinned(std::size_t bytes) {
+    bytes = std::min(bytes, arenaBytes());
+    std::unique_lock<std::mutex> lock(pinMutex_);
+    if (pinStop_) {
+      return;
+    }
+    pinDemand_ = std::max(pinDemand_, bytes + kPinAheadBytes);
+    pinCv_.notify_all();
+    pinCv_.wait(lock, [&]() { return pinnedBytes_ >= bytes; });
+  }
+
+  void stopPinning() {
+    {
+      std::lock_guard<std::mutex> lock(pinMutex_);
+      pinStop_ = true;
+    }
+    pinCv_.notify_all();
+    if (pinner_.joinable()) {
+      pinner_.join();
     }
   }
 
   // Too small for the GPU: copy the presorted columns and use the CPU.
   void growOnCpu(LevelNode root) {
-    waitForArena();
+    ensurePinned(features_ * stride_ * sizeof(Entry));
     CUDA_CHECK(cudaMemcpy(arena_.get(), entries_[current_].get(),
                           features_ * stride_ * sizeof(Entry), cudaMemcpyDeviceToHost));
     cpuBuilder_->grow(Columns{arena_.get(), stride_, arenaScratch_.get()},
@@ -1828,6 +2028,8 @@ private:
 
   void growLevels(LevelNode root) {
     if (rules_->isTerminal(store_->counts(root.node), root.count, 0)) {
+      addLeafJob(0, root.count, root.node);
+      launchLeafJobs();
       return;
     }
     std::vector<LevelNode> level;
@@ -2085,6 +2287,7 @@ private:
       const SplitRules::Decision decision =
           rules_->choose(cuts.data(), features_, parent.count);
       if (decision.feature < 0) {
+        addLeafJob(segments[firstSegment[n]].base, parent.count, parent.node);
         continue;
       }
       for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
@@ -2118,6 +2321,8 @@ private:
             left ? decision.leftCount : parent.count - decision.leftCount;
         const int depth = parent.depth + 1;
         if (rules_->isTerminal(left ? leftCounts : rightCounts, count, depth)) {
+          addLeafJob(segments[static_cast<std::size_t>(winnerSegment)].base + (begin - parent.begin),
+                     count, left ? leftId : rightId);
           continue;
         }
         nodes[n].partition = 1;
@@ -2131,6 +2336,7 @@ private:
       }
       anyPartition = anyPartition || nodes[n].partition;
     }
+    launchLeafJobs(); // reads this level's buffer, before handOff() reuses it
     if (!anyPartition) {
       return {};
     }
@@ -2170,6 +2376,8 @@ private:
     }
     const int other = 1 - current_;
     profile_.run("markGoesLeft", stream_, [&]() {
+      CUDA_CHECK(cudaMemsetAsync(goesLeft_.get(), 0, (rows_ / 32 + 1) * sizeof(std::uint32_t),
+                                 stream_));
       markGoesLeftKernel<<<tiles, kThreads, 0, stream_>>>(entries_[current_].get(),
                                                           segments_.get(), tileSegment_.get(),
                                                           nodes_.get(), codec_, goesLeft_.get());
@@ -2192,6 +2400,49 @@ private:
     }
     current_ = other;
     return next;
+  }
+
+  // The rows of a leaf made on the GPU: `count` entries of one of its columns
+  // at `from` in the current buffer.
+  void addLeafJob(std::size_t from, std::uint32_t count, std::uint32_t leaf) {
+    if (!recordLeaves_) {
+      return;
+    }
+    constexpr std::uint32_t kPiece = 1u << 14; // entries per block
+    for (std::uint32_t done = 0; done < count; done += kPiece) {
+      leafJobs_.push_back({from + done, std::min(kPiece, count - done), leaf});
+    }
+  }
+
+  void launchLeafJobs() {
+    if (leafJobs_.empty()) {
+      return;
+    }
+    upload(leafJobsDevice_, leafJobs_);
+    profile_.run("leafRows", stream_, [&]() {
+      leafKernel<<<static_cast<unsigned>(leafJobs_.size()), kThreads, 0, stream_>>>(
+          entries_[current_].get(), leafJobsDevice_.get(), codec_, leafOfRow_.get());
+    });
+    CUDA_CHECK(cudaGetLastError());
+    leafJobs_.clear(); // a copy from pageable memory has read it on return
+  }
+
+  // The leaves of the rows that ended on the GPU, into `leafOfRow` (which
+  // holds those of the CPU tasks).
+  void mergeLeaves(LeafIds &leafOfRow) {
+    LeafIds gpuLeaves(stride_);
+    CUDA_CHECK(cudaMemcpyAsync(gpuLeaves.data(), leafOfRow_.get(),
+                               stride_ * sizeof(std::uint32_t), cudaMemcpyDeviceToHost, stream_));
+    CUDA_CHECK(cudaStreamSynchronize(stream_));
+    constexpr std::size_t kChunk = 1 << 16;
+    pool_.parallelFor((stride_ + kChunk - 1) / kChunk, [&](std::size_t chunk) {
+      const std::size_t end = std::min(stride_, (chunk + 1) * kChunk);
+      for (std::size_t row = chunk * kChunk; row < end; ++row) {
+        if (gpuLeaves[row] != UINT32_MAX) {
+          leafOfRow[row] = gpuLeaves[row];
+        }
+      }
+    });
   }
 
   // Gather the columns of `children` (in buffer `buffer`) into one block,
@@ -2225,7 +2476,7 @@ private:
       CUDA_CHECK(cudaGetLastError());
     }
 
-    waitForArena();
+    ensurePinned((arenaUsed_ + blockEntries) * sizeof(Entry));
     Entry *host = arena_.get() + arenaUsed_;
     arenaUsed_ += blockEntries;
     Entry *scratch = arenaScratch_.get() + scratchUsed_;
@@ -2239,9 +2490,16 @@ private:
     }
     if (endEntry > firstEntry) {
       profile_.run("handOffCopy", stream_, [&]() {
-        CUDA_CHECK(cudaMemcpyAsync(host + firstEntry, staging + firstEntry,
-                                   (endEntry - firstEntry) * sizeof(Entry),
-                                   cudaMemcpyDeviceToHost, stream_));
+        // A copy into one page-locked chunk at a time runs at full speed.
+        const std::size_t chunkEntries = kPinChunkBytes / sizeof(Entry);
+        const std::size_t base = static_cast<std::size_t>(host - arena_.get());
+        for (std::size_t at = firstEntry; at < endEntry;) {
+          const std::size_t chunkEnd = ((base + at) / chunkEntries + 1) * chunkEntries - base;
+          const std::size_t to = std::min(endEntry, chunkEnd);
+          CUDA_CHECK(cudaMemcpyAsync(host + at, staging + at, (to - at) * sizeof(Entry),
+                                     cudaMemcpyDeviceToHost, stream_));
+          at = to;
+        }
       });
     }
     CUDA_CHECK(cudaStreamSynchronize(stream_));
@@ -2284,19 +2542,25 @@ private:
   std::unique_ptr<Entry[]> arenaScratch_;
   std::size_t arenaUsed_ = 0;
   std::size_t scratchUsed_ = 0;
-  std::future<void> arenaPinning_;
-  bool arenaPinned_ = false;
+  std::thread pinner_; // pinArena()
+  std::mutex pinMutex_;
+  std::condition_variable pinCv_;
+  std::size_t pinDemand_ = 0;  // bytes of the arena wanted page-locked (pinMutex_)
+  std::size_t pinnedBytes_ = 0; // bytes of the arena ready (pinMutex_)
+  bool pinStop_ = false;
+  std::vector<std::size_t> pinnedChunks_; // page-locked chunks, to unregister
   Dataset::Values sortedValues_;           // C4.5: for the first presort
   std::shared_future<bool> valuesPinning_; // true once it is page-locked
 
   cudaStream_t stream_ = nullptr;
+
   DeviceArray<Entry> entries_[2];
   DeviceArray<float> values_;
   DeviceArray<std::uint16_t> labels_;
   DeviceArray<std::uint32_t> rowList_;
   DeviceArray<unsigned char> sortTemp_;
   std::size_t sortTempBytes_ = 0;
-  DeviceArray<std::uint8_t> goesLeft_;
+  DeviceArray<std::uint32_t> goesLeft_; // a bit per row: goes left (fits in L2)
   DeviceArray<Segment> segments_;
   DeviceArray<std::uint32_t> tileSegment_;
   DeviceArray<std::uint8_t> constant_;
@@ -2319,13 +2583,20 @@ private:
   DeviceArray<CutCandidate> segmentBest_;
   DeviceArray<std::uint32_t> segmentLeft_;
   DeviceArray<CopyJob> copyJobs_;
+  DeviceArray<LeafJob> leafJobsDevice_;
+  DeviceArray<std::uint32_t> leafOfRow_; // leaves of rows made on the GPU
+  std::vector<LeafJob> leafJobs_;
+  bool recordLeaves_ = false;
   DeviceArray<double> logTable_;
   KernelProfile profile_;
 };
 
 } // namespace
 
-void gpuPrepare() { CUDA_CHECK(cudaFree(nullptr)); }
+void gpuPrepare() {
+  CUDA_CHECK(cudaFree(nullptr));
+  staging().prepare();
+}
 
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &options,
                                       ThreadPool &pool, bool reusable, double &setupSeconds) {

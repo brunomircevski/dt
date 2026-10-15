@@ -205,17 +205,25 @@ copying the data and sorting again.
 
 ## Post-processing
 
-`src/algo/c45_pruning.cpp`: C4.5 pruning routes every training row once
-through the tree, groups rows by leaf in preorder (a parallel radix sort by
-leaf) — every subtree then owns one contiguous slice of rows — and only
-re-routes rows for subtree raising. The rows are kept in that order in a
+`src/algo/c45_pruning.cpp`: C4.5 pruning needs every training row's leaf.
+The growers record it while they build (a node's rows are known when it
+becomes a leaf), and the ids follow the tree through its renumbering to
+preorder and the collapse of useless splits, so no row is routed through the
+whole tree. The rows are grouped by leaf in preorder (a parallel LSD radix
+sort by leaf, in passes of at most 11 bits, 12 from 4M rows on, balanced so
+the passes have equal digits) — every subtree then owns one contiguous slice
+of rows — and only rows of raised subtrees are routed again.
+(`DT_CHECK_LEAVES=1` routes every row anyway and compares.) The rows are kept in that order in a
 row-major copy (one row's values share a cache line), written straight from
 the columns into leaf order and kept in the grower's memory that is free by
 then, so a subtree's rows are one contiguous block. Routing walks 16 rows
 side by side over compact 16-byte nodes (float thresholds rounded down, exact
 for float data), without branches on the data. Pruning is idempotent on a
 subtree whose rows did not change, so after a subtree is raised only the nodes
-that gained rows are pruned again. C4.5's training-value thresholds are found
+that gained rows are pruned again. The recursion runs on the pool without
+blocking: a node's left branch becomes a task, the right one runs inline, and
+whichever finishes last settles the node (prunes, raises or keeps it), so no
+thread waits on a join. C4.5's training-value thresholds are found
 by binary-searching each threshold among its feature's sorted training values
 (a by-product of the presort). CART cost-complexity pruning only needs the
 per-node class counts of the tree.
@@ -227,5 +235,8 @@ on different threads and the few nodes above them last, which serves C4.5's
 collapse of useless splits and the class counts of the first arrangement;
 `Tree::compact` copies subtrees in parallel. Subtree raising asks how many
 errors a branch would make with its sibling's rows; for big siblings those
-rows are counted per leaf by all threads, and the leaves' changes are summed
-in the order the serial loop sums them, so the result is the same to the bit.
+rows are counted per leaf by all threads (each with a small cache of the
+leaves it touched, flushed to the shared counters on eviction and at the end,
+so they are rarely updated once per row), and the leaves' changes are summed in the order the serial loop
+sums them, so the result is the same to the bit. `DT_PROFILE=1` prints where
+the pruning time goes.
