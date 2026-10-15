@@ -3,6 +3,7 @@
 #include "core/dataset.h"
 #include "core/options.h"
 #include "core/thread_pool.h"
+#include "core/nvtx.h"
 #include "core/timing.h"
 #include "core/tree.h"
 
@@ -77,6 +78,7 @@ int main(int argc, char *argv[]) {
     Dataset data;
     {
       ScopedTimer timer(loadSeconds);
+      NvtxRange range("load");
       data = loadDataset(options.datasetPath, &pool);
       multiplyDataset(data, options.multiplier);
     }
@@ -110,6 +112,7 @@ int main(int argc, char *argv[]) {
     double testAccuracy = 0.0;
     {
       ScopedTimer timer(evalSeconds);
+      NvtxRange range("accuracy");
       trainAccuracy = tree.accuracy(train, &pool);
       if (test.rowCount > 0) {
         testAccuracy = tree.accuracy(test, &pool);

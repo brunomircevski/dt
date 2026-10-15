@@ -46,12 +46,11 @@ struct Columns {
 EntryCodec makeEntryCodec(std::size_t classCount, std::size_t rowCount);
 
 // Fill `out` (featureCount * rowCount entries) with every feature column
-// sorted by value (LSD radix sort, stable, so equal values keep row order),
-// and `sortedValues` (if not null, as many floats) with the values alone.
+// sorted by value (LSD radix sort, stable, so equal values keep row order).
 // `temp` (if not null, as many entries as `out`) is the sort's workspace;
 // otherwise every sorting thread allocates a column's worth.
 void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
-                    ThreadPool *pool, float *sortedValues = nullptr, Entry *temp = nullptr);
+                    ThreadPool *pool, Entry *temp = nullptr);
 
 // A node that still has to be split, and the features that can still split
 // it: a feature whose values are all equal in a node is dropped for the whole

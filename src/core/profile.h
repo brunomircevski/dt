@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "core/nvtx.h"
+
 namespace dt {
 
 // Opt-in timers for the parts of a phase (DT_PROFILE=1 in the environment):
@@ -13,6 +15,8 @@ namespace dt {
 class ProfileCounter {
 public:
   explicit ProfileCounter(const char *name) : name_(name) {}
+
+  const char *name() const { return name_; }
 
   static bool enabled() {
     static const bool on = [] {
@@ -47,7 +51,8 @@ private:
 
 class ProfileScope {
 public:
-  explicit ProfileScope(ProfileCounter &counter) : counter_(ProfileCounter::enabled() ? &counter : nullptr) {
+  explicit ProfileScope(ProfileCounter &counter)
+      : range_(counter.name()), counter_(ProfileCounter::enabled() ? &counter : nullptr) {
     if (counter_) {
       start_ = std::chrono::steady_clock::now();
     }
@@ -62,6 +67,7 @@ public:
   ProfileScope &operator=(const ProfileScope &) = delete;
 
 private:
+  NvtxRange range_;
   ProfileCounter *counter_;
   std::chrono::steady_clock::time_point start_;
 };

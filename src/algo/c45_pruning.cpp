@@ -29,13 +29,16 @@ ProfileCounter pCollapse("c45 collapse");
 ProfileCounter pThresholds("c45 thresholds");
 ProfileCounter pSetup("prune setup (hops)");
 ProfileCounter pArrangeWhole("prune arrange whole");
+ProfileCounter pArrangeElsewhere("  arranged by the grower");
 ProfileCounter pRouteWhole("  route whole");
 ProfileCounter pSortWhole("  sort whole");
 ProfileCounter pTranspose("  transpose");
 ProfileCounter pCountsWhole("  counts whole");
 ProfileCounter pRecursion("prune recursion (wall)");
+ProfileCounter pRouteBig("  route >= 1M rows");
+ProfileCounter pExtraBig("  extra counts >= 1M rows");
 ProfileCounter pCompact("prune compact");
-ProfileCounter pDummy("unused");
+ProfileCounter pDummy(nullptr); // never printed; no NVTX range (1.5M calls on airline)
 
 // The nodes of `root`'s subtree in preorder, left branch first.
 void subtreePreorder(const Tree &tree, std::uint32_t root, std::vector<std::uint32_t> &out) {
@@ -127,8 +130,10 @@ class C45Pruner {
 public:
   // `rowMajor` and `spare` each have room for all the feature values.
   C45Pruner(Tree &tree, const Dataset &train, float *rowMajor, float *spare,
-            double confidenceFactor, ThreadPool *pool, std::span<std::uint32_t> leafOfRow)
+            double confidenceFactor, ThreadPool *pool, RowLeaves *leafOfRow,
+            const RowArranger &arranger)
       : tree_(tree), train_(train), data_(rowMajor), spare_(spare), givenLeaves_(leafOfRow),
+        arranger_(arranger),
         features_(train.featureCount()), classCount_(train.classCount()),
         estimator_(confidenceFactor), pool_(pool), labels_(train.labels),
         errors_(tree.nodes.size(), 0.0), leafSlot_(tree.nodes.size(), 0),
@@ -166,8 +171,8 @@ public:
       tree_.compact(pool_);
     }
     for (ProfileCounter *counter :
-         {&pCollapse, &pThresholds, &pSetup, &pArrangeWhole, &pRouteWhole, &pSortWhole,
-          &pTranspose, &pCountsWhole, &pRecursion, &pCompact}) {
+         {&pCollapse, &pThresholds, &pSetup, &pArrangeWhole, &pArrangeElsewhere, &pRouteWhole, &pSortWhole,
+          &pTranspose, &pCountsWhole, &pRecursion, &pRouteBig, &pExtraBig, &pCompact}) {
       counter->print();
     }
   }
@@ -310,53 +315,35 @@ private:
         }
       }
     }
-    std::vector<std::uint32_t> routed;
-    std::span<std::uint32_t> leafOfRow;
-    if (whole && !givenLeaves_.empty()) {
-      leafOfRow = givenLeaves_; // the grower's
-      if (checkLeaves()) {
-        route(root, begin, count, routed);
-        if (!std::equal(routed.begin(), routed.end(), leafOfRow.begin(), leafOfRow.end())) {
-          throw std::logic_error("C4.5 pruning: the grower's leaves of rows are wrong");
-        }
-        std::fprintf(stderr, "  leaves of rows checked\n");
-      }
-    } else {
-      ProfileScope scope(whole ? pRouteWhole : pDummy);
-      route(root, begin, count, routed);
-      leafOfRow = routed;
-    }
-    std::optional<ProfileScope> sortScope(std::in_place, whole ? pSortWhole : pDummy);
-
-    // Stable sort by leaf (`source`: the old place of each row, relative to
-    // `begin`), and the class histogram of every leaf.
     std::vector<std::uint32_t> leafCounts(leaves.size() * classCount_, 0);
-    std::vector<std::uint32_t> source(count);
-    const bool parallel = pool_ && count >= kParallelRows;
-    if (parallel) {
-      sortByLeafInParallel(begin, count, leafOfRow, leaves.size(), leafCounts, source);
-    } else {
-      std::vector<std::size_t> offset(leaves.size() + 1, 0);
-      for (std::size_t index = 0; index < count; ++index) {
-        const std::uint32_t slot = leafSlot_[leafOfRow[index]];
-        leafOfRow[index] = slot;
-        ++offset[slot + 1];
-        ++leafCounts[slot * classCount_ + labels_[begin + index]];
-      }
-      for (std::size_t slot = 0; slot < leaves.size(); ++slot) {
-        offset[slot + 1] += offset[slot];
-      }
-      for (std::size_t index = 0; index < count; ++index) {
-        source[offset[leafOfRow[index]]++] = static_cast<std::uint32_t>(index);
-      }
+    // The slot of every leaf id of the rows: leafSlot_, through the map of
+    // the grower's leaves if they have one.
+    std::span<const std::uint32_t> slotOf = leafSlot_;
+    std::vector<std::uint32_t> slotOfGivenId;
+    const bool given = whole && givenLeaves_ && !givenLeaves_->empty();
+    if (given && !givenLeaves_->map.empty()) {
+      const std::vector<std::uint32_t> &map = givenLeaves_->map;
+      slotOfGivenId.resize(map.size());
+      constexpr std::size_t kChunk = 1 << 16;
+      parallelFor(pool_, (map.size() + kChunk - 1) / kChunk, [&](std::size_t chunk) {
+        const std::size_t end = std::min(map.size(), (chunk + 1) * kChunk);
+        for (std::size_t id = chunk * kChunk; id < end; ++id) {
+          slotOfGivenId[id] = leafSlot_[map[id]];
+        }
+      });
+      slotOf = slotOfGivenId;
     }
-    sortScope.reset();
-    if (arranged_) {
-      permute(begin, count, source, parallel);
-    } else {
-      ProfileScope scope(pTranspose);
-      transposeArranged(source);
+    bool done = false;
+    if (given && arranger_ && !checkLeaves()) {
+      ProfileScope scope(pArrangeElsewhere);
+      done = arranger_(slotOf, leaves.size(), givenLeaves_->ids, data_, labels_.data(),
+                       leafCounts.data());
+      arranged_ = done;
     }
+    if (!done) {
+      sortByLeaf(root, begin, count, whole, slotOf, leaves.size(), leafCounts);
+    }
+
     ProfileScope countScope(whole ? pCountsWhole : pDummy);
     constexpr std::size_t kChunk = 4096;
     parallelFor(whole ? pool_ : nullptr, (leaves.size() + kChunk - 1) / kChunk,
@@ -397,6 +384,63 @@ private:
         sum[k] = left[k] + right[k];
       }
       setCounts(*it, sum.data());
+    }
+  }
+
+  // arrange() on the CPU: the leaf of every row (the grower's, or routed),
+  // the rows sorted by leaf slot stably, the class counts of every slot into
+  // `leafCounts`, and the rows moved into that order (the first time, written
+  // into the row-major copy).
+  void sortByLeaf(std::uint32_t root, std::size_t begin, std::size_t count, bool whole,
+                  std::span<const std::uint32_t> slotOf, std::size_t slots,
+                  std::vector<std::uint32_t> &leafCounts) {
+    std::vector<std::uint32_t> routed;
+    std::span<std::uint32_t> leafOfRow;
+    if (whole && givenLeaves_ && !givenLeaves_->empty()) {
+      leafOfRow = givenLeaves_->ids; // the grower's
+      if (checkLeaves()) {
+        route(root, begin, count, routed);
+        for (std::size_t row = 0; row < count; ++row) {
+          if (routed[row] != (*givenLeaves_)[row]) {
+            throw std::logic_error("C4.5 pruning: the grower's leaves of rows are wrong");
+          }
+        }
+        std::fprintf(stderr, "  leaves of rows checked\n");
+      }
+    } else {
+      ProfileScope scope(whole ? pRouteWhole : pDummy);
+      route(root, begin, count, routed);
+      leafOfRow = routed;
+    }
+    std::optional<ProfileScope> sortScope(std::in_place, whole ? pSortWhole : pDummy);
+
+    // Stable sort by leaf (`source`: the old place of each row, relative to
+    // `begin`), and the class histogram of every leaf.
+    std::vector<std::uint32_t> source(count);
+    const bool parallel = pool_ && count >= kParallelRows;
+    if (parallel) {
+      sortByLeafInParallel(begin, count, leafOfRow, slotOf, slots, leafCounts, source);
+    } else {
+      std::vector<std::size_t> offset(slots + 1, 0);
+      for (std::size_t index = 0; index < count; ++index) {
+        const std::uint32_t slot = slotOf[leafOfRow[index]];
+        leafOfRow[index] = slot;
+        ++offset[slot + 1];
+        ++leafCounts[slot * classCount_ + labels_[begin + index]];
+      }
+      for (std::size_t slot = 0; slot < slots; ++slot) {
+        offset[slot + 1] += offset[slot];
+      }
+      for (std::size_t index = 0; index < count; ++index) {
+        source[offset[leafOfRow[index]]++] = static_cast<std::uint32_t>(index);
+      }
+    }
+    sortScope.reset();
+    if (arranged_) {
+      permute(begin, count, source, parallel);
+    } else {
+      ProfileScope scope(pTranspose);
+      transposeArranged(source);
     }
   }
 
@@ -509,7 +553,8 @@ private:
   // (slot, index) orders the rows exactly as the counting
   // sort does, and the class counts are added up run by run.
   void sortByLeafInParallel(std::size_t begin, std::size_t count,
-                            std::span<std::uint32_t> leaves, std::size_t slotCount,
+                            std::span<std::uint32_t> leaves,
+                            std::span<const std::uint32_t> slotOf, std::size_t slotCount,
                             std::vector<std::uint32_t> &leafCounts,
                             std::vector<std::uint32_t> &source) {
     // As few passes as digits of at most 11 bits allow, the digits balanced
@@ -531,7 +576,7 @@ private:
     };
     forChunks([&](std::size_t, std::size_t from, std::size_t to) {
       for (std::size_t index = from; index < to; ++index) {
-        leaves[index] = leafSlot_[leaves[index]];
+        leaves[index] = slotOf[leaves[index]];
         source[index] = static_cast<std::uint32_t>(index);
       }
     });
@@ -744,8 +789,13 @@ private:
     thread_local std::vector<std::uint32_t> leaves;
     thread_local std::vector<std::uint32_t> extraCounts;
     thread_local std::vector<std::uint32_t> counts;
-    route(root, begin, count, arrival);
+    const bool big = count >= (std::size_t{1} << 20);
+    {
+      ProfileScope scope(big ? pRouteBig : pDummy);
+      route(root, begin, count, arrival);
+    }
     if (extraCounts_ && count >= kParallelRows) {
+      ProfileScope scope(big ? pExtraBig : pDummy);
       return errorsWithExtraRowsInParallel(root, begin, arrival);
     }
     // Class counts of the extra rows per reached leaf. A leaf's slot is kept
@@ -881,7 +931,8 @@ private:
   const Dataset &train_;
   float *data_;  // row-major features, in the arranged order
   float *spare_; // as large, for reordering
-  std::span<std::uint32_t> givenLeaves_; // the grower's leaf of every row, or empty
+  RowLeaves *givenLeaves_;               // the grower's leaf of every row, or null
+  const RowArranger &arranger_;          // may do the first arrange() (with givenLeaves_)
   std::size_t features_;
   std::size_t classCount_;
   ErrorEstimator estimator_;
@@ -900,12 +951,13 @@ private:
 
 } // namespace
 
-void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool, std::span<std::uint32_t> leafOfRow) {
+void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool, RowLeaves *leafOfRow) {
   ProfileScope scope(pCollapse);
   // Bottom-up: a node's children are settled before it.
   const std::size_t nodeCount = tree.nodes.size();
   std::vector<double> subtreeErrors(nodeCount);
-  std::vector<std::uint8_t> collapsed(leafOfRow.empty() ? 0 : nodeCount, 0);
+  const bool leaves = leafOfRow && !leafOfRow->empty();
+  std::vector<std::uint8_t> collapsed(leaves ? nodeCount : 0, 0);
   tree.bottomUp(pool, [&](std::uint32_t id) {
     Node &node = tree.nodes[id];
     const double leafErrors = node.count - tree.counts(id)[node.label];
@@ -921,7 +973,7 @@ void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool, std::span<std::uint3
       }
     }
   });
-  if (leafOfRow.empty()) {
+  if (!leaves) {
     tree.compact(pool);
     return;
   }
@@ -947,11 +999,10 @@ void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool, std::span<std::uint3
       owner[id] = newIdOf[owner[id]];
     }
   });
-  remapIds(leafOfRow.data(), leafOfRow.size(), owner.data(), pool);
+  leafOfRow->remap(owner, pool);
 }
 
-void c45UseTrainingValueThresholds(Tree &tree, std::span<const float> sortedValues,
-                                   std::size_t rowCount, ThreadPool *pool) {
+void c45UseTrainingValueThresholds(Tree &tree, const DistinctValues &distinct, ThreadPool *pool) {
   ProfileScope scope(pThresholds);
   constexpr std::size_t kChunk = 4096;
   const std::size_t chunks = (tree.nodes.size() + kChunk - 1) / kChunk;
@@ -962,9 +1013,10 @@ void c45UseTrainingValueThresholds(Tree &tree, std::span<const float> sortedValu
       if (node.isLeaf()) {
         continue;
       }
-      const float *begin =
-          sortedValues.data() + static_cast<std::size_t>(node.feature) * rowCount;
-      const float *above = std::upper_bound(begin, begin + rowCount, node.threshold,
+      const std::size_t feature = static_cast<std::size_t>(node.feature);
+      const float *begin = distinct.values.data() + distinct.offsets[feature];
+      const float *end = distinct.values.data() + distinct.offsets[feature + 1];
+      const float *above = std::upper_bound(begin, end, node.threshold,
                                             [](double threshold, float value) {
                                               return threshold < static_cast<double>(value);
                                             });
@@ -979,7 +1031,7 @@ void c45UseTrainingValueThresholds(Tree &tree, std::span<const float> sortedValu
 
 void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFactor,
                          ThreadPool *pool, std::span<std::byte> workspace,
-                         std::span<std::uint32_t> leafOfRow) {
+                         RowLeaves *leafOfRow, const RowArranger &arranger) {
   if (tree.nodes.empty()) {
     return;
   }
@@ -1001,10 +1053,10 @@ void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFact
   float *spare = room >= 2 * values ? rowMajor + values
                  : room >= values   ? owned.get()
                                     : owned.get() + values;
-  if (!leafOfRow.empty() && leafOfRow.size() != train.rowCount) {
+  if (leafOfRow && !leafOfRow->empty() && leafOfRow->size() != train.rowCount) {
     throw std::logic_error("c45PessimisticPrune: a leaf per training row expected");
   }
-  C45Pruner(tree, train, rowMajor, spare, confidenceFactor, pool, leafOfRow).run();
+  C45Pruner(tree, train, rowMajor, spare, confidenceFactor, pool, leafOfRow, arranger).run();
 }
 
 } // namespace dt

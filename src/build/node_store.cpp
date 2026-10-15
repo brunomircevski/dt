@@ -69,21 +69,20 @@ std::uint32_t NodeStore::add(const std::uint32_t *counts) {
   return id;
 }
 
-void NodeStore::toTree(Tree &tree, ThreadPool *pool, std::uint32_t *leafOfRow, std::size_t rows) {
+void NodeStore::toTree(Tree &tree, ThreadPool *pool, RowLeaves *leafOfRow) {
   if (size_.load() == 0) {
     tree.nodes.clear();
     tree.classCounts.clear();
     return;
   }
-  std::unique_ptr<std::uint32_t[]> newIdOf;
-  if (leafOfRow) {
-    newIdOf.reset(new std::uint32_t[size_.load()]);
-  }
+  // Ids never handed to a node map to 0 (the map must be valid everywhere).
+  std::vector<std::uint32_t> newIdOf(leafOfRow ? size_.load() : 0, 0);
   tree.assignPreorder(
       0, [&](std::uint32_t id) -> const Node & { return node(id); },
-      [&](std::uint32_t id) { return counts(id); }, pool, newIdOf.get());
+      [&](std::uint32_t id) { return counts(id); }, pool,
+      leafOfRow ? newIdOf.data() : nullptr);
   if (leafOfRow) {
-    remapIds(leafOfRow, rows, newIdOf.get(), pool);
+    leafOfRow->remap(newIdOf, pool);
   }
 }
 

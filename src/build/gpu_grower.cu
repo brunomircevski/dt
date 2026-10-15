@@ -42,12 +42,14 @@
 
 #include "build/cpu_builder.h"
 #include "build/grower.h"
+#include "core/nvtx.h"
 #include "core/timing.h"
 
 #include <cub/cub.cuh>
 #include <cuda_runtime.h>
 
 #include <algorithm>
+#include <cctype>
 #include <optional>
 #include <chrono>
 #include <cmath>
@@ -61,6 +63,8 @@
 #include <thread>
 #include <mutex>
 #include <numeric>
+#include <pthread.h>
+#include <sched.h>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -1443,6 +1447,38 @@ __global__ void leafKernel(const Entry *src, const LeafJob *jobs, EntryCodec cod
   }
 }
 
+// C4.5's pruning order (GpuGrower::arrangeRows): the leaf slot of every row.
+__global__ void leafSlotKernel(const std::uint32_t *ids, const std::uint32_t *slotOfId,
+                               std::size_t rows, std::uint32_t *slots, std::uint32_t *order) {
+  const std::size_t row = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (row < rows) {
+    slots[row] = slotOfId[ids[row]];
+    order[row] = static_cast<std::uint32_t>(row);
+  }
+}
+
+// Then, in that order: the row-major features, the labels, and the class
+// counts of every slot. A thread per (position, feature): the writes are
+// contiguous.
+__global__ void arrangeKernel(const float *values, std::size_t rows, std::uint32_t features,
+                              const std::uint32_t *order, const std::uint32_t *slots,
+                              const std::uint16_t *labels, int classCount, float *rowMajor,
+                              std::uint16_t *sortedLabels, std::uint32_t *slotCounts) {
+  const std::size_t index = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (index >= rows * features) {
+    return;
+  }
+  const std::size_t position = index / features;
+  const std::uint32_t feature = static_cast<std::uint32_t>(index - position * features);
+  const std::uint32_t row = order[position];
+  rowMajor[index] = values[feature * rows + row];
+  if (feature == 0) {
+    const std::uint16_t label = labels[row];
+    sortedLabels[position] = label;
+    atomicAdd(&slotCounts[static_cast<std::size_t>(slots[position]) * classCount + label], 1u);
+  }
+}
+
 template <typename T> class DeviceArray {
 public:
   DeviceArray() = default;
@@ -1454,16 +1490,20 @@ public:
     }
   }
 
-  void reserve(std::size_t count) {
+  // With a stream, the old memory is freed and the new allocated in stream
+  // order (cudaFree would wait for the whole device, the hand-off copies on
+  // another stream too).
+  void reserve(std::size_t count, cudaStream_t stream = nullptr) {
     if (count <= capacity_) {
       return;
     }
     if (data_) {
-      CUDA_CHECK(cudaFree(data_));
+      CUDA_CHECK(stream ? cudaFreeAsync(data_, stream) : cudaFree(data_));
       data_ = nullptr;
     }
     capacity_ = std::max(count, capacity_ + capacity_ / 2);
-    CUDA_CHECK(cudaMalloc(&data_, capacity_ * sizeof(T)));
+    CUDA_CHECK(stream ? cudaMallocAsync(&data_, capacity_ * sizeof(T), stream)
+                      : cudaMalloc(&data_, capacity_ * sizeof(T)));
   }
   T *get() const { return data_; }
 
@@ -1531,27 +1571,109 @@ private:
   std::vector<std::pair<std::string, float>> totals_;
 };
 
-// Page-locked staging buffers for uploads from pageable memory
-// (GpuGrower::uploadStaged). Allocating them takes tens of milliseconds, so
-// gpuPrepare() does it while the dataset loads. They live as long as the
-// process (freeing them at exit would race with the CUDA runtime's teardown).
+// The CPUs of the GPU's NUMA node that this process may use; empty if that
+// is unknown or the machine has a single node.
+std::vector<int> gpuNodeCpus() {
+  int device = 0;
+  char busId[32] = {};
+  if (cudaGetDevice(&device) != cudaSuccess ||
+      cudaDeviceGetPCIBusId(busId, sizeof busId, device) != cudaSuccess) {
+    return {};
+  }
+  std::string id(busId);
+  std::transform(id.begin(), id.end(), id.begin(), [](unsigned char c) { return std::tolower(c); });
+  int node = -1;
+  if (std::FILE *file = std::fopen(("/sys/bus/pci/devices/" + id + "/numa_node").c_str(), "r")) {
+    if (std::fscanf(file, "%d", &node) != 1) {
+      node = -1;
+    }
+    std::fclose(file);
+  }
+  std::FILE *file =
+      node < 0 ? nullptr
+               : std::fopen(("/sys/devices/system/node/node" + std::to_string(node) + "/cpulist").c_str(), "r");
+  if (!file) {
+    return {};
+  }
+  cpu_set_t allowed;
+  CPU_ZERO(&allowed);
+  sched_getaffinity(0, sizeof allowed, &allowed);
+  std::vector<int> cpus;
+  int first = 0;
+  while (std::fscanf(file, "%d", &first) == 1) {
+    int last = first;
+    if (std::fscanf(file, "-%d", &last) != 1) {
+      last = first;
+    }
+    for (int cpu = first; cpu <= last; ++cpu) {
+      if (cpu < CPU_SETSIZE && CPU_ISSET(cpu, &allowed)) {
+        cpus.push_back(cpu);
+      }
+    }
+    if (std::fgetc(file) != ',') {
+      break;
+    }
+  }
+  std::fclose(file);
+  if (static_cast<int>(cpus.size()) == CPU_COUNT(&allowed)) {
+    return {}; // one node (or only its CPUs allowed): nothing to choose
+  }
+  return cpus;
+}
+
+// Page-locked staging buffers for copies between the GPU and pageable memory
+// (GpuGrower::uploadStaged, downloadStaged). Allocating them takes tens of
+// milliseconds, so gpuPrepare() does it while the dataset loads. They live as
+// long as the process (freeing them at exit would race with the CUDA
+// runtime's teardown).
+//
+// On a machine with several NUMA nodes, the buffers are on the GPU's node
+// and the copies into and out of them are made by threads pinned to its
+// CPUs: with the copies spread over both sockets of the A100 node, the
+// traffic between the sockets slowed the transfers to half the PCIe speed
+// (6 GB uploaded in 0.55-0.75 s instead of 0.3 s).
 struct Staging {
   static constexpr int kBuffers = 4;
   static constexpr std::size_t kBytes = std::size_t{32} << 20;
+  static constexpr std::size_t kCopyThreads = 32;
   char *buffers[kBuffers] = {};
   cudaEvent_t done[kBuffers] = {};
+  std::unique_ptr<ThreadPool> copiers; // on the GPU's node, if it is known
   std::once_flag once;
 
   void prepare() {
     std::call_once(once, [this]() {
-      for (int buffer = 0; buffer < kBuffers; ++buffer) {
-        void *memory = nullptr;
-        CUDA_CHECK(cudaMallocHost(&memory, kBytes));
-        buffers[buffer] = static_cast<char *>(memory);
-        CUDA_CHECK(cudaEventCreateWithFlags(&done[buffer], cudaEventDisableTiming));
+      const std::vector<int> cpus = gpuNodeCpus();
+      auto pin = [cpus]() {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        for (const int cpu : cpus) {
+          CPU_SET(cpu, &set);
+        }
+        pthread_setaffinity_np(pthread_self(), sizeof set, &set);
+      };
+      // Page-locked memory is placed when it is allocated: on the node of
+      // the allocating thread.
+      std::thread([&]() {
+        if (!cpus.empty()) {
+          pin();
+        }
+        for (int buffer = 0; buffer < kBuffers; ++buffer) {
+          void *memory = nullptr;
+          CUDA_CHECK(cudaMallocHost(&memory, kBytes));
+          buffers[buffer] = static_cast<char *>(memory);
+          CUDA_CHECK(cudaEventCreateWithFlags(&done[buffer], cudaEventDisableTiming));
+        }
+      }).join();
+      if (cpus.size() > 1) {
+        copiers = std::make_unique<ThreadPool>(
+            static_cast<unsigned>(std::min(cpus.size(), kCopyThreads) - 1), pin);
       }
     });
   }
+
+  // The threads for the copies: the caller works too (ThreadPool::parallelFor).
+  ThreadPool &copyPool(ThreadPool &fallback) { return copiers ? *copiers : fallback; }
 };
 
 Staging &staging() {
@@ -1593,8 +1715,11 @@ public:
     for (const std::size_t chunk : pinnedChunks_) {
       cudaHostUnregister(reinterpret_cast<char *>(arena_.get()) + chunk * kPinChunkBytes);
     }
-    if (valuesPinning_.valid() && valuesPinning_.get()) { // never presorted
-      cudaHostUnregister(sortedValues_.data());
+    if (gathered_) {
+      cudaEventDestroy(gathered_);
+    }
+    if (copyStream_) {
+      cudaStreamDestroy(copyStream_);
     }
     if (stream_) {
       cudaStreamDestroy(stream_);
@@ -1602,7 +1727,7 @@ public:
   }
 
   Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
-            GrowTimings &timings, Dataset::Values *sortedValues, LeafIds *leafOfRow) override {
+            GrowTimings &timings, DistinctValues *distinct, RowLeaves *leafOfRow) override {
     if (leafOfRow && !rows.empty()) {
       throw std::logic_error("GpuGrower: leaves of rows only with all rows");
     }
@@ -1611,7 +1736,8 @@ public:
     params_.criterion = rules.criterion();
     {
       ScopedTimer timer(timings.prepareSeconds);
-      presort(rows, sortedValues);
+      NvtxRange range("presort");
+      presort(rows, distinct);
     }
     Tree tree;
     tree.featureNames = train_.featureNames;
@@ -1622,30 +1748,22 @@ public:
     // levels into leafOfRow_ (all ones elsewhere), merged at the end.
     leafJobs_.clear();
     if (leafOfRow) {
-      leafOfRow->resize(stride_);
+      leafOfRow->ids.resize(stride_);
+      leafOfRow->map.clear();
       leafOfRow_.reserve(stride_);
       CUDA_CHECK(cudaMemsetAsync(leafOfRow_.get(), 0xff, stride_ * sizeof(std::uint32_t),
                                  stream_));
     }
     recordLeaves_ = leafOfRow != nullptr;
     CpuTreeBuilder cpuBuilder(rules, codec_, features_, store, hostGoesLeft_.get(), &pool_,
-                              options_.parallel, {}, leafOfRow ? leafOfRow->data() : nullptr);
+                              options_.parallel, {}, leafOfRow ? leafOfRow->ids.data() : nullptr);
     rules_ = &rules;
     store_ = &store;
     cpuBuilder_ = &cpuBuilder;
     arenaUsed_ = 0;
     scratchUsed_ = 0;
 
-    std::vector<std::uint32_t> counts(static_cast<std::size_t>(classCount_), 0);
-    if (rows.empty()) {
-      for (const std::uint16_t label : train_.labels) {
-        ++counts[label];
-      }
-    } else {
-      for (const std::uint32_t row : rows) {
-        ++counts[train_.labels[row]];
-      }
-    }
+    const std::vector<std::uint32_t> counts = countClasses(train_, rows, &pool_);
     std::vector<std::uint32_t> allFeatures(features_);
     std::iota(allFeatures.begin(), allFeatures.end(), 0u);
     LevelNode root{store.add(counts.data()), 0, static_cast<std::uint32_t>(stride_), 0,
@@ -1665,20 +1783,92 @@ public:
     double waitSeconds = 0.0;
     {
       ScopedTimer wait(waitSeconds);
+      NvtxRange range("wait cpu subtrees");
+      // Every hand-off has started its CPU tasks once its copy is done.
+      CUDA_CHECK(cudaStreamSynchronize(copyStream_));
       pool_.waitIdle();
     }
     if (profile_.enabled()) {
       std::fprintf(stderr, "  waiting for CPU subtrees: %.2f ms\n", waitSeconds * 1000.0);
       profile_.report();
     }
+    NvtxRange range("merge, toTree");
     if (leafOfRow) {
-      mergeLeaves(*leafOfRow);
+      mergeLeaves(leafOfRow->ids);
     }
-    store.toTree(tree, &pool_, leafOfRow ? leafOfRow->data() : nullptr, stride_);
+    store.toTree(tree, &pool_, leafOfRow);
     rules_ = nullptr;
     store_ = nullptr;
     cpuBuilder_ = nullptr;
     return tree;
+  }
+
+  bool arrangeRows(std::span<const std::uint32_t> slotOfId, std::size_t slots,
+                   std::span<const std::uint32_t> ids, float *rowMajor,
+                   std::uint16_t *labels, std::uint32_t *slotCounts) override {
+    if (!rawValues_.get() || ids.size() != rows_ || slots == 0) {
+      return false;
+    }
+    // Scratch in buffer 0, the result in buffer 1: the grow is done with both.
+    const std::size_t rows = rows_;
+    const std::size_t classes = static_cast<std::size_t>(classCount_);
+    unsigned keyBits = 1;
+    while ((std::size_t{1} << keyBits) < slots) {
+      ++keyBits;
+    }
+    std::size_t tempBytes = 0;
+    std::uint32_t *none = nullptr; // only the size is asked for
+    CUDA_CHECK(cub::DeviceRadixSort::SortPairs(nullptr, tempBytes, none, none, none, none,
+                                               static_cast<int>(rows), 0,
+                                               static_cast<int>(keyBits), stream_));
+    char *scratch = reinterpret_cast<char *>(entries_[0].get());
+    std::size_t used = 0;
+    auto take = [&](std::size_t bytes) {
+      char *at = scratch + used;
+      used += (bytes + 255) / 256 * 256;
+      return at;
+    };
+    auto *nodeSlots = reinterpret_cast<std::uint32_t *>(take(slotOfId.size_bytes()));
+    auto *leaves = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+    auto *keys = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+    auto *sortedKeys = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+    auto *rowIds = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+    auto *sortedOrder = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+    auto *sortedLabels = reinterpret_cast<std::uint16_t *>(take(rows * sizeof(std::uint16_t)));
+    auto *counts = reinterpret_cast<std::uint32_t *>(take(slots * classes * sizeof(std::uint32_t)));
+    void *temp = take(tempBytes);
+    if (used > features_ * rows * sizeof(Entry)) {
+      return false;
+    }
+    float *arranged = reinterpret_cast<float *>(entries_[1].get());
+    uploadStaged(nodeSlots, slotOfId.data(), slotOfId.size_bytes());
+    uploadStaged(leaves, ids.data(), rows * sizeof(std::uint32_t));
+    profile_.run("arrangeSort", stream_, [&]() {
+      leafSlotKernel<<<static_cast<unsigned>((rows + 255) / 256), 256, 0, stream_>>>(
+          leaves, nodeSlots, rows, keys, rowIds);
+      CUDA_CHECK(cudaGetLastError());
+      CUDA_CHECK(cub::DeviceRadixSort::SortPairs(temp, tempBytes, keys, sortedKeys, rowIds,
+                                                 sortedOrder, static_cast<int>(rows), 0,
+                                                 static_cast<int>(keyBits), stream_));
+    });
+    CUDA_CHECK(cudaMemsetAsync(counts, 0, slots * classes * sizeof(std::uint32_t), stream_));
+    profile_.run("arrangeRows", stream_, [&]() {
+      const std::size_t total = rows * features_;
+      arrangeKernel<<<static_cast<unsigned>((total + 255) / 256), 256, 0, stream_>>>(
+          rawValues_.get(), rows, static_cast<std::uint32_t>(features_), sortedOrder, sortedKeys,
+          labels_.get(), classCount_, arranged, sortedLabels, counts);
+    });
+    CUDA_CHECK(cudaGetLastError());
+    // rowMajor is the arena (page-locked) when the pruning got the workspace.
+    CUDA_CHECK(cudaMemcpyAsync(rowMajor, arranged, rows * features_ * sizeof(float),
+                               cudaMemcpyDeviceToHost, stream_));
+    downloadStaged(labels, sortedLabels, rows * sizeof(std::uint16_t));
+    downloadStaged(slotCounts, counts, slots * classes * sizeof(std::uint32_t));
+    CUDA_CHECK(cudaStreamSynchronize(stream_));
+    if (profile_.enabled()) {
+      profile_.report();
+    }
+    return true;
   }
 
   // The host arena: it only holds the columns of nodes handed to the CPU.
@@ -1695,8 +1885,16 @@ private:
       CUDA_CHECK(cudaFree(nullptr)); // creates the CUDA context if needed
     }
     CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
+    CUDA_CHECK(cudaStreamCreateWithFlags(&copyStream_, cudaStreamNonBlocking));
+    CUDA_CHECK(cudaEventCreateWithFlags(&gathered_, cudaEventDisableTiming));
     int device = 0;
     CUDA_CHECK(cudaGetDevice(&device));
+    // The level arrays grow in stream order (DeviceArray::reserve): keep what
+    // the pool frees for reuse instead of returning it at every sync.
+    cudaMemPool_t memoryPool = nullptr;
+    CUDA_CHECK(cudaDeviceGetDefaultMemPool(&memoryPool, device));
+    std::uint64_t keep = UINT64_MAX;
+    CUDA_CHECK(cudaMemPoolSetAttribute(memoryPool, cudaMemPoolAttrReleaseThreshold, &keep));
     int fp32PerFp64 = 0;
     CUDA_CHECK(cudaDeviceGetAttribute(&fp32PerFp64, cudaDevAttrSingleToDoublePrecisionPerfRatio,
                                       device));
@@ -1726,10 +1924,21 @@ private:
                                std::to_string(freeBytes >> 20) +
                                " MiB free. Use --parallel instead.");
     }
+    // C4.5's pruning starts by ordering the rows by leaf (arrangeRows()),
+    // which needs the raw values again: a copy stays on the GPU if it fits.
+    const bool keepValues = leaves && !reusable_ && needed + total * sizeof(float) <= freeBytes;
     double allocSeconds = 0.0;
     std::optional<ScopedTimer> allocTimer(std::in_place, allocSeconds);
     entries_[0].reserve(total);
     entries_[1].reserve(total);
+    // The hand-offs are gathered into a mirror of the host arena, if it fits
+    // (with room to spare), so that their copies to the host can overlap the
+    // next levels (see handOff()).
+    if (needed + (keepValues ? total * sizeof(float) : 0) + total * sizeof(Entry) +
+            (std::size_t{2} << 30) <= freeBytes) {
+      deviceArena_.reserve(total);
+      deviceArenaEntries_ = total;
+    }
     goesLeft_.reserve(rows_ / 32 + 1);
     labels_.reserve(rows_);
     if (reusable_) {
@@ -1749,8 +1958,14 @@ private:
     double uploadSeconds = 0.0;
     {
       ScopedTimer timer(uploadSeconds);
+      NvtxRange range("upload");
       uploadStaged(target, train_.values.data(), total * sizeof(float));
       uploadStaged(labels_.get(), train_.labels.data(), rows_ * sizeof(std::uint16_t));
+      if (keepValues) {
+        rawValues_.reserve(total);
+        CUDA_CHECK(cudaMemcpyAsync(rawValues_.get(), target, total * sizeof(float),
+                                   cudaMemcpyDeviceToDevice, stream_));
+      }
     }
     if (profile_.enabled()) {
       std::fprintf(stderr, "  setup alloc %.2f ms, upload %.2f ms\n", allocSeconds * 1e3,
@@ -1774,33 +1989,23 @@ private:
 
     // Host memory for the columns of nodes handed to the CPU (every row is
     // handed over at most once per grow, so features * rows entries always
-    // suffice), and their partition scratch; for C4.5 also the sorted values
-    // that the presort hands back. Both are page-locked in the background, so
-    // the copies run at full speed: the sorted values first (needed at the
-    // end of the presort), then the arena, only as far as the hand-offs get
-    // (see ensurePinned()).
+    // suffice), and their partition scratch. The arena is page-locked in the
+    // background, so the copies run at full speed, only as far as the
+    // hand-offs get (see ensurePinned()).
     arena_.reset(new Entry[total]);
     arenaScratch_.reset(new Entry[rows_]);
-    if (options_.algorithm == Algorithm::C45 && !reusable_) {
-      sortedValues_.resize(total);
-      valuesPinning_ = std::async(std::launch::async, [this, total]() {
-                         return pinHostMemory(sortedValues_.data(), total * sizeof(float));
-                       }).share();
-    }
     // CART with a fixed alpha stops early and hands few rows to the CPU
     // (airline: 2 of 12 GB); otherwise nearly every row is handed over.
     const bool fewHandOffs = options_.algorithm == Algorithm::Cart &&
                              options_.cart.pruning == CartPruning::Alpha;
     pinDemand_ = fewHandOffs ? kPinAheadBytes : arenaBytes();
-    pinner_ = std::thread([this, fewHandOffs, values = valuesPinning_]() {
-      if (values.valid()) {
-        values.wait();
-      }
+    pinner_ = std::thread([this, fewHandOffs]() {
       if (!fewHandOffs) {
         // All of it at once, while the pool is still idle (the GPU presorts):
         // the pages are touched by all threads, so they are spread over the
         // NUMA nodes, and a single registration stalls the GPU loop least
         // (12 chunks of 1 GB made C4.5 on airline 0.4 s slower on the H100).
+        NvtxRange range("pin arena");
         const bool pinned = pinHostMemory(arena_.get(), arenaBytes());
         std::lock_guard<std::mutex> lock(pinMutex_);
         if (pinned) {
@@ -1825,7 +2030,6 @@ private:
   // than they gain, more threads gained nothing.
   void uploadStaged(void *target, const void *source, std::size_t bytes) {
     constexpr std::size_t kChunk = Staging::kBytes;
-    constexpr std::size_t kCopyThreads = 32;
     if (bytes <= kChunk) {
       CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyHostToDevice, stream_));
       CUDA_CHECK(cudaStreamSynchronize(stream_));
@@ -1835,13 +2039,14 @@ private:
     Staging &staging = dt::staging();
     const char *from = static_cast<const char *>(source);
     char *to = static_cast<char *>(target);
-    const std::size_t parts = std::min<std::size_t>(kCopyThreads, pool_.workerCount() + 1);
+    ThreadPool &copiers = staging.copyPool(pool_);
+    const std::size_t parts = std::min<std::size_t>(Staging::kCopyThreads, copiers.workerCount() + 1);
     for (std::size_t offset = 0, chunk = 0; offset < bytes; offset += kChunk, ++chunk) {
       const int buffer = static_cast<int>(chunk % Staging::kBuffers);
       const std::size_t size = std::min(kChunk, bytes - offset);
       CUDA_CHECK(cudaEventSynchronize(staging.done[buffer])); // its last upload is done
       char *stage = staging.buffers[buffer];
-      pool_.parallelFor(parts, [&](std::size_t part) {
+      copiers.parallelFor(parts, [&](std::size_t part) {
         const std::size_t begin = size * part / parts;
         const std::size_t end = size * (part + 1) / parts;
         std::memcpy(stage + begin, from + offset + begin, end - begin);
@@ -1850,6 +2055,58 @@ private:
       CUDA_CHECK(cudaEventRecord(staging.done[buffer], stream_));
     }
     CUDA_CHECK(cudaStreamSynchronize(stream_));
+  }
+
+  // The reverse of uploadStaged(): chunks are downloaded into the staging
+  // buffers, and the pool's threads copy each one out while the next ones
+  // are downloaded.
+  void downloadStaged(void *target, const void *source, std::size_t bytes) {
+    if (bytes <= Staging::kBytes / 8) {
+      CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyDeviceToHost, stream_));
+      CUDA_CHECK(cudaStreamSynchronize(stream_));
+      return;
+    }
+    char *to = static_cast<char *>(target);
+    staging().prepare();
+    ThreadPool &copiers = staging().copyPool(pool_);
+    const std::size_t parts = std::min<std::size_t>(Staging::kCopyThreads, copiers.workerCount() + 1);
+    downloadChunks(source, bytes, [&](std::size_t offset, const char *stage, std::size_t size) {
+      copiers.parallelFor(parts, [&](std::size_t part) {
+        const std::size_t begin = size * part / parts;
+        const std::size_t end = size * (part + 1) / parts;
+        std::memcpy(to + offset + begin, stage + begin, end - begin);
+      });
+    });
+  }
+
+  // Download `bytes` chunk by chunk through the staging buffers; `consume`
+  // (offset, chunk, size) takes each chunk in order, while the next ones are
+  // downloaded.
+  template <typename Consume>
+  void downloadChunks(const void *source, std::size_t bytes, Consume &&consume) {
+    constexpr std::size_t kChunk = Staging::kBytes;
+    staging().prepare();
+    Staging &staging = dt::staging();
+    const char *from = static_cast<const char *>(source);
+    const std::size_t chunks = (bytes + kChunk - 1) / kChunk;
+    auto sizeOf = [&](std::size_t chunk) { return std::min(kChunk, bytes - chunk * kChunk); };
+    auto download = [&](std::size_t chunk) {
+      const int buffer = static_cast<int>(chunk % Staging::kBuffers);
+      CUDA_CHECK(cudaMemcpyAsync(staging.buffers[buffer], from + chunk * kChunk, sizeOf(chunk),
+                                 cudaMemcpyDeviceToHost, stream_));
+      CUDA_CHECK(cudaEventRecord(staging.done[buffer], stream_));
+    };
+    for (std::size_t chunk = 0; chunk < std::min<std::size_t>(chunks, Staging::kBuffers); ++chunk) {
+      download(chunk);
+    }
+    for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+      const int buffer = static_cast<int>(chunk % Staging::kBuffers);
+      CUDA_CHECK(cudaEventSynchronize(staging.done[buffer]));
+      consume(chunk * kChunk, staging.buffers[buffer], sizeOf(chunk));
+      if (chunk + Staging::kBuffers < chunks) {
+        download(chunk + Staging::kBuffers);
+      }
+    }
   }
 
   // Page-lock host memory, so that copies run at full speed. The pages are
@@ -1896,7 +2153,7 @@ private:
   // Sorted columns of the selected rows in buffer 1, stride = their count.
   // The keys/ids to sort go to buffer 1, the sorted ones to buffer 0, and are
   // then interleaved back into buffer 1.
-  void presort(std::span<const std::uint32_t> rows, Dataset::Values *sortedValues) {
+  void presort(std::span<const std::uint32_t> rows, DistinctValues *distinct) {
     const std::size_t total = features_ * stride_;
     float *keys = reinterpret_cast<float *>(entries_[1].get());
     std::uint32_t *ids = reinterpret_cast<std::uint32_t *>(keys + total);
@@ -1932,19 +2189,8 @@ private:
             sortedIds + offset, static_cast<int>(stride_), 0, 32, stream_));
       }
     });
-    // The buffer prepared by setup(), if any (the first presort of a C4.5
-    // grower), else a pageable one.
-    const bool prepared = sortedValues && valuesPinning_.valid();
-    const bool valuesPinned = prepared && valuesPinning_.get();
-    if (sortedValues) {
-      if (prepared) {
-        *sortedValues = std::move(sortedValues_);
-        valuesPinning_ = {};
-      }
-      sortedValues->resize(total);
-      // Before level 0 reuses buffer 0 (the copy is ordered on the stream).
-      CUDA_CHECK(cudaMemcpyAsync(sortedValues->data(), sortedKeys, total * sizeof(float),
-                                 cudaMemcpyDeviceToHost, stream_));
+    if (distinct) { // the unsorted keys and ids are no longer needed
+      distinctValues(sortedKeys, keys, ids, *distinct);
     }
     profile_.run("presortInterleave", stream_, [&]() {
       interleaveKernel<<<blocks, 256, 0, stream_>>>(sortedKeys, sortedIds, entries_[1].get(),
@@ -1952,10 +2198,41 @@ private:
     });
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaStreamSynchronize(stream_));
-    if (valuesPinned) {
-      CUDA_CHECK(cudaHostUnregister(sortedValues->data()));
-    }
     current_ = 1;
+  }
+
+  // Every feature's distinct values, from the sorted keys (stride_ per
+  // feature): cub's unique on their bit patterns into `out` (as many floats),
+  // their numbers into `scratch`, then only those values are downloaded.
+  void distinctValues(const float *sortedKeys, float *out, std::uint32_t *scratch,
+                      DistinctValues &distinct) {
+    const auto *keys = reinterpret_cast<const std::uint32_t *>(sortedKeys);
+    auto *unique = reinterpret_cast<std::uint32_t *>(out);
+    int *selected = reinterpret_cast<int *>(scratch);
+    const int count = static_cast<int>(stride_);
+    std::size_t tempBytes = 0;
+    CUDA_CHECK(cub::DeviceSelect::Unique(nullptr, tempBytes, keys, unique, selected, count, stream_));
+    sortTemp_.reserve(tempBytes);
+    profile_.run("presortDistinct", stream_, [&]() {
+      for (std::size_t feature = 0; feature < features_; ++feature) {
+        CUDA_CHECK(cub::DeviceSelect::Unique(sortTemp_.get(), tempBytes, keys + feature * stride_,
+                                             unique + feature * stride_, selected + feature,
+                                             count, stream_));
+      }
+    });
+    std::vector<int> counts(features_);
+    CUDA_CHECK(cudaMemcpyAsync(counts.data(), selected, features_ * sizeof(int),
+                               cudaMemcpyDeviceToHost, stream_));
+    CUDA_CHECK(cudaStreamSynchronize(stream_));
+    distinct.offsets.assign(features_ + 1, 0);
+    for (std::size_t feature = 0; feature < features_; ++feature) {
+      distinct.offsets[feature + 1] = distinct.offsets[feature] + static_cast<std::size_t>(counts[feature]);
+    }
+    distinct.values.resize(distinct.offsets[features_]);
+    for (std::size_t feature = 0; feature < features_; ++feature) {
+      downloadStaged(distinct.values.data() + distinct.offsets[feature], out + feature * stride_,
+                     static_cast<std::size_t>(counts[feature]) * sizeof(float));
+    }
   }
 
   // The arena is page-locked by a background thread. Page-locking takes the
@@ -2046,6 +2323,8 @@ private:
       const std::size_t nodes = level.size();
       {
         ScopedTimer timer(seconds);
+        const std::string name = "gpu level " + std::to_string(depth);
+        NvtxRange range(name.c_str());
         level = processLevel(level);
       }
       if (profile_.enabled()) {
@@ -2164,7 +2443,7 @@ private:
   }
 
   template <typename T> void upload(DeviceArray<T> &target, const std::vector<T> &source) {
-    target.reserve(source.size());
+    target.reserve(source.size(), stream_);
     CUDA_CHECK(cudaMemcpyAsync(target.get(), source.data(), source.size() * sizeof(T),
                                cudaMemcpyHostToDevice, stream_));
   }
@@ -2219,28 +2498,28 @@ private:
     upload(tileSegment_, tileSegment);
     upload(nodes_, nodes);
     upload(nodeCounts_, nodeCounts);
-    constant_.reserve(segmentCount);
-    tileHist_.reserve(static_cast<std::size_t>(tiles) * classes);
-    tileBest_.reserve(tiles);
-    tileMax_.reserve(tiles);
-    tileTries_.reserve(tiles);
-    segmentMax_.reserve(segmentCount);
+    constant_.reserve(segmentCount, stream_);
+    tileHist_.reserve(static_cast<std::size_t>(tiles) * classes, stream_);
+    tileBest_.reserve(tiles, stream_);
+    tileMax_.reserve(tiles, stream_);
+    tileTries_.reserve(tiles, stream_);
+    segmentMax_.reserve(segmentCount, stream_);
     if (!onePass_ && classCount_ <= kMaxCandidateClasses) {
       const std::size_t candidateBytes = classCount_ <= 2   ? sizeof(Candidate<2>)
                                          : classCount_ <= 4 ? sizeof(Candidate<4>)
                                                             : sizeof(Candidate<8>);
-      candidates_.reserve(static_cast<std::size_t>(tiles) * kCandidates * candidateBytes);
-      candidateCount_.reserve(tiles);
-      tileList_.reserve(static_cast<std::size_t>(tiles) + 1);
+      candidates_.reserve(static_cast<std::size_t>(tiles) * kCandidates * candidateBytes, stream_);
+      candidateCount_.reserve(tiles, stream_);
+      tileList_.reserve(static_cast<std::size_t>(tiles) + 1, stream_);
     }
     if (classCount_ == 2) {
-      tileUpper_.reserve(tiles);
-      tileLower_.reserve(tiles);
-      segmentLower_.reserve(segmentCount);
+      tileUpper_.reserve(tiles, stream_);
+      tileLower_.reserve(tiles, stream_);
+      segmentLower_.reserve(segmentCount, stream_);
     }
-    tileStates_.reserve(static_cast<std::size_t>(tiles) + 1);
-    segmentBest_.reserve(segmentCount);
-    segmentLeft_.reserve(segmentCount * classes);
+    tileStates_.reserve(static_cast<std::size_t>(tiles) + 1, stream_);
+    segmentBest_.reserve(segmentCount, stream_);
+    segmentLeft_.reserve(segmentCount * classes, stream_);
 
     // 0-4: constant segments, class counts left of every tile, then the best
     // cut per segment with its left class counts.
@@ -2367,8 +2646,8 @@ private:
     upload(partitionTargets_, targets);
     if (nextTiles > 0) {
       // This level is done with them (the kernels are ordered on the stream).
-      tileHist_.reserve(nextTiles * classes);
-      tileTries_.reserve(nextTiles);
+      tileHist_.reserve(nextTiles * classes, stream_);
+      tileTries_.reserve(nextTiles, stream_);
       CUDA_CHECK(cudaMemsetAsync(tileHist_.get(), 0, nextTiles * classes * sizeof(std::uint32_t),
                                  stream_));
       CUDA_CHECK(cudaMemsetAsync(tileTries_.get(), 0, nextTiles * sizeof(std::uint32_t), stream_));
@@ -2429,26 +2708,35 @@ private:
 
   // The leaves of the rows that ended on the GPU, into `leafOfRow` (which
   // holds those of the CPU tasks).
-  void mergeLeaves(LeafIds &leafOfRow) {
-    LeafIds gpuLeaves(stride_);
-    CUDA_CHECK(cudaMemcpyAsync(gpuLeaves.data(), leafOfRow_.get(),
-                               stride_ * sizeof(std::uint32_t), cudaMemcpyDeviceToHost, stream_));
-    CUDA_CHECK(cudaStreamSynchronize(stream_));
-    constexpr std::size_t kChunk = 1 << 16;
-    pool_.parallelFor((stride_ + kChunk - 1) / kChunk, [&](std::size_t chunk) {
-      const std::size_t end = std::min(stride_, (chunk + 1) * kChunk);
-      for (std::size_t row = chunk * kChunk; row < end; ++row) {
-        if (gpuLeaves[row] != UINT32_MAX) {
-          leafOfRow[row] = gpuLeaves[row];
-        }
-      }
-    });
+  void mergeLeaves(decltype(RowLeaves::ids) &leafOfRow) {
+    constexpr std::size_t kPiece = 1 << 16; // rows
+    downloadChunks(leafOfRow_.get(), stride_ * sizeof(std::uint32_t),
+                   [&](std::size_t offset, const char *stage, std::size_t size) {
+                     const auto *gpuLeaves = reinterpret_cast<const std::uint32_t *>(stage);
+                     std::uint32_t *leaves = leafOfRow.data() + offset / sizeof(std::uint32_t);
+                     const std::size_t count = size / sizeof(std::uint32_t);
+                     pool_.parallelFor((count + kPiece - 1) / kPiece, [&](std::size_t piece) {
+                       const std::size_t end = std::min(count, (piece + 1) * kPiece);
+                       for (std::size_t row = piece * kPiece; row < end; ++row) {
+                         if (gpuLeaves[row] != UINT32_MAX) {
+                           leaves[row] = gpuLeaves[row];
+                         }
+                       }
+                     });
+                   });
   }
 
   // Gather the columns of `children` (in buffer `buffer`) into one block,
   // copy it to the host and start a CPU task per child. Only the columns of
   // features that can still split a child are copied.
+  //
+  // With room for the device arena, the block is gathered there and copied
+  // on copyStream_, which starts the CPU tasks itself once the copy is done
+  // (startTasks()): the GPU goes on with the next levels meanwhile. Otherwise
+  // the block goes through the other buffer (free until the next partition)
+  // and the copy is waited for.
   void handOff(std::vector<LevelNode> &children, int buffer) {
+    NvtxRange range("hand-off copy");
     std::size_t handOffRows = 0;
     for (const LevelNode &child : children) {
       handOffRows += child.count;
@@ -2466,7 +2754,9 @@ private:
       offset += child.count;
     }
     const std::size_t blockEntries = features_ * handOffRows;
-    Entry *staging = entries_[1 - buffer].get(); // fully consumed by this level
+    const bool async = arenaUsed_ + blockEntries <= deviceArenaEntries_;
+    Entry *staging = async ? deviceArena_.get() + arenaUsed_
+                           : entries_[1 - buffer].get(); // fully consumed by this level
     if (!jobs.empty()) {
       upload(copyJobs_, jobs);
       profile_.run("handOffGather", stream_, [&]() {
@@ -2488,8 +2778,13 @@ private:
       firstEntry = std::min<std::size_t>(firstEntry, job.to);
       endEntry = std::max<std::size_t>(endEntry, job.to + job.count);
     }
+    const cudaStream_t copies = async ? copyStream_ : stream_;
+    if (async) {
+      CUDA_CHECK(cudaEventRecord(gathered_, stream_));
+      CUDA_CHECK(cudaStreamWaitEvent(copyStream_, gathered_, 0));
+    }
     if (endEntry > firstEntry) {
-      profile_.run("handOffCopy", stream_, [&]() {
+      profile_.run("handOffCopy", copies, [&]() {
         // A copy into one page-locked chunk at a time runs at full speed.
         const std::size_t chunkEntries = kPinChunkBytes / sizeof(Entry);
         const std::size_t base = static_cast<std::size_t>(host - arena_.get());
@@ -2497,22 +2792,44 @@ private:
           const std::size_t chunkEnd = ((base + at) / chunkEntries + 1) * chunkEntries - base;
           const std::size_t to = std::min(endEntry, chunkEnd);
           CUDA_CHECK(cudaMemcpyAsync(host + at, staging + at, (to - at) * sizeof(Entry),
-                                     cudaMemcpyDeviceToHost, stream_));
+                                     cudaMemcpyDeviceToHost, copies));
           at = to;
         }
       });
     }
-    CUDA_CHECK(cudaStreamSynchronize(stream_));
-
-    const Columns columns{host, handOffRows, scratch};
+    auto tasks = std::make_unique<PendingTasks>();
+    tasks->grower = this;
+    tasks->columns = Columns{host, handOffRows, scratch};
     offset = 0;
     for (LevelNode &child : children) {
-      Subtree subtree{child.node, static_cast<std::uint32_t>(offset), child.count, child.depth,
-                      std::move(child.features), 0, {}};
-      pool_.submit([this, columns, subtree = std::move(subtree)]() mutable {
-        cpuBuilder_->grow(columns, std::move(subtree));
-      });
+      tasks->subtrees.push_back({child.node, static_cast<std::uint32_t>(offset), child.count,
+                                 child.depth, std::move(child.features), 0, {}});
       offset += child.count;
+    }
+    if (async) {
+      CUDA_CHECK(cudaLaunchHostFunc(copyStream_, startTasks, tasks.release()));
+    } else {
+      CUDA_CHECK(cudaStreamSynchronize(stream_));
+      startTasks(tasks.release());
+    }
+  }
+
+  // The CPU tasks of one hand-off (a stream callback: no CUDA calls).
+  struct PendingTasks {
+    GpuGrower *grower;
+    Columns columns;
+    std::vector<Subtree> subtrees;
+  };
+
+  static void CUDART_CB startTasks(void *data) {
+    std::unique_ptr<PendingTasks> tasks(static_cast<PendingTasks *>(data));
+    GpuGrower *grower = tasks->grower;
+    for (Subtree &subtree : tasks->subtrees) {
+      grower->pool_.submit(
+          [grower, columns = tasks->columns, subtree = std::move(subtree)]() mutable {
+            NvtxRange range("cpu subtree");
+            grower->cpuBuilder_->grow(columns, std::move(subtree));
+          });
     }
   }
 
@@ -2549,13 +2866,16 @@ private:
   std::size_t pinnedBytes_ = 0; // bytes of the arena ready (pinMutex_)
   bool pinStop_ = false;
   std::vector<std::size_t> pinnedChunks_; // page-locked chunks, to unregister
-  Dataset::Values sortedValues_;           // C4.5: for the first presort
-  std::shared_future<bool> valuesPinning_; // true once it is page-locked
 
   cudaStream_t stream_ = nullptr;
+  cudaStream_t copyStream_ = nullptr; // hand-off copies to the host
+  cudaEvent_t gathered_ = nullptr;    // the last hand-off's block is gathered
 
   DeviceArray<Entry> entries_[2];
   DeviceArray<float> values_;
+  DeviceArray<float> rawValues_; // C4.5 with pruning: for arrangeRows()
+  DeviceArray<Entry> deviceArena_; // the hand-offs, as in arena_ (see handOff())
+  std::size_t deviceArenaEntries_ = 0;
   DeviceArray<std::uint16_t> labels_;
   DeviceArray<std::uint32_t> rowList_;
   DeviceArray<unsigned char> sortTemp_;

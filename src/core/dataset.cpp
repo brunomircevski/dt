@@ -401,6 +401,29 @@ Dataset selectRows(const Dataset &dataset, const std::vector<std::uint32_t> &row
 
 } // namespace
 
+std::vector<std::uint32_t> countClasses(const Dataset &dataset,
+                                        std::span<const std::uint32_t> rows, ThreadPool *pool) {
+  const std::size_t classes = dataset.classCount();
+  const std::size_t count = rows.empty() ? dataset.rowCount : rows.size();
+  constexpr std::size_t kChunk = std::size_t{1} << 20;
+  const std::size_t chunks = (count + kChunk - 1) / kChunk;
+  std::vector<std::uint32_t> perChunk(chunks * classes, 0);
+  parallelFor(pool, chunks, [&](std::size_t chunk) {
+    std::uint32_t *counts = perChunk.data() + chunk * classes;
+    const std::size_t end = std::min(count, (chunk + 1) * kChunk);
+    for (std::size_t index = chunk * kChunk; index < end; ++index) {
+      ++counts[dataset.labels[rows.empty() ? index : rows[index]]];
+    }
+  });
+  std::vector<std::uint32_t> total(classes, 0);
+  for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+    for (std::size_t k = 0; k < classes; ++k) {
+      total[k] += perChunk[chunk * classes + k];
+    }
+  }
+  return total;
+}
+
 std::mt19937_64 seededRandom(std::uint64_t seed, RandomStream stream) {
   std::seed_seq seeds{static_cast<std::uint32_t>(seed), static_cast<std::uint32_t>(seed >> 32),
                       static_cast<std::uint32_t>(stream)};

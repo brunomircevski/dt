@@ -2,6 +2,89 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: profiling airline with Nsight Systems (mordor3 cluster)
+
+Commit `35cf315` (before) against this work (after), on airline, same nodes
+and method as below: before and after in the same job, interleaved, 3 runs
+each, medians of `train total` (presort + build + prune for C4.5, presort +
+build for CART in brackets; on the GPU nodes the total also counts the GPU
+setup). Every tree is byte-identical, and
+`tests/check.sh` passes for `./tree` and `./tree_cpu`.
+
+| Algorithm | Node, backend | Before | After | Speed-up |
+|-----------|---------------|-------:|------:|--------:|
+| C4.5 | hopper cuda | 7.29 s (0.54 + 3.29 + 3.22) | 5.19 s (0.09 + 2.88 + 2.02) | 1.40× |
+| C4.5 | ampere cuda | 8.48 s (0.70 + 3.34 + 3.89) | 5.85 s (0.11 + 3.30 + 2.12) | 1.45× |
+| C4.5 | epyc1 parallel | 12.34 s (0.72 + 10.28 + 1.36) | 11.87 s (0.47 + 10.09 + 1.33) | 1.04× |
+| CART | hopper cuda | 1.18 s (0.09 + 0.92) | 1.11 s (0.09 + 0.81) | 1.06× |
+| CART | ampere cuda | 1.89 s (0.10 + 1.23) | 1.59 s (0.10 + 1.17) | 1.19× |
+| CART | epyc1 parallel | 7.31 s (0.67 + 6.64) | 7.11 s (0.45 + 6.66) | 1.03× |
+
+GPU setup (upload) on ampere went from 0.56 to 0.32 s; on hopper it stays
+at about 0.2 s. The time was found with Nsight Systems (`make NVTX=1`, see
+below) and `perf` on ampere. What changed:
+- **C4.5's distinct values on the device:** the GPU presort used to copy all
+  sorted values back for the thresholds; now CUB's `DeviceSelect::Unique`
+  keeps each feature's distinct values and only those are copied (presort
+  0.54 → 0.09 s on hopper, 0.70 → 0.11 s on ampere). The CPU grower takes
+  them from its sorted columns in parallel.
+- **Copies on the GPU's NUMA node:** ampere has two sockets and its A100 on
+  the first. Staging buffers and copy threads on the other socket ran at
+  21 GB/s up and 16 GB/s down, against 25 and 24 on the GPU's own (hopper:
+  about 55 GB/s either way). The staging buffers and a pool of copy threads
+  are now pinned to the GPU's node (read from sysfs), for the upload, the
+  leaves of the rows and the pruning's arrangement.
+- **Asynchronous hand-off:** the level loop used to wait for each hand-off's
+  copy to the host. With room on the device (airline on both GPUs) the
+  columns are gathered into a device arena, copied on a second stream, and
+  a host callback starts the CPU tasks; the GPU goes on with the next level.
+  Buffer resizes use stream-ordered allocation, so they do not synchronize.
+- **The pruning's first arrangement on the GPU:** C4.5 pruning starts by
+  sorting the 115M rows by leaf and transposing their features to rows
+  (0.4 s on 32-48 threads). When the device can keep a copy of the raw
+  values, a radix sort and a gather kernel do it on the GPU and the result
+  is copied into the pruning's workspace.
+- **Leaf ids renumbered lazily:** the leaf of every row went through two
+  renumberings (node store to tree, collapse of useless splits), each a pass
+  over 115M ids. Now only a map from old to new ids (one per node) is
+  composed, and the ids are read through it.
+- **Parallel presort for few features:** with fewer features than threads
+  each big column's radix sort is split across threads (digit counts per
+  part, prefix over parts, stable parallel scatter): epyc1's presort 0.67 →
+  0.45 s. Root class counts are counted in parallel too.
+
+Tried and dropped:
+- **Routing the pruning's extra rows on the GPU** (subtree raising counts a
+  sibling's rows in the raised branch): the per-call uploads, the scan of
+  changed nodes and the calls serialized on one device made the big routes
+  slower (0.85 → 2.4 s on hopper).
+- **More levels on the GPU** (`--gpu-min-rows` 512 or 1024 instead of 4096
+  for C4.5 and 2048 for CART): slower on both GPU nodes (ampere C4.5 build
+  3.3 → 5.9 s at 512). A level of many small nodes costs the GPU nearly as
+  much as one of big nodes, and the CPU threads finish small subtrees fast.
+  The defaults are best on hopper and on ampere, so the benchmarks need no
+  per-node settings.
+- **Tile sizes** of 4 or 16 entries per thread instead of 8: slower.
+
+The CPU builder's sweep and partition (most of epyc1's 10 s C4.5 build) are
+unchanged. The cluster benchmarks in bench/results/ were run on `35cf315`,
+before this work.
+
+### Profiling with Nsight Systems
+
+`make NVTX=1` builds `./tree` with NVTX ranges around the phases (load,
+upload, presort, every GPU level, hand-off copies, CPU subtrees, merge,
+pruning steps, and every `DT_PROFILE` counter). Then, on a GPU node (not the
+login node):
+
+```
+nsys profile -t cuda,nvtx,osrt -o airline-c45 ./tree --cuda --c45 train.csv
+nsys stats -r nvtx_sum,cuda_gpu_kern_sum,cuda_gpu_mem_time_sum airline-c45.nsys-rep
+```
+
+CPU sampling (`-s cpu`) needs `perf_event_paranoid` ≤ 2: on mordor3 only
+ampere allows it. Without NVTX=1 the ranges compile to nothing.
+
 ## October 2026: C4.5 pruning, the GPU partition and the upload (mordor3 cluster)
 
 Commit `93920b9` (before) against the merge of this work (after), on airline

@@ -98,6 +98,22 @@ private:
                              CountsAt &countsAt, std::uint32_t *newIdOf);
 };
 
+// Per training row, the leaf it ends in: map[ids[row]], or ids[row] if the
+// map is empty. Renumbering the tree's nodes only changes the map (a value
+// per node id), so the rows' ids are translated once, where they are used.
+struct RowLeaves {
+  std::vector<std::uint32_t, UninitializedAllocator<std::uint32_t>> ids;
+  std::vector<std::uint32_t> map;
+
+  bool empty() const { return ids.empty(); }
+  std::size_t size() const { return ids.size(); }
+  std::uint32_t operator[](std::size_t row) const {
+    return map.empty() ? ids[row] : map[ids[row]];
+  }
+  // Renumber the leaves: leaf id l becomes newIdOf[l].
+  void remap(const std::vector<std::uint32_t> &newIdOf, ThreadPool *pool);
+};
+
 // ids[i] = newIdOf[ids[i]] for the `count` ids, in parallel (`pool` may be
 // null).
 void remapIds(std::uint32_t *ids, std::size_t count, const std::uint32_t *newIdOf,

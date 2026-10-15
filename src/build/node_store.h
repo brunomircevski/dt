@@ -35,10 +35,9 @@ public:
   }
 
   // The tree below node 0 (the first node added), in preorder. `pool` may
-  // be null. `leafOfRow` (optional, `rows` values), holding NodeStore ids of
-  // leaves, is changed to the leaves' ids in `tree`.
-  void toTree(Tree &tree, ThreadPool *pool, std::uint32_t *leafOfRow = nullptr,
-              std::size_t rows = 0);
+  // be null. `leafOfRow` (optional), holding NodeStore ids of leaves, gets
+  // the map to their ids in `tree`.
+  void toTree(Tree &tree, ThreadPool *pool, RowLeaves *leafOfRow = nullptr);
 
 private:
   static constexpr unsigned kChunkBits = 12;

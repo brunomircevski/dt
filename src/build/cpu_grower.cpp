@@ -2,6 +2,7 @@
 #include "build/grower.h"
 #include "core/timing.h"
 
+#include <bit>
 #include <cstring>
 #include <memory>
 #include <numeric>
@@ -29,33 +30,23 @@ public:
   }
 
   Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
-            GrowTimings &timings, Dataset::Values *sortedValues,
-            LeafIds *leafOfRow) override {
+            GrowTimings &timings, DistinctValues *distinct, RowLeaves *leafOfRow) override {
     if (leafOfRow && !rows.empty()) {
       throw std::logic_error("CpuGrower: leaves of rows only with all rows");
     }
     const std::size_t count = rows.empty() ? rows_ : rows.size();
     {
       ScopedTimer timer(timings.prepareSeconds);
-      prepare(rows, sortedValues);
-      if (sortedValues && reusable_) { // the presort wrote them otherwise
-        parallelFor(pool_, features_, [&](std::size_t feature) {
-          const Entry *column = work_.get() + feature * count;
-          float *values = sortedValues->data() + feature * count;
-          for (std::size_t index = 0; index < count; ++index) {
-            values[index] = column[index].value;
-          }
-        });
+      prepare(rows);
+      if (distinct) {
+        distinctValues(count, *distinct);
       }
     }
     Tree tree;
     tree.featureNames = train_.featureNames;
     tree.classNames = train_.classNames;
     ScopedTimer timer(timings.buildSeconds);
-    std::vector<std::uint32_t> counts(train_.classCount(), 0);
-    for (std::size_t index = 0; index < count; ++index) {
-      ++counts[codec_.cls(work_[index].packed)];
-    }
+    const std::vector<std::uint32_t> counts = countClasses(train_, rows, pool_);
     NodeStore store(train_.classCount(), 2 * count);
     Subtree root;
     root.node = store.add(counts.data());
@@ -63,17 +54,18 @@ public:
     root.features.resize(features_);
     std::iota(root.features.begin(), root.features.end(), 0u);
     if (leafOfRow) {
-      leafOfRow->resize(count);
+      leafOfRow->ids.resize(count);
+      leafOfRow->map.clear();
     }
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
                            options_.parallel, countTables(),
-                           leafOfRow ? leafOfRow->data() : nullptr);
+                           leafOfRow ? leafOfRow->ids.data() : nullptr);
     builder.grow(Columns{work_.get(), count, scratch_.get(), other_.get(), leftBits_.get()},
                  std::move(root));
     if (pool_) {
       pool_->waitIdle();
     }
-    store.toTree(tree, pool_, leafOfRow ? leafOfRow->data() : nullptr, count);
+    store.toTree(tree, pool_, leafOfRow);
     return tree;
   }
 
@@ -94,25 +86,51 @@ private:
     return {countXlog_.data(), countInverse_.data(), static_cast<std::uint32_t>(rows_ + 1)};
   }
 
-  // Fill work_ with the sorted columns of the selected rows (stride = their
-  // count), and `sortedValues` (if not null) with their values. Without
-  // reuse, presort straight into work_.
-  void prepare(std::span<const std::uint32_t> rows, Dataset::Values *sortedValues) {
-    const std::size_t count = rows.empty() ? rows_ : rows.size();
-    if (sortedValues) {
-      sortedValues->resize(features_ * count);
+  // Every feature's distinct values, from the sorted columns in work_ (stride
+  // `count`): the last value of each run, in chunks on the pool.
+  void distinctValues(std::size_t count, DistinctValues &distinct) {
+    constexpr std::size_t kChunk = std::size_t{1} << 20;
+    const std::size_t chunks = (count + kChunk - 1) / kChunk;
+    std::vector<std::vector<float>> parts(features_ * chunks);
+    parallelFor(pool_, parts.size(), [&](std::size_t part) {
+      const Entry *column = work_.get() + part / chunks * count;
+      const std::size_t begin = part % chunks * kChunk;
+      const std::size_t end = std::min(count, begin + kChunk);
+      std::vector<float> &out = parts[part];
+      for (std::size_t index = begin; index < end; ++index) {
+        const float value = column[index].value;
+        if (index + 1 == count ||
+            std::bit_cast<std::uint32_t>(value) != std::bit_cast<std::uint32_t>(column[index + 1].value)) {
+          out.push_back(value);
+        }
+      }
+    });
+    distinct.values.clear();
+    distinct.offsets.assign(1, 0);
+    for (std::size_t part = 0; part < parts.size(); ++part) {
+      distinct.values.insert(distinct.values.end(), parts[part].begin(), parts[part].end());
+      if (part % chunks == chunks - 1) {
+        distinct.offsets.push_back(distinct.values.size());
+      }
     }
+    if (chunks == 0) {
+      distinct.offsets.assign(features_ + 1, 0);
+    }
+  }
+
+  // Fill work_ with the sorted columns of the selected rows (stride = their
+  // count). Without reuse, presort straight into work_.
+  void prepare(std::span<const std::uint32_t> rows) {
     if (!reusable_) {
       if (used_ || !rows.empty()) {
         throw std::logic_error("CpuGrower: not created for repeated use");
       }
       used_ = true;
-      presortColumns(train_, codec_, work_.get(), pool_,
-                     sortedValues ? sortedValues->data() : nullptr, other_.get());
+      presortColumns(train_, codec_, work_.get(), pool_, other_.get());
       return;
     }
     if (!presorted_) {
-      presortColumns(train_, codec_, sorted_.get(), pool_, nullptr, other_.get());
+      presortColumns(train_, codec_, sorted_.get(), pool_, other_.get());
       presorted_ = true;
     }
     if (rows.empty()) {

@@ -41,3 +41,5 @@ __pycache__
 /bench/.venv/
 /bench/.tools/
 /bench/data/
+/bench/profiles/
+*.nsys-rep

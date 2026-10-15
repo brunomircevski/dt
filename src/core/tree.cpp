@@ -127,6 +127,14 @@ void Tree::compact(ThreadPool *pool, std::uint32_t *newIdOf) {
       newIdOf);
 }
 
+void RowLeaves::remap(const std::vector<std::uint32_t> &newIdOf, ThreadPool *pool) {
+  if (map.empty()) {
+    map = newIdOf;
+    return;
+  }
+  remapIds(map.data(), map.size(), newIdOf.data(), pool);
+}
+
 void remapIds(std::uint32_t *ids, std::size_t count, const std::uint32_t *newIdOf,
               ThreadPool *pool) {
   constexpr std::size_t kChunk = 1 << 16;

@@ -18,8 +18,13 @@ on the float bits, stable, 3 passes of 11 bits; a pass in which all keys share
 the digit is skipped). The histograms of all features are computed first, so
 that the features needing the most passes (continuous ones need three, binary
 ones one) are sorted first, which balances the threads. The first pass reads
-the raw values directly and the last one writes the final column (and, for
-C4.5, the sorted values alone, which its thresholds need). For feature `f`
+the raw values directly and the last one writes the final column. With
+fewer features than threads (airline: 18 features, 48 threads) each big
+column is sorted by several threads: every thread counts the digits of its
+part, a prefix over (digit, part) gives each part its place, and the parts
+scatter in parallel, still stably. C4.5's thresholds then take each feature's
+distinct values from the sorted columns (in parallel, per 1M-entry chunk).
+For feature `f`
 the builder keeps a column of entries
 
 ```
@@ -224,8 +229,8 @@ that gained rows are pruned again. The recursion runs on the pool without
 blocking: a node's left branch becomes a task, the right one runs inline, and
 whichever finishes last settles the node (prunes, raises or keeps it), so no
 thread waits on a join. C4.5's training-value thresholds are found
-by binary-searching each threshold among its feature's sorted training values
-(a by-product of the presort). CART cost-complexity pruning only needs the
+by binary-searching each threshold among its feature's distinct training
+values (a by-product of the presort). CART cost-complexity pruning only needs the
 per-node class counts of the tree.
 
 The passes over the whole tree run in parallel too, which matters for trees

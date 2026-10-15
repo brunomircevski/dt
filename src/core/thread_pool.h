@@ -23,7 +23,8 @@ namespace dt {
 //    tasks) can never deadlock the pool.
 class ThreadPool {
 public:
-  explicit ThreadPool(unsigned workerCount);
+  // `onStart` (optional) runs first on every worker, e.g. to pin it to CPUs.
+  explicit ThreadPool(unsigned workerCount, std::function<void()> onStart = {});
   ~ThreadPool();
 
   ThreadPool(const ThreadPool &) = delete;

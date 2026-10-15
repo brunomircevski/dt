@@ -4,6 +4,7 @@
 #include "algo/cart_pruning.h"
 #include "algo/split_rules.h"
 #include "build/grower.h"
+#include "core/nvtx.h"
 #include "core/timing.h"
 
 #include <algorithm>
@@ -165,6 +166,7 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
     if (!pool) {
       throw std::logic_error("The Cuda backend needs a thread pool");
     }
+    NvtxRange range("gpu setup");
     grower = makeGpuGrower(train, options, *pool, crossValidate, timings.gpuSetupSeconds);
   } else {
     grower = makeCpuGrower(train, options, buildPool, crossValidate);
@@ -172,25 +174,30 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
 
   const SplitRules rules(options, train.classCount(), train.rowCount);
   GrowTimings growTimings;
-  Dataset::Values sortedValues; // C4.5's thresholds need them
-  LeafIds leafOfRow;            // C4.5's pruning starts from them
+  DistinctValues distinct;      // C4.5's thresholds need them
+  RowLeaves leafOfRow;          // C4.5's pruning starts from them
   const bool c45Prune = !isCart && options.c45.prune;
-  Tree tree = grower->grow(rules, {}, growTimings, isCart ? nullptr : &sortedValues,
-                           c45Prune ? &leafOfRow : nullptr);
+  Tree tree = [&] {
+    NvtxRange range("grow");
+    return grower->grow(rules, {}, growTimings, isCart ? nullptr : &distinct,
+                        c45Prune ? &leafOfRow : nullptr);
+  }();
   timings.presortSeconds += growTimings.prepareSeconds;
   timings.buildSeconds += growTimings.buildSeconds;
 
   if (!isCart) {
     ScopedTimer timer(timings.pruneSeconds);
+    NvtxRange range("c45 prune");
     // Part of growing in c4.5 (done with or without pruning).
-    c45CollapseUselessSplits(tree, buildPool, leafOfRow);
-    c45UseTrainingValueThresholds(tree, sortedValues, train.rowCount, buildPool);
+    c45CollapseUselessSplits(tree, buildPool, &leafOfRow);
+    c45UseTrainingValueThresholds(tree, distinct, buildPool);
     if (options.c45.prune) {
       if (verbose) {
         std::cout << "  unpruned: " << tree.nodeCount() << " nodes\n";
       }
+      const RowArranger arranger = [&](auto... args) { return grower->arrangeRows(args...); };
       c45PessimisticPrune(tree, train, options.c45.confidence, buildPool, grower->workspace(),
-                          leafOfRow);
+                          &leafOfRow, arranger);
     }
     return tree;
   }
@@ -201,10 +208,12 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   double alpha = options.cart.alpha;
   if (crossValidate) {
     ScopedTimer timer(timings.cvSeconds);
+    NvtxRange range("cart cv");
     alpha = crossValidateAlpha(train, tree, options, rules, *grower, buildPool, verbose);
   }
   if (options.cart.pruning != CartPruning::None) {
     ScopedTimer timer(timings.pruneSeconds);
+    NvtxRange range("cart prune");
     cartCostComplexityPrune(tree, alpha);
   }
   return tree;

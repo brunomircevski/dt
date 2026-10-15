@@ -5,6 +5,7 @@
 #include <memory>
 #include <new>
 #include <random>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -55,6 +56,14 @@ struct Dataset {
   }
 };
 
+// Every feature's distinct values (bit patterns), in increasing order: those
+// of feature f are values[offsets[f]] .. values[offsets[f + 1] - 1]. C4.5's
+// thresholds need them (a by-product of the presort).
+struct DistinctValues {
+  std::vector<float> values;
+  std::vector<std::size_t> offsets;
+};
+
 // Load a CSV with a header line. The last column is the class label; a first
 // column named "Id" (any case) is ignored; every other column must be numeric.
 // Parsing runs on the pool (or on the calling thread if `pool` is null).
@@ -62,6 +71,10 @@ Dataset loadDataset(const std::string &filePath, ThreadPool *pool);
 
 // Stress tests: append (multiplier - 1) slightly rescaled copies of every row.
 void multiplyDataset(Dataset &dataset, std::size_t multiplier);
+
+// Rows of each class among `rows` (every row if empty), counted on `pool`.
+std::vector<std::uint32_t> countClasses(const Dataset &dataset,
+                                        std::span<const std::uint32_t> rows, ThreadPool *pool);
 
 // Independent random streams derived from one --seed, so that e.g. changing
 // the CV folds does not change the holdout split.

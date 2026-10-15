@@ -34,15 +34,18 @@ partition never overwrites data it still has to read.
    them, which is slow with HMM (both cluster GPU nodes): the pool's threads
    copy 32 MB chunks into four page-locked staging buffers while the previous
    chunks upload. Airline's 6 GB take 0.2 s on the H100 node, against 0.35 s
-   page-locked; the A100 node takes 0.5 s either way. The staging buffers are
-   allocated while the CSV loads. All device buffers are allocated once per
-   run.
+   page-locked. The staging buffers, and the threads that copy through them,
+   are on the GPU's NUMA node: on the A100 node (two sockets) copies from the
+   other socket ran at 21 GB/s up and 16 GB/s down instead of 25 and 24, and
+   the upload went from 0.5 to 0.3 s. The staging buffers are allocated while
+   the CSV loads. All device buffers are allocated once per run.
 2. Per grown tree: build `(value, packed row/class)` pairs of the selected
    rows and sort each feature with CUB's radix sort (stable, like the CPU's).
-   For C4.5 the sorted values are copied back to the host (its thresholds
-   need them) into a buffer that was touched by all threads and page-locked
-   in the background during setup, so the copy runs at full speed and costs
-   no page faults.
+   For C4.5 the device keeps each feature's distinct values (CUB's
+   `DeviceSelect::Unique` on the sorted values' bits, into free device
+   memory) and copies only those to the host for the thresholds, instead of
+   all sorted values (as big as the columns), and the presort went from
+   0.54 to 0.09 s on the H100 node.
 
 With cross-validation (CART `--cv K`) the raw values stay on the device in
 their own buffer, so each fold tree only uploads its row list and
@@ -84,10 +87,23 @@ The goes-left flags of step 5 are a bitmap (one bit per row, set with
 which stays in L2, against 115 MB of bytes that did not. The H100's CART build
 on airline went from 1.73 to 1.09 s.
 
+When the device has room for a copy of all hand-offs (airline: 12 GB on
+both cluster GPUs), the gathered columns are copied to the host on a second
+stream, and a host callback on that stream (`cudaLaunchHostFunc`) starts the
+CPU tasks when the copy is done: the level loop goes on with the next level
+instead of waiting for each hand-off to arrive. Device buffers that change
+size between levels use stream-ordered allocation (`cudaMallocAsync`, with a
+pool that keeps its memory), so a resize does not synchronize the device.
+
 For C4.5 with pruning the grower also records the leaf of every row: a
 kernel writes them for the nodes finished on the GPU, the CPU tasks for
-theirs, and they are merged at the end. Pruning then does not route the rows
-down the tree again (see CPU.md).
+theirs, and they are merged at the end, streamed from the staging buffers
+straight into the ids. Pruning then does not route the rows down the tree
+again (see CPU.md). When there is room, the device also keeps a copy of the
+raw values, and the pruning's first step (rows sorted by leaf, their features
+transposed to rows, their labels and the class counts of every leaf) runs on
+the GPU (`arrangeRows`): a stable radix sort by leaf and one gather kernel
+instead of two CPU passes over 115M rows.
 
 ### Inside the sweep (kernels 3a / 3c)
 

@@ -85,12 +85,14 @@ void radixHistogram(const float *values, std::size_t count, RadixHistogram &hist
   }
 }
 
-// Sorted entries of one feature column into `out` (and their values into
-// `sortedValues` if not null). The first active pass reads the raw values, and
-// the buffers alternate so that the last one writes `out`.
+// Sorted entries of one feature column into `out`. The first active pass
+// reads the raw values, and the buffers alternate so that the last one
+// writes `out`. With `parts` > 1, every pass is split into that many ranges
+// of rows on `pool`: each range counts its digits, and scatters from its own
+// offsets (after those of the earlier ranges, so the sort stays stable).
 void sortColumn(const float *values, const std::uint16_t *labels, std::size_t count,
-                const EntryCodec &codec, RadixHistogram &histogram, Entry *out,
-                float *sortedValues, Entry *temp) {
+                const EntryCodec &codec, RadixHistogram &histogram, Entry *out, Entry *temp,
+                ThreadPool *pool, std::size_t parts) {
   auto entryOf = [&](std::size_t row) {
     // +0.0f: -0.0 and 0.0 are the same value (no threshold between them).
     return Entry{values[row] + 0.0f, codec.pack(static_cast<std::uint32_t>(row), labels[row])};
@@ -99,27 +101,62 @@ void sortColumn(const float *values, const std::uint16_t *labels, std::size_t co
     for (std::size_t row = 0; row < count; ++row) {
       out[row] = entryOf(row);
     }
-    if (sortedValues) {
-      std::fill_n(sortedValues, count, count > 0 ? out[0].value : 0.0f);
-    }
     return;
   }
   thread_local std::vector<Entry> threadTemp;
+  std::unique_ptr<Entry[]> columnTemp; // shared by the parts
   if (!temp && histogram.activePasses > 1) {
-    if (threadTemp.size() < count) {
-      threadTemp.resize(count);
+    if (parts > 1) {
+      columnTemp.reset(new Entry[count]);
+      temp = columnTemp.get();
+    } else {
+      if (threadTemp.size() < count) {
+        threadTemp.resize(count);
+      }
+      temp = threadTemp.data();
     }
-    temp = threadTemp.data();
   }
   Entry *target = histogram.activePasses % 2 == 1 ? out : temp;
   Entry *other = target == out ? temp : out;
   const Entry *source = nullptr; // null: the raw values
-  int remaining = histogram.activePasses;
   for (int pass = 0; pass < kRadixPasses; ++pass) {
     if (!histogram.active[pass]) {
       continue;
     }
-    const bool last = --remaining == 0;
+    const std::uint32_t shift = static_cast<std::uint32_t>(pass * kRadixBits);
+    if (parts > 1) {
+      auto digitAt = [&](std::size_t index) {
+        const float value = source ? source[index].value : values[index] + 0.0f;
+        return (sortKey(value) >> shift) & (kRadixBuckets - 1);
+      };
+      std::vector<std::uint32_t> buckets(parts * kRadixBuckets, 0);
+      parallelFor(pool, parts, [&](std::size_t part) {
+        std::uint32_t *bucket = buckets.data() + part * kRadixBuckets;
+        const std::size_t end = count * (part + 1) / parts;
+        for (std::size_t index = count * part / parts; index < end; ++index) {
+          ++bucket[digitAt(index)];
+        }
+      });
+      std::uint32_t offset = 0;
+      for (std::size_t digit = 0; digit < kRadixBuckets; ++digit) {
+        for (std::size_t part = 0; part < parts; ++part) {
+          const std::uint32_t size = buckets[part * kRadixBuckets + digit];
+          buckets[part * kRadixBuckets + digit] = offset;
+          offset += size;
+        }
+      }
+      parallelFor(pool, parts, [&](std::size_t part) {
+        std::uint32_t *bucket = buckets.data() + part * kRadixBuckets;
+        const std::size_t end = count * (part + 1) / parts;
+        for (std::size_t index = count * part / parts; index < end; ++index) {
+          const Entry entry = source ? source[index] : entryOf(index);
+          target[bucket[(sortKey(entry.value) >> shift) & (kRadixBuckets - 1)]++] = entry;
+        }
+      });
+      source = target;
+      std::swap(target, other);
+      continue;
+    }
     std::uint32_t *bucket = histogram.counts[pass];
     std::uint32_t offset = 0;
     for (std::size_t digit = 0; digit < kRadixBuckets; ++digit) {
@@ -127,13 +164,9 @@ void sortColumn(const float *values, const std::uint16_t *labels, std::size_t co
       bucket[digit] = offset;
       offset += size;
     }
-    const std::uint32_t shift = static_cast<std::uint32_t>(pass * kRadixBits);
     auto place = [&](const Entry &entry) {
       const std::uint32_t at = bucket[(sortKey(entry.value) >> shift) & (kRadixBuckets - 1)]++;
       target[at] = entry;
-      if (last && sortedValues) {
-        sortedValues[at] = entry.value;
-      }
     };
     if (source == nullptr) {
       for (std::size_t row = 0; row < count; ++row) {
@@ -152,7 +185,7 @@ void sortColumn(const float *values, const std::uint16_t *labels, std::size_t co
 } // namespace
 
 void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
-                    ThreadPool *pool, float *sortedValues, Entry *temp) {
+                    ThreadPool *pool, Entry *temp) {
   const std::size_t rows = dataset.rowCount;
   const std::size_t features = dataset.featureCount();
   if (rows > std::numeric_limits<std::uint32_t>::max()) {
@@ -170,11 +203,14 @@ void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
   std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
     return histograms[a].activePasses > histograms[b].activePasses;
   });
+  // Fewer features than threads: every column is sorted in parts.
+  const std::size_t threads = pool ? pool->workerCount() + 1 : 1;
+  const std::size_t parts =
+      rows >= (std::size_t{1} << 20) ? (threads + features - 1) / features : 1;
   parallelFor(pool, features, [&](std::size_t index) {
     const std::size_t feature = order[index];
     sortColumn(dataset.column(feature), dataset.labels.data(), rows, codec, histograms[feature],
-               out + feature * rows, sortedValues ? sortedValues + feature * rows : nullptr,
-               temp ? temp + feature * rows : nullptr);
+               out + feature * rows, temp ? temp + feature * rows : nullptr, pool, parts);
   });
 }
 

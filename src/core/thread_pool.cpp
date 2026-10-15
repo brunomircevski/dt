@@ -2,10 +2,15 @@
 
 namespace dt {
 
-ThreadPool::ThreadPool(unsigned workerCount) {
+ThreadPool::ThreadPool(unsigned workerCount, std::function<void()> onStart) {
   workers_.reserve(workerCount);
   for (unsigned index = 0; index < workerCount; ++index) {
-    workers_.emplace_back([this]() { workerLoop(); });
+    workers_.emplace_back([this, onStart]() {
+      if (onStart) {
+        onStart();
+      }
+      workerLoop();
+    });
   }
 }
 

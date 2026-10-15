@@ -12,6 +12,12 @@ CUDA_ARCH ?= -arch=native
 
 CXXFLAGS  := -std=c++20 -O3 -pthread -Wall -Wextra -Isrc -MMD -MP
 NVCCFLAGS := -std=c++20 -O3 $(CUDA_ARCH) -Isrc -MMD -MP -Xcompiler -Wall
+# NVTX=1: named ranges for Nsight Systems (src/core/nvtx.h; header-only, from the CUDA toolkit)
+ifeq ($(NVTX),1)
+NVTX_FLAGS := -DDT_NVTX -I$(dir $(NVCC))../include
+CXXFLAGS   += $(NVTX_FLAGS)
+NVCCFLAGS  += $(NVTX_FLAGS)
+endif
 
 BUILD   := build
 SOURCES := $(filter-out src/build/gpu_grower_stub.cpp,$(wildcard src/*/*.cpp))
