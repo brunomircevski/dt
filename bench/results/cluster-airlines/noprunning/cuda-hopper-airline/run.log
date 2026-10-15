@@ -1,46 +1,46 @@
-log: bench/results/cluster-airlines/noprunning/cuda-hopper-airline/run.log, job 404 on hopper, started 2026-10-15 16:53:01
+log: bench/results/cluster-airlines/noprunning/cuda-hopper-airline/run.log, job 494 on hopper, started 2026-10-15 23:25:08
 
-=== 16:53:01  1/3 machine check
+=== 23:25:08  1/3 machine check
 CPUs allocated: 32 (0-31), SLURM_JOB_CPUS_PER_NODE=32
 CPU governor: schedutil 
-load average: 12.32 4.99 3.07
+load average: 12.80 4.32 2.82
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:1/1/16 17:1/1/17 18:1/1/18 19:1/1/19 20:1/1/20 21:1/1/21 22:1/1/22 23:1/1/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31
 GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
-code: 35cf31543002-dirty (from submit.sh: hopper has no git)
+code: 8da0c121e041-dirty (from submit.sh: hopper has no git)
 runs per case: 3
 
-=== 16:53:01  2/3 benchmark: airline, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 32), 3 run(s) per case
+=== 23:25:08  2/3 benchmark: airline, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 32), 3 run(s) per case
 2 cases, 9 processes:
   airline | cart_full_nodepth | tree_cuda | 32
   airline | c45_unpruned | tree_cuda | 32
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  airline: identical in every format (31 s)
+  airline: identical in every format (32 s)
 2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
-[1/9] 16:53:34 run 1/3: CART ./tree CUDA, 32 threads, airline ...
-    ok: train 3.373 s, peak 21,349 MiB, GPU 24,435 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m08s, elapsed 0m08s
-[2/9] 16:53:42 run 1/3: C4.5 ./tree CUDA, 32 threads, airline ...
-    ok: train 3.558 s, peak 25,627 MiB, GPU 24,427 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m07s, elapsed 0m17s, about 0m33s left
-[3/9] 16:53:51 run 2/3: CART ./tree CUDA, 32 threads, airline ...
-    ok: train 3.439 s, peak 21,351 MiB, GPU 24,435 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m08s, elapsed 0m26s, about 0m24s left
-[4/9] 16:54:00 run 2/3: C4.5 ./tree CUDA, 32 threads, airline ...
-    ok: train 3.661 s, peak 25,627 MiB, GPU 24,427 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m08s, elapsed 0m34s, about 0m16s left
-[5/9] 16:54:08 run 3/3: C4.5 ./tree CUDA, 32 threads, airline ...
-    ok: train 4.058 s, peak 25,627 MiB, GPU 24,427 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m08s, elapsed 0m43s, about 0m08s left
-[6/9] 16:54:17 run 3/3: CART ./tree CUDA, 32 threads, airline ...
-    ok: train 3.291 s, peak 21,354 MiB, GPU 24,435 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m08s, elapsed 0m51s, about 0m00s left
+[1/9] 23:25:41 run 1/3: CART ./tree CUDA, 32 threads, airline ...
+    ok: train 3.265 s, peak 21,389 MiB, GPU 35,829 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m08s, elapsed 0m08s
+[2/9] 23:25:50 run 1/3: C4.5 ./tree CUDA, 32 threads, airline ...
+    ok: train 3.13 s, peak 19,986 MiB, GPU 35,797 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m07s, elapsed 0m16s, about 0m32s left
+[3/9] 23:25:58 run 2/3: CART ./tree CUDA, 32 threads, airline ...
+    ok: train 3.237 s, peak 21,389 MiB, GPU 35,829 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m08s, elapsed 0m24s, about 0m23s left
+[4/9] 23:26:06 run 2/3: C4.5 ./tree CUDA, 32 threads, airline ...
+    ok: train 3.042 s, peak 19,986 MiB, GPU 35,797 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m07s, elapsed 0m32s, about 0m16s left
+[5/9] 23:26:14 run 3/3: C4.5 ./tree CUDA, 32 threads, airline ...
+    ok: train 3.091 s, peak 19,985 MiB, GPU 35,797 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m07s, elapsed 0m40s, about 0m08s left
+[6/9] 23:26:21 run 3/3: CART ./tree CUDA, 32 threads, airline ...
+    ok: train 3.112 s, peak 21,389 MiB, GPU 35,797 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m08s, elapsed 0m48s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/9] 16:54:26 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.015 s, peak 357 MiB, GPU 463 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m52s, about 0m00s left
-[8/9] 16:54:26 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0149 s, peak 357 MiB, GPU 461 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m53s, about 0m00s left
-[9/9] 16:54:27 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.015 s, peak 357 MiB, GPU 461 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m54s, about 0m00s left
+[7/9] 23:26:30 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0265 s, peak 391 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m49s, about 0m00s left
+[8/9] 23:26:31 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0253 s, peak 391 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m50s, about 0m00s left
+[9/9] 23:26:32 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0252 s, peak 391 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m51s, about 0m00s left
 results: /home/bmircevski/dt/bench/results/cluster-airlines/noprunning/cuda-hopper-airline/results.jsonl
 
-=== 16:54:28  3/3 tables and CSV files
-done 2026-10-15 16:54:29
+=== 23:26:33  3/3 tables and CSV files
+done 2026-10-15 23:26:33

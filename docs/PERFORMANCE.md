@@ -67,8 +67,10 @@ Tried and dropped:
 - **Tile sizes** of 4 or 16 entries per thread instead of 8: slower.
 
 The CPU builder's sweep and partition (most of epyc1's 10 s C4.5 build) are
-unchanged. The cluster benchmarks in bench/results/ were run on `35cf315`,
-before this work.
+unchanged. The cluster benchmarks were rerun on this commit (`8da0c12`):
+[cluster-airlines](../bench/results/cluster-airlines/BENCHMARK.md),
+[cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
+[cluster-cpu-scaling](../bench/results/cluster-cpu-scaling/BENCHMARK.md).
 
 ### Profiling with Nsight Systems
 
