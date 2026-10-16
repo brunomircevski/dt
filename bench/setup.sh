@@ -30,8 +30,12 @@ Rscript -e 'suppressMessages(library(rpart))' || { echo "R package rpart missing
 make -C .. cpu
 # Static if the C library allows it: the smaller the launcher, the less it adds
 # to the peak RSS of the processes it starts (see adapters/rusage.c).
-cc -O2 -static -Wall -o "$TOOLS/rusage" adapters/rusage.c 2>/dev/null ||
-  cc -O2 -Wall -o "$TOOLS/rusage" adapters/rusage.c
+# Rebuilt only when its source changed, like the J48 adapter below: another
+# machine may be running them from the same (NFS) directory.
+if [ ! -x "$TOOLS/rusage" ] || [ adapters/rusage.c -nt "$TOOLS/rusage" ]; then
+  cc -O2 -static -Wall -o "$TOOLS/rusage" adapters/rusage.c 2>/dev/null ||
+    cc -O2 -Wall -o "$TOOLS/rusage" adapters/rusage.c
+fi
 
 [ -x .venv/bin/python ] || python3 -m venv .venv
 .venv/bin/pip install -q -r requirements.txt
@@ -42,7 +46,8 @@ maven=https://repo1.maven.org/maven2/nz/ac/waikato/cms/weka
 [ -f "$TOOLS/bounce.jar" ] ||
   curl -sSfL -o "$TOOLS/bounce.jar" "$maven/thirdparty/bounce/0.18/bounce-0.18.jar"
 mkdir -p "$TOOLS/classes"
-javac -nowarn -d "$TOOLS/classes" -cp "$TOOLS/weka.jar:$TOOLS/bounce.jar" adapters/J48Fit.java
+[ -f "$TOOLS/classes/J48Fit.class" ] && [ "$TOOLS/classes/J48Fit.class" -nt adapters/J48Fit.java ] ||
+  javac -nowarn -d "$TOOLS/classes" -cp "$TOOLS/weka.jar:$TOOLS/bounce.jar" adapters/J48Fit.java
 
 if [ ! -x "$TOOLS/yadt/dTcmd" ]; then
   curl -sSfL -o "$TOOLS/yadt.zip" https://pages.di.unipi.it/ruggieri/YaDT/YaDT2.3.0.zip
