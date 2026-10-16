@@ -168,6 +168,8 @@ def check_csv(path, X, y, header):
     classes = pa.array([f"c{k}" for k in range(int(y.max()) + 1)])
     if not pc.all(pc.equal(table["class"], pc.take(classes, pa.array(y)))).as_py():
         raise AssertionError(f"{path}: class labels differ from the binary file")
+    del table
+    pa.default_memory_pool().release_unused()  # ECBDL: tens of GB, not kept while tools run
 
 
 def verify_dataset(dataset):
@@ -185,7 +187,8 @@ def verify_dataset(dataset):
         hashes[path.name] = digest.hexdigest()
     for part in ("train", "test"):
         X, y = load(dataset, part)
-        check_csv(folder / f"{part}.yadt.csv", X, y, header=False)
+        if (folder / f"{part}.yadt.csv").exists():  # not written for huge datasets
+            check_csv(folder / f"{part}.yadt.csv", X, y, header=False)
         if part == "train":
             check_csv(folder / "train.csv", X, y, header=True)
     return hashes

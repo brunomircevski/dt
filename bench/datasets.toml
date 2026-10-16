@@ -13,6 +13,8 @@
 #   train_rows     use only the first N training rows (0 = all; default 0)
 #   max_test_rows  cap the test set (0 = no cap; default 0)
 #   seed           shuffle seed for split = "random" (default 1)
+#   yadt           write YaDT's files (default true; false for huge datasets
+#                  that YaDT never runs on)
 #
 # Only numeric features are supported for now. A smaller variant of a dataset
 # is just another entry with the same source and train_rows set.
@@ -69,3 +71,23 @@ max_test_rows = 100_000
 source = "datasets/airline.csv"
 split = "random"
 test_rows = 500_000
+
+# ECBDL'14 (protein contact maps, GECCO 2014 big data competition): 32M rows,
+# 631 features (92 nominal ones as integer codes), label 0/1 (~2% contacts).
+# Made from the ARFF by bench/cluster/make_datasets.py; cluster-only. The test
+# rows are only set aside (the cluster runs measure training alone), so no
+# YaDT files: they would copy the 70 GB training CSV. ecbdl_6m is a random 6M
+# of ecbdl's training rows: the most that fits on an 80 GB GPU (16 bytes per
+# value for CART, 20 for C4.5 with its values kept for pruning).
+[ecbdl]
+source = "datasets/ecbdl.csv"
+split = "random"
+test_rows = 100_000
+yadt = false
+
+[ecbdl_6m]
+source = "datasets/ecbdl.csv"
+split = "random"
+test_rows = 100_000
+train_rows = 6_000_000
+yadt = false

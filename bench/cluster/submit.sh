@@ -19,35 +19,46 @@
 #   bench/cluster/submit.sh -m 3 cuda-hopper-higgs   # only the named runs
 #   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned \
 #       -o cluster-airlines/noprunning               # unpruned trees
+#   bench/cluster/submit.sh -d ecbdl_6m -a 1234  # ECBDL'14, 6M rows, after job 1234
+#   bench/cluster/submit.sh -d ecbdl             # full ECBDL'14: CPU nodes only (no GPU
+#                                                # has the 320 GB it needs)
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
-# C4.5 has none); -o: the directory under bench/results/.
+# C4.5 has none); -o: the directory under bench/results/; -a: start only after
+# that job (e.g. prepare.sh) ended well.
 
 set -euo pipefail
 RUNS=1
 DATASET=higgs
 PROTOCOLS=cart_alpha_nodepth,c45
 OUTDIR=
-while getopts "m:d:p:o:h" option; do
+AFTER=
+while getopts "m:d:p:o:a:h" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
     d) DATASET="$OPTARG" ;;
     p) PROTOCOLS="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
-    *) sed -n '2,24p' "$0"; exit 2 ;;
+    a) AFTER="$OPTARG" ;;
+    *) sed -n '2,28p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 case "$DATASET" in
-  higgs) DIR=cluster-higgs; LIMIT=01:00:00 ;;
-  airline) DIR=cluster-airlines; LIMIT=04:00:00 ;;
-  *) echo "-d: higgs or airline" >&2; exit 2 ;;
+  higgs) DIR=cluster-higgs; LIMIT=01:00:00 TIMEOUT=3600 ;;
+  airline) DIR=cluster-airlines; LIMIT=04:00:00 TIMEOUT=3600 ;;
+  # ECBDL: the dell partition allows at most 12 hours.
+  ecbdl_6m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
+  ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
+  *) echo "-d: higgs, airline, ecbdl_6m or ecbdl" >&2; exit 2 ;;
 esac
 DIR="${OUTDIR:-$DIR}"
 
 cd "$(dirname "$0")/../.."  # repository root: the jobs start here (SLURM_SUBMIT_DIR)
 for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$DATASET/train.csv"; do
-  [ -e "$f" ] || { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
+  # With -a the data may still be in the making.
+  [ -e "$f" ] || [ -n "$AFTER" -a "${f#bench/data/}" != "$f" ] ||
+    { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 
 #        name                    partition  node    impls
@@ -55,6 +66,11 @@ JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda"
       "cuda-ampere-$DATASET  ampere     ampere  tree_cuda"
       "cpu-epyc-$DATASET     epyc       epyc1   tree"
       "cpu-dell-$DATASET     dell       dell1   tree")
+
+# Full ECBDL needs about 320 GB of GPU memory: CPU nodes only.
+if [ "$DATASET" = ecbdl ]; then
+  JOBS=("${JOBS[@]:2}")
+fi
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then
@@ -87,7 +103,8 @@ for job in "${JOBS[@]}"; do
   read -r name partition node impls <<<"$job"
   mkdir -p "bench/results/$DIR/$name"
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "$LIMIT" \
-    -o "bench/results/$DIR/$name/run.log" bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "$PROTOCOLS")")
+    ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
+    bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "$PROTOCOLS" all "$TIMEOUT")")
   echo "$name: job ${ids[-1]} on $node"
 done
 scontrol release "${ids[@]}"

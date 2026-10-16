@@ -2,15 +2,16 @@
 # One benchmark on one whole node of mordor3, as a SLURM job; submit.sh submits
 # it with the partition, --exclusive and the log file:
 #
-#   job.sh <results directory> <run name> <dataset> <impls> <runs per case> [protocols] [threads]
+#   job.sh <results directory> <run name> <dataset> <impls> <runs per case> [protocols] [threads] [timeout]
 #
 # e.g. job.sh cluster-higgs cuda-hopper-higgs higgs tree,tree_cuda 3
 #   -> bench/results/cluster-higgs/cuda-hopper-higgs/
 # threads: run.py's --threads (default all); "scaling" = 1, 2, 4, then every
-# 4 up to the node's CPU count (scaling.sh).
+# 4 up to the node's CPU count (scaling.sh). timeout: seconds per ./tree process
+# (default 3600).
 
 set -euo pipefail
-DIR="$1" NAME="$2" DATASET="$3" IMPLS="$4" RUNS="$5" PROTOCOLS="${6:-cart_alpha_nodepth,c45}" THREADS="${7:-all}"
+DIR="$1" NAME="$2" DATASET="$3" IMPLS="$4" RUNS="$5" PROTOCOLS="${6:-cart_alpha_nodepth,c45}" THREADS="${7:-all}" TIMEOUT="${8:-3600}"
 cd "$SLURM_SUBMIT_DIR"  # repository root
 PY=bench/.venv/bin/python
 OUT="bench/results/$DIR/$NAME"
@@ -44,7 +45,7 @@ echo "runs per case: $RUNS"
 
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
-  --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$DIR/$NAME" --train-accuracy-only
+  --cpus "$CPUS" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" --train-accuracy-only
 
 step "3/3 tables and CSV files"
 "$PY" bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"

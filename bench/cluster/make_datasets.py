@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild datasets/{covertype,higgs,supersymmetry}.csv from public downloads,
-byte for byte as the copies on the desktop, make datasets/airline.csv, and
-check them all by SHA-256.
+byte for byte as the copies on the desktop, make datasets/airline.csv and
+datasets/ecbdl.csv, and check them all by SHA-256.
 
   bench/.venv/bin/python -I bench/cluster/make_datasets.py ~/downloads [names...]
 
@@ -26,6 +26,10 @@ Sources, in <downloads>:
                            https://kt.ijs.si/elena_ikonomovska/datasets/airline/
                            (SHA-256 1f13460f...). There is no desktop copy: the
                            expected SHA-256 is that of the first build (mordor3, 2026-10-14)
+  ecbdl/training_set.arff  ECBDL'14 (protein contact maps, the GECCO 2014 big data
+                           competition): 31,992,921 rows, 631 features, label 0/1.
+                           On mordor3 a link to /home/Datasets/ECBDL (60.8 GB).
+                           The expected SHA-256 is that of the first build (mordor3, 2026-10-16)
 
 A file whose SHA-256 differs from the expected one is left as <name>.csv.mismatch
 and the script fails.
@@ -42,9 +46,9 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "datasets"
-# sha256sum of the desktop's datasets/ (2026-10-14); airline: of its first build.
+# sha256sum of the desktop's datasets/ (2026-10-14); airline, ecbdl: of their first build.
 EXPECTED = {
     "covertype": "fd7a387defeab82ea260a5be0c42b84e3426b963bb7feb490ffbafdaf89dac77",
     "higgs": "71f566a24e8a03ff51aa6961addc652d44ff8878b28f4198a7f8921f3c6af31c",
@@ -187,8 +191,60 @@ def airline(downloads, out):
         out.write(text.getvalue().to_pybytes().decode())
 
 
+def ecbdl(downloads, out):
+    """ECBDL'14 from its ARFF: 539 real attributes as float32 (the values
+    prepare.py makes of them anyway), the 92 nominal ones (predicted secondary
+    structure H/E/C, solvent accessibility 0-4; X = no residue at that window
+    position) as integer codes of their values in sorted order, as airline's
+    carrier and airports; label 0/1 (1 = contact) last. Rows in file order."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    path = downloads / "ecbdl" / "training_set.arff"
+    names, nominal = [], {}
+    with open(path, "rb") as arff:
+        while line := arff.readline():
+            text = line.decode().strip()
+            if text.lower().startswith("@attribute"):
+                _, name, kind = text.split(None, 2)
+                names.append(name)
+                if kind.startswith("{"):
+                    nominal[name] = sorted(v.strip() for v in kind.strip("{}").split(","))
+                else:
+                    assert kind.lower() in ("real", "numeric", "integer"), text
+            elif text.lower() == "@data":
+                break
+        label = names[-1]
+        assert nominal.pop(label) == ["0", "1"], label
+        assert (len(names), len(nominal)) == (632, 92), (len(names), len(nominal))
+        sets = {name: pa.array(values) for name, values in nominal.items()}
+        reader = pacsv.open_csv(  # from the first data row on
+            arff, read_options=pacsv.ReadOptions(column_names=names, block_size=1 << 26),
+            convert_options=pacsv.ConvertOptions(column_types={
+                name: pa.string() if name in nominal or name == label else pa.float32()
+                for name in names}))
+        out.write(",".join(names) + "\n")
+        rows = 0
+        for batch in reader:
+            columns = []
+            for name, column in zip(names, batch.columns):
+                assert not column.null_count, f"{name}: missing values"
+                if name in sets:
+                    column = pc.index_in(column, value_set=sets[name])
+                    assert not column.null_count, f"{name}: a value outside {nominal[name]}"
+                elif name == label:
+                    assert pc.all(pc.is_in(column, value_set=pa.array(["0", "1"]))).as_py()
+                columns.append(column)
+            text = pa.BufferOutputStream()
+            pacsv.write_csv(pa.record_batch(columns, names=names), text,
+                            pacsv.WriteOptions(include_header=False, quoting_style="none"))
+            out.write(text.getvalue().to_pybytes().decode())
+            rows += batch.num_rows
+    assert rows == 31_992_921, rows
+
+
 BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmetry,
-            "airline": airline}
+            "airline": airline, "ecbdl": ecbdl}
 
 
 def main():
@@ -209,10 +265,12 @@ def main():
         with open(path, "rb") as f:
             while block := f.read(1 << 24):
                 digest.update(block)
-        same = digest.hexdigest() == EXPECTED[name]
+        expected = EXPECTED.get(name)
+        same = digest.hexdigest() == expected
         print(f"{name}: {path.stat().st_size:,} bytes, sha256 {digest.hexdigest()} "
-              f"{'= the expected' if same else '!= the expected ' + EXPECTED[name]}")
-        if not same:
+              + ("(nothing to compare with: record it in EXPECTED)" if expected is None
+                 else "= the expected" if same else f"!= the expected {expected}"))
+        if expected is not None and not same:
             path.rename(path.with_suffix(".csv.mismatch"))
             failed = True
     sys.exit(1 if failed else 0)

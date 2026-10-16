@@ -28,7 +28,8 @@ import benchlib as B  # noqa: E402
 COLORS = {"tree": "#2a78d6", "sklearn": "#eb6834", "rpart": "#1baf7a", "j48": "#eda100",
           "yadt": "#e87ba4", "tree_cuda": "#008300"}
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
-NAMES = {"susy": "SUSY", "higgs": "HIGGS", "covertype": "Covertype", "diabetes": "Diabetes"}
+NAMES = {"susy": "SUSY", "higgs": "HIGGS", "covertype": "Covertype", "diabetes": "Diabetes",
+         "airline": "airline", "ecbdl": "ECBDL'14", "ecbdl_6m": "ECBDL'14 (6M sample)"}
 GROUP = {"cart_alpha": "CART, fixed α", "cart_full": "CART, unpruned",
          "cart_depth12": "CART, depth 12", "cart_alpha_nodepth": "CART, fixed α, no depth limit", "c45": "C4.5, CF 0.25", "c45_unpruned": "C4.5, unpruned"}
 

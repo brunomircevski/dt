@@ -62,7 +62,7 @@ def read_source(spec):
     return features, [str(c) for c in classes], X, y.astype(np.int32)
 
 
-def write_dataset(name, features, classes, X, y, train, test, info):
+def write_dataset(name, features, classes, X, y, train, test, info, yadt=True):
     out = DATA / name
     tmp = DATA / f".{name}.tmp"
     shutil.rmtree(tmp, ignore_errors=True)
@@ -82,13 +82,16 @@ def write_dataset(name, features, classes, X, y, train, test, info):
         if part == "train":
             pacsv.write_csv(table, tmp / "train.csv", pacsv.WriteOptions(quoting_style="none"))
             check_csv(tmp / "train.csv", Xp, y[rows], header=True)
+        if not yadt:
+            continue
         pacsv.write_csv(table, tmp / f"{part}.yadt.csv",
                         pacsv.WriteOptions(include_header=False, quoting_style="none"))
         check_csv(tmp / f"{part}.yadt.csv", Xp, y[rows], header=False)
-    with open(tmp / "yadt.names", "w") as names:
-        for j in range(F):
-            names.write(f"f{j},float,continuous\n")
-        names.write("class,string,class\n")
+    if yadt:
+        with open(tmp / "yadt.names", "w") as names:
+            for j in range(F):
+                names.write(f"f{j},float,continuous\n")
+            names.write("class,string,class\n")
     meta = {"name": name, "features": [f"f{j}" for j in range(F)], "feature_names": features,
             "classes": [f"c{k}" for k in range(len(classes))], "class_names": classes,
             "n_train": int(len(train)), "n_test": int(len(test)), **info}
@@ -134,7 +137,8 @@ def main():
             sources = {key: read_source(spec)}
         features, classes, X, y = sources[key]
         train, test = split_rows(len(y), spec)
-        write_dataset(name, features, classes, X, y, train, test, {"spec": spec})
+        write_dataset(name, features, classes, X, y, train, test, {"spec": spec},
+                      yadt=spec.get("yadt", True))
         print(f"{name}: {len(train):,} train / {len(test):,} test rows, {len(features)} features, "
               f"{len(classes)} classes ({time.perf_counter() - start:.1f} s)")
 

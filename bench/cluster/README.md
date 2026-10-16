@@ -6,6 +6,7 @@ cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 - [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows)
 - [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees
 - [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS with 1 to 48 threads on the two CPU nodes
+- `bench/results/cluster-ecbdl/`: ECBDL'14 (631 features): a 6M-row sample on all four nodes, the full 32M rows on the CPU nodes
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
 only, the CPU nodes (epyc1, dell1) parallel only:** a GPU node's CPU is
@@ -36,6 +37,18 @@ sbatch --export=ALL,PREPARE=airline -t 02:00:00 -o bench/cluster/prepare-airline
 bench/cluster/submit.sh -m 3               # HIGGS: four jobs, one per node, released together
 bench/cluster/submit.sh -m 3 -d airline    # airline (or name single runs, e.g. cuda-hopper-airline)
 bench/cluster/scaling.sh -m 3              # HIGGS with 1, 2, 4, 8, 12, ... 48 threads on epyc1 and dell1
+```
+
+ECBDL'14, each case once. Preparing it needs about 350 GB of RAM, so it runs
+on ampere (1 TB); the benchmarks wait for it (`-a`):
+
+```bash
+ln -s /home/Datasets/ECBDL ~/downloads/ecbdl
+prep=$(sbatch --parsable -p ampere -w ampere --exclusive -c 48 -t 08:00:00 \
+    --export=ALL,PREPARE="ecbdl ecbdl_6m" -o bench/cluster/prepare-ecbdl.log \
+    bench/cluster/prepare.sh ecbdl)
+bench/cluster/submit.sh -d ecbdl_6m -a "$prep"   # all four nodes
+bench/cluster/submit.sh -d ecbdl -a "$prep"      # full: epyc1 and dell1 only
 ```
 
 Then copy `bench/results/cluster-*/` back and draw the charts:
@@ -150,6 +163,19 @@ because its values are short integers. It is cluster-only: the CUDA backend
 needs 23.6 GB of GPU memory for it, more than the laptop's 8 GB or a 2080 Ti's 11 GB.
 `ActualElapsedTime` partly gives the delay away, so its accuracy says little;
 it is there to compare speed, as in gbm-bench.
+
+`ecbdl.csv` is ECBDL'14 (protein contact-map prediction, the GECCO 2014 big
+data competition) from the ARFF in mordor3's `/home/Datasets/ECBDL` (60.8 GB):
+31,992,921 rows, 631 features, label 0/1 (about 2% contacts). The 539 real
+attributes become float32; the 92 nominal ones (predicted secondary structure
+H/E/C, solvent accessibility 0–4, X where the window runs past the chain) become
+integer codes in sorted order, as airline's airports. Its 20.2 G values are 65×
+HIGGS's (81 GB as float32). `datasets.toml` sets 100,000 random rows aside as
+the test set and writes no YaDT files. The CUDA backend needs 16 bytes per value
+(20 for C4.5, which keeps the values for its pruning), about 320 GB for the full
+set, so the GPUs get `ecbdl_6m`: a random 6M of the training rows (3.8 G values,
+about 76 GB with C4.5's copy). The pre-converted `.bin` files under
+`/home/Datasets/IMM` lack the label and the nominal attributes.
 
 HIGGS's prepared files (`bench/data/higgs/`) have the SHA-256 recorded in
 `plan.json` of `pc-legion-higgs/cpu-pc-higgs` and `pc-legion-higgs/cuda-legion-higgs` (desktop and laptop).
