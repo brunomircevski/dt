@@ -124,11 +124,14 @@ step "3/4 benchmark: full SUSY, pruned CART and C4.5, 1 and all threads, $RUNS r
 # Full SUSY only: no subset runs anywhere, not even a pilot. scikit-learn, rpart
 # and J48 fit one untimed tree on the first 50,000 training rows first (code
 # loading, JIT); a warm-up on all rows would add a whole tree to J48's peak RSS.
+# CPU only: the implementations are named, so ./tree's CUDA build never runs.
+IMPLS=tree,sklearn,rpart,j48,yadt
+[ -z "$TREE_ONLY" ] || IMPLS=tree
 # J48 gets the same 15 GB heap everywhere: the default (half the RAM) would be
 # 250-500 GB on the servers, and the JVM grows its heap before it collects.
 $PY bench/run.py susy --protocols cart_alpha,c45 --threads 1,all --cpus "$CPUS" \
   --reps "$RUNS" --timeout 3600 --warmup-rows 50000 --java-heap 15g \
-  ${TREE_ONLY:+--impls tree} --run-id "$RUN${TREE_ONLY:+/tree-rerun}"
+  --impls "$IMPLS" --run-id "$RUN${TREE_ONLY:+/tree-rerun}"
 
 if [ -n "$TREE_ONLY" ]; then
   # The ./tree rows (runs and footprint) of the rerun replace the old ones.
