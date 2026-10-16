@@ -7,25 +7,30 @@
 #   run.sh pc   [-m N]   the desktop (i7-14700KF): runs here
 #   run.sh epyc [-m N]   mordor3's epyc1 (2x EPYC 9255): on the login node, submits a SLURM job
 #   run.sh dell [-m N]   mordor3's dell1 (2x Xeon Gold 6542Y): the same
+#   run.sh pc -t -m 3    ./tree only, when only ./tree changed (the desktop since 2026-10-16)
 #
-# -m: runs per case (default 1). Every run measures training time, peak memory,
-# tree size and accuracy in the same process. Then bench/vs_others_chart.py draws
-# all machines in one chart.
+# -m: runs per case (default 1). -t: run ./tree alone into <machine>/tree-rerun,
+# then replace the ./tree rows of <machine>/results.jsonl with its rows and keep
+# the other tools' rows (machine.json -> tree_rerun records it). Every run
+# measures training time, peak memory, tree size and accuracy in the same
+# process. Then bench/vs_others_chart.py draws all machines in one chart.
 
 set -euo pipefail
 MACHINE="${1:-}"
 shift || true
 RUNS=1
-while getopts "m:h" option; do
+TREE_ONLY=
+while getopts "m:th" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
-    *) sed -n '2,12p' "$0"; exit 2 ;;
+    t) TREE_ONLY=-t ;;
+    *) sed -n '2,16p' "$0"; exit 2 ;;
   esac
 done
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 case "$MACHINE" in
   pc|epyc|dell) ;;
-  *) sed -n '2,12p' "$0"; exit 2 ;;
+  *) sed -n '2,16p' "$0"; exit 2 ;;
 esac
 
 # A SLURM job runs a copy of this script: find the directory from where it was submitted.
@@ -51,8 +56,12 @@ fi
 
 if [ -z "${SLURM_JOB_ID:-}" ]; then
   # run.py appends to results.jsonl: never mix two runs in one directory.
-  if [ -e "$OUT/results.jsonl" ]; then
+  if [ -z "$TREE_ONLY" ] && [ -e "$OUT/results.jsonl" ]; then
     echo "$OUT already has results: move them away before running again" >&2
+    exit 1
+  fi
+  if [ -n "$TREE_ONLY" ] && { [ ! -e "$OUT/results.jsonl" ] || [ -e "$OUT/tree-rerun" ]; }; then
+    echo "-t needs $OUT/results.jsonl and no $OUT/tree-rerun" >&2
     exit 1
   fi
   git diff --quiet HEAD -- src bench Makefile && echo "code: committed ($(git rev-parse --short HEAD))" ||
@@ -70,7 +79,7 @@ if [ "$MACHINE" != pc ] && [ -z "${SLURM_JOB_ID:-}" ]; then
   job="$(sbatch --parsable -J "dt-vs-others-$MACHINE" -p "$partition" -w "$node" --exclusive \
     -t "$limit" -o "$OUT/run.log" \
     --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)" \
-    "$SCRIPT" "$MACHINE" -m "$RUNS")"
+    "$SCRIPT" "$MACHINE" -m "$RUNS" $TREE_ONLY)"
   echo "$MACHINE: job $job on $node, log $OUT/run.log"
   exit 0
 fi
@@ -81,7 +90,7 @@ if [ "$MACHINE" = pc ]; then
   if [ -z "${BENCH_INHIBITED:-}" ] && command -v systemd-inhibit >/dev/null; then
     export BENCH_INHIBITED=1
     exec systemd-inhibit --what=idle:sleep:shutdown --who="bench $RUN" \
-      --why="benchmark running" "$SCRIPT" "$MACHINE" -m "$RUNS"
+      --why="benchmark running" "$SCRIPT" "$MACHINE" -m "$RUNS" $TREE_ONLY
   fi
   mkdir -p "$OUT"
   exec > >(trap "" INT; tee -a "$OUT/run.log") 2>&1
@@ -111,14 +120,42 @@ else
   echo "code: $TREE_GIT_DESCRIBE"
 fi
 
-step "3/4 benchmark: full SUSY, pruned CART and C4.5, 1 and all threads, $RUNS run(s) per case"
+step "3/4 benchmark: full SUSY, pruned CART and C4.5, 1 and all threads, $RUNS run(s) per case${TREE_ONLY:+, ./tree only}"
 # Full SUSY only: no subset runs anywhere, not even a pilot. scikit-learn, rpart
 # and J48 fit one untimed tree on the first 50,000 training rows first (code
 # loading, JIT); a warm-up on all rows would add a whole tree to J48's peak RSS.
 # J48 gets the same 15 GB heap everywhere: the default (half the RAM) would be
 # 250-500 GB on the servers, and the JVM grows its heap before it collects.
 $PY bench/run.py susy --protocols cart_alpha,c45 --threads 1,all --cpus "$CPUS" \
-  --reps "$RUNS" --timeout 3600 --warmup-rows 50000 --java-heap 15g --run-id "$RUN"
+  --reps "$RUNS" --timeout 3600 --warmup-rows 50000 --java-heap 15g \
+  ${TREE_ONLY:+--impls tree} --run-id "$RUN${TREE_ONLY:+/tree-rerun}"
+
+if [ -n "$TREE_ONLY" ]; then
+  # The ./tree rows (runs and footprint) of the rerun replace the old ones.
+  $PY - "$OUT" <<'EOF'
+import json, sys
+from pathlib import Path
+out = Path(sys.argv[1])
+rerun = out / "tree-rerun"
+old = [json.loads(line) for line in open(out / "results.jsonl")]
+new = [json.loads(line) for line in open(rerun / "results.jsonl")]
+with open(out / "results.jsonl", "w") as f:
+    for row in [r for r in old if r["impl"] != "tree"] + new:
+        f.write(json.dumps(row) + "\n")
+machine = json.load(open(out / "machine.json"))
+again = json.load(open(rerun / "machine.json"))
+replaced = machine.get("tree_rerun", {}).get("tree_git") or machine["versions"]["tree_git"]
+machine["tree_rerun"] = {
+    "note": "./tree rows rerun on the newer code; the other tools' rows are from the first run",
+    "started": again["started"], "command": again["command"],
+    "tree_git": again["versions"]["tree_git"], "loadavg_at_start": again["loadavg_at_start"],
+    "governors": again["governors"], "reps": again["settings"]["reps"],
+    "replaced_tree_git": replaced}
+json.dump(machine, open(out / "machine.json", "w"), indent=1)
+print(f"replaced the ./tree rows: {sum(r['impl'] == 'tree' for r in old)} old, {len(new)} new")
+EOF
+  rm -r "$OUT/tree-rerun"
+fi
 
 step "4/4 tables and CSV files"
 $PY bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"
