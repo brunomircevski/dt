@@ -264,6 +264,28 @@ def trees(fig, spec, machines):
                         xy=(1, 0.5), va="center", fontsize=8, color=MUTED)
 
 
+def run_counts(machines):
+    """"median of 3 runs, black line: min-max", plus the cases that have another
+    number of runs (e.g. the desktop's other tools, kept from an older run)."""
+    counts = {}
+    for name, data in machines.items():
+        for key, values in data["times"].items():
+            counts.setdefault(len(values), []).append((name, key[2]))
+    usual = max(counts, key=lambda n: len(counts[n]))
+    text = f"median of {usual} runs, black line: min–max" if usual > 1 else "one run"
+    for n, cases in sorted(counts.items()):
+        if n == usual:
+            continue
+        for name in dict.fromkeys(m for m, _ in cases):
+            impls = [B.IMPLS[i]["label"] for i in B.IMPLS if (name, i) in cases]
+            rerun = machines[name]["machine"].get("tree_rerun")
+            when = (f" from {machines[name]['machine']['started'][:10]}, ./tree rerun on "
+                    f"{rerun['started'][:10]}" if rerun else "")
+            text += (f"; {name}'s {', '.join(impls[:-1]) + ' and ' if len(impls) > 1 else ''}"
+                     f"{impls[-1]}: {'one run' if n == 1 else f'{n} runs'}{when}")
+    return text
+
+
 def write_summary(top, machines, out):
     rows = []
     for name in machines:
@@ -296,7 +318,7 @@ def main():
     heights = [layout(machines, p)[1] for p in PROTOCOLS]
     tree_height = 2 + sum(len(B.PROTOCOLS[p]["impls"]) for p in PROTOCOLS)
     pitch = 0.235
-    header, footer = 2.2, 0.85
+    header, footer = 2.2, 1.0
     body = [h * pitch + 0.55 for h in heights] + [tree_height * pitch + 0.55]
     fig = plt.figure(figsize=(16, header + sum(body) + 0.9 + footer))
     inches = fig.get_figheight()
@@ -329,15 +351,13 @@ def main():
     fig.legend(handles=handles, loc="upper left", ncol=len(handles), frameon=False,
                fontsize=9.5, bbox_to_anchor=(x0 - 0.004, 1 - (0.82 + 0.22 * len(machines)) / inches),
                handlelength=1.6, handleheight=1.1, columnspacing=1.6)
-    reps = sorted({d["machine"]["settings"]["reps"] for d in machines.values()})
-    runs = (f"median of {reps[0]} runs, black line: min–max" if reps == [reps[0]] and reps[0] > 1
-            else "one run" if reps == [1] else "median of the runs, black line: min–max")
-    fig.text(x0, 0.6 / inches, f"Bars: {runs}. Training time excludes reading the data; "
+    runs = run_counts(machines)
+    fig.text(x0, 0.75 / inches, f"Bars: {runs}.\nTraining time excludes reading the data; "
              "\"× ./tree\": how many times longer than ./tree on the same machine and thread "
-             "count.\nPeak RSS: the highest resident memory of the training process up to the "
-             "end of training (runtime, data, warm-up, training). scikit-learn, rpart and "
+             "count. Peak RSS: the highest resident memory of the training process up to the "
+             "end of training (runtime, data, warm-up, training).\nscikit-learn, rpart and "
              "Weka J48 build a tree on one thread only, so they have no parallel case. One "
-             "thread is pinned to one core;\nthe parallel case uses every logical CPU of the "
+             "thread is pinned to one core; the parallel case uses every logical CPU of the "
              "machine. Same data files (SHA-256) everywhere.", fontsize=8.2, color=MUTED,
              va="top", linespacing=1.55)
     out = Path(args.out) if args.out else top / "chart.png"
