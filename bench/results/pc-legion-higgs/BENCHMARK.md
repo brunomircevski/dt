@@ -34,7 +34,7 @@ bench/results/pc-legion-higgs/cuda-legion-higgs/run.sh -m 5  # each case 5 times
 
 ## Method
 
-The protocols and measurements of [`cpu-pc-susy-vs-others`](../cpu-pc-susy-vs-others/BENCHMARK.md), ./tree only, on HIGGS:
+The protocols and measurements of [`cpu-susy-vs-others`](../cpu-susy-vs-others/BENCHMARK.md), ./tree only, on HIGGS:
 
 | Backend | Machine | Command | Threads |
 |---|---|---|---|

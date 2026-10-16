@@ -267,11 +267,18 @@ def hardware(machine):
     model = re.sub(r"\(R\)|\(TM\)|\d+th Gen |\s+CPU.*|\s+\d+-Core Processor", "",
                    model.group(1)).strip() \
         if model else "unknown CPU"
+    if model.startswith("INTEL "):  # "INTEL XEON GOLD 6542Y" -> "Intel Xeon Gold 6542Y"
+        model = " ".join(w.capitalize() if w.isalpha() else w for w in model.split())
     p_logical = _cpu_list_count(machine.get("p_cores"))
     e_cores = _cpu_list_count(machine.get("e_cores"))
+    sockets = re.search(r"Socket\(s\):\s+(\d+)", machine.get("lscpu", ""))
+    per_socket = re.search(r"Core\(s\) per socket:\s+(\d+)", machine.get("lscpu", ""))
     if p_logical:
         p_cores = p_logical // 2 if machine.get("smt_active") == "1" else p_logical
         cores = f"{p_cores}P + {e_cores}E cores, "
+    elif sockets and per_socket and int(sockets.group(1)) > 1:
+        model = f"{sockets.group(1)}× {model}"
+        cores = f"{sockets.group(1)} × {per_socket.group(1)} cores, "
     else:
         cores = ""
     cpu = f"{model}, {cores}{machine.get('logical_cpus')} threads"
