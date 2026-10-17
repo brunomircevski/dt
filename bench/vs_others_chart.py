@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """One chart of a benchmark against other implementations run on several
-machines (bench/results/cpu-susy-vs-others/<machine>/): for CART and C4.5,
+machines (bench/results/cluster-susy-vs-others-cpu/<machine>/): for CART and C4.5,
 training time and peak RSS of every implementation on every machine (log
 scales; one thread solid, every CPU hatched), then the trees they built
 (nodes, depth, test accuracy with its 95% interval). Also writes summary.csv
 with every machine's cases.
 
-  bench/.venv/bin/python bench/vs_others_chart.py bench/results/cpu-susy-vs-others \
+  bench/.venv/bin/python bench/vs_others_chart.py bench/results/cluster-susy-vs-others-cpu \
       [--machines pc,epyc,dell] [--out chart.png]
 """
 

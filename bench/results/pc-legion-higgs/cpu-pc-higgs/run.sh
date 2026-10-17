@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ./tree parallel (28 threads) on the desktop (i7-14700KF) on full HIGGS: pruned
-# CART and C4.5 with the protocols of cpu-susy-vs-others, to compare with the laptop's
+# CART and C4.5 with the protocols of cluster-susy-vs-others-cpu, to compare with the laptop's
 # parallel and CUDA runs in cuda-legion-higgs. Everything it writes goes into
 # this directory; ../BENCHMARK.md explains every choice.
 #
@@ -24,7 +24,7 @@ cd "$HERE/../../../.."  # repository root
 PY=bench/.venv/bin/python
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 
-# All 28 logical CPUs of the i7-14700KF, in the order of cpu-susy-vs-others.
+# All 28 logical CPUs of the i7-14700KF, in the order of cluster-susy-vs-others-cpu.
 CPUS=2,0,1,3-27
 
 # run.py appends to results.jsonl: never mix two runs in one directory.

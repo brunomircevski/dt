@@ -6,17 +6,17 @@ One directory per benchmark: `<backend>-<machine>-<dataset>/`.
 - **machine:** a short name for the computer. `pc` is the i7-14700KF desktop (8 performance + 12 efficiency cores, 28 threads); `legion` is the laptop with an i7-13650HX (6 + 8 cores, 20 threads) and an RTX 5070 Laptop GPU (8 GB).
   The desktop's and laptop's HIGGS runs are grouped in `pc-legion-higgs/`. The mordor3 cluster's runs are grouped in `cluster-*/` directories, named after its nodes. Two GPU servers run CUDA only: `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402). Two CPU servers run parallel only: `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y). Their scripts are in [bench/cluster/](../cluster/README.md), not in a `run.sh`.
 - **dataset:** the `bench/datasets.toml` entry, e.g. `susy` for the full SUSY dataset, `higgs`.
-- **`-vs-others`:** the directory also runs other implementations (sklearn, rpart, Weka J48, YaDT) next to ./tree: `cpu-susy-vs-others`, which has no machine in its name because it holds three, one subdirectory each (`pc`, `epyc`, `dell`). Every other directory is ./tree only.
+- **`-vs-others`:** the directory also runs other implementations (sklearn, rpart, Weka J48, YaDT) next to ./tree: `cluster-susy-vs-others-cpu`, which has no machine in its name because it holds three, one subdirectory each (`pc`, `epyc`, `dell`). Every other directory is ./tree only.
 
 Each directory holds a `run.sh` that runs that benchmark and writes all of its results into the same directory:
 
 ```bash
 bench/results/cpu-pc-susy-scaling/run.sh          # each case once
 bench/results/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
-bench/results/cpu-susy-vs-others/run.sh pc -m 3   # its run.sh takes the machine: pc, epyc or dell
+bench/results/cluster-susy-vs-others-cpu/run.sh pc -m 3   # its run.sh takes the machine: pc, epyc or dell
 ```
 
-`BENCHMARK.md` next to it describes the method, and the results once the run is done. `run.sh` refuses to run where results already exist, so move them away to run again. When only ./tree changed, a run that also holds other tools can keep their rows: `cpu-susy-vs-others/run.sh <machine> -t` runs ./tree alone into a subdirectory and replaces the ./tree rows of `results.jsonl` with its rows (`machine.json` → `tree_rerun` records it; `report.py` and the charts show the rerun's date).
+`BENCHMARK.md` next to it describes the method, and the results once the run is done. `run.sh` refuses to run where results already exist, so move them away to run again. When only ./tree changed, a run that also holds other tools can keep their rows: `cluster-susy-vs-others-cpu/run.sh <machine> -t` runs ./tree alone into a subdirectory and replaces the ./tree rows of `results.jsonl` with its rows (`machine.json` → `tree_rerun` records it; `report.py` and the charts show the rerun's date).
 
 ## The benchmarks
 
@@ -26,7 +26,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 
 | Directory | What | Main result |
 |---|---|---|
-| [`cpu-susy-vs-others`](cpu-susy-vs-others/BENCHMARK.md) | full SUSY (4.5M training rows): ./tree against scikit-learn, rpart (CART) and Weka J48, YaDT (C4.5), on one thread and on every CPU of the desktop (28 threads), epyc1 and dell1 (48 each); one chart for all three | On one thread ./tree is 68–180× faster than the CART libraries and 20–147× faster than the C4.5 ones (4.6 s against 412–900 s for CART). On every CPU it builds the trees in 0.49–1.19 s, 28–52× faster than YaDT (31–34 s). It has the lowest memory for C4.5. |
+| [`cluster-susy-vs-others-cpu`](cluster-susy-vs-others-cpu/BENCHMARK.md) | full SUSY (4.5M training rows): ./tree against scikit-learn, rpart (CART) and Weka J48, YaDT (C4.5), on one thread and on every CPU of the desktop (28 threads), epyc1 and dell1 (48 each); one chart for all three | On one thread ./tree is 68–180× faster than the CART libraries and 20–147× faster than the C4.5 ones (4.6 s against 412–900 s for CART). On every CPU it builds the trees in 0.49–1.19 s, 28–52× faster than YaDT (31–34 s). It has the lowest memory for C4.5. |
 
 **./tree alone on the desktop and laptop** (2026-10-10, commit 49b7f47 or e809e97, one run per case):
 
@@ -54,7 +54,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 
 ## A new machine
 
-1. Copy a directory and rename it for the machine, e.g. `cpu-server-susy-scaling`. (`cpu-susy-vs-others` instead takes a new machine as a case in its `run.sh`.)
+1. Copy a directory and rename it for the machine, e.g. `cpu-server-susy-scaling`. (`cluster-susy-vs-others-cpu` instead takes a new machine as a case in its `run.sh`.)
 2. In its `run.sh`, adjust `--cpus` to that machine's CPU numbering:
    - the first CPU listed runs the 1-thread cases and should be a fast core;
    - `--threads 1,all` uses every CPU listed.

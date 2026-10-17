@@ -7,11 +7,11 @@
 ## Run it
 
 ```bash
-bench/results/cpu-susy-vs-others/run.sh pc -m 3      # on the desktop
-bench/results/cpu-susy-vs-others/run.sh epyc -m 3    # on mordor3's login node: submits a whole-node SLURM job
-bench/results/cpu-susy-vs-others/run.sh dell -m 3
-bench/results/cpu-susy-vs-others/run.sh pc -t -m 3   # ./tree only, keeping the other tools' rows
-bench/.venv/bin/python bench/vs_others_chart.py bench/results/cpu-susy-vs-others   # chart.png, summary.csv
+bench/results/cluster-susy-vs-others-cpu/run.sh pc -m 3      # on the desktop
+bench/results/cluster-susy-vs-others-cpu/run.sh epyc -m 3    # on mordor3's login node: submits a whole-node SLURM job
+bench/results/cluster-susy-vs-others-cpu/run.sh dell -m 3
+bench/results/cluster-susy-vs-others-cpu/run.sh pc -t -m 3   # ./tree only, keeping the other tools' rows
+bench/.venv/bin/python bench/vs_others_chart.py bench/results/cluster-susy-vs-others-cpu   # chart.png, summary.csv
 ```
 
 - **Time:** with `-m 3`, about 2 h on epyc1 and 2¾ h on dell1; ./tree alone takes a minute. Per run on full SUSY: J48 14–22 min, rpart 6–15 min, scikit-learn 7–9 min, YaDT 2–3.5 min (1 thread) or ~30 s (all threads), ./tree 1–11 s.

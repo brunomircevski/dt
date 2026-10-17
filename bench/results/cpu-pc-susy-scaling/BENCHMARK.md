@@ -31,12 +31,12 @@ bench/results/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
 
 ## Method
 
-Only ./tree runs here: this is a scaling study, not a comparison with other tools (that is `cpu-susy-vs-others`).
+Only ./tree runs here: this is a scaling study, not a comparison with other tools (that is `cluster-susy-vs-others-cpu`).
 
 - **Protocols:** pruned CART and C4.5 with the settings of the other benchmarks, but **no depth limit for either**:
   - `cart_alpha_nodepth`: CART, cost-complexity pruning at the fixed α = 1e-5, no depth limit;
   - `c45`: C4.5, error-based pruning, CF 0.25, min 2 rows, no depth limit (the same protocol as the other benchmarks).
-- **Why CART differs from the comparison benchmarks:** there, every CART tool stops at depth 30 because rpart cannot grow deeper (`rpart.control` refuses `maxdepth > 30`). Only ./tree runs here, so nothing needs the cap. As a result the CART tree here can be deeper than `cart_alpha`'s, and its 1- and 28-thread times are not the same measurement as in `cpu-susy-vs-others`. C4.5 is the same protocol in both, so its points are.
+- **Why CART differs from the comparison benchmarks:** there, every CART tool stops at depth 30 because rpart cannot grow deeper (`rpart.control` refuses `maxdepth > 30`). Only ./tree runs here, so nothing needs the cap. As a result the CART tree here can be deeper than `cart_alpha`'s, and its 1- and 28-thread times are not the same measurement as in `cluster-susy-vs-others-cpu`. C4.5 is the same protocol in both, so its points are.
 - **Still two algorithms:** CART and C4.5 differ in split criterion, leaf size and pruning, so the chart shows how each scales, not the same work done two ways.
 - **Data:** full SUSY, published split: 4,500,000 training rows, 500,000 test rows, 18 features.
 - **Thread counts:** 1, 2, 4, 8, 12, 16, 20, 24, 28.

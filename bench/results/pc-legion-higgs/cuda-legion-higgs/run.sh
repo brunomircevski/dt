@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ./tree on the Legion laptop (i7-13650HX, RTX 5070 Laptop GPU) on full HIGGS:
 # parallel (20 threads) and CUDA (GPU + 20 CPU threads), pruned CART and C4.5
-# with the protocols of cpu-susy-vs-others, to compare with the desktop's parallel run
+# with the protocols of cluster-susy-vs-others-cpu, to compare with the desktop's parallel run
 # in cpu-pc-higgs. Everything it writes goes into this directory;
 # ../BENCHMARK.md explains every choice.
 #

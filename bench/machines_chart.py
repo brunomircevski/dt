@@ -11,7 +11,7 @@ Refuses to draw when the runs did not read the same data (SHA-256 of the
 prepared files in plan.json) or did not build the same trees.
 
   bench/.venv/bin/python bench/machines_chart.py bench/results/cuda-legion-susy \\
-      --reference bench/results/cpu-susy-vs-others/pc  # -> cuda-legion-susy/chart.png
+      --reference bench/results/cluster-susy-vs-others-cpu/pc  # -> cuda-legion-susy/chart.png
 
 --more adds the cases of later runs kept in another directory under the same
 run names (e.g. cluster-ecbdl/unpruned/cpu-epyc-ecbdl next to

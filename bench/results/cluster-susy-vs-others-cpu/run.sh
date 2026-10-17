@@ -35,7 +35,7 @@ esac
 
 # A SLURM job runs a copy of this script: find the directory from where it was submitted.
 if [ -n "${SLURM_JOB_ID:-}" ]; then
-  HERE="$SLURM_SUBMIT_DIR/bench/results/cpu-susy-vs-others"
+  HERE="$SLURM_SUBMIT_DIR/bench/results/cluster-susy-vs-others-cpu"
 else
   HERE="$(cd "$(dirname "$0")" && pwd)"
 fi
