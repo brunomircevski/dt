@@ -5,8 +5,8 @@ cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 
 - [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows)
 - [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees
-- [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS with 1 to 48 threads on the two CPU nodes
-- [`bench/results/cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md): ECBDL'14 (631 features): a 6M-row sample on all four nodes, the full 32M rows on the CPU nodes
+- [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS and airline with 1 to 48 threads on the two CPU nodes
+- [`bench/results/cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md): ECBDL'14 (631 features): a 6M-row sample on all four nodes, the full 32M rows on the CPU nodes, both also on dell2 (512 GB); pruned and unpruned CART, C4.5
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
 only, the CPU nodes (epyc1, dell1) parallel only:** a GPU node's CPU is
@@ -37,6 +37,7 @@ sbatch --export=ALL,PREPARE=airline -t 02:00:00 -o bench/cluster/prepare-airline
 bench/cluster/submit.sh -m 3               # HIGGS: four jobs, one per node, released together
 bench/cluster/submit.sh -m 3 -d airline    # airline (or name single runs, e.g. cuda-hopper-airline)
 bench/cluster/scaling.sh -m 3              # HIGGS with 1, 2, 4, 8, 12, ... 48 threads on epyc1 and dell1
+bench/cluster/scaling.sh -m 3 -d airline   # the same on airline
 ```
 
 ECBDL'14, each case once. Preparing it needs about 350 GB of RAM, so it runs
@@ -60,9 +61,11 @@ for d in higgs:higgs airlines:airline; do
       $dir/cuda-hopper-$data $dir/cuda-ampere-$data $dir/cpu-epyc-$data $dir/cpu-dell-$data \
       --out $dir/chart.png
 done
-for node in epyc dell; do  # the scaling charts, one per node
+for node in epyc dell; do  # the scaling charts, one per node and dataset
   bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling/cpu-$node-higgs \
       --out bench/results/cluster-cpu-scaling/chart-$node.png
+  bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling/cpu-$node-airline \
+      --out bench/results/cluster-cpu-scaling/chart-$node-airline.png
 done
 ```
 
