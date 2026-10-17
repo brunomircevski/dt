@@ -10,7 +10,7 @@
 #   sbatch --export=ALL,PREPARE=airline -t 02:00:00 \
 #       -o bench/cluster/prepare-airline.log bench/cluster/prepare.sh airline
 #   sbatch -p ampere -w ampere --exclusive -c 48 -t 08:00:00 \
-#       --export=ALL,PREPARE="ecbdl ecbdl_6m" -o bench/cluster/prepare-ecbdl.log \
+#       --export=ALL,PREPARE="ecbdl ecbdl_15m" -o bench/cluster/prepare-ecbdl.log \
 #       bench/cluster/prepare.sh ecbdl
 #
 #SBATCH -J dt-prepare

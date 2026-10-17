@@ -76,18 +76,19 @@ test_rows = 500_000
 # 631 features (92 nominal ones as integer codes), label 0/1 (~2% contacts).
 # Made from the ARFF by bench/cluster/make_datasets.py; cluster-only. The test
 # rows are only set aside (the cluster runs measure training alone), so no
-# YaDT files: they would copy the 70 GB training CSV. ecbdl_6m is a random 6M
-# of ecbdl's training rows: the most that fits on an 80 GB GPU (16 bytes per
-# value for CART, 20 for C4.5 with its values kept for pruning).
+# YaDT files: they would copy the 70 GB training CSV. ecbdl_15m is a random
+# 15M of ecbdl's training rows (the first 15M of ecbdl's shuffled training
+# rows): about the most that fits on an 80 GB GPU, which needs 8 bytes per value
+# (one copy of the presorted columns) plus one spare column.
 [ecbdl]
 source = "datasets/ecbdl.csv"
 split = "random"
 test_rows = 100_000
 yadt = false
 
-[ecbdl_6m]
+[ecbdl_15m]
 source = "datasets/ecbdl.csv"
 split = "random"
 test_rows = 100_000
-train_rows = 6_000_000
+train_rows = 15_000_000
 yadt = false

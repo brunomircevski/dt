@@ -21,9 +21,9 @@
 #   bench/cluster/submit.sh -m 3 cuda-hopper-higgs   # only the named runs
 #   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned \
 #       -o cluster-airlines/noprunning               # unpruned trees
-#   bench/cluster/submit.sh -d ecbdl_6m -a 1234  # ECBDL'14, 6M rows, after job 1234
+#   bench/cluster/submit.sh -d ecbdl_15m -a 1234 # ECBDL'14, 15M rows, after job 1234
 #   bench/cluster/submit.sh -d ecbdl             # full ECBDL'14: CPU nodes only (no GPU
-#                                                # has the 320 GB it needs)
+#                                                # has the 160 GB it needs)
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well.
@@ -50,9 +50,9 @@ case "$DATASET" in
   higgs) DIR=cluster-higgs; LIMIT=01:00:00 TIMEOUT=3600 ;;
   airline) DIR=cluster-airlines; LIMIT=04:00:00 TIMEOUT=3600 ;;
   # ECBDL: the dell partition allows at most 12 hours.
-  ecbdl_6m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
+  ecbdl_15m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
   ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
-  *) echo "-d: higgs, airline, ecbdl_6m or ecbdl" >&2; exit 2 ;;
+  *) echo "-d: higgs, airline, ecbdl_15m or ecbdl" >&2; exit 2 ;;
 esac
 DIR="${OUTDIR:-$DIR}"
 
@@ -69,7 +69,7 @@ JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda"
       "cpu-epyc-$DATASET     epyc       epyc1   tree"
       "cpu-dell-$DATASET     dell       dell1   tree")
 
-# Full ECBDL needs about 320 GB of GPU memory: CPU nodes only.
+# Full ECBDL needs about 160 GB of GPU memory: CPU nodes only.
 if [ "$DATASET" = ecbdl ]; then
   JOBS=("${JOBS[@]:2}")
 fi

@@ -6,7 +6,7 @@ cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 - [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows)
 - [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees
 - [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS and airline with 1 to 48 threads on the two CPU nodes
-- [`bench/results/cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md): ECBDL'14 (631 features): a 6M-row sample on all four nodes, the full 32M rows on the CPU nodes, both also on dell2 (512 GB); pruned and unpruned CART, C4.5
+- [`bench/results/cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md): ECBDL'14 (631 features): a 15M-row sample on all four nodes, the full 32M rows on the CPU nodes, both also on dell2 (512 GB); pruned and unpruned CART, C4.5
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
 only, the CPU nodes (epyc1, dell1) parallel only:** a GPU node's CPU is
@@ -46,9 +46,9 @@ on ampere (1 TB); the benchmarks wait for it (`-a`):
 ```bash
 ln -s /home/Datasets/ECBDL ~/downloads/ecbdl
 prep=$(sbatch --parsable -p ampere -w ampere --exclusive -c 48 -t 08:00:00 \
-    --export=ALL,PREPARE="ecbdl ecbdl_6m" -o bench/cluster/prepare-ecbdl.log \
+    --export=ALL,PREPARE="ecbdl ecbdl_15m" -o bench/cluster/prepare-ecbdl.log \
     bench/cluster/prepare.sh ecbdl)
-bench/cluster/submit.sh -d ecbdl_6m -a "$prep"   # all four nodes
+bench/cluster/submit.sh -d ecbdl_15m -a "$prep"  # all four nodes
 bench/cluster/submit.sh -d ecbdl -a "$prep"      # full: epyc1 and dell1 only
 ```
 
@@ -170,7 +170,7 @@ stops on any SHA-256 difference:
 Airline has 10.5× HIGGS's rows and 4.9× its values (1.49 G against 0.31 G;
 6.0 GB as float32 against 1.2 GB). Its CSV is smaller than HIGGS's only
 because its values are short integers. It is cluster-only: the CUDA backend
-needs 23.6 GB of GPU memory for it, more than the laptop's 8 GB or a 2080 Ti's 11 GB.
+needs 13.3 GiB of GPU memory for it, more than the laptop's 8 GB or a 2080 Ti's 11 GB.
 `ActualElapsedTime` partly gives the delay away, so its accuracy says little;
 it is there to compare speed, as in gbm-bench.
 
@@ -181,10 +181,11 @@ attributes become float32; the 92 nominal ones (predicted secondary structure
 H/E/C, solvent accessibility 0–4, X where the window runs past the chain) become
 integer codes in sorted order, as airline's airports. Its 20.2 G values are 65×
 HIGGS's (81 GB as float32). `datasets.toml` sets 100,000 random rows aside as
-the test set and writes no YaDT files. The CUDA backend needs 16 bytes per value
-(20 for C4.5, which keeps the values for its pruning), about 320 GB for the full
-set, so the GPUs get `ecbdl_6m`: a random 6M of the training rows (3.8 G values,
-about 76 GB with C4.5's copy). `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
+the test set and writes no YaDT files. The CUDA backend needs 8 bytes per value
+(one copy of the presorted columns, plus one spare column), about 160 GB for the
+full set, so the GPUs get `ecbdl_15m`: a random 15M of the training rows (9.5 G
+values, about 72 GiB of GPU memory). Until 2026-10-17 the GPU needed 16 bytes per
+value and the sample had 6M rows. `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
 `5bc39aec…` (first build). Log: `prepare-ecbdl.log`. The pre-converted `.bin` files under
 `/home/Datasets/IMM` lack the label and the nominal attributes.
 
