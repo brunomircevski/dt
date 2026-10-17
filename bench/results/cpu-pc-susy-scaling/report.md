@@ -1,6 +1,6 @@
 ## cpu-pc-susy-scaling
 
-**cpu-pc-susy-scaling**: Intel(R) Core(TM) i7-14700KF, 28 logical CPUs (P-cores 0-15, E-cores 16-27), 31 GiB, Linux 7.2.9-arch1-1 #1 SMP PREEMPT_DYNAMIC Sat, 03 Oct 2026 11:43:28 +0000 x86_64, governor performance, turbo on, ./tree 49b7f472da08-dirty, CPUs in order of use 2,4,6,8,10,12,14,0,16-27,3,5,7,9,11,13,15,1, 1 run(s) per case, warm-up 50000 rows
+**cpu-pc-susy-scaling**: Intel(R) Core(TM) i7-14700KF, 28 logical CPUs (P-cores 0-15, E-cores 16-27), 31 GiB, Linux 7.2.9-arch1-1 #1 SMP PREEMPT_DYNAMIC Sat, 03 Oct 2026 11:43:28 +0000 x86_64, governor performance, turbo on, ./tree 49b7f472da08-dirty, CPUs in order of use 2,4,6,8,10,12,14,0,16-27,3,5,7,9,11,13,15,1, 1 run(s) per case, warm-up 50000 rows; ./tree's one-thread cases rerun on 2026-10-17 (./tree 3bd3a4651449)
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 7 MiB
 
@@ -10,7 +10,7 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 7 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 7.06 s | 7.06 s–7.06 s | 1.00× | 1.19 GiB | 1.18 GiB | 723 | 362 | 19 | 79.68% | 79.65% |
+| ./tree | 4.67 s | 4.67 s–4.67 s | 1.00× | 1.61 GiB | 1.61 GiB | 723 | 362 | 19 | 79.68% | 79.65% |
 
 **CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 2 threads
 
@@ -64,7 +64,7 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 7 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 6.17 s | 6.17 s–6.17 s | 1.00× | 1.43 GiB | 1.43 GiB | 15,113 | 7,557 | 38 | 80.67% | 79.74% |
+| ./tree | 5.88 s | 5.88 s–5.88 s | 1.00× | 1.77 GiB | 1.76 GiB | 15,113 | 7,557 | 38 | 80.67% | 79.74% |
 
 **C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 2 threads
 

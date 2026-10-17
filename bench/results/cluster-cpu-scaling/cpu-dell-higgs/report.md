@@ -1,6 +1,6 @@
 ## cpu-dell-higgs
 
-**cpu-dell-higgs**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 1007 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree 8da0c121e041-dirty, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**cpu-dell-higgs**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 1007 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree 8da0c121e041-dirty, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows; ./tree's one-thread cases rerun on 2026-10-17 (./tree 3bd3a4651449)
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
 
@@ -10,7 +10,7 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 29.3 s | 29.3 s–29.3 s | 1.00× | 3.66 GiB | 3.65 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 25.7 s | 25.5 s–26.1 s | 1.00× | 5.69 GiB | 5.68 GiB | 1,611 | 806 | 19 | 71.79% |  |
 
 **CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 2 threads
 
@@ -94,7 +94,7 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 54.4 s | 54.4 s–54.5 s | 1.00× | 3.99 GiB | 3.99 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 54 s | 53.9 s–54.2 s | 1.00× | 6.02 GiB | 6.01 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
 
 **C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 2 threads
 

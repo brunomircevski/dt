@@ -1,6 +1,6 @@
 ## cpu-epyc-higgs
 
-**cpu-epyc-higgs**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2 x86_64, governor performance, turbo on, ./tree 8da0c121e041-dirty, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**cpu-epyc-higgs**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2 x86_64, governor performance, turbo on, ./tree 8da0c121e041-dirty, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows; ./tree's one-thread cases rerun on 2026-10-17 (./tree 3bd3a4651449)
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
 
@@ -10,7 +10,7 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 15.3 s | 15.3 s–15.3 s | 1.00× | 3.66 GiB | 3.65 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 18.2 s | 18.1 s–18.2 s | 1.00× | 5.69 GiB | 5.68 GiB | 1,611 | 806 | 19 | 71.79% |  |
 
 **CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 2 threads
 
@@ -94,7 +94,7 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 30.5 s | 30.5 s–30.5 s | 1.00× | 3.99 GiB | 3.99 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 37.8 s | 37.8 s–37.9 s | 1.00× | 6.02 GiB | 6.01 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
 
 **C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 2 threads
 

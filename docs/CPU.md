@@ -187,7 +187,8 @@ without it and partitioned every node in place, through a byte per row
 (`goesLeft`). On airline's 115M rows the serial build then used 1.7× the CPU
 time of a 2-thread parallel build on epyc1 (171 s against 103 s), probably
 because the 115 MB byte array misses the caches where the parallel build's
-14 MB bitmap does not.
+14 MB bitmap does not. Making serial use the copy sped serial airline up 1.3–1.9×; on epyc1 it
+slowed HIGGS and SUSY by 6–19% ([PERFORMANCE.md](PERFORMANCE.md)).
 The sweep's
 tables of `c·log2 c` and `1/c` take another `16 · n` bytes for training sets
 of 65536 rows or more (smaller counts use shared tables).

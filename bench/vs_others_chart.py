@@ -283,6 +283,13 @@ def run_counts(machines):
                     f"{rerun['started'][:10]}" if rerun else "")
             text += (f"; {name}'s {', '.join(impls[:-1]) + ' and ' if len(impls) > 1 else ''}"
                      f"{impls[-1]}: {'one run' if n == 1 else f'{n} runs'}{when}")
+    reruns = {name: data["machine"]["serial_rerun"]["started"][:10]
+              for name, data in machines.items() if data["machine"].get("serial_rerun")}
+    if reruns:  # bench/serial_rerun.py
+        dates = set(reruns.values())
+        text += (f"; ./tree's one-thread cases rerun on {dates.pop()}" if len(dates) == 1 else
+                 "; ./tree's one-thread cases rerun on "
+                 + ", ".join(f"{date} ({name})" for name, date in reruns.items()))
     return text
 
 

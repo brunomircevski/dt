@@ -2,6 +2,8 @@
 
 **Status:** run on 2026-10-10 at 19:11, one run per point, commit 49b7f47 (replacing the 2026-10-09 run on commit 93f2c03), `performance` governor. The load average at the start (8.5 / 2.9 / 1.6) is the benchmarks run just before it on this PC, which had ended; nothing else was running. `machine.json` says `-dirty` only because other benchmarks' result files were being replaced at the time; the code was committed.
 
+**1 thread rerun on 2026-10-17** (`bench/serial_rerun.py`, commit 3bd3a46, one run per case): `--serial` now runs the parallel backend's algorithm, big nodes partitioned out of place ([docs/CPU.md](../../../docs/CPU.md)). Serial CART 7.06 → 4.67 s, C4.5 6.17 → 5.88 s, peak RSS 1.2 → 1.6 GiB (CART). **The 2–28-thread points are still the 2026-10-10 run (commit 49b7f47)**, so the speedups below compare today's serial code with older parallel code; most of the serial gain (CART) comes from changes between the two commits, not from the out-of-place partition, which leaves SUSY's serial time unchanged ([cluster-susy-vs-others-cpu](../cluster-susy-vs-others-cpu/BENCHMARK.md): 4.63 → 4.53 s on this PC). Rerun every point to read the speedups.
+
 ## Run it
 
 ```bash
@@ -64,17 +66,17 @@ The i7-14700KF has 8 performance cores with 2 hardware threads each (logical CPU
 
 | Threads | CART time | speedup | C4.5 time | speedup |
 |--:|--:|--:|--:|--:|
-| 1 (serial) | 7.06 s | 1.0× | 6.17 s | 1.0× |
-| 2 | 3.79 s | 1.9× | 3.40 s | 1.8× |
-| 4 | 2.12 s | 3.3× | 2.01 s | 3.1× |
-| 8 | 1.35 s | 5.2× | 1.31 s | 4.7× |
-| 12 | 1.12 s | 6.3× | 1.20 s | 5.2× |
-| 16 | 1.04 s | 6.8× | 1.18 s | 5.2× |
-| 20 | 0.99 s | 7.1× | 1.20 s | 5.2× |
-| 24 | 0.96 s | 7.4× | 1.20 s | 5.1× |
-| 28 | 0.96 s | 7.4× | 1.17 s | 5.3× |
+| 1 (serial) | 4.67 s | 1.0× | 5.88 s | 1.0× |
+| 2 | 3.79 s | 1.2× | 3.40 s | 1.7× |
+| 4 | 2.12 s | 2.2× | 2.01 s | 2.9× |
+| 8 | 1.35 s | 3.5× | 1.31 s | 4.5× |
+| 12 | 1.12 s | 4.1× | 1.20 s | 4.9× |
+| 16 | 1.04 s | 4.5× | 1.18 s | 5.0× |
+| 20 | 0.99 s | 4.7× | 1.20 s | 4.9× |
+| 24 | 0.96 s | 4.9× | 1.20 s | 4.9× |
+| 28 | 0.96 s | 4.9× | 1.17 s | 5.0× |
 
 - **Same trees:** CART 723 nodes, C4.5 15,113 nodes at every thread count (and the same as on 2026-10-09).
-- **Shape:** near-linear up to 4 threads; beyond that the big nodes are bound by memory bandwidth (a STREAM-style triad reaches 36 GB/s on this PC). CART keeps gaining a little through the E-cores (1.35 s at 8 threads, 0.99 s at 20), C4.5 flattens at 12, and the SMT siblings (21–28) add almost nothing.
-- **Against the first run (commit 93f2c03):** 1.23–1.44× faster at every point (CART 10.06 → 7.06 s serial, 1.20 → 0.96 s on 28 threads; C4.5 7.59 → 6.17 s and 1.52 → 1.17 s).
-- **Memory:** the parallel backend keeps a second copy of the columns for the out-of-place partition, so from 2 threads on the peak RSS is a constant ~1.85 GB (CART) and ~2.13 GB (C4.5) instead of growing with the threads' buffers; the serial run needs 1.27 and 1.54 GB.
+- **Shape** (as measured on 2026-10-10 against that day's serial time: 1.9× at 2 threads, 3.3× at 4, 7.4× at 28 for CART): near-linear up to 4 threads; beyond that the big nodes are bound by memory bandwidth (a STREAM-style triad reaches 36 GB/s on this PC). CART keeps gaining a little through the E-cores (1.35 s at 8 threads, 0.99 s at 20), C4.5 flattens at 12, and the SMT siblings (21–28) add almost nothing.
+- **Against the first run (commit 93f2c03),** as of 2026-10-10: 1.23–1.44× faster at every point (CART 10.06 → 7.06 s serial, 1.20 → 0.96 s on 28 threads; C4.5 7.59 → 6.17 s and 1.52 → 1.17 s).
+- **Memory:** the parallel backend keeps a second copy of the columns for the out-of-place partition, so from 2 threads on the peak RSS is a constant ~1.85 GB (CART) and ~2.13 GB (C4.5) instead of growing with the threads' buffers. Since the rerun the serial backend keeps that copy too: 1.73 GB (CART) and 1.90 GB (C4.5), 1.27 and 1.54 GB before.

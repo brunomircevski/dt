@@ -130,7 +130,9 @@ def machine_line(run_dir):
             f"{settings.get('warmup_rows')} rows"
             + (f"; ./tree cases rerun on {info['tree_rerun']['started'][:10]}, the other tools' "
                f"rows are from {info['started'][:10]} (./tree {info['tree_rerun']['replaced_tree_git']} then)"
-               if info.get("tree_rerun") else ""))
+               if info.get("tree_rerun") else "")
+            + (f"; ./tree's one-thread cases rerun on {info['serial_rerun']['started'][:10]} "
+               f"(./tree {info['serial_rerun']['tree_git']})" if info.get("serial_rerun") else ""))
 
 
 def table(cases):

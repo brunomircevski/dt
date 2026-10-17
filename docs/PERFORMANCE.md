@@ -2,6 +2,34 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: the serial backend runs the parallel algorithm
+
+Until 2026-10-17 `--serial` kept no second copy of the columns, so it
+partitioned every node in place, through a byte per row, while `--parallel`
+partitioned big nodes (≥ 32768 rows) out of place through a bitmap and swept
+the big children during the partition. Now both do the latter (commit
+4b1ced0); serial differs only in running on one thread (plain bit operations
+instead of atomics). Same trees everywhere. One-thread `./tree` rows of the
+benchmarks were rerun with `bench/serial_rerun.py` (median of 3, the same
+nodes):
+
+| Serial | epyc1 | dell1 | desktop |
+|---|--:|--:|--:|
+| airline CART | 148.5 → 76.4 s (1.94×) | 204.7 → 128.1 s (1.60×) | – |
+| airline C4.5 | 250.6 → 178.6 s (1.40×) | 338.3 → 264.1 s (1.28×) | – |
+| HIGGS CART | 15.3 → 18.2 s (0.84×) | 29.3 → 25.7 s (1.14×) | – |
+| HIGGS C4.5 | 30.5 → 37.8 s (0.81×) | 54.4 → 54.0 s (1.01×) | – |
+| SUSY CART | 4.68 → 4.98 s (0.94×) | 7.97 → 6.84 s (1.16×) | 4.63 → 4.53 s (1.02×) |
+| SUSY C4.5 | 5.83 → 6.77 s (0.86×) | 10.75 → 9.06 s (1.19×) | 5.99 → 5.90 s (1.01×) |
+
+* Airline (115M rows) gains most: the old byte per row (115 MB) misses the
+  caches, the bitmap (14 MB) does not.
+* On epyc, HIGGS and SUSY got 6–19% slower (HIGGS CART's build 13.55 →
+  16.25 s; three runs within 0.05 s). Not investigated; one candidate is the
+  non-temporal stores of the out-of-place partition, tuned for many threads.
+* Memory: a serial run now holds the second copy too (`8 · F · n` bytes):
+  HIGGS 3.7 → 5.7 GiB, airline 20.4 → 29.0 GiB.
+
 ## October 2026: profiling airline with Nsight Systems (mordor3 cluster)
 
 Commit `35cf315` (before) against this work (after), on airline, same nodes

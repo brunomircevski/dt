@@ -111,5 +111,17 @@
   "reps": 3,
   "timeout": 3600.0,
   "cooldown": 0
+ },
+ "serial_rerun": {
+  "note": "./tree's one-thread (serial) rows rerun after --serial got the parallel backend's out-of-place partition; the other rows are from the earlier run",
+  "started": "2026-10-17T13:13:20+02:00",
+  "command": "/home/bmircevski/dt/bench/.venv/bin/python /home/bmircevski/dt/bench/run.py susy --protocols cart_alpha,c45 --threads 1 --cpus 0-47 --reps 3 --timeout 3600 --warmup-rows 50000 --java-heap 15g --impls tree --run-id cluster-susy-vs-others-cpu/dell/serial-rerun --no-baseline",
+  "tree_git": "3bd3a4651449",
+  "loadavg_at_start": "11.87 12.62 9.96 1/928 130437",
+  "governors": [
+   "powersave"
+  ],
+  "reps": 3,
+  "replaced_rows": 6
  }
 }

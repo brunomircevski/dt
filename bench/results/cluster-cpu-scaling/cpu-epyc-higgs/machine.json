@@ -121,5 +121,17 @@
   "reps": 3,
   "timeout": 3600.0,
   "cooldown": 0
+ },
+ "serial_rerun": {
+  "note": "./tree's one-thread (serial) rows rerun after --serial got the parallel backend's out-of-place partition; the other rows are from the earlier run",
+  "started": "2026-10-17T12:42:49+02:00",
+  "command": "/home/bmircevski/dt/bench/.venv/bin/python /home/bmircevski/dt/bench/run.py higgs --protocols cart_alpha_nodepth,c45 --impls tree --threads 1 --cpus 0-47 --reps 3 --timeout 3600 --run-id cluster-cpu-scaling/cpu-epyc-higgs/serial-rerun --train-accuracy-only --no-baseline",
+  "tree_git": "3bd3a4651449",
+  "loadavg_at_start": "0.00 0.00 0.00 1/980 249733",
+  "governors": [
+   "performance"
+  ],
+  "reps": 3,
+  "replaced_rows": 6
  }
 }

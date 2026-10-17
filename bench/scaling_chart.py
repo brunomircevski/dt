@@ -155,6 +155,9 @@ def figure(run, dataset, protocols, series, machine, out):
                  fontweight="bold")
     reps = settings.get("reps")
     runs = f"median of {reps} runs, bar: min–max" if reps and reps > 1 else "one run per point"
+    rerun = machine.get("serial_rerun")
+    if rerun:  # bench/serial_rerun.py
+        runs += f" (1 thread rerun on {rerun['started'][:10]})"
     fig.text(0.08, 0.015,
              f"Dot: {runs}. 1 thread = the serial backend, more = the parallel backend;\n"
              "every thread count builds the same tree. Training time excludes reading the data;\n"

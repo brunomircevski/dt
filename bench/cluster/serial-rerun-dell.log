@@ -1,0 +1,71 @@
+job 531 on dell1, 2026-10-17_12:42:49, tree_cpu 2026-10-17 12:42:48.740533164 +0200
+
+== cluster-cpu-scaling/cpu-dell-higgs 12:42:49 load 0.00 0.00 0.09
+2 cases, 6 processes:
+  higgs | cart_alpha_nodepth | tree | 1
+  higgs | c45 | tree | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  higgs: identical in every format (11 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 6 processes. Time left is shown once every case has run once.
+[1/6] 12:43:01 run 1/3: CART ./tree, 1 thread, higgs ...
+    ok: train 26.05 s, peak 5,827 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m33s, elapsed 0m33s
+[2/6] 12:43:34 run 1/3: C4.5 ./tree, 1 thread, higgs ...
+    ok: train 53.88 s, peak 6,164 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 1m03s, elapsed 1m36s, about 3m13s left
+[3/6] 12:44:38 run 2/3: CART ./tree, 1 thread, higgs ...
+    ok: train 25.72 s, peak 5,827 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m32s, elapsed 2m09s, about 2m39s left
+[4/6] 12:45:11 run 2/3: C4.5 ./tree, 1 thread, higgs ...
+    ok: train 54.17 s, peak 6,164 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 1m03s, elapsed 3m13s, about 1m36s left
+[5/6] 12:46:14 run 3/3: C4.5 ./tree, 1 thread, higgs ...
+    ok: train 54 s, peak 6,164 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 1m03s, elapsed 4m16s, about 0m33s left
+[6/6] 12:47:18 run 3/3: CART ./tree, 1 thread, higgs ...
+    ok: train 25.45 s, peak 5,827 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m32s, elapsed 4m49s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-cpu-scaling/cpu-dell-higgs/serial-rerun/results.jsonl
+bench/results/cluster-cpu-scaling/cpu-dell-higgs: replaced 6 serial ./tree rows with 6 new ones
+
+== cluster-cpu-scaling/cpu-dell-airline 12:47:51 load 8.41 5.91 2.70
+2 cases, 6 processes:
+  airline | cart_alpha_nodepth | tree | 1
+  airline | c45 | tree | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  airline: identical in every format (31 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 6 processes. Time left is shown once every case has run once.
+[1/6] 12:48:23 run 1/3: CART ./tree, 1 thread, airline ...
+    ok: train 128.4 s, peak 29,650 MiB, 3,013 nodes, depth 25, train acc 71.54% | process 2m38s, elapsed 2m38s
+[2/6] 12:51:01 run 1/3: C4.5 ./tree, 1 thread, airline ...
+    ok: train 264.9 s, peak 33,424 MiB, 8,548,725 nodes, depth 72, train acc 87.42% | process 5m41s, elapsed 8m19s, about 16m38s left
+[3/6] 12:56:42 run 2/3: CART ./tree, 1 thread, airline ...
+    ok: train 128.1 s, peak 29,650 MiB, 3,013 nodes, depth 25, train acc 71.54% | process 2m37s, elapsed 10m56s, about 13m59s left
+[4/6] 12:59:20 run 2/3: C4.5 ./tree, 1 thread, airline ...
+    ok: train 264.1 s, peak 33,386 MiB, 8,548,725 nodes, depth 72, train acc 87.42% | process 5m40s, elapsed 16m37s, about 8m18s left
+[5/6] 13:05:01 run 3/3: C4.5 ./tree, 1 thread, airline ...
+    ok: train 264.1 s, peak 33,423 MiB, 8,548,725 nodes, depth 72, train acc 87.42% | process 5m40s, elapsed 22m17s, about 2m37s left
+[6/6] 13:10:41 run 3/3: CART ./tree, 1 thread, airline ...
+    ok: train 128.1 s, peak 29,650 MiB, 3,013 nodes, depth 25, train acc 71.54% | process 2m37s, elapsed 24m55s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-cpu-scaling/cpu-dell-airline/serial-rerun/results.jsonl
+bench/results/cluster-cpu-scaling/cpu-dell-airline: replaced 6 serial ./tree rows with 6 new ones
+
+== cluster-susy-vs-others-cpu/dell 13:13:19 load 11.87 12.62 9.96
+2 cases, 6 processes:
+  susy | cart_alpha | tree | 1
+  susy | c45 | tree | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy: identical in every format (3 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 6 processes. Time left is shown once every case has run once.
+[1/6] 13:13:23 run 1/3: CART ./tree, 1 thread, susy ...
+    ok: train 6.837 s, peak 1,652 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m08s, elapsed 0m10s
+[2/6] 13:13:34 run 1/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 9.097 s, peak 1,812 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m11s, elapsed 0m23s, about 0m40s left
+[3/6] 13:13:47 run 2/3: CART ./tree, 1 thread, susy ...
+    ok: train 6.86 s, peak 1,651 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m08s, elapsed 0m34s, about 0m31s left
+[4/6] 13:13:58 run 2/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 8.992 s, peak 1,813 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m11s, elapsed 0m47s, about 0m20s left
+[5/6] 13:14:11 run 3/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 9.063 s, peak 1,812 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m11s, elapsed 1m01s, about 0m08s left
+[6/6] 13:14:25 run 3/3: CART ./tree, 1 thread, susy ...
+    ok: train 6.842 s, peak 1,652 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m08s, elapsed 1m11s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-susy-vs-others-cpu/dell/serial-rerun/results.jsonl
+bench/results/cluster-susy-vs-others-cpu/dell: replaced 6 serial ./tree rows with 6 new ones
+done 2026-10-17_13:14:35
