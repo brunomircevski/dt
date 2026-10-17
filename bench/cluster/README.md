@@ -67,6 +67,9 @@ for node in epyc dell; do  # the scaling charts, one per node and dataset
   bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling/cpu-$node-airline \
       --out bench/results/cluster-cpu-scaling/chart-$node-airline.png
 done
+s=bench/results/cluster-cpu-scaling  # all four in a 2x2 grid
+bench/.venv/bin/python bench/grid_chart.py $s/chart-epyc.png $s/chart-dell.png \
+    $s/chart-epyc-airline.png $s/chart-dell-airline.png --out $s/chart.png
 ```
 
 The unpruned airline run and its chart:
