@@ -28,7 +28,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 
 | Directory | What | Main result |
 |---|---|---|
-| [`cluster-susy-vs-others-cpu`](cluster-susy-vs-others-cpu/BENCHMARK.md) | full SUSY (4.5M training rows): ./tree against scikit-learn, rpart (CART) and Weka J48, YaDT (C4.5), on one thread and on every CPU of the desktop (28 threads), epyc1 and dell1 (48 each); one chart for all three | On one thread ./tree is 80–168× faster than the CART libraries and 21–150× faster than the C4.5 ones (4.5–6.8 s against 412–900 s for CART). On every CPU it builds the trees in 0.47–1.19 s, 28–51× faster than YaDT (31–34 s). It has the lowest memory for C4.5. ./tree's rows on epyc and dell rerun on cd18717 (one copy of the columns: 1.04–1.20 GiB on one thread). |
+| [`cluster-susy-vs-others-cpu`](cluster-susy-vs-others-cpu/BENCHMARK.md) | full SUSY (4.5M training rows): ./tree against scikit-learn, rpart (CART) and Weka J48, YaDT (C4.5), on one thread and on every CPU of the desktop (28 threads), epyc1 and dell1 (48 each); one chart for all three | On one thread ./tree is 80–168× faster than the CART libraries and 22–150× faster than the C4.5 ones (4.4–6.8 s against 412–900 s for CART). On every CPU it builds the trees in 0.47–1.18 s, 28–51× faster than YaDT (31–34 s). It has the lowest memory for C4.5. ./tree's rows on all three machines rerun on cd18717 (one copy of the columns: 1.04–1.20 GiB on one thread). |
 
 **./tree alone on the desktop and laptop** (2026-10-10, commit 49b7f47 or e809e97, one run per case):
 
