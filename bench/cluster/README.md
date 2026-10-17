@@ -186,7 +186,7 @@ the test set and writes no YaDT files. The CUDA backend needs 8 bytes per value
 full set, so the GPUs get `ecbdl_15m`: a random 15M of the training rows (9.5 G
 values, about 72 GiB of GPU memory). Until 2026-10-17 the GPU needed 16 bytes per
 value and the sample had 6M rows. `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
-`5bc39aec…` (first build). Log: `prepare-ecbdl.log`. The pre-converted `.bin` files under
+`5bc39aec…` (first build). Logs: `prepare-ecbdl.log` (the full set; it also made the earlier 6M sample), `prepare-ecbdl_15m.log` (the 15M sample, `bench/prepare.py ecbdl_15m` alone in a job on dell3). The pre-converted `.bin` files under
 `/home/Datasets/IMM` lack the label and the nominal attributes.
 
 HIGGS's prepared files (`bench/data/higgs/`) have the SHA-256 recorded in

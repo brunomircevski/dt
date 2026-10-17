@@ -47,8 +47,16 @@ mordor3 nodes; before = 66bd66c.
 * `--parallel` keeps `min(F − 1, threads)` spare slots by default, so that a
   big node moves all its columns at once, one per thread, with the children's
   sweeps fused in: memory drops only where the features outnumber the threads
-  (airline: 6%; ECBDL's 631 features on 48 threads would need 679 instead of
-  1262 slots). `--spare-slots N` trades speed for memory (CPU.md).
+  (airline: 6%; ECBDL's 631 features on 48 threads need 678 slots instead of
+  1262). `--spare-slots N` trades speed for memory (CPU.md).
+* The cluster benchmarks were rerun on cd18717 (2026-10-17,
+  [bench/results/](../bench/results/README.md)): the same trees everywhere,
+  times within a few percent of the previous runs. Full ECBDL'14 on the CPU
+  servers needs 237 GiB instead of 375 GiB; its GPU sample grew from 6M to 15M
+  rows, which fill 73.5 GiB of the 80 GB GPUs as 6M did before. A same-job
+  comparison on the A100 (old and new binary interleaved, 5 runs): pruned
+  HIGGS CART 0.50 → 0.51 s, C4.5 1.19 → 1.16 s, airline CART 1.60 → 1.63 s,
+  C4.5 5.91 → 5.90 s.
 
 ## October 2026: the serial backend runs the parallel algorithm
 

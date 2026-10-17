@@ -114,3 +114,63 @@ results: /home/bmircevski/dt/bench/results/cpu-susy-vs-others/dell/results.jsonl
 === 00:48:26  4/4 tables and CSV files
 done 2026-10-17 00:48:27: /home/bmircevski/dt/bench/results/cpu-susy-vs-others/dell
 when all machines are done: bench/.venv/bin/python bench/vs_others_chart.py /home/bmircevski/dt/bench/results/cpu-susy-vs-others
+
+=== ./tree rerun (run.sh dell -t -m 3), 2026-10-17
+log: /home/bmircevski/dt/bench/results/cluster-susy-vs-others-cpu/dell/run.log, dell1, job 621, started 2026-10-17 19:59:33
+
+=== 19:59:33  1/4 machine check
+warning: CPU governor is 'powersave ', not performance
+load average: 36.05 24.14 21.28
+CPUs: 0-47 (48 available), 1 thread on CPU 0
+runs per case: 3
+
+=== 19:59:33  2/4 tools (built on the login node)
+code: cd187178dd26-dirty
+
+=== 19:59:33  3/4 benchmark: full SUSY, pruned CART and C4.5, 1 and all threads, 3 run(s) per case, ./tree only
+4 cases, 15 processes:
+  susy | cart_alpha | tree | 1
+  susy | cart_alpha | tree | 48
+  susy | c45 | tree | 1
+  susy | c45 | tree | 48
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy: identical in every format (3 s)
+4 cases x 3 run(s), then 1 footprint run(s) x 3: 15 processes. Time left is shown once every case has run once.
+[1/15] 19:59:37 run 1/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 8.93 s, peak 1,230 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m11s, elapsed 0m13s
+[2/15] 19:59:51 run 1/3: CART ./tree, 1 thread, susy ...
+    ok: train 6.824 s, peak 1,069 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m08s, elapsed 0m23s
+[3/15] 20:00:01 run 1/3: CART ./tree, 48 threads, susy ...
+    ok: train 0.4709 s, peak 1,631 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m25s
+[4/15] 20:00:03 run 1/3: C4.5 ./tree, 48 threads, susy ...
+    ok: train 0.7001 s, peak 1,881 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m29s, about 0m43s left
+[5/15] 20:00:06 run 2/3: CART ./tree, 1 thread, susy ...
+    ok: train 6.782 s, peak 1,069 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m08s, elapsed 0m39s, about 0m34s left
+[6/15] 20:00:16 run 2/3: CART ./tree, 48 threads, susy ...
+    ok: train 0.483 s, peak 1,632 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m41s, about 0m33s left
+[7/15] 20:00:18 run 2/3: C4.5 ./tree, 48 threads, susy ...
+    ok: train 0.6347 s, peak 1,906 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m44s, about 0m32s left
+[8/15] 20:00:21 run 2/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 8.929 s, peak 1,230 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m11s, elapsed 0m58s, about 0m21s left
+[9/15] 20:00:35 run 3/3: CART ./tree, 1 thread, susy ...
+    ok: train 6.797 s, peak 1,070 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m08s, elapsed 1m08s, about 0m12s left
+[10/15] 20:00:45 run 3/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 8.88 s, peak 1,231 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m11s, elapsed 1m21s, about 0m01s left
+[11/15] 20:00:59 run 3/3: CART ./tree, 48 threads, susy ...
+    ok: train 0.5069 s, peak 1,631 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 1m23s, about 0m00s left
+[12/15] 20:01:01 run 3/3: C4.5 ./tree, 48 threads, susy ...
+    ok: train 0.7675 s, peak 1,891 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 1m27s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[13/15] 20:01:04 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0008 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m27s, about 0m00s left
+[14/15] 20:01:04 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0008 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m27s, about 0m00s left
+[15/15] 20:01:04 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0007 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m27s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-susy-vs-others-cpu/dell/tree-rerun/results.jsonl
+replaced the ./tree rows: 15 old, 15 new
+
+=== 20:01:04  4/4 tables and CSV files
+done 2026-10-17 20:01:04: /home/bmircevski/dt/bench/results/cluster-susy-vs-others-cpu/dell
+when all machines are done: bench/.venv/bin/python bench/vs_others_chart.py /home/bmircevski/dt/bench/results/cluster-susy-vs-others-cpu

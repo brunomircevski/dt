@@ -1,13 +1,13 @@
 # HIGGS and airline on the mordor3 GPUs: ./tree against other GPU decision-tree builders
 
-**Status:** run on 2026-10-17, 3 runs per case. ./tree is at commit 00ae13f, built for sm_80 and sm_90 in a separate clone (`~/gpu-dt-bench/dt`). Both GPU servers ran CUDA only, on GPU 0, with the whole node held through `--exclusive`. **One unpruned tree with depth ≤ 19 per case, CART and C4.5, on HIGGS and on airline.** 19 is the depth of ./tree's pruned CART tree on HIGGS. Each library runs with its default bins, its faster setting; the earlier 1024-bin runs were slower and agreed with ./tree only 1–2 points more.
+**Status:** run on 2026-10-17, 3 runs per case. The libraries ran from 12:44 with ./tree at commit 00ae13f; **./tree's rows were rerun at 17:54 on cd18717** (one copy of the presorted columns on the GPU, [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), built for sm_80 and sm_90 in a separate clone (`~/gpu-dt-bench/dt`). The trees are the same as before, node for node; `machine.json` → `tree_rerun` records the rerun. Both GPU servers ran CUDA only, on GPU 0, with the whole node held through `--exclusive`. **One unpruned tree with depth ≤ 19 per case, CART and C4.5, on HIGGS and on airline.** 19 is the depth of ./tree's pruned CART tree on HIGGS. Each library runs with its default bins, its faster setting; the earlier 1024-bin runs were slower and agreed with ./tree only 1–2 points more.
 
 **Bottom line:** ./tree is the fastest single-tree GPU builder found, and the only one with exact splits.
-- **Against cuML (the fastest of the others):** 2.2–2.5× faster on HIGGS and 2.4–3.2× faster on airline, for CART and for C4.5 against cuML's entropy tree.
+- **Against cuML (the fastest of the others):** 2.2–2.4× faster on HIGGS and 2.4–3.2× faster on airline, for CART and for C4.5 against cuML's entropy tree.
 - **Against XGBoost (CART only):** 12–15× faster.
 - **CART test accuracy is the same within 0.3 points.** The histogram trees classify 83–91% of test rows the same as ./tree's exact tree.
 - **C4.5 is a different algorithm from cuML's entropy tree.** ./tree's C4.5 (gain ratio) builds a smaller tree at the same depth limit, with 1.2–3.1 points lower test accuracy (below).
-- **Memory:** ./tree uses the most GPU memory: 7.2 GiB on HIGGS and 35 GiB on airline, against 1.9–2.9 GiB and 9.5–13 GiB for the libraries.
+- **Memory:** ./tree uses 3.3–3.4 GiB on HIGGS and 13.3 GiB on airline, against 1.9–2.9 GiB and 9.5–13 GiB for the libraries: 1.8× cuML on HIGGS, 1.3–1.4× cuML and about the same as XGBoost on airline. Before the rerun it used 7.2 and 35 GiB.
 
 ![HIGGS: CART and C4.5 per GPU library, depth 19](chart-higgs.png)
 
@@ -24,7 +24,7 @@ I found no public CUDA implementation of C4.5. The GPU C4.5 papers (CUDT, GPU C4
 
 | Implementation | Version | How it builds one tree |
 |---|---|---|
-| **./tree --cuda** | 00ae13f | `--cart --no-prune -d 19`: exact Gini splits over every distinct value (presorted). `--c45 --no-prune -d 19`: Quinlan's C4.5 rules (docs/ALGORITHMS.md), without the error-based pruning. |
+| **./tree --cuda** | cd18717 | `--cart --no-prune -d 19`: exact Gini splits over every distinct value (presorted). `--c45 --no-prune -d 19`: Quinlan's C4.5 rules (docs/ALGORITHMS.md), without the error-based pruning. |
 | **cuML** `RandomForestClassifier` | 26.10 (RAPIDS, pip `cuml-cu12`) | `n_estimators=1, bootstrap=False, max_features=1.0, n_bins=128` (default). CART: `split_criterion="gini"`, `min_samples_leaf=1`. C4.5: `"entropy"`, `min_samples_leaf=2, min_samples_split=4`. Thresholds are per-feature quantiles. |
 | **XGBoost** | 3.4.1, `device="cuda", tree_method="hist"` | One round of `reg:squarederror` on the 0/1 label with `eta=1, lambda=0, alpha=0, gamma=0, min_child_weight=1`, `base_score` = the class-1 share. Every row has hessian 1, so the gain is the drop in squared error, which is n/2 × the drop in Gini impurity: **the CART split, on histogram bins** (`max_bin` 256, the default). `depthwise` growth to the depth limit. |
 | CudaTree | 0.6 (2013) | **Not run.** It is Python 2 code, and its kernels use texture references, which CUDA 12 removed. |
@@ -62,7 +62,7 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
 
 | Implementation | H100 time | A100 time | Nodes | Depth | Train acc. | Test acc. | Same as ./tree | VRAM H100 | VRAM A100 | Root split |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|
-| ./tree CART (exact Gini) | 0.39 s (0.39–0.39) | 0.48 s (0.46–0.54) | 302,341 | 19 | 77.85% | 71.74% | – | 7.20 GiB | 7.16 GiB | `f25 <= 1.077748` |
+| ./tree CART (exact Gini) | 0.39 s (0.39–0.41) | 0.50 s (0.47–0.50) | 302,341 | 19 | 77.85% | 71.74% | – | 3.37 GiB | 3.33 GiB | `f25 <= 1.077748` |
 | cuML RF, Gini, 128 bins | 0.94 s (0.88–1.89) | 1.08 s (1.07–2.09) | 342,393 | 19 | 77.78% | 71.70% | 83.12% | 1.85 GiB | 1.91 GiB | `f25 <= 1.080328` |
 | XGBoost, squared error, 256 bins | 5.41 s (5.13–5.70) | 6.02 s (5.99–6.16) | 319,733 | 19 | 77.79% | 71.64% | 83.95% | 2.90 GiB | 2.86 GiB | `f25 < 1.075816` |
 
@@ -70,14 +70,14 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
 
 | Implementation | H100 time | A100 time | Nodes | Depth | Train acc. | Test acc. | Same as ./tree | VRAM H100 | VRAM A100 | Root split |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|
-| ./tree C4.5 (exact gain ratio) | 0.35 s (0.35–0.37) | 0.47 s (0.46–0.47) | 84,695 | 19 | 70.43% | 68.65% | – | 7.17 GiB | 7.13 GiB | `f25 <= 1.837873` |
+| ./tree C4.5 (exact gain ratio) | 0.36 s (0.36–0.37) | 0.44 s (0.44–0.44) | 84,695 | 19 | 70.43% | 68.65% | – | 3.34 GiB | 3.30 GiB | `f25 <= 1.837873` |
 | cuML RF, entropy, 128 bins | 0.87 s (0.87–1.76) | 1.03 s (1.03–2.02) | 292,477 | 19 | 76.73% | 71.76% | 76.72% | 1.85 GiB | 1.91 GiB | `f25 <= 1.080328` |
 
 ### airline: CART, depth ≤ 19
 
 | Implementation | H100 time | A100 time | Nodes | Depth | Train acc. | Test acc. | Same as ./tree | VRAM H100 | VRAM A100 | Root split |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|
-| ./tree CART (exact Gini) | 1.37 s (1.35–1.38) | 1.95 s (1.92–2.02) | 621,689 | 19 | 75.31% | 74.88% | – | 34.99 GiB | 34.95 GiB | `f8 <= 70.5` |
+| ./tree CART (exact Gini) | 1.38 s (1.36–1.39) | 1.97 s (1.96–1.99) | 621,689 | 19 | 75.31% | 74.88% | – | 13.33 GiB | 13.30 GiB | `f8 <= 70.5` |
 | cuML RF, Gini, 128 bins | 4.23 s (4.20–8.23) | 4.67 s (4.67–8.56) | 655,631 | 19 | 75.00% | 74.59% | 86.80% | 9.99 GiB | 9.45 GiB | `f8 <= 70` |
 | XGBoost, squared error, 256 bins | 20.40 s (20.21–20.58) | 24.69 s (24.54–24.85) | 641,161 | 19 | 75.20% | 74.76% | 90.80% | 13.00 GiB | 12.96 GiB | `f8 < 71` |
 
@@ -85,15 +85,15 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
 
 | Implementation | H100 time | A100 time | Nodes | Depth | Train acc. | Test acc. | Same as ./tree | VRAM H100 | VRAM A100 | Root split |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|
-| ./tree C4.5 (exact gain ratio) | 1.30 s (1.29–1.32) | 1.87 s (1.86–1.87) | 190,337 | 19 | 73.15% | 73.02% | – | 34.96 GiB | 34.92 GiB | `f8 <= 70` |
+| ./tree C4.5 (exact gain ratio) | 1.32 s (1.31–1.32) | 1.89 s (1.88–1.96) | 190,337 | 19 | 73.15% | 73.02% | – | 13.30 GiB | 13.27 GiB | `f8 <= 70` |
 | cuML RF, entropy, 128 bins | 4.18 s (4.12–6.88) | 4.59 s (4.58–8.55) | 555,457 | 19 | 74.58% | 74.26% | 84.98% | 9.47 GiB | 9.95 GiB | `f8 <= 70` |
 
 ## Observations
 
 - **./tree is the fastest in every case, and the gap grows with the data.**
-  - **CART, H100:** HIGGS 0.39 s against 0.94 s for cuML (2.4×) and 5.41 s for XGBoost (13.8×). Airline 1.37 s against 4.23 s (3.1×) and 20.4 s (14.9×).
+  - **CART, H100:** HIGGS 0.39 s against 0.94 s for cuML (2.4×) and 5.41 s for XGBoost (13.8×). Airline 1.38 s against 4.23 s (3.1×) and 20.4 s (14.8×).
   - **CART, A100:** 2.2× and 12.4× on HIGGS, 2.4× and 12.7× on airline.
-  - **C4.5 against cuML's entropy tree:** 2.2–2.5× on HIGGS and 2.5–3.2× on airline.
+  - **C4.5 against cuML's entropy tree:** 2.3–2.4× on HIGGS and 2.4–3.2× on airline.
 - **CART: same accuracy, different trees.**
   - **Test accuracy:** HIGGS 71.64–71.74% for every tree, airline 74.59–74.88%. ./tree's exact tree is the most accurate on both, by at most 0.3 points.
   - **Tree size:** about the same. HIGGS gives 302,341 nodes for ./tree and 319,733–342,393 for the others; airline gives 621,689 against 641,161–655,631.
@@ -104,10 +104,11 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
   - **The reason is C4.5's own rules.** Gain ratio prefers uneven splits: on HIGGS its root is `f25 <= 1.837873`, against 1.08 for every Gini and entropy tree. Uneven splits use up the 19 levels on few rows. C4.5's minimum split size (up to 25 rows per side) and its collapse of useless splits stop it earlier still. Without the depth limit C4.5 grows deeper (depth 74 on airline, [cluster-airlines](../cluster-airlines/BENCHMARK.md)).
   - **Agreement:** the two trees agree on only 77% (HIGGS) and 85% (airline) of test rows.
   - **Timing still compares the same amount of data.** Every case reads the same rows, and ./tree's smaller C4.5 tree takes about as long as its CART tree.
-- **Memory:** ./tree peaks at 7.2 GiB on HIGGS and 35 GiB on airline. It holds two copies of the presorted columns, plus extra buffers when the GPU has room ([cluster-airlines](../cluster-airlines/BENCHMARK.md)). cuML uses 1.9 and 9.5–10 GiB, XGBoost 2.9 and 13 GiB.
+- **Memory:** ./tree peaks at 3.3–3.4 GiB on HIGGS and 13.3 GiB on airline: one copy of the presorted columns (8 bytes per value) plus one spare column, a 512 MB hand-off ring and the CUDA context ([docs/CUDA.md](../../../docs/CUDA.md)). cuML uses 1.9 and 9.5–10 GiB, XGBoost 2.9 and 13 GiB. The libraries split on histogram bins and keep no presorted columns, so they need less; ./tree keeps every exact value with its row.
+- **Against ./tree on 00ae13f** (the libraries' run, earlier the same day): the GPU memory peak fell from 7.2 to 3.4 GiB (HIGGS) and from 35.0 to 13.3 GiB (airline), 53–62% less, with the same trees. Times moved within −5% to +3% (H100 HIGGS CART 0.39 → 0.39 s, A100 HIGGS C4.5 0.47 → 0.44 s, H100 airline CART 1.37 → 1.38 s and C4.5 1.30 → 1.32 s).
 - **H100 against A100:** ./tree is 1.2–1.3× faster on the H100 on HIGGS and 1.4× on airline. The libraries are 1.1–1.2× faster on it.
 - **First-run cost:** cuML's first full-size fit in each process took 0.9–4 s longer (max column), probably because its memory pool grows past the 50k-row warm-up size. The medians leave it out.
-- **Against the previous run** (35cf315, 2026-10-15, HIGGS CART depth 19 only): ./tree went from 0.42 to 0.39 s on the H100 and from 0.58 to 0.48 s on the A100. cuML (0.96 → 0.94 s) and XGBoost (5.08 → 5.41 s) did not change beyond noise. Its GPU memory peak went from 5.0 to 7.2 GiB; the cause was not looked into.
+- **Against the previous run** (35cf315, 2026-10-15, HIGGS CART depth 19 only): ./tree went from 0.42 to 0.39 s on the H100 and from 0.58 to 0.48 s on the A100. cuML (0.96 → 0.94 s) and XGBoost (5.08 → 5.41 s) did not change beyond noise. Its GPU memory peak went from 5.0 to 7.2 GiB: the GPU kept a mirror of the hand-offs to the host when it had room. The rerun on cd18717 replaced that mirror with a fixed 512 MB ring.
 
 ## Run it
 
@@ -117,7 +118,7 @@ Everything runs on mordor3 in `~/gpu-dt-bench`, outside this repository. Every c
 # on the mordor3 login node: a clone at the measured commit, the venv, the sources
 mkdir ~/gpu-dt-bench && cd ~/gpu-dt-bench
 cp /path/to/scripts/* .                      # build.sh job.sh gpubench.py treebench.py summarize.py
-git clone ~/dt dt && git -C dt checkout 00ae13f
+git clone ~/dt dt && git -C dt checkout cd18717   # the libraries' rows: 00ae13f
 /usr/bin/virtualenv -p python3 venv          # python3-venv is missing on mordor3
 venv/bin/pip install --extra-index-url=https://pypi.nvidia.com cuml-cu12 xgboost matplotlib
 sbatch build.sh                              # ./tree for sm_80 + sm_90

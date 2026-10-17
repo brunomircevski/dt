@@ -1,0 +1,9 @@
+job 587 on dell3 2026-10-17 17:42:12
+ecbdl_15m: 15,000,000 train / 100,000 test rows, 631 features, 2 classes (1389.2 s)
+8c89cb38f7e0675858912eeda7e4190f42aba3c7d931b38f0e0ea7cbac5ccf23  bench/data/ecbdl_15m/meta.json
+5ee9cb4a9934262bd203fa2504a1e8e369041fa480fa20c9b742a43393e4a919  bench/data/ecbdl_15m/test.f32
+a812cf274fd39342c17a71711ade719a97d6566b0d36d080f2174336ec4de9a0  bench/data/ecbdl_15m/test.y.i32
+15dfc382d9b45632b24661d42375d2ced1edf212597e209f4eed5f0c98c9d6f1  bench/data/ecbdl_15m/train.csv
+88b582bbae700c53a8743c22cf8978eebada7da676b240f837c3157b49669f52  bench/data/ecbdl_15m/train.f32
+469a385a35b9b612009e59416172f1808e18dc7740d9f146ee28c93950254270  bench/data/ecbdl_15m/train.y.i32
+2026-10-17 18:06:04

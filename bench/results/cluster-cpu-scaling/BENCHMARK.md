@@ -1,10 +1,8 @@
 # Thread scaling on the mordor3 CPU servers: ./tree with 1 to 48 threads on HIGGS and airline
 
-**Status:** HIGGS run on 2026-10-15, 3 runs per point, at commit 8da0c12 (GPU hand-off and C4.5 changes, parallel presort: [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), with ./tree's defaults (the fastest settings found on these servers). `machine.json` says `-dirty` only because the previous result files had been removed from the cluster's checkout for the rerun; the code was committed.
-- **epyc1:** 23:26–23:35.
-- **dell1:** 23:27–23:41.
-- **Airline** (`cpu-epyc-airline`, `cpu-dell-airline`): run on 2026-10-17, 3 runs per point, at commit 6c7a43b (the same ./tree code and binaries as 8da0c12). epyc1 10:11–11:08, dell1 10:11–11:37.
-- **One-thread points rerun on 2026-10-17** (`bench/serial_rerun.py`, commit 3bd3a46, 3 runs each): since then `--serial` runs the parallel backend's algorithm, with big nodes partitioned out of place ([docs/CPU.md](../../../docs/CPU.md)). The other points are from the runs above; `machine.json` → `serial_rerun` records it, and the old serial times are in the table below. Logs: `bench/cluster/serial-rerun-{epyc,dell}.log`.
+**Status:** run on 2026-10-17, 3 runs per point, at commit cd18717: the columns are kept once, in column slots, with min(features − 1, threads) spare slots (one for `--serial`) instead of a second copy of every column ([docs/CPU.md](../../../docs/CPU.md)); ./tree's defaults otherwise (the fastest settings found on these servers). `machine.json` says `-dirty` only because the previous result files had been removed from the cluster's checkout for the rerun; the code was committed.
+- **HIGGS:** epyc1 17:51–18:00, dell1 17:52–18:05.
+- **Airline:** epyc1 18:00–18:48, dell1 18:05–19:24.
 - **Each node ran alone** and was used whole.
 - **Same trees:** every thread count built the same tree on both nodes, the same as in [cluster-higgs](../cluster-higgs/BENCHMARK.md).
 
@@ -34,23 +32,14 @@ All four charts in one image (HIGGS above airline, epyc left, dell right):
 
 ![Thread scaling on epyc1 and dell1, HIGGS and airline](chart.png)
 
-### The serial rerun
+### Against the previous runs
 
-| Serial (1 thread), median of 3 | before (in place) | now (out of place) | change |
-|---|--:|--:|--:|
-| epyc HIGGS CART | 15.32 s | 18.16 s | 0.84× |
-| epyc HIGGS C4.5 | 30.50 s | 37.82 s | 0.81× |
-| dell HIGGS CART | 29.31 s | 25.72 s | 1.14× |
-| dell HIGGS C4.5 | 54.43 s | 54.00 s | 1.01× |
-| epyc airline CART | 148.54 s | 76.38 s | **1.94×** |
-| epyc airline C4.5 | 250.61 s | 178.63 s | **1.40×** |
-| dell airline CART | 204.67 s | 128.09 s | **1.60×** |
-| dell airline C4.5 | 338.34 s | 264.14 s | **1.28×** |
-
-- **Airline gains most:** with 115M rows the old serial path's byte per row (115 MB) does not fit in the caches; the bitmap (14 MB) does.
-- **On epyc HIGGS got slower** (build 13.55 → 16.25 s for CART, the three runs within 0.05 s of each other): out of place on one Zen 5 core costs more than in place for HIGGS's nodes. Why was not investigated; one candidate is the non-temporal stores, tuned for many threads. dell gains or stays level.
-- **Memory:** a serial run now holds the second copy of the columns too, like the parallel ones: HIGGS 3.7 → 5.7 GiB (CART), airline 20.4 → 29.0 GiB.
-- **Speedups changed with the serial times:** every speedup below is over the new serial time.
+The previous runs (HIGGS 2026-10-15 on 8da0c12, airline 2026-10-17 on 6c7a43b, their one-thread points rerun on 3bd3a46 after `--serial` moved to the parallel backend's out-of-place partition) kept a second copy of every column at every thread count.
+- **Memory now grows with the thread count** instead of being constant: a partition needs one free column slot per column it moves at a time, and ./tree keeps min(features − 1, threads) spare slots (1 for `--serial`).
+  - HIGGS (28 features): CART 3.6 GiB serial → 5.6 GiB from 28 threads on, C4.5 3.9 → 6.0 GiB (5.7 and 6.0–6.1 GiB at every count before).
+  - Airline (13 features): CART 19.6 GiB serial → 27.2–28.1 GiB from 12 threads on, C4.5 23.2 → 31.3–32.3 GiB (29.0 and 32.6–33.2 GiB before).
+- **Times are within ±4% at almost every point,** on both nodes and both datasets. Exceptions: epyc's serial C4.5 got faster (HIGGS 37.82 → 36.16 s, airline 178.63 → 170.88 s), and epyc HIGGS C4.5 at 8 threads slower (5.52 → 5.94 s).
+- **The same trees** at every point, as before.
 
 ## HIGGS
 
@@ -58,35 +47,32 @@ Training time, median of 3 runs, and speedup over 1 thread:
 
 | Threads | epyc CART | speedup | epyc C4.5 | speedup | dell CART | speedup | dell C4.5 | speedup |
 |--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| 1 (serial) | 18.16 s | 1.0× | 37.82 s | 1.0× | 25.72 s | 1.0× | 54.00 s | 1.0× |
-| 2 | 9.50 s | 1.9× | 19.01 s | 2.0× | 15.15 s | 1.7× | 31.87 s | 1.7× |
-| 4 | 4.91 s | 3.7× | 9.70 s | 3.9× | 8.72 s | 2.9× | 17.77 s | 3.0× |
-| 8 | 3.01 s | 6.0× | 5.52 s | 6.9× | 4.48 s | 5.7× | 8.70 s | 6.2× |
-| 12 | 2.23 s | 8.1× | 4.03 s | 9.4× | 3.20 s | 8.0× | 6.16 s | 8.8× |
-| 16 | 1.89 s | 9.6× | 3.30 s | 11.5× | 2.47 s | 10.4× | 4.75 s | 11.4× |
-| 20 | 1.66 s | 10.9× | 2.85 s | 13.2× | 2.13 s | 12.1× | 3.91 s | 13.8× |
-| 24 | 1.48 s | 12.3× | 2.52 s | 15.0× | 1.85 s | 13.9× | 3.43 s | 15.7× |
-| 28 | 1.47 s | 12.3× | 2.36 s | 16.0× | 1.74 s | 14.8× | 3.05 s | 17.7× |
-| 32 | 1.47 s | 12.3× | 2.32 s | 16.3× | 1.56 s | 16.5× | 2.77 s | 19.5× |
-| 36 | 1.37 s | 13.2× | 2.13 s | 17.7× | 1.58 s | 16.3× | 2.64 s | 20.5× |
-| 40 | 1.29 s | 14.1× | 1.98 s | 19.1× | 1.42 s | 18.1× | 2.54 s | 21.3× |
-| 44 | 1.23 s | 14.7× | 1.91 s | 19.8× | 1.36 s | 19.0× | 2.36 s | 22.8× |
-| 48 | **1.12 s** | 16.2× | **1.77 s** | 21.3× | 1.26 s | 20.4× | 2.25 s | 24.0× |
+| 1 (serial) | 18.02 s | 1.0× | 36.16 s | 1.0× | 25.68 s | 1.0× | 53.55 s | 1.0× |
+| 2 | 9.52 s | 1.9× | 19.05 s | 1.9× | 15.32 s | 1.7× | 32.61 s | 1.6× |
+| 4 | 4.88 s | 3.7× | 9.70 s | 3.7× | 8.31 s | 3.1× | 17.64 s | 3.0× |
+| 8 | 3.13 s | 5.8× | 5.94 s | 6.1× | 4.51 s | 5.7× | 8.97 s | 6.0× |
+| 12 | 2.19 s | 8.2× | 4.03 s | 9.0× | 3.15 s | 8.1× | 6.19 s | 8.7× |
+| 16 | 1.91 s | 9.4× | 3.32 s | 10.9× | 2.47 s | 10.4× | 4.71 s | 11.4× |
+| 20 | 1.66 s | 10.9× | 2.89 s | 12.5× | 2.16 s | 11.9× | 3.99 s | 13.4× |
+| 24 | 1.47 s | 12.3× | 2.52 s | 14.4× | 1.85 s | 13.8× | 3.57 s | 15.0× |
+| 28 | 1.49 s | 12.1× | 2.39 s | 15.1× | 1.77 s | 14.5× | 3.00 s | 17.8× |
+| 32 | 1.46 s | 12.4× | 2.30 s | 15.7× | 1.51 s | 17.0× | 2.76 s | 19.4× |
+| 36 | 1.33 s | 13.5× | 2.11 s | 17.1× | 1.50 s | 17.1× | 2.54 s | 21.1× |
+| 40 | 1.27 s | 14.2× | 1.97 s | 18.4× | 1.35 s | 19.0× | 2.47 s | 21.7× |
+| 44 | 1.18 s | 15.3× | 1.89 s | 19.2× | 1.32 s | 19.5× | 2.34 s | 22.8× |
+| 48 | **1.15 s** | 15.7× | **1.75 s** | 20.6× | 1.27 s | 20.2× | 2.26 s | 23.7× |
 
 The trees are CART 1,611 nodes (depth 19, training accuracy 71.79%) and C4.5 1,159,295 nodes (depth 71, 87.88%) at every point on both nodes. `scaling.csv` in each run directory has every point with its min–max, efficiency and peak RSS.
 
 ### Observations
 
-- **With all 48 threads epyc is faster:** CART 1.12 against 1.26 s, C4.5 1.77 against 2.25 s.
-- **On one thread dell is slower:** 25.7 against 18.2 s (CART) and 54.0 against 37.8 s (C4.5), 1.4× epyc's time (1.8–1.9× before the serial rerun, when epyc's serial path was faster on HIGGS). That is why dell's speedups look better (20–24× against 16–21× at 48 threads). The parallel times are closer.
+- **With all 48 threads epyc is faster:** CART 1.15 against 1.27 s, C4.5 1.75 against 2.26 s.
+- **On one thread dell is slower:** 25.7 against 18.0 s (CART) and 53.6 against 36.2 s (C4.5), 1.4–1.5× epyc's time. That is why dell's speedups look better (20–24× against 16–21× at 48 threads). The parallel times are closer.
   - Why dell's single thread is slower was not investigated. Its governor (`powersave` with intel_pstate) still boosts, and a single thread's memory is local to one of four NUMA nodes.
-- **epyc stalls where the second socket comes in:** CART takes 1.48 s at 24 threads and 1.47 s at 28 and 32. After that it gains again, to 1.12 s at 48. dell, whose threads span both sockets from the start, has no such step; it has a small dip at 36 threads (1.56 → 1.58 s on CART), seen in every run of this benchmark.
-- **Efficiency falls steadily:** at 48 threads it is 34% (CART) and 44% (C4.5) on epyc, and 43% and 50% on dell (each against its own serial time). The big nodes near the root are bound by memory bandwidth, and CART's 1,611-node tree has little else to share out.
-- **C4.5 scales better than CART** on epyc (21.3× against 16.2× at 48). Its 1.16-million-node tree has many more subtrees to grow in parallel. Its pruning runs on all threads too: 2.12 s serial, 0.19 s on 48 threads (epyc).
-- **Against the previous run** (2026-10-15 at 16:54, commit 35cf315; serial times as before the rerun), little changed: the CPU-side changes of this commit help most with few features and many rows (airline), and HIGGS has 28 features.
-  - **C4.5** is 1–3% faster up to 28 threads on epyc (serial 31.13 → 30.50 s) and within 2% from 32 on (48 threads: 1.77 s both). dell is within −3% to +4%, except 4 threads (16.75 → 17.77 s, whose runs spread over 17.0–18.6 s).
-  - **CART** is 1–7% slower from 12 threads on, on both nodes (and dell's 4 threads 8%) (epyc 36 threads 1.29 → 1.37 s, 48 threads 1.11 → 1.12 s; dell 48 threads 1.23 → 1.26 s). Its CPU code did not change apart from counting the root's classes in parallel, and the previous run showed swings of the same size between commits with the same CART code; this was not checked with a same-job comparison on HIGGS.
-- **Memory:** a constant 5.7 GiB (CART) and 6.0–6.1 GiB (C4.5) at every thread count, the same on both nodes: both backends keep a second copy of the columns for the out-of-place partition (serial needed 3.7 and 4.0 GiB before the rerun). C4.5 no longer keeps a copy of the sorted values (5.0 GiB serial and 7.1–7.2 GiB parallel before).
+- **epyc stalls where the second socket comes in:** CART takes 1.47 s at 24 threads, 1.49 s at 28 and 1.46 s at 32. After that it gains again, to 1.15 s at 48. dell, whose threads span both sockets from the start, has no such step.
+- **Efficiency falls steadily:** at 48 threads it is 33% (CART) and 43% (C4.5) on epyc, and 42% and 49% on dell (each against its own serial time). The big nodes near the root are bound by memory bandwidth, and CART's 1,611-node tree has little else to share out.
+- **C4.5 scales better than CART** on epyc (20.6× against 15.7× at 48). Its 1.16-million-node tree has many more subtrees to grow in parallel. Its pruning runs on all threads too: 2.11 s serial, 0.19 s on 48 threads (epyc).
+- **Memory:** 3.6 GiB (CART) and 3.9 GiB (C4.5) serial, rising with the spare column slots to 5.6 and 6.0 GiB from 28 threads on (27 spare slots for 28 features), the same on both nodes.
 
 ## Airline
 
@@ -94,27 +80,27 @@ Training time, median of 3 runs, and speedup over 1 thread:
 
 | Threads | epyc CART | speedup | epyc C4.5 | speedup | dell CART | speedup | dell C4.5 | speedup |
 |--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| 1 (serial) | 76.38 s | 1.0× | 178.63 s | 1.0× | 128.09 s | 1.0× | 264.14 s | 1.0× |
-| 2 | 41.41 s | 1.8× | 92.39 s | 1.9× | 107.54 s | 1.2× | 201.80 s | 1.3× |
-| 4 | 21.54 s | 3.5× | 47.60 s | 3.8× | 60.15 s | 2.1× | 109.09 s | 2.4× |
-| 8 | 16.86 s | 4.5× | 32.43 s | 5.5× | 31.19 s | 4.1× | 56.58 s | 4.7× |
-| 12 | 11.80 s | 6.5× | 22.43 s | 8.0× | 20.88 s | 6.1× | 38.51 s | 6.9× |
-| 16 | 10.75 s | 7.1× | 19.60 s | 9.1× | 16.44 s | 7.8× | 29.95 s | 8.8× |
-| 20 | 9.28 s | 8.2× | 16.98 s | 10.5× | 13.73 s | 9.3× | 25.37 s | 10.4× |
-| 24 | 8.27 s | 9.2× | 15.01 s | 11.9× | 11.80 s | 10.9× | 21.83 s | 12.1× |
-| 28 | 9.34 s | 8.2× | 15.98 s | 11.2× | 10.58 s | 12.1× | 19.47 s | 13.6× |
-| 32 | 8.93 s | 8.6× | 15.57 s | 11.5× | 9.53 s | 13.4× | 17.45 s | 15.1× |
-| 36 | 8.26 s | 9.2× | 14.12 s | 12.7× | 8.94 s | 14.3× | 16.30 s | 16.2× |
-| 40 | 7.98 s | 9.6× | 13.64 s | 13.1× | 8.38 s | 15.3× | 15.29 s | 17.3× |
-| 44 | 7.51 s | 10.2× | 12.82 s | 13.9× | 7.90 s | 16.2× | 14.80 s | 17.9× |
-| 48 | **7.16 s** | 10.7× | **11.95 s** | 14.9× | 7.59 s | 16.9× | 13.93 s | 19.0× |
+| 1 (serial) | 75.07 s | 1.0× | 170.88 s | 1.0× | 126.77 s | 1.0× | 263.06 s | 1.0× |
+| 2 | 41.08 s | 1.8× | 91.41 s | 1.9× | 105.65 s | 1.2× | 199.18 s | 1.3× |
+| 4 | 21.36 s | 3.5× | 47.20 s | 3.6× | 60.55 s | 2.1× | 110.19 s | 2.4× |
+| 8 | 17.05 s | 4.4× | 32.33 s | 5.3× | 31.11 s | 4.1× | 56.51 s | 4.7× |
+| 12 | 11.92 s | 6.3× | 22.49 s | 7.6× | 21.01 s | 6.0× | 38.63 s | 6.8× |
+| 16 | 10.81 s | 6.9× | 19.65 s | 8.7× | 16.26 s | 7.8× | 30.24 s | 8.7× |
+| 20 | 9.31 s | 8.1× | 16.82 s | 10.2× | 13.65 s | 9.3× | 25.28 s | 10.4× |
+| 24 | 8.10 s | 9.3× | 14.91 s | 11.5× | 11.73 s | 10.8× | 21.88 s | 12.0× |
+| 28 | 9.19 s | 8.2× | 16.00 s | 10.7× | 10.49 s | 12.1× | 19.53 s | 13.5× |
+| 32 | 9.19 s | 8.2× | 15.59 s | 11.0× | 9.70 s | 13.1× | 17.56 s | 15.0× |
+| 36 | 8.46 s | 8.9× | 14.29 s | 12.0× | 9.14 s | 13.9× | 16.49 s | 15.9× |
+| 40 | 8.06 s | 9.3× | 13.74 s | 12.4× | 8.39 s | 15.1× | 15.52 s | 16.9× |
+| 44 | 7.61 s | 9.9× | 12.74 s | 13.4× | 8.00 s | 15.8× | 14.90 s | 17.7× |
+| 48 | **7.17 s** | 10.5× | **11.98 s** | 14.3× | 7.79 s | 16.3× | 14.01 s | 18.8× |
 
-The trees are CART 3,013 nodes (depth 25, training accuracy 71.54%) and C4.5 8,548,725 nodes (depth 72, 87.42%) at every point on both nodes, the same as in [cluster-airlines](../cluster-airlines/BENCHMARK.md), whose 48-thread times these match within 1%.
+The trees are CART 3,013 nodes (depth 25, training accuracy 71.54%) and C4.5 8,548,725 nodes (depth 72, 87.42%) at every point on both nodes, the same as in [cluster-airlines](../cluster-airlines/BENCHMARK.md), whose 48-thread times these match within 1%, except dell's CART (7.79 against 7.52 s, 3.6%).
 
 ### Observations
 
-- **Airline's speedups are lower than HIGGS's:** 10.7× (CART) and 14.9× (C4.5) on epyc at 48 threads against 16.2× and 21.3× on HIGGS; 16.9× and 19.0× on dell against 20.4× and 24.0×. The serial rerun made airline's serial runs 1.3–1.9× faster and HIGGS's no faster, so the same parallel times now divide a smaller serial time on airline.
-- **From 1 to 2 threads:** 1.8× (CART, 76.4 → 41.4 s) and 1.9× (C4.5) on epyc; only 1.2× and 1.3× on dell (1.7× on HIGGS). dell's first two CPUs sit on different sockets, so half of each thread's memory is on the other socket, which may weigh more with airline's 115M rows; this was not investigated. Before the serial rerun epyc's step was 3.6×: the old serial backend partitioned in place through a byte per row, slow on 115M rows, and the parallel backend did not.
-- **epyc again loses time where its second socket comes in:** CART 8.27 s at 24 threads, 9.34 s at 28 and 8.93 s at 32, then down to 7.16 s at 48 (C4.5 15.01 → 15.98 → 15.57 → 11.95 s). dell, whose threads span both sockets from 2 on, keeps improving at every step.
-- **At 48 threads the two nodes are close:** CART 7.16 s (epyc) against 7.59 s (dell), C4.5 11.95 against 13.93 s. dell's single thread is 1.7× (CART, 128.1 against 76.4 s) and 1.5× (C4.5) slower than epyc's.
-- **Memory:** 29.0 GiB (CART) and 32.6–33.1 GiB (C4.5) at every thread count, the same on both nodes: the serial backend now keeps the second copy of the columns too (20.4 and 24.0 GiB before the rerun).
+- **Airline's speedups are lower than HIGGS's:** 10.5× (CART) and 14.3× (C4.5) on epyc at 48 threads against 15.7× and 20.6× on HIGGS; 16.3× and 18.8× on dell against 20.2× and 23.7×.
+- **From 1 to 2 threads:** 1.8× (CART, 75.1 → 41.1 s) and 1.9× (C4.5) on epyc; only 1.2× and 1.3× on dell (1.6–1.7× on HIGGS). dell's first two CPUs sit on different sockets, so half of each thread's memory is on the other socket, which may weigh more with airline's 115M rows; this was not investigated.
+- **epyc again loses time where its second socket comes in:** CART 8.10 s at 24 threads, 9.19 s at 28 and 32, then down to 7.17 s at 48 (C4.5 14.91 → 16.00 → 15.59 → 11.98 s). dell, whose threads span both sockets from 2 on, keeps improving at every step.
+- **At 48 threads the two nodes are close:** CART 7.17 s (epyc) against 7.79 s (dell), C4.5 11.98 against 14.01 s. dell's single thread is 1.7× (CART, 126.8 against 75.1 s) and 1.5× (C4.5) slower than epyc's.
+- **Memory:** 19.6 GiB (CART) and 23.2 GiB (C4.5) serial, rising to 27.2–28.1 and 31.3–32.3 GiB from 12 threads on (12 spare slots for 13 features), the same on both nodes.

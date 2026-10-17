@@ -1,5 +1,16 @@
-{"host": "ampere", "cpu": "AMD EPYC 7402 24-Core Processor",
- "cpus": 48, "gpu": "NVIDIA A100 80GB PCIe, 81920 MiB",
+{
+ "host": "ampere",
+ "cpu": "AMD EPYC 7402 24-Core Processor",
+ "cpus": 48,
+ "gpu": "NVIDIA A100 80GB PCIe, 81920 MiB",
  "driver": "615.71.09",
  "cuda": "Cuda compilation tools, release 12.9, V12.9.86",
- "tree_commit": "00ae13f", "dataset": "higgs", "date": "2026-10-17 12:44:45"}
+ "tree_commit": "00ae13f",
+ "dataset": "higgs",
+ "date": "2026-10-17 12:44:45",
+ "tree_rerun": {
+  "tree_commit": "cd18717",
+  "date": "2026-10-17 17:54:38",
+  "note": "the ./tree rows of results.jsonl are from this rerun; the libraries rows from the run above"
+ }
+}
