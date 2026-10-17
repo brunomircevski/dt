@@ -44,9 +44,9 @@ node splits at "feature w, first L entries go left":
 
 Both children again own one range in every column, still sorted. Nothing is
 ever sorted twice, and each level of the tree costs `O(F · n)` (the SLIQ /
-SPRINT idea). The partition is done in place with a small per-thread scratch
-buffer for the right rows (with `--parallel`, big nodes are partitioned out of
-place instead, see Parallelism). The children's class counts come from the
+SPRINT idea). Small nodes are partitioned in place with a small per-thread
+scratch buffer for the right rows; big nodes are partitioned out of place
+instead, with `--serial` as with `--parallel` (see Parallelism). The children's class counts come from the
 sweep of column `w` (it returns the counts left of its best cut); when both
 children are leaves anyway (pure, too small, at the depth limit — common at the
 bottom of the tree), steps 1–2 are skipped, and when one of them is, only the
@@ -141,7 +141,8 @@ One thread pool (`ThreadPool`), two kinds of work:
   Smaller machines and smaller datasets can prefer a lower value: C4.5's
   lopsided splits leave chains of mid-size nodes on the critical path (SUSY
   500k on 28 desktop threads: 140 → 110 ms with 4096 against 65536).
-* **Big nodes out of place** (`--parallel`, ≥ 32768 rows): the builder keeps a
+* **Big nodes out of place** (≥ 32768 rows; `--serial` too, on its one
+  thread, so both backends run the same algorithm): the builder keeps a
   second copy of the columns, and such a node is partitioned from the copy
   that holds it into the other one, where its children continue (ping-pong).
   Every entry moves once, written with non-temporal stores; the rows going
@@ -177,10 +178,16 @@ tasks without deadlocks.
 The columns take `8 · F · n` bytes. Partitioning needs a buffer for the rows of
 one child: a node uses its own range of one shared `n`-entry scratch array,
 and per-thread buffers are capped at 2^18 entries, so extra memory is about
-`8 · n` bytes plus 2 MB per thread, however many threads run. `--parallel`
-keeps a second copy of the columns (another `8 · F · n` bytes; the presort
+`8 · n` bytes plus 2 MB per thread, however many threads run. Both backends
+keep a second copy of the columns (another `8 · F · n` bytes; the presort
 uses it instead of per-thread buffers): with many threads the peak is about
-the same as without it, with few it is higher (HIGGS, 4 threads: +1.9 GB).
+the same as without it, with one or a few it is higher (HIGGS serial: 3.7 →
+5.7 GiB, airline serial: 20.4 → 29.0 GiB). Until 2026-10-17 `--serial` did
+without it and partitioned every node in place, through a byte per row
+(`goesLeft`). On airline's 115M rows the serial build then used 1.7× the CPU
+time of a 2-thread parallel build on epyc1 (171 s against 103 s), probably
+because the 115 MB byte array misses the caches where the parallel build's
+14 MB bitmap does not.
 The sweep's
 tables of `c·log2 c` and `1/c` take another `16 · n` bytes for training sets
 of 65536 rows or more (smaller counts use shared tables).

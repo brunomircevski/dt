@@ -23,10 +23,10 @@ public:
     if (reusable_) {
       sorted_.reset(new Entry[features_ * rows_]);
     }
-    if (pool_) {
-      other_.reset(new Entry[features_ * rows_]);
-      leftBits_.reset(new std::uint64_t[rows_ / 64 + 1]);
-    }
+    // Serial and parallel builds run the same algorithm: big nodes are
+    // partitioned out of place in both, only on one thread or on many.
+    other_.reset(new Entry[features_ * rows_]);
+    leftBits_.reset(new std::uint64_t[rows_ / 64 + 1]);
   }
 
   Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
@@ -170,8 +170,8 @@ private:
   EntryCodec codec_;
   std::unique_ptr<Entry[]> sorted_; // presorted columns of all rows (reusable only)
   std::unique_ptr<Entry[]> work_;   // columns being partitioned by the builder
-  std::unique_ptr<Entry[]> other_;  // parallel: their second copy (Columns::other)
-  std::unique_ptr<std::uint64_t[]> leftBits_; // with other_: Columns::leftBits
+  std::unique_ptr<Entry[]> other_;  // their second copy (Columns::other)
+  std::unique_ptr<std::uint64_t[]> leftBits_; // Columns::leftBits
   std::unique_ptr<Entry[]> scratch_;
   std::unique_ptr<std::uint8_t[]> goesLeft_;
   std::vector<double> countXlog_; // see countTables()

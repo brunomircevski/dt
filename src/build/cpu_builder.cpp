@@ -394,9 +394,14 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
          index < end; ++index) {
       const std::uint32_t row = codec_.row(winner[index].packed);
       if (outOfPlace) {
+        const std::uint64_t bit = std::uint64_t{1} << (row & 63);
+        if (!pool_) { // one thread: nothing else writes the words
+          std::uint64_t &word = columns.leftBits[row >> 6];
+          word = index < leftCount ? word | bit : word & ~bit;
+          continue;
+        }
         // Atomic: the rows of other nodes share the words.
         std::atomic_ref<std::uint64_t> word(columns.leftBits[row >> 6]);
-        const std::uint64_t bit = std::uint64_t{1} << (row & 63);
         if (index < leftCount) {
           word.fetch_or(bit, std::memory_order_relaxed);
         } else {
