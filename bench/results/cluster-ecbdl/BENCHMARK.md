@@ -21,10 +21,10 @@ bench/cluster/submit.sh -d ecbdl cpu-dell512-ecbdl
 bench/cluster/submit.sh -d ecbdl_6m $P cpu-dell512-ecbdl_6m
 bench/cluster/submit.sh -d ecbdl $P cpu-dell512-ecbdl
 d=bench/results/cluster-ecbdl                            # the charts
-bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45,cart_full_nodepth \
+bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,cart_full_nodepth,c45 \
     --more $d/unpruned $d/cuda-hopper-ecbdl_6m $d/cuda-ampere-ecbdl_6m $d/cpu-epyc-ecbdl_6m \
     $d/cpu-dell-ecbdl_6m $d/cpu-dell512-ecbdl_6m --out $d/chart.png
-bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45,cart_full_nodepth \
+bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,cart_full_nodepth,c45 \
     --more $d/unpruned $d/cpu-epyc-ecbdl $d/cpu-dell-ecbdl $d/cpu-dell512-ecbdl --out $d/chart-full.png
 ```
 
@@ -42,20 +42,20 @@ The dataset is ECBDL'14 (protein contact-map prediction, the GECCO 2014 big data
 
 Each bar is ./tree's training time (`train total`: GPU setup, presort, build and pruning, not reading the CSV). Three protocols, one section each:
 - `cart_alpha_nodepth`: CART pruned at the fixed α = 1e-5, no depth limit.
-- `c45`: C4.5, CF 0.25. A bar's lighter part is the pruning.
 - `cart_full_nodepth`: CART grown to pure leaves, no pruning, no depth limit.
+- `c45`: C4.5, CF 0.25. A bar's lighter part is the pruning.
 
 ## 6M-row sample
 
 ![ECBDL'14 6M sample on five mordor3 nodes](chart.png)
 
-| | CART | C4.5 (of which pruning) | CART unpruned | RAM CART / C4.5 / unpruned | VRAM CART / C4.5 / unpruned |
+| | CART | CART unpruned | C4.5 (of which pruning) | RAM CART / unpruned / C4.5 | VRAM CART / unpruned / C4.5 |
 |---|--:|--:|--:|--:|--:|
-| CUDA · hopper (H100 PCIe + 32 threads) | **4.08 s** | **13.92 s** (3.78 s) | **7.62 s** | 17.6 / 43.0 / 42.8 GiB | 57.3 / 71.5 / 57.4 GiB |
-| CUDA · ampere (A100 80GB PCIe + 48 threads) | 5.77 s | 20.46 s (6.43 s) | 11.00 s | 17.6 / 43.1 / 42.8 GiB | 57.2 / 71.4 / 57.4 GiB |
-| Parallel · epyc (EPYC 9255, 48 threads) | 7.35 s | 22.70 s (2.00 s) | 12.94 s | 70.7 / 71.3 / 70.7 GiB | – |
-| Parallel · dell (Xeon 6542Y, 48 threads) | 11.97 s | 34.46 s (3.33 s) | 19.44 s | 70.7 / 71.3 / 70.7 GiB | – |
-| Parallel · dell512 (the same, half the memory channels) | 15.79 s | 42.97 s (5.95 s) | 25.68 s | 70.7 / 71.2 / 70.7 GiB | – |
+| CUDA · hopper (H100 PCIe + 32 threads) | **4.08 s** | **7.62 s** | **13.92 s** (3.78 s) | 17.6 / 42.8 / 43.0 GiB | 57.3 / 57.4 / 71.5 GiB |
+| CUDA · ampere (A100 80GB PCIe + 48 threads) | 5.77 s | 11.00 s | 20.46 s (6.43 s) | 17.6 / 42.8 / 43.1 GiB | 57.2 / 57.4 / 71.4 GiB |
+| Parallel · epyc (EPYC 9255, 48 threads) | 7.35 s | 12.94 s | 22.70 s (2.00 s) | 70.7 / 70.7 / 71.3 GiB | – |
+| Parallel · dell (Xeon 6542Y, 48 threads) | 11.97 s | 19.44 s | 34.46 s (3.33 s) | 70.7 / 70.7 / 71.3 GiB | – |
+| Parallel · dell512 (the same, half the memory channels) | 15.79 s | 25.68 s | 42.97 s (5.95 s) | 70.7 / 70.7 / 71.2 GiB | – |
 
 - **The H100 is 1.8× (CART), 1.6× (C4.5) and 1.7× (unpruned CART) faster than epyc**, less than on airline (6.6× for pruned CART): the GPU has no room for the mirror of the CPU hand-off (another 8 bytes per value), so its copies to the host no longer overlap the next levels, and C4.5's pruning on the host CPU is 27–31% of a CUDA run.
 - **VRAM is as computed from the allocations:** two copies of the presorted columns (16 bytes per value, 56.4 GiB) plus the CUDA context and per-level arrays; C4.5 also keeps the raw values for its pruning (4 bytes per value, 14.1 GiB). C4.5 uses 71.5 of the 80 GB.
@@ -65,11 +65,11 @@ Each bar is ./tree's training time (`train total`: GPU setup, presort, build and
 
 ![full ECBDL'14 on epyc, dell and dell512](chart-full.png)
 
-| | CART | C4.5 (of which pruning) | CART unpruned | RAM CART / C4.5 / unpruned |
+| | CART | CART unpruned | C4.5 (of which pruning) | RAM CART / unpruned / C4.5 |
 |---|--:|--:|--:|--:|
-| Parallel · epyc (EPYC 9255, 48 threads) | **51.57 s** | **209.79 s** (27.36 s) | **83.58 s** | 375.5 / 377.4 / 375.5 GiB |
-| Parallel · dell (Xeon 6542Y, 48 threads) | 52.85 s | 338.54 s (40.12 s) | 123.00 s | 375.5 / 377.4 / 375.5 GiB |
-| Parallel · dell512 (the same, half the memory channels) | 78.25 s | 452.37 s (96.05 s) | 172.73 s | 375.4 / 377.4 / 375.5 GiB |
+| Parallel · epyc (EPYC 9255, 48 threads) | **51.57 s** | **83.58 s** | **209.79 s** (27.36 s) | 375.5 / 375.5 / 377.4 GiB |
+| Parallel · dell (Xeon 6542Y, 48 threads) | 52.85 s | 123.00 s | 338.54 s (40.12 s) | 375.5 / 375.5 / 377.4 GiB |
+| Parallel · dell512 (the same, half the memory channels) | 78.25 s | 172.73 s | 452.37 s (96.05 s) | 375.4 / 375.5 / 377.4 GiB |
 
 - **About 20 bytes per value of RAM** (403 GB): 4 for the loaded data, 8 for the presorted columns, 8 for their second copy. It fits in the 512 GB of epyc1 and dell2.
 - **epyc is 1.5–1.6× faster than dell** on C4.5 and unpruned CART, as on the 6M sample. Pruned CART is the exception (51.6 against 52.9 s): epyc's presort took 21.2 s there (see below).
