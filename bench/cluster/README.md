@@ -6,7 +6,7 @@ cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 - [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows)
 - [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees
 - [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS with 1 to 48 threads on the two CPU nodes
-- `bench/results/cluster-ecbdl/`: ECBDL'14 (631 features): a 6M-row sample on all four nodes, the full 32M rows on the CPU nodes
+- [`bench/results/cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md): ECBDL'14 (631 features): a 6M-row sample on all four nodes, the full 32M rows on the CPU nodes
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
 only, the CPU nodes (epyc1, dell1) parallel only:** a GPU node's CPU is
@@ -174,7 +174,8 @@ HIGGS's (81 GB as float32). `datasets.toml` sets 100,000 random rows aside as
 the test set and writes no YaDT files. The CUDA backend needs 16 bytes per value
 (20 for C4.5, which keeps the values for its pruning), about 320 GB for the full
 set, so the GPUs get `ecbdl_6m`: a random 6M of the training rows (3.8 G values,
-about 76 GB with C4.5's copy). The pre-converted `.bin` files under
+about 76 GB with C4.5's copy). `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
+`5bc39aec…` (first build). Log: `prepare-ecbdl.log`. The pre-converted `.bin` files under
 `/home/Datasets/IMM` lack the label and the nominal attributes.
 
 HIGGS's prepared files (`bench/data/higgs/`) have the SHA-256 recorded in

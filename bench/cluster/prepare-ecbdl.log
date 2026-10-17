@@ -1,0 +1,23 @@
+job 509 on ampere, 48 CPUs, 2026-10-16 22:19:25
+
+=== 22:19:25  1/3 datasets from /home/bmircevski/downloads, checked by SHA-256
+ecbdl: 59,533,971,938 bytes, sha256 5bc39aecbec956ccb06b77295e292e0166db5f87c8341678b1e0ca35fd67120c (nothing to compare with: record it in EXPECTED)
+
+=== 22:59:53  2/3 prepare ecbdl ecbdl_6m for bench/run.py
+ecbdl: 31,892,921 train / 100,000 test rows, 631 features, 2 classes (3335.1 s)
+ecbdl_6m: 6,000,000 train / 100,000 test rows, 631 features, 2 classes (499.6 s)
+
+=== 00:03:52  3/3 SHA-256 of the prepared files (for higgs: compare with plan.json of pc-legion-higgs/cuda-legion-higgs)
+51111ef11b75c374557d68a2cfff989275eca5caa6374fd428ab135fb2c4cdbb  bench/data/ecbdl/meta.json
+5ee9cb4a9934262bd203fa2504a1e8e369041fa480fa20c9b742a43393e4a919  bench/data/ecbdl/test.f32
+a812cf274fd39342c17a71711ade719a97d6566b0d36d080f2174336ec4de9a0  bench/data/ecbdl/test.y.i32
+9c48940a11f80f4ad03282ac12eaeb804c045ceeecd5efc95814c4c742de4912  bench/data/ecbdl/train.csv
+cea061dfa59208fa8b1ffbdcef9ac1800e5f383fa72d2a4d297d9b70a2eccabe  bench/data/ecbdl/train.f32
+910a6913d38a226cec8dbc3ee1121bf650a3038c83134f7e3f07e848d9b1929d  bench/data/ecbdl/train.y.i32
+f08c3afdd02433bed050ed21556c3fbff5dea7f6e9242e2cfcd2522c8fe17fa9  bench/data/ecbdl_6m/meta.json
+5ee9cb4a9934262bd203fa2504a1e8e369041fa480fa20c9b742a43393e4a919  bench/data/ecbdl_6m/test.f32
+a812cf274fd39342c17a71711ade719a97d6566b0d36d080f2174336ec4de9a0  bench/data/ecbdl_6m/test.y.i32
+ed1ca6c7a7ba1ca837665189253dc2dd406c55cfa1f051b80d7e4431e96d082f  bench/data/ecbdl_6m/train.csv
+f293d3b6e438fa38a79b3f0e2afb8ae7e2c65dc6e8ca231eeefc74c24a5e2850  bench/data/ecbdl_6m/train.f32
+af096bc62cf606d03671e85f70819f83c327b4dbaef7b40853e5d3e981210a32  bench/data/ecbdl_6m/train.y.i32
+done 2026-10-17 00:06:05

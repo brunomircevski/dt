@@ -145,10 +145,16 @@ def main():
     gaps = max(len({e["backend"] for e in entries if e["protocol"] == p}) for p in PROTOCOLS) - 1
     header = 0.42 + 0.2 * len(runs)  # inches of the hardware lines
     footer = 0.18 if any(e["prune"] is not None and not e["reference"] for e in entries) else 0
-    inches = 1.9 + header + footer + 2 * 0.58 * (per_panel + 0.45 * gaps)
+    # At least three bars high: the row labels take two lines each.
+    inches = 1.9 + header + footer + 2 * 0.58 * max(per_panel + 0.45 * gaps, 3)
+    split = any(e["prune"] is not None and not e["reference"] for e in entries)
+    # Between the panels: the lower one's title and subtitle and the upper one's
+    # tick labels, the same in inches however few bars the panels hold.
+    gap = 0.92
+    panels = inches - (header + 1.05) - (1.08 if split else 0.9)
     fig, axes = plt.subplots(2, 2, figsize=(13, inches), squeeze=False,
                              gridspec_kw={"width_ratios": [1.5, 1], "wspace": 0.12,
-                                          "hspace": 0.42 * 8.8 / inches})
+                                          "hspace": gap / ((panels - gap) / 2)})
     max_time = max(e["time"] for e in entries)
     max_gib = max(max(e["ram"], e["vram"] or 0) for e in entries)
     for row, protocol in enumerate(PROTOCOLS):
@@ -249,7 +255,6 @@ def main():
                  fontsize=9.2, color=INK, va="top")
     handles = [Patch(color=COLORS[b], label=BACKENDS[b]) for b in BACKENDS
                if any(e["backend"] == b for e in entries)]
-    split = any(e["prune"] is not None and not e["reference"] for e in entries)
     if split:
         handles.append(Patch(color=lighter(MUTED), label="lighter: pruning"))
     if args.reference:
