@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SLURM job: build ./tree (commit 35cf315, in its own clone ~/gpu-dt-bench/dt,
+# SLURM job: build ./tree (the commit checked out in its own clone ~/gpu-dt-bench/dt,
 # so rebuilds of ~/dt cannot change it mid-run) for the A100 and the H100.
 # Submit from ~/gpu-dt-bench:  sbatch build.sh
 #SBATCH -J gdb-build
