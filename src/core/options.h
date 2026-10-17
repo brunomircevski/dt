@@ -60,6 +60,12 @@ struct ParallelOptions {
   // a 48-core server spent a third of the build in the kernel (futex). 16K-64K
   // were best on 10.5M and 115M rows.
   std::size_t featureParallelRows = 32768;
+  // Column slots beyond one per feature (CpuGrower; see Columns). 0 = auto:
+  // features - 1, at most the threads, so that every thread can move a column
+  // of a big node at once. Fewer save memory (a slot is 8 bytes per row) and
+  // cost time: on 48 cores, 8 slots made HIGGS CART 35% slower, 2 twice as
+  // slow. The serial build uses 1 (it moves one column at a time anyway).
+  std::size_t spareSlots = 0;
 };
 
 struct GpuOptions {

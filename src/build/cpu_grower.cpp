@@ -2,7 +2,9 @@
 #include "build/grower.h"
 #include "core/timing.h"
 
+#include <algorithm>
 #include <bit>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <numeric>
@@ -18,14 +20,15 @@ public:
       : train_(train), options_(options), pool_(pool), reusable_(reusable),
         rows_(train.rowCount), features_(train.featureCount()),
         codec_(makeEntryCodec(train.classCount(), train.rowCount)),
-        work_(new Entry[features_ * rows_]), scratch_(new Entry[rows_]),
+        slots_(features_ + spareSlots(options, pool, features_)), scratch_(new Entry[rows_]),
         goesLeft_(new std::uint8_t[rows_]) {
+    // A slot per column and a few more (see Columns): serial and parallel
+    // builds run the same algorithm, big nodes are partitioned out of place
+    // in both, only on one thread or on many.
+    work_.reset(new Entry[slots_ * rows_]);
     if (reusable_) {
       sorted_.reset(new Entry[features_ * rows_]);
     }
-    // Serial and parallel builds run the same algorithm: big nodes are
-    // partitioned out of place in both, only on one thread or on many.
-    other_.reset(new Entry[features_ * rows_]);
     leftBits_.reset(new std::uint64_t[rows_ / 64 + 1]);
   }
 
@@ -49,6 +52,7 @@ public:
     const std::vector<std::uint32_t> counts = countClasses(train_, rows, pool_);
     NodeStore store(train_.classCount(), 2 * count);
     Subtree root;
+    root.slots = std::make_shared<const SlotMap>(slotOf_);
     root.node = store.add(counts.data());
     root.count = static_cast<std::uint32_t>(count);
     root.features.resize(features_);
@@ -60,7 +64,7 @@ public:
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
                            options_.parallel, countTables(),
                            leafOfRow ? leafOfRow->ids.data() : nullptr);
-    builder.grow(Columns{work_.get(), count, scratch_.get(), other_.get(), leftBits_.get()},
+    builder.grow(Columns{work_.get(), count, scratch_.get(), slots_, leftBits_.get()},
                  std::move(root));
     if (pool_) {
       pool_->waitIdle();
@@ -70,10 +74,22 @@ public:
   }
 
   std::span<std::byte> workspace() override {
-    return {reinterpret_cast<std::byte *>(work_.get()), features_ * rows_ * sizeof(Entry)};
+    return {reinterpret_cast<std::byte *>(work_.get()), slots_ * rows_ * sizeof(Entry)};
   }
 
 private:
+  // See ParallelOptions::spareSlots.
+  static std::size_t spareSlots(const Options &options, ThreadPool *pool, std::size_t features) {
+    if (!pool) {
+      return 1;
+    }
+    if (options.parallel.spareSlots > 0) {
+      return options.parallel.spareSlots;
+    }
+    const std::size_t threads = pool->workerCount() + 1;
+    return std::max<std::size_t>(1, std::min(features > 0 ? features - 1 : 0, threads));
+  }
+
   // The sweep's per-count tables, for every count up to the number of
   // training rows (the builder's default tables cover small training sets).
   CountTables countTables() {
@@ -87,13 +103,13 @@ private:
   }
 
   // Every feature's distinct values, from the sorted columns in work_ (stride
-  // `count`): the last value of each run, in chunks on the pool.
+  // `count`, slots slotOf_): the last value of each run, in chunks on the pool.
   void distinctValues(std::size_t count, DistinctValues &distinct) {
     constexpr std::size_t kChunk = std::size_t{1} << 20;
     const std::size_t chunks = (count + kChunk - 1) / kChunk;
     std::vector<std::vector<float>> parts(features_ * chunks);
     parallelFor(pool_, parts.size(), [&](std::size_t part) {
-      const Entry *column = work_.get() + part / chunks * count;
+      const Entry *column = work_.get() + slotOf_[part / chunks] * count;
       const std::size_t begin = part % chunks * kChunk;
       const std::size_t end = std::min(count, begin + kChunk);
       std::vector<float> &out = parts[part];
@@ -119,20 +135,26 @@ private:
   }
 
   // Fill work_ with the sorted columns of the selected rows (stride = their
-  // count). Without reuse, presort straight into work_.
+  // count; slotOf_ says where). Without reuse, presort straight into work_.
   void prepare(std::span<const std::uint32_t> rows) {
     if (!reusable_) {
       if (used_ || !rows.empty()) {
         throw std::logic_error("CpuGrower: not created for repeated use");
       }
       used_ = true;
-      presortColumns(train_, codec_, work_.get(), pool_, other_.get());
+      slotOf_ = presortColumns(train_, codec_, work_.get(), slots_, pool_);
       return;
     }
-    if (!presorted_) {
-      presortColumns(train_, codec_, sorted_.get(), pool_, other_.get());
+    if (!presorted_) { // in work_'s slots, then in feature order into sorted_
+      const SlotMap slots = presortColumns(train_, codec_, work_.get(), slots_, pool_);
+      parallelFor(pool_, features_, [&](std::size_t feature) {
+        std::memcpy(sorted_.get() + feature * rows_, work_.get() + slots[feature] * rows_,
+                    rows_ * sizeof(Entry));
+      });
       presorted_ = true;
     }
+    slotOf_.resize(features_);
+    std::iota(slotOf_.begin(), slotOf_.end(), 0u);
     if (rows.empty()) {
       parallelFor(pool_, features_, [&](std::size_t feature) {
         std::memcpy(work_.get() + feature * rows_, sorted_.get() + feature * rows_,
@@ -168,9 +190,10 @@ private:
   std::size_t rows_;
   std::size_t features_;
   EntryCodec codec_;
+  std::size_t slots_; // features_ + spareSlots()
   std::unique_ptr<Entry[]> sorted_; // presorted columns of all rows (reusable only)
-  std::unique_ptr<Entry[]> work_;   // columns being partitioned by the builder
-  std::unique_ptr<Entry[]> other_;  // their second copy (Columns::other)
+  std::unique_ptr<Entry[]> work_;   // slots_ slots: the columns being partitioned
+  SlotMap slotOf_;                  // where in work_ the grow starts
   std::unique_ptr<std::uint64_t[]> leftBits_; // Columns::leftBits
   std::unique_ptr<Entry[]> scratch_;
   std::unique_ptr<std::uint8_t[]> goesLeft_;

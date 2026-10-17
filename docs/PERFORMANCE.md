@@ -2,6 +2,54 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: one copy of the columns (CUDA, serial, parallel)
+
+The columns now live in **slots**, one per feature and a few spare ones, and a
+partition moves each column into a free slot instead of ping-ponging between
+two full copies ([CUDA.md](CUDA.md), [CPU.md](CPU.md)). The CUDA backend also
+dropped its device mirror of the host arena (the hand-offs go through a
+512 MB ring) and presorts in the slots. Same trees everywhere (`tests/check.sh`
+for `./tree` and `./tree_cpu`, and every run below byte-identical). Means of
+3 runs (GPU) or 2 (CPU parallel; serial 1), `train total`, depth 19, no pruning, the
+mordor3 nodes; before = 66bd66c.
+
+| CUDA | H100 before | H100 after | A100 before | A100 after |
+|---|--:|--:|--:|--:|
+| HIGGS CART | 0.39 s, 7.2 GiB | 0.40–0.42 s, 3.4 GiB | 0.49 s, 7.2 GiB | 0.49 s, 3.3 GiB |
+| HIGGS C4.5 | 0.36 s, 7.2 GiB | 0.36 s, 3.3 GiB | 0.46 s, 7.1 GiB | 0.44 s, 3.3 GiB |
+| airline CART | 1.33 s, 35.0 GiB | 1.38 s, 13.3 GiB | 1.94 s, 35.0 GiB | 1.98 s, 13.3 GiB |
+| airline C4.5 | 1.30 s, 35.0 GiB | 1.33 s, 13.3 GiB | 1.87 s, 34.9 GiB | 1.91 s, 13.3 GiB |
+
+* GPU memory: 53% less on HIGGS, 62% less on airline (cuML used 1.9 and
+  9.5–10 GiB, [cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md)).
+* Airline is 2–3% slower: the partition is 3% slower (a column waits for the
+  one before it to leave its slot, 3–5 ms of 500), and the GPU sometimes
+  waits for the ring's copies to the host.
+* Traps found on the way: tiles taken column by column instead of node by node
+  made the partition 10% slower (the dependency is per segment, so the order
+  could stay); a 64-bit field in `PartitionTarget`, indexed by side, pushed it
+  to local memory (+5%); a move record read by every thread, or waited for by a
+  second thread, +3%; growing CUB's temp buffer in the presort, or a sync per
+  feature, put the presort behind the arena's page-locking (C4.5 airline
+  presort 0.1 → 0.4 s), so the arena is now registered after the presort.
+
+| CPU (48 threads) | epyc1 before | epyc1 after | dell1 before | dell1 after |
+|---|--:|--:|--:|--:|
+| HIGGS CART parallel | 1.04 s, 5.7 GiB | 1.06 s, 5.6 GiB | 1.28 s | 1.27 s |
+| HIGGS C4.5 parallel | 1.06 s, 5.8 GiB | 1.01 s, 5.7 GiB | 1.50 s | 1.48 s |
+| airline CART parallel | 7.05 s, 29.0 GiB | 7.09 s, 27.3 GiB | 7.81 s | 7.53 s |
+| airline C4.5 parallel | 8.26 s, 29.0 GiB | 8.12 s, 27.3 GiB | 8.81 s | 8.94 s |
+| HIGGS CART serial | 18.1 s, 5.7 GiB | 18.0 s, 3.6 GiB | 25.0 s | 24.8 s |
+| HIGGS C4.5 serial | 22.3 s, 5.7 GiB | 20.7 s, 3.6 GiB | 34.1 s | 32.6 s |
+
+* `--serial` uses one spare slot: 37% less memory on HIGGS, and 0–7% faster
+  (the winner's column is no longer copied).
+* `--parallel` keeps `min(F − 1, threads)` spare slots by default, so that a
+  big node moves all its columns at once, one per thread, with the children's
+  sweeps fused in: memory drops only where the features outnumber the threads
+  (airline: 6%; ECBDL's 631 features on 48 threads would need 679 instead of
+  1262 slots). `--spare-slots N` trades speed for memory (CPU.md).
+
 ## October 2026: the serial backend runs the parallel algorithm
 
 Until 2026-10-17 `--serial` kept no second copy of the columns, so it

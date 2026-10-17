@@ -66,6 +66,9 @@ void printUsage(const char *program) {
       << "Parallel and Cuda (CPU side):\n"
       << "  --task-rows N            nodes with >= N rows grow a child as a pool task\n"
       << "                           (default " << ParallelOptions{}.nodeTaskRows << ")\n"
+      << "  --spare-slots N          Parallel: column copies beyond one per feature; fewer\n"
+      << "                           use less memory (8 bytes per row each) but slow down\n"
+      << "                           big nodes (default: features - 1, at most threads)\n"
       << "  --feature-parallel-rows N  nodes with >= N rows scan features in parallel\n"
       << "                           (default " << ParallelOptions{}.featureParallelRows << ")\n"
       << "\n"
@@ -179,6 +182,9 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
   if (options.backend != Backend::Cuda) {
     refuse({"--gpu-min-rows", "--gpu-sweep", "--gpu-profile"}, "is for --cuda only");
   }
+  if (options.backend != Backend::Parallel) {
+    refuse({"--spare-slots"}, "is for --parallel only");
+  }
 }
 
 } // namespace
@@ -233,6 +239,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.cart.folds = static_cast<int>(parseCount(arg, args.value(arg)));
     } else if (arg == "--task-rows") {
       options.parallel.nodeTaskRows = parseCount(arg, args.value(arg));
+    } else if (arg == "--spare-slots") {
+      options.parallel.spareSlots = parseCount(arg, args.value(arg));
     } else if (arg == "--feature-parallel-rows") {
       options.parallel.featureParallelRows = parseCount(arg, args.value(arg));
     } else if (arg == "--gpu-profile") {

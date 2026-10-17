@@ -23,9 +23,17 @@ of kernel launches, not 300. Work is cut into **tiles**: 2048 consecutive
 entries of one (node, feature) column range — a *segment*. Every kernel runs
 one block per tile (or per segment).
 
-Two copies of all columns live on the device. Level `d` reads buffer `d % 2`
-and writes the partitioned children into the other one (ping-pong), so a
-partition never overwrites data it still has to read.
+One copy of the columns lives on the device, in a buffer of **slots**: one per
+feature and one more (each `8 × rows` bytes, rounded up to 2 MiB). The
+partition moves every column it writes to a free slot: first the slot that
+holds no column of the level, then the ones the moved columns leave, so column
+`f` usually goes to the slot column `f − 1` just left. A node's rows keep their
+index range in every column, so in that slot a segment overwrites only the same
+node's segment of the column that left; a tile writes once that segment's last
+tile has published its running total (which every tile does right after
+loading its entries), and within a node the segments are in column order, so
+the tiles it waits for have started before it. Until 2026-10-17 two full
+copies ping-ponged instead (and a third mirrored the host arena, see Memory).
 
 ## Setup
 
@@ -70,7 +78,7 @@ anything.
 | 3b | `segmentMaxKernel` | Best estimate per segment. |
 | 3c | `tileCandidateKernel`, `tileExactKernel` | Compute the exact **double-precision** gain (`dt::cutGain`, the CPU's function) only for cuts whose estimate is within a proven float error bound of the segment's best. `tileCandidateKernel` (one warp per tile) scores the candidates 3a kept; `tileExactKernel` sweeps again only the tiles that had more (with more than 8 classes: every tile that can hold the best cut). On GPUs with fast double precision (data-center parts: A100, H100, B200…, detected from the FP32:FP64 ratio) 3a and 3b are skipped and `tileExactKernel` scores every cut once (`--gpu-sweep` overrides). |
 | 4 | `segmentBestKernel` | Best cut per (node, feature), and the class counts left of it. **Host** (the level's only round trip): `SplitRules::choose` picks each node's split exactly like the CPU; the winning feature's left counts give both children's class counts, so children that are leaves (pure, too small, depth limit) are finished on the spot. |
-| 5 | `markGoesLeftKernel`, `partitionKernel` | Stable partition of every non-constant column of every split node into the other buffer (skipped for nodes whose children are both leaves), in **one pass**: each tile learns how many left and right entries come before it by decoupled look-back on its predecessors' published counts, then writes its entries coalesced. While writing, it counts the class histograms (and C4.5 cut counts) of the next level's tiles, so step 1 is not needed below the root. |
+| 5 | `markGoesLeftKernel`, `partitionKernel` | Stable partition of every non-constant column of every split node into a free slot (skipped for nodes whose children are both leaves), in **one pass**: each tile learns how many left and right entries come before it by decoupled look-back on its predecessors' published counts, then writes its entries coalesced. While writing, it counts the class histograms (and C4.5 cut counts) of the next level's tiles, so step 1 is not needed below the root. |
 | 6 | `copyKernel` | Children with fewer than `--gpu-min-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer; only the columns that can still split them. |
 
 Small children become `CpuTreeBuilder` tasks on the thread pool, which grow them
@@ -161,12 +169,30 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
 
 ## Memory
 
-Device: two copies of all columns (`2 × 8 × rows × features` bytes, 1.4 GB for
-5M × 18), with cross-validation also the raw values (`4 × rows × features`),
+Device: one copy of the columns in `features + 1` slots (`8 × rows ×
+(features + 1)` bytes, 0.76 GB for 5M × 18), a 512 MB ring for the hand-offs to
+the CPU, with cross-validation also the raw values (`4 × rows × features`),
+with C4.5 pruning a copy of the raw values if it fits (for `arrangeRows`),
 plus small per-level arrays (the largest: 3a's candidates, 8 × (16 + 4·K)
 bytes per tile with K the class count rounded up to 2, 4 or 8, e.g. 28 MB at
 HIGGS's root level). The builder checks free memory first and
 suggests `--parallel` if it does not fit.
+
+* **Presort** in the slots too: the raw values are uploaded into the last
+  slots; each feature is gathered into a free slot and radix-sorted (CUB, by
+  value only, stable) with another free slot as the second buffer, and stays
+  in whichever holds the result. A slot is taken once the raw values in it
+  are sorted. C4.5's distinct values are collected in the ring (free until the
+  build) and downloaded once.
+* **Hand-offs** to the CPU go through the ring, in pieces of a quarter of it:
+  each piece is gathered into the next part once that part's last copy to the
+  host is done, so the GPU waits only when it is a whole ring ahead of PCIe.
+  Before, a mirror of the whole host arena (another `8 × rows × features`)
+  took the hand-offs.
+* **Cost:** on the H100, HIGGS (10.5M × 28) went from 7.2 to 3.4 GiB at the
+  same speed, airline (115M × 13) from 35 to 13.3 GiB, 2-4% slower (the
+  partition waits a little for the column before it, and the ring for PCIe);
+  see [PERFORMANCE.md](PERFORMANCE.md).
 
 ## Building for other GPUs
 

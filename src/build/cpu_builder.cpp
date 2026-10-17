@@ -3,8 +3,11 @@
 #include <algorithm>
 #include <atomic>
 #include <bit>
+#include <condition_variable>
 #include <cstring>
+#include <deque>
 #include <limits>
+#include <mutex>
 #include <numeric>
 #include <optional>
 #include <stdexcept>
@@ -41,8 +44,15 @@ namespace {
 constexpr std::uint32_t kBlockPartitionRows = 1u << 18;
 
 // Nodes with at least this many rows are partitioned out of place, if the
-// builder has a second copy of the columns (Columns::other).
+// builder has a spare column slot (Columns::slots).
 constexpr std::uint32_t kOutOfPlaceRows = 1u << 15;
+
+// Nodes with at least this many rows are partitioned out of place in blocks
+// of kPartitionBlock entries by all threads (partitionInBlocks()) when they
+// have fewer free slots than threads (and columns to move), so that the
+// slots do not limit the threads; their children are not swept on the way.
+constexpr std::uint32_t kBlockedRows = 1u << 20;
+constexpr std::uint32_t kPartitionBlock = 1u << 14;
 
 // Children with at least this many rows are swept during the out-of-place
 // partition of their parent, through staging buffers of kStageEntries.
@@ -85,14 +95,15 @@ void radixHistogram(const float *values, std::size_t count, RadixHistogram &hist
   }
 }
 
-// Sorted entries of one feature column into `out`. The first active pass
-// reads the raw values, and the buffers alternate so that the last one
-// writes `out`. With `parts` > 1, every pass is split into that many ranges
-// of rows on `pool`: each range counts its digits, and scatters from its own
-// offsets (after those of the earlier ranges, so the sort stays stable).
-void sortColumn(const float *values, const std::uint16_t *labels, std::size_t count,
-                const EntryCodec &codec, RadixHistogram &histogram, Entry *out, Entry *temp,
-                ThreadPool *pool, std::size_t parts) {
+// Sorted entries of one feature column, in `out` or `temp` (returned): the
+// first active pass reads the raw values into `out`, then the buffers
+// alternate (`temp` is needed only with more than one active pass). With
+// `parts` > 1, every pass is split into that many ranges of rows on `pool`:
+// each range counts its digits, and scatters from its own offsets (after
+// those of the earlier ranges, so the sort stays stable).
+Entry *sortColumn(const float *values, const std::uint16_t *labels, std::size_t count,
+                  const EntryCodec &codec, RadixHistogram &histogram, Entry *out, Entry *temp,
+                  ThreadPool *pool, std::size_t parts) {
   auto entryOf = [&](std::size_t row) {
     // +0.0f: -0.0 and 0.0 are the same value (no threshold between them).
     return Entry{values[row] + 0.0f, codec.pack(static_cast<std::uint32_t>(row), labels[row])};
@@ -101,24 +112,11 @@ void sortColumn(const float *values, const std::uint16_t *labels, std::size_t co
     for (std::size_t row = 0; row < count; ++row) {
       out[row] = entryOf(row);
     }
-    return;
+    return out;
   }
-  thread_local std::vector<Entry> threadTemp;
-  std::unique_ptr<Entry[]> columnTemp; // shared by the parts
-  if (!temp && histogram.activePasses > 1) {
-    if (parts > 1) {
-      columnTemp.reset(new Entry[count]);
-      temp = columnTemp.get();
-    } else {
-      if (threadTemp.size() < count) {
-        threadTemp.resize(count);
-      }
-      temp = threadTemp.data();
-    }
-  }
-  Entry *target = histogram.activePasses % 2 == 1 ? out : temp;
-  Entry *other = target == out ? temp : out;
-  const Entry *source = nullptr; // null: the raw values
+  Entry *target = out;
+  Entry *other = temp;
+  Entry *source = nullptr; // null: the raw values
   for (int pass = 0; pass < kRadixPasses; ++pass) {
     if (!histogram.active[pass]) {
       continue;
@@ -180,12 +178,13 @@ void sortColumn(const float *values, const std::uint16_t *labels, std::size_t co
     source = target;
     std::swap(target, other);
   }
+  return source;
 }
 
 } // namespace
 
-void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
-                    ThreadPool *pool, Entry *temp) {
+SlotMap presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *data,
+                       std::size_t slots, ThreadPool *pool) {
   const std::size_t rows = dataset.rowCount;
   const std::size_t features = dataset.featureCount();
   if (rows > std::numeric_limits<std::uint32_t>::max()) {
@@ -203,15 +202,58 @@ void presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *out,
   std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
     return histograms[a].activePasses > histograms[b].activePasses;
   });
-  // Fewer features than threads: every column is sorted in parts.
+  if (slots <= features) {
+    throw std::logic_error("presortColumns: needs a slot more than features");
+  }
+  // The free slots, handed out under a lock: a sort takes one for its column
+  // and, with more than one pass, one more as workspace, and gives back the
+  // one that does not end up with the result. Fewer sorts at once than
+  // threads: every column is sorted in parts.
   const std::size_t threads = pool ? pool->workerCount() + 1 : 1;
-  const std::size_t parts =
-      rows >= (std::size_t{1} << 20) ? (threads + features - 1) / features : 1;
+  SlotMap slotOf(features);
+  std::vector<std::uint32_t> free(slots);
+  std::iota(free.rbegin(), free.rend(), 0u); // taken from the back: lowest first
+  std::size_t sorted = 0;
+  std::mutex mutex;
+  std::condition_variable freed;
   parallelFor(pool, features, [&](std::size_t index) {
     const std::size_t feature = order[index];
-    sortColumn(dataset.column(feature), dataset.labels.data(), rows, codec, histograms[feature],
-               out + feature * rows, temp ? temp + feature * rows : nullptr, pool, parts);
+    const bool workspace = histograms[feature].activePasses > 1;
+    std::uint32_t slot;
+    std::uint32_t spare = 0;
+    std::size_t parts = 1;
+    {
+      std::unique_lock<std::mutex> lock(mutex);
+      freed.wait(lock, [&]() { return free.size() >= (workspace ? 2u : 1u); });
+      slot = free.back();
+      free.pop_back();
+      if (workspace) {
+        spare = free.back();
+        free.pop_back();
+      }
+      // Sorts that can run at once: the features left, and the slots for them.
+      const std::size_t room =
+          std::max<std::size_t>(1, std::min(features - index, (slots - sorted) / 2));
+      if (rows >= (std::size_t{1} << 20)) {
+        parts = (threads + room - 1) / room;
+      }
+    }
+    Entry *out = data + std::size_t{slot} * rows;
+    const Entry *result =
+        sortColumn(dataset.column(feature), dataset.labels.data(), rows, codec,
+                   histograms[feature], out, workspace ? data + std::size_t{spare} * rows : nullptr,
+                   pool, parts);
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      slotOf[feature] = result == out ? slot : spare;
+      if (workspace) {
+        free.push_back(result == out ? spare : slot);
+      }
+      ++sorted;
+    }
+    freed.notify_all();
   });
+  return slotOf;
 }
 
 void fillCountTables(std::size_t size, std::vector<double> &xlog, std::vector<double> &inverse,
@@ -272,6 +314,15 @@ void CpuTreeBuilder::recordLeaf(const Entry *entries, std::uint32_t count,
   }
 }
 
+namespace {
+
+// A node's column of `feature`.
+Entry *columnOf(const Columns &columns, const Subtree &item, std::uint32_t feature) {
+  return columns.slot(item.slots ? (*item.slots)[feature] : feature);
+}
+
+} // namespace
+
 void CpuTreeBuilder::grow(const Columns &columns, Subtree root) {
   std::vector<Subtree> stack;
   stack.push_back(std::move(root));
@@ -287,7 +338,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   const std::uint32_t count = item.count;
   const std::uint32_t *counts = store_.counts(item.node);
   // Every column of item.features holds the node's rows in its range.
-  const Entry *rows = columns.feature(item.features.front(), item.side) + begin;
+  const Entry *rows = columnOf(columns, item, item.features.front()) + begin;
   if (rules_.isTerminal(counts, count, item.depth)) {
     recordLeaf(rows, count, item.node);
     return;
@@ -301,7 +352,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
     if (item.cuts) {
       return item.cuts->constant[feature] != 0;
     }
-    const Entry *entries = columns.feature(feature, item.side) + begin;
+    const Entry *entries = columnOf(columns, item, feature) + begin;
     return !isCut(entries[0].value, entries[count - 1].value, gap);
   });
   if (features.empty()) {
@@ -336,7 +387,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   } else {
     parallelFor(widePool, features.size(), [&](std::size_t index) {
       const std::uint32_t feature = features[index];
-      cuts[feature] = scanFeature(columns.feature(feature, item.side) + begin, count, counts,
+      cuts[feature] = scanFeature(columnOf(columns, item, feature) + begin, count, counts,
                                   parentWeighted, minChild, cutLefts.data() + feature * classes);
     });
   }
@@ -349,7 +400,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   }
   const std::uint32_t leftCount = decision.leftCount;
   const Entry *winner =
-      columns.feature(static_cast<std::size_t>(decision.feature), item.side) + begin;
+      columnOf(columns, item, static_cast<std::uint32_t>(decision.feature)) + begin;
 
   // 3. The children's class counts: the winner's sweep counted the left side.
   thread_local std::vector<std::uint32_t> threadChildCounts;
@@ -387,7 +438,9 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
     return;
   }
   const std::size_t blocks = wide ? 4 * (pool_->workerCount() + 1) : 1;
-  const bool outOfPlace = columns.other && count >= kOutOfPlaceRows;
+  // Out of place needs a slot that holds none of the node's columns.
+  const bool outOfPlace = columns.leftBits && count >= kOutOfPlaceRows &&
+                          (columns.slots > 0 ? columns.slots : featureCount_) > features.size();
   parallelFor(widePool, blocks, [&](std::size_t block) {
     const std::uint32_t end = static_cast<std::uint32_t>(std::size_t{count} * (block + 1) / blocks);
     for (std::uint32_t index = static_cast<std::uint32_t>(std::size_t{count} * block / blocks);
@@ -417,7 +470,14 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   ChildSweep sweeps[2];
   ChildSweep *swept[2] = {nullptr, nullptr};
   std::shared_ptr<FeatureCuts> childCuts[2];
-  if (columns.other && count >= kOutOfPlaceRows && classCount_ == 2) {
+  // In blocks only if the free slots cannot keep the threads busy, as the
+  // blocks lose the fused sweeps.
+  const std::size_t freeSlots =
+      outOfPlace ? (columns.slots > 0 ? columns.slots : featureCount_) - features.size() : 0;
+  const bool blocked = outOfPlace && pool_ && count >= kBlockedRows &&
+                       freeSlots < std::min<std::size_t>(features.size() - 1,
+                                                         pool_->workerCount() + 1);
+  if (outOfPlace && !blocked && classCount_ == 2) {
     for (int child = 0; child < 2; ++child) {
       const std::uint32_t *total = child == 0 ? leftCounts : rightCounts;
       const std::uint32_t rows = child == 0 ? leftCount : rightCount;
@@ -436,12 +496,13 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
       swept[child] = &sweeps[child];
     }
   }
-  const int side = partition(columns, item, decision.feature, leftCount, keep, swept);
+  std::shared_ptr<const SlotMap> slots =
+      partition(columns, item, decision.feature, leftCount, keep, outOfPlace, blocked, swept);
 
   // 5. Children. A big left child becomes a pool task so idle threads can pick
   //    it up; this thread continues with the right one.
-  Subtree left{leftId, begin, leftCount, item.depth + 1, {}, side, std::move(childCuts[0])};
-  Subtree right{rightId, begin + leftCount, rightCount, item.depth + 1, {}, side,
+  Subtree left{leftId, begin, leftCount, item.depth + 1, {}, slots, std::move(childCuts[0])};
+  Subtree right{rightId, begin + leftCount, rightCount, item.depth + 1, {}, std::move(slots),
                 std::move(childCuts[1])};
   if (!leftTerminal && !rightTerminal) {
     left.features = features;
@@ -461,22 +522,82 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   }
 }
 
-int CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int winner,
-                              std::uint32_t leftCount, Keep keep, ChildSweep *const *children) {
+std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
+                                                         const Subtree &item, int winner,
+                                                         std::uint32_t leftCount, Keep keep,
+                                                         bool outOfPlace, bool blocked,
+                                                         ChildSweep *const *children) {
   const std::uint32_t count = item.count;
-  if (columns.other && count >= kOutOfPlaceRows) {
-    // Every column into the other side; the winner's is already in order.
-    const int to = 1 - item.side;
-    const std::uint32_t from = keep == Keep::Right ? leftCount : 0;
-    const std::uint32_t to_end = keep == Keep::Left ? leftCount : count;
+  if (outOfPlace) {
+    // Every column but the winner's into a slot that holds none of the
+    // node's columns (see Columns): the free ones first, then those that the
+    // moved columns leave. The winner's column is already in order.
+    constexpr std::uint32_t kNone = ~0u;
+    const std::vector<std::uint32_t> &features = item.features;
+    const std::size_t slotCount = columns.slots > 0 ? columns.slots : featureCount_;
+    auto slots = std::make_shared<SlotMap>(featureCount_);
+    if (item.slots) {
+      *slots = *item.slots;
+    } else {
+      std::iota(slots->begin(), slots->end(), 0u);
+    }
+    std::vector<bool> taken(slotCount, false);
+    for (const std::uint32_t feature : features) {
+      taken[(*slots)[feature]] = true;
+    }
+    std::deque<std::pair<std::uint32_t, std::uint32_t>> free; // (slot, index of the column leaving it)
+    for (std::uint32_t slot = 0; slot < slotCount; ++slot) {
+      if (!taken[slot]) {
+        free.emplace_back(slot, kNone);
+      }
+    }
+    std::vector<std::uint32_t> from(features.size());
+    std::vector<std::uint32_t> waitFor(features.size(), kNone);
+    for (std::size_t index = 0; index < features.size(); ++index) {
+      const std::uint32_t feature = features[index];
+      from[index] = (*slots)[feature];
+      if (static_cast<int>(feature) == winner) {
+        continue;
+      }
+      const auto [slot, leaving] = free.front();
+      free.pop_front();
+      waitFor[index] = leaving;
+      free.emplace_back(from[index], static_cast<std::uint32_t>(index));
+      (*slots)[feature] = slot;
+    }
+    if (blocked) {
+      std::vector<const Entry *> sources;
+      std::vector<Entry *> targets;
+      std::vector<std::uint32_t> moveOf(features.size(), kNone);
+      std::vector<std::uint32_t> moveWaits;
+      for (std::size_t index = 0; index < features.size(); ++index) {
+        if (static_cast<int>(features[index]) != winner) {
+          moveOf[index] = static_cast<std::uint32_t>(sources.size());
+          sources.push_back(columns.slot(from[index]) + item.begin);
+          targets.push_back(columns.slot((*slots)[features[index]]) + item.begin);
+          moveWaits.push_back(waitFor[index] == kNone ? kNone : moveOf[waitFor[index]]);
+        }
+      }
+      partitionInBlocks(sources, targets, moveWaits, count, leftCount, keep, columns.leftBits);
+      return slots;
+    }
+    // Columns are taken in order, so the one a column waits for has started.
+    std::unique_ptr<std::atomic<std::uint32_t>[]> done(
+        new std::atomic<std::uint32_t>[features.size()]());
     const bool sweep = children[0] || children[1];
     const bool gini = rules_.criterion() == Criterion::Gini;
     parallelFor(pool_ && count >= options_.featureParallelRows ? pool_ : nullptr,
-                item.features.size(), [&](std::size_t index) {
-                  const std::uint32_t feature = item.features[index];
-                  const Entry *source = columns.feature(feature, item.side) + item.begin;
-                  Entry *target = columns.feature(feature, to) + item.begin;
+                features.size(), [&](std::size_t index) {
+                  const std::uint32_t feature = features[index];
                   const bool isWinner = static_cast<int>(feature) == winner;
+                  const Entry *source = columns.slot(from[index]) + item.begin;
+                  Entry *target = isWinner ? nullptr : columns.slot((*slots)[feature]) + item.begin;
+                  if (waitFor[index] != kNone) {
+                    std::atomic<std::uint32_t> &other = done[waitFor[index]];
+                    while (other.load(std::memory_order_acquire) == 0) {
+                      other.wait(0, std::memory_order_acquire);
+                    }
+                  }
                   if (sweep) {
                     // CART: Gini, values must differ; C4.5: entropy, gap.
                     if (gini) {
@@ -488,14 +609,14 @@ int CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int w
                                                                   leftCount, keep, columns.leftBits,
                                                                   isWinner, feature, children);
                     }
-                  } else if (isWinner) {
-                    std::memcpy(target + from, source + from, (to_end - from) * sizeof(Entry));
-                  } else {
+                  } else if (!isWinner) {
                     partitionFeatureOutOfPlace(source, target, count, leftCount, keep,
                                                columns.leftBits);
                   }
+                  done[index].store(1, std::memory_order_release);
+                  done[index].notify_all();
                 });
-    return to;
+    return slots;
   }
   thread_local std::vector<std::uint32_t> threadOthers;
   std::vector<std::uint32_t> &others = threadOthers;
@@ -519,19 +640,19 @@ int CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int w
         std::min(others.size(), keep == Keep::Both ? count / bufferSize : others.size());
     if (pool_ && slots < 2) {
       for (std::uint32_t feature : others) {
-        partitionFeatureInBlocks(columns.feature(feature, item.side) + item.begin, count,
+        partitionFeatureInBlocks(columnOf(columns, item, feature) + item.begin, count,
                                  leftCount, nodeScratch);
       }
-      return item.side;
+      return item.slots;
     }
     parallelFor(pool_, slots, [&](std::size_t slot) {
       Entry *buffer = nodeScratch + slot * bufferSize;
       for (std::size_t index = slot; index < others.size(); index += slots) {
-        partitionFeature(columns.feature(others[index], item.side) + item.begin, count,
+        partitionFeature(columnOf(columns, item, others[index]) + item.begin, count,
                          leftCount, buffer, keep);
       }
     });
-    return item.side;
+    return item.slots;
   }
   // Small node: a per-thread buffer (stays in cache), one column per thread
   // for wide nodes.
@@ -540,12 +661,12 @@ int CpuTreeBuilder::partition(const Columns &columns, const Subtree &item, int w
     if (keep == Keep::Both && buffer.size() < count) {
       buffer.resize(count);
     }
-    partitionFeature(columns.feature(others[index], item.side) + item.begin, count, leftCount,
+    partitionFeature(columnOf(columns, item, others[index]) + item.begin, count, leftCount,
                      buffer.data(), keep);
   };
   parallelFor(pool_ && count >= options_.featureParallelRows ? pool_ : nullptr, others.size(),
               partitionOne);
-  return item.side;
+  return item.slots;
 }
 
 // Stable partition of `source` into `target` by goesLeft: left rows to
@@ -592,6 +713,84 @@ void CpuTreeBuilder::partitionFeatureOutOfPlace(const Entry *source, Entry *targ
 #if defined(__SSE2__)
   _mm_sfence(); // the stores are visible before another thread reads them
 #endif
+}
+
+// partitionFeatureOutOfPlace() for the columns `sources` of a big node, into
+// `targets`, in blocks of kPartitionBlock entries taken in order (column by
+// column) by all threads. A block counts its left rows (which brings it into
+// the cache), takes the left rows before it from the block before it (a
+// chain: that block has started), publishes its own, and writes its rows. A
+// column writes once every block of the column that leaves its target slot
+// (waitFor, an earlier one) is done with it.
+void CpuTreeBuilder::partitionInBlocks(const std::vector<const Entry *> &sources,
+                                       const std::vector<Entry *> &targets,
+                                       const std::vector<std::uint32_t> &waitFor,
+                                       std::uint32_t count, std::uint32_t leftCount, Keep keep,
+                                       const std::uint64_t *leftBits) const {
+  const std::size_t columns = sources.size();
+  const std::size_t blocks = (count + kPartitionBlock - 1) / kPartitionBlock;
+  // Left rows up to and including each block, plus one (0: not yet known).
+  std::unique_ptr<std::atomic<std::uint32_t>[]> lefts(
+      new std::atomic<std::uint32_t>[columns * blocks]());
+  std::unique_ptr<std::atomic<std::uint32_t>[]> read(new std::atomic<std::uint32_t>[columns]());
+  const EntryCodec codec = codec_;
+  auto goesLeft = [leftBits, codec](Entry entry) {
+    const std::uint32_t row = codec.row(entry.packed);
+    return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
+  };
+  pool_->parallelFor(columns * blocks, [&](std::size_t item) {
+    const std::size_t column = item / blocks;
+    const std::size_t block = item % blocks;
+    const std::uint32_t start = static_cast<std::uint32_t>(block * kPartitionBlock);
+    const std::uint32_t length = std::min(kPartitionBlock, count - start);
+    const Entry *source = sources[column] + start;
+    std::uint32_t mine = 0;
+    for (std::uint32_t index = 0; index < length; ++index) {
+      mine += goesLeft(source[index]);
+    }
+    std::uint32_t before = 0; // left rows of the column before this block
+    if (block > 0) {
+      const std::atomic<std::uint32_t> &previous = lefts[item - 1];
+      std::uint32_t value;
+      while ((value = previous.load(std::memory_order_acquire)) == 0) {
+#if defined(__SSE2__)
+        _mm_pause();
+#endif
+      }
+      before = value - 1;
+    }
+    lefts[item].store(before + mine + 1, std::memory_order_release);
+    if (waitFor[column] != ~0u) {
+      std::atomic<std::uint32_t> &other = read[waitFor[column]];
+      for (std::uint32_t value; (value = other.load(std::memory_order_acquire)) < blocks;) {
+        other.wait(value, std::memory_order_acquire);
+      }
+    }
+    Entry *target = targets[column];
+    std::uint32_t left = before;
+    std::uint32_t right = leftCount + (start - before);
+    for (std::uint32_t index = 0; index < length; ++index) {
+      const Entry entry = source[index];
+      const std::uint32_t isLeft = goesLeft(entry);
+      if (isLeft ? keep != Keep::Right : keep != Keep::Left) {
+#if defined(__SSE2__)
+        _mm_stream_si64(reinterpret_cast<long long *>(target + (isLeft ? left : right)),
+                        std::bit_cast<long long>(entry));
+#else
+        target[isLeft ? left : right] = entry;
+#endif
+      }
+      left += isLeft;
+      right += 1 - isLeft;
+    }
+#if defined(__SSE2__)
+    _mm_sfence(); // the stores are visible before another thread reads them
+#endif
+    // Done with its source (read twice: counting, then writing).
+    if (read[column].fetch_add(1, std::memory_order_acq_rel) + 1 == blocks) {
+      read[column].notify_all();
+    }
+  });
 }
 
 // Stable partition by goesLeft (`leftCount` rows go left). The larger side is
@@ -1369,8 +1568,8 @@ CutCandidate CpuTreeBuilder::scanFeatureK(const Entry *entries, std::uint32_t co
 // through a small staging buffer per child (in L1), where the child's sweep
 // reads them, and from there to the target with non-temporal stores. So a big
 // node's columns are read once per level instead of twice (partition, then
-// the children's sweeps). The winner's column is already in order: it is
-// copied, and the sweeps read it in place.
+// the children's sweeps). The winner's column is already in order: it stays
+// where it is (no target), and the sweeps read it there.
 template <Criterion Crit, bool HasGap>
 void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::uint32_t count,
                                        std::uint32_t leftCount, Keep keep,
@@ -1397,23 +1596,10 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
     }
   }
 
-  if (isWinner) {
-    constexpr std::uint32_t kChunk = 4 * kStageEntries;
+  if (isWinner) { // in order where it is (no target)
     for (int child = 0; child < 2; ++child) {
-      if (!kept[child]) {
-        continue;
-      }
-      const Entry *from = source + childBegin[child];
-      Entry *to = target + childBegin[child];
-      for (std::uint32_t done = 0; done < childCount[child];) {
-        const std::uint32_t end = std::min(childCount[child], done + kChunk);
-        for (std::uint32_t index = done; index < end; ++index) {
-          store(to + index, from[index]);
-        }
-        if (sweeps[child]) {
-          sweeps[child]->advance(from, end);
-        }
-        done = end;
+      if (kept[child] && sweeps[child]) {
+        sweeps[child]->advance(source + childBegin[child], childCount[child]);
       }
     }
   } else {
@@ -1501,7 +1687,7 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
     FeatureCuts &out = *children[child]->out;
     const std::size_t classes = static_cast<std::size_t>(classCount_);
     out.cuts[feature] = sweeps[child]->finish(out.lefts.data() + feature * classes);
-    const Entry *entries = target + childBegin[child];
+    const Entry *entries = (isWinner ? source : target) + childBegin[child];
     out.constant[feature] = !isCut(entries[0].value, entries[childCount[child] - 1].value, gap);
   }
 }

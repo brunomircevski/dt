@@ -142,10 +142,14 @@ One thread pool (`ThreadPool`), two kinds of work:
   lopsided splits leave chains of mid-size nodes on the critical path (SUSY
   500k on 28 desktop threads: 140 → 110 ms with 4096 against 65536).
 * **Big nodes out of place** (≥ 32768 rows; `--serial` too, on its one
-  thread, so both backends run the same algorithm): the builder keeps a
-  second copy of the columns, and such a node is partitioned from the copy
-  that holds it into the other one, where its children continue (ping-pong).
-  Every entry moves once, written with non-temporal stores; the rows going
+  thread, so both backends run the same algorithm): the columns live in
+  *slots*, one per feature and a few spare ones (`Columns`), and such a node
+  moves every column but the winner's (already in order) into a slot that
+  holds none of its columns: the free ones first, then those the moved
+  columns leave (a column waits until the one it replaces is done). The node's
+  range is its own in every slot, so nodes never conflict; each subtree knows
+  its columns' slots (`Subtree::slots`, shared by its descendants until the
+  next move). Every entry moves once, written with non-temporal stores; the rows going
   left are marked in a bitmap (a bit per row, 1.3 MB on HIGGS) that stays in
   the caches while the columns stream through. With two classes, children of
   4096+ rows are swept *during* the partition: each column passes through a
@@ -155,7 +159,14 @@ One thread pool (`ThreadPool`), two kinds of work:
   goes. Their Gini sweeps (65536+ rows) divide instead of looking up `1/n` in
   the count tables, which are as large as the training set and cost more
   bandwidth than the entries when many threads read them.
-* **Huge nodes without the second copy** (> 2^18 rows) partition through the
+* **Nodes of 2^20+ rows with fewer free slots than threads** (`--parallel`
+  with `--spare-slots` below the default) are partitioned in blocks of 16K
+  entries by all threads instead of a column per thread, so that the few
+  slots do not idle the threads: a block counts its left rows, takes the count
+  before it from the block before it (a chain) and writes. Their children are
+  not swept on the way.
+* **Huge nodes in place** (> 2^18 rows, when no slot is spare: the CUDA
+  backend's hand-offs) partition through the
   node's own range of the shared scratch array. A column is partitioned in
   place with a buffer for
   the smaller child's rows only, so the range holds `count / (smaller + 1)`
@@ -175,16 +186,21 @@ tasks without deadlocks.
 
 ## Memory
 
-The columns take `8 · F · n` bytes. Partitioning needs a buffer for the rows of
-one child: a node uses its own range of one shared `n`-entry scratch array,
-and per-thread buffers are capped at 2^18 entries, so extra memory is about
-`8 · n` bytes plus 2 MB per thread, however many threads run. Both backends
-keep a second copy of the columns (another `8 · F · n` bytes; the presort
-uses it instead of per-thread buffers): with many threads the peak is about
-the same as without it, with one or a few it is higher (HIGGS serial: 3.7 →
-5.7 GiB, airline serial: 20.4 → 29.0 GiB). Until 2026-10-17 `--serial` did
-without it and partitioned every node in place, through a byte per row
-(`goesLeft`). On airline's 115M rows the serial build then used 1.7× the CPU
+The columns take `8 · (F + spare) · n` bytes: a slot per feature and `spare`
+more (see big nodes above). `--serial` has one spare slot. `--parallel` has
+`min(F − 1, threads)` (`--spare-slots N` to choose): a big node then moves all
+its columns at once, a column per thread, with the children's sweeps fused
+in. Fewer spare slots save `8 · n` bytes each but make big nodes wait: on
+epyc1 and dell1 (48 threads), 8 spare slots cut HIGGS from 5.7 to 4.1 GiB and
+airline from 29.0 to 25.6 GiB, with HIGGS CART 33-35% slower (C4.5 5-8%,
+airline 0-7%); 2 spare slots halve the speed. The presort sorts into the
+slots too, a free slot as each sort's second buffer. Partitioning in place
+needs a buffer for the rows of one child: a node uses its own range of one
+shared `n`-entry scratch array, and per-thread buffers are capped at 2^18
+entries, so extra memory is about `8 · n` bytes plus 2 MB per thread, however
+many threads run. Until 2026-10-17 both backends kept a full second copy of
+the columns (`8 · 2F · n`): serial HIGGS now peaks at 3.6 GiB instead of 5.7. Before that, `--serial` partitioned every node in place, through a byte
+per row (`goesLeft`). On airline's 115M rows the serial build then used 1.7× the CPU
 time of a 2-thread parallel build on epyc1 (171 s against 103 s), probably
 because the 115 MB byte array misses the caches where the parallel build's
 14 MB bitmap does not. Making serial use the copy sped serial airline up 1.3–1.9×; on epyc1 it
