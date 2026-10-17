@@ -7,6 +7,8 @@
 #   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          CUDA
 #   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
 #   cpu-dell-<data>     dell1: 2x Xeon Gold 6542Y                     parallel
+#   cpu-dell512-<data>  dell2: the same CPUs, 512 GB instead of 1 TB  parallel
+#                       (only when named, e.g. for the memory pressure of full ECBDL)
 # The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
 # on a GPU node would measure a CPU that is only there to feed the GPU.
 # The epyc and dell partitions have more nodes: the runs always take epyc1
@@ -71,11 +73,12 @@ JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda"
 if [ "$DATASET" = ecbdl ]; then
   JOBS=("${JOBS[@]:2}")
 fi
+OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then
   selected=()
-  for job in "${JOBS[@]}"; do
+  for job in "${JOBS[@]}" "${OPTIONAL[@]}"; do
     read -r name _ _ <<<"$job"
     for wanted in "$@"; do [ "$wanted" = "$name" ] && selected+=("$job"); done
   done

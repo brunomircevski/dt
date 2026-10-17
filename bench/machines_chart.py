@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One chart of a ./tree benchmark run with another machine's run as reference:
 training time and peak memory of every backend the runs hold (serial, parallel,
-CUDA), CART above C4.5. Colour follows the backend; the reference run's bars
+CUDA), one panel per protocol (CART above C4.5). Colour follows the backend; the reference run's bars
 are hatched. The header names every machine's CPU, RAM and GPU; memory is split
 into RAM (host, peak RSS) and VRAM (GPU) bars. When the runs recorded ./tree's
 phases, a time bar is split into growing the tree (setup, presort, build) and,
@@ -12,6 +12,10 @@ prepared files in plan.json) or did not build the same trees.
 
   bench/.venv/bin/python bench/machines_chart.py bench/results/cuda-legion-susy \\
       --reference bench/results/cpu-susy-vs-others/pc  # -> cuda-legion-susy/chart.png
+
+--more adds the cases of later runs kept in another directory under the same
+run names (e.g. cluster-ecbdl/unpruned/cpu-epyc-ecbdl next to
+cluster-ecbdl/cpu-epyc-ecbdl), so that one chart shows both.
 """
 
 import argparse
@@ -36,7 +40,7 @@ BACKENDS = {"serial": "Serial", "parallel": "Parallel", "cuda": "CUDA"}
 TITLES = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25",
           "cart_full": "CART, no pruning, depth ≤ 30", "c45_unpruned": "C4.5, no pruning",
           "cart_alpha_nodepth": "CART, fixed α = 1e-5", "cart_full_nodepth": "CART, no pruning"}
-PROTOCOLS = {p: TITLES[p] for p in ("cart_alpha", "c45")}  # the two panels; --protocols
+PROTOCOLS = {p: TITLES[p] for p in ("cart_alpha", "c45")}  # the panels; --protocols
 # No pruning: their "prune" timer holds only C4.5's collapse of useless splits
 # and its thresholds, part of growing; the bars are not split.
 UNPRUNED = {"cart_full", "c45_unpruned", "cart_full_nodepth"}
@@ -45,6 +49,12 @@ DATA_FILES = ("train.csv", "train.f32", "train.y.i32", "test.f32", "test.y.i32")
 LEFT = 0.215  # figure fraction left of the panels, for the row labels
 # Result directories are <backend>-<machine>-<dataset>; what to call each machine.
 MACHINES = {"pc": "desktop", "legion": "laptop"}
+MORE = []  # --more: directories with later runs of the same names
+
+
+def sources(run):
+    """The run's directory, then those of its later runs in the --more directories."""
+    return [run] + [more / run.name for more in MORE if (more / run.name / "results.jsonl").exists()]
 
 
 def lighter(color, amount=0.55):
@@ -68,7 +78,7 @@ def short_gpu(info):
 
 def bars(run, reference):
     """-> one dict per ./tree case of the run that went well."""
-    rows = [json.loads(line) for line in open(run / "results.jsonl")]
+    rows = [json.loads(line) for source in sources(run) for line in open(source / "results.jsonl")]
     info = B.hardware(json.load(open(run / "machine.json")))
     out = []
     for protocol in PROTOCOLS:
@@ -102,7 +112,7 @@ def bars(run, reference):
 
 
 def check_same(runs):
-    plans = [json.load(open(run / "plan.json")) for run in runs]
+    plans = [json.load(open(source / "plan.json")) for run in runs for source in sources(run)]
     datasets = {d for plan in plans for d in plan["data_files"] if d != B.BASELINE}
     if len(datasets) != 1:
         raise SystemExit(f"the runs used different datasets: {sorted(datasets)}")
@@ -127,8 +137,12 @@ def main():
                         help="runs drawn hatched as reference (another machine's run)")
     parser.add_argument("--out", type=Path, help="default: <first run>/chart.png")
     parser.add_argument("--protocols", default="cart_alpha,c45",
-                        help=f"the CART and the C4.5 protocol to draw, of: {', '.join(TITLES)}")
+                        help=f"the protocols to draw, one panel each, of: {', '.join(TITLES)}")
+    parser.add_argument("--more", action="append", type=Path, default=[],
+                        help="a directory with later runs of the same names, e.g. other "
+                        "protocols (repeatable)")
     args = parser.parse_args()
+    MORE.extend(args.more)
     PROTOCOLS.clear()
     PROTOCOLS.update((p, TITLES[p]) for p in args.protocols.split(","))
     runs = list(args.reference) + list(args.runs)
@@ -146,15 +160,16 @@ def main():
     header = 0.42 + 0.2 * len(runs)  # inches of the hardware lines
     footer = 0.18 if any(e["prune"] is not None and not e["reference"] for e in entries) else 0
     # At least three bars high: the row labels take two lines each.
-    inches = 1.9 + header + footer + 2 * 0.58 * max(per_panel + 0.45 * gaps, 3)
+    count = len(PROTOCOLS)
+    inches = 1.9 + header + footer + count * 0.58 * max(per_panel + 0.45 * gaps, 3)
     split = any(e["prune"] is not None and not e["reference"] for e in entries)
     # Between the panels: the lower one's title and subtitle and the upper one's
     # tick labels, the same in inches however few bars the panels hold.
     gap = 0.92
     panels = inches - (header + 1.05) - (1.08 if split else 0.9)
-    fig, axes = plt.subplots(2, 2, figsize=(13, inches), squeeze=False,
+    fig, axes = plt.subplots(count, 2, figsize=(13, inches), squeeze=False,
                              gridspec_kw={"width_ratios": [1.5, 1], "wspace": 0.12,
-                                          "hspace": gap / ((panels - gap) / 2)})
+                                          "hspace": gap / ((panels - (count - 1) * gap) / count)})
     max_time = max(e["time"] for e in entries)
     max_gib = max(max(e["ram"], e["vram"] or 0) for e in entries)
     for row, protocol in enumerate(PROTOCOLS):
@@ -246,13 +261,19 @@ def main():
         used_gpu = any(e["run"] == run and e["backend"] == "cuda" for e in entries)
         # Only ./tree is drawn: when its cases were rerun later, that is the date.
         started = machine.get("tree_rerun", machine)["started"][:10]
-        role = (f"reference: {run.name}, run {started}" if run in args.reference
-                else f"{run.name}, run {started}")
+        later = sources(run)[1:]
+        dates = list(dict.fromkeys(
+            [started] + [json.load(open(more / "machine.json"))["started"][:10] for more in later]))
+        role = (("reference: " if run in args.reference else "") + run.name
+                + "".join(f" + {more.parent.name}/" for more in later)
+                + f", run {' and '.join(dates)}")
         line_y = top - (0.36 + 0.2 * index) / inches
         fig.text(0.012, line_y, f"{where(run).capitalize()}", fontsize=9.2, color=INK,
                  fontweight="bold", va="top")
-        fig.text(0.075, line_y, f"{B.hardware_line(machine, used_gpu)}   ({role})",
-                 fontsize=9.2, color=INK, va="top")
+        line = f"{B.hardware_line(machine, used_gpu)}   ({role})"
+        # About 170 characters fit at 9.2 pt; a longer line is set smaller.
+        fig.text(0.075, line_y, line, fontsize=min(9.2, 9.2 * 170 / len(line)), color=INK,
+                 va="top")
     handles = [Patch(color=COLORS[b], label=BACKENDS[b]) for b in BACKENDS
                if any(e["backend"] == b for e in entries)]
     if split:
@@ -268,7 +289,8 @@ def main():
                bbox_to_anchor=(LEFT - 0.005, top - (header + 0.06) / inches),
                ncol=len(handles), frameon=False, fontsize=8.8, handletextpad=0.4,
                columnspacing=1.3)
-    reps = {json.load(open(r / "machine.json"))["settings"]["reps"] for r in runs}
+    reps = {json.load(open(source / "machine.json"))["settings"]["reps"]
+            for run in runs for source in sources(run)}
     runs_text = "one run per case" if reps == {1} else "median over the runs of each case"
     fig.text(LEFT, 0.1 / inches,
              f"Bars: {runs_text}. Time: ./tree's 'train total' (presort, build, prune; CUDA also "
