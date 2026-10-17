@@ -313,7 +313,7 @@ def main():
 
     every_time = [t for d in machines.values() for v in d["times"].values() for t in v]
     every_rss = [m / 2**30 for d in machines.values() for v in d["memory"].values() for m in v]
-    limits = {"time": (min(every_time) / 2.5, max(every_time) * 30),
+    limits = {"time": (min(every_time) / 2.5, max(every_time) * 14),
               "rss": (min(every_rss) / 1.8, max(every_rss) * 3.2)}
     heights = [layout(machines, p)[1] for p in PROTOCOLS]
     tree_height = 2 + sum(len(B.PROTOCOLS[p]["impls"]) for p in PROTOCOLS)

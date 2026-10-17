@@ -1,0 +1,22 @@
+job 502 on dell1 Fri Oct 16 09:58:27 PM CEST 2026
+susy: 4,500,000 train / 500,000 test rows, 18 features, 2 classes (20.8 s)
+susy_500k: 500,000 train / 100,000 test rows, 18 features, 2 classes (5.8 s)
+dbcc64d47ffd6242a500383a76fc07765c6e19c905b343e2c2f5033f3c0cfa77  bench/data/susy/meta.json
+72df35a16d6fe52920b356b961a8e3c7ddc81ce4ca76fd9b6cf98c9cb9c96d6c  bench/data/susy/test.f32
+5463489708d25a643407a4bed49b70de76ac6cb93adafd4084f18a003b3fe959  bench/data/susy/test.y.i32
+ca4fc6d1d24409f19683b066eb01973e203bcb327c39b89767b902b4bb1783b3  bench/data/susy/test.yadt.csv
+f4044b67be272496ad428662591479b57b9f89fe8f41510ece66dd06ee6734b0  bench/data/susy/train.csv
+1fcab64b0ce01a3e78c8ab892d97acaaff9ddf5f1a8714183d09a15353b2bd2f  bench/data/susy/train.f32
+12e742aef170247171df6c5c0f49544b7801a5cfb04ce5f43ea339d7004262a2  bench/data/susy/train.y.i32
+9664cd29660aed203d908f7139855f821451639f145ff7e37ff602f737b8ef2e  bench/data/susy/train.yadt.csv
+b893792b4d89af536c87ec1120cd2580c255dca4b225d49b8473cb262c94f4e8  bench/data/susy/yadt.names
+fe8ca5608e7a7294edeefc3717d7817cd485f207f9c4d561c9c2adcd77b9cad6  bench/data/susy_500k/meta.json
+b7d6f10b4371965584bfb5394bbb63524310beb34ee04b6488a2925c81bfbce7  bench/data/susy_500k/test.f32
+921da0af2044b1e2bbd0d8977f5900c37b96453532e75ac2a3484792005c29d7  bench/data/susy_500k/test.y.i32
+481aa517c94acb0e727723e21deeccc035c59e1b7b23b0e61f8303669db6e554  bench/data/susy_500k/test.yadt.csv
+d84197e6b70581eed5dd43c629c55742df426bb7aa84683c8a89685f5ad9f6d7  bench/data/susy_500k/train.csv
+f1410ca4f968e246500b58c7f2a56c31e10d4f5c737035b6fee071368a99612c  bench/data/susy_500k/train.f32
+fe0fc07e438735decc3b5e08a4c4167dcda63f6bfe11132f12e99ccad63b67f0  bench/data/susy_500k/train.y.i32
+34b097a3138713df66950a07bc9c2d8c42750c8404116d77f34fa0fb096eb1c4  bench/data/susy_500k/train.yadt.csv
+b893792b4d89af536c87ec1120cd2580c255dca4b225d49b8473cb262c94f4e8  bench/data/susy_500k/yadt.names
+done Fri Oct 16 09:58:55 PM CEST 2026
