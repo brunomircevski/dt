@@ -55,31 +55,35 @@ bench/cluster/submit.sh -d ecbdl -a "$prep"      # full: epyc1 and dell1 only
 Then copy `bench/results/cluster-*/` back and draw the charts:
 
 ```bash
-for d in higgs:higgs airlines:airline; do
-  dir=bench/results/cluster-${d%%:*} data=${d##*:}
-  bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
-      $dir/cuda-hopper-$data $dir/cuda-ampere-$data $dir/cpu-epyc-$data $dir/cpu-dell-$data \
-      --out $dir/chart.png
+dir=bench/results/cluster-higgs  # airline has its own, pruned and unpruned in one image, below
+bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
+    $dir/cuda-hopper-higgs $dir/cuda-ampere-higgs $dir/cpu-epyc-higgs $dir/cpu-dell-higgs \
+    --out $dir/chart.png
+s=bench/results/cluster-cpu-scaling
+t=$(mktemp -d)  # one chart per node and dataset, only to build the grid
+for node in epyc dell; do
+  bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-higgs --out $t/$node.png
+  bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-airline --out $t/$node-airline.png
 done
-for node in epyc dell; do  # the scaling charts, one per node and dataset
-  bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling/cpu-$node-higgs \
-      --out bench/results/cluster-cpu-scaling/chart-$node.png
-  bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling/cpu-$node-airline \
-      --out bench/results/cluster-cpu-scaling/chart-$node-airline.png
-done
-s=bench/results/cluster-cpu-scaling  # all four in a 2x2 grid
-bench/.venv/bin/python bench/grid_chart.py $s/chart-epyc.png $s/chart-dell.png \
-    $s/chart-epyc-airline.png $s/chart-dell-airline.png --out $s/chart.png
+bench/.venv/bin/python bench/grid_chart.py $t/epyc.png $t/dell.png \
+    $t/epyc-airline.png $t/dell-airline.png --out $s/chart.png  # 2x2: HIGGS above airline
+rm -r $t
 ```
 
-The unpruned airline run and its chart:
+The unpruned airline run and its chart (pruned and unpruned side by side in one image):
 
 ```bash
 bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines/noprunning
-dir=bench/results/cluster-airlines/noprunning
+d=bench/results/cluster-airlines
+t=$(mktemp -d)  # one chart per run, only to build the grid
+bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
+    $d/cuda-hopper-airline $d/cuda-ampere-airline $d/cpu-epyc-airline $d/cpu-dell-airline \
+    --out $t/pruned.png
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45_unpruned \
-    $dir/cuda-hopper-airline $dir/cuda-ampere-airline $dir/cpu-epyc-airline $dir/cpu-dell-airline \
-    --out bench/results/cluster-airlines/chart-noprunning.png
+    $d/noprunning/cuda-hopper-airline $d/noprunning/cuda-ampere-airline \
+    $d/noprunning/cpu-epyc-airline $d/noprunning/cpu-dell-airline --out $t/noprunning.png
+bench/.venv/bin/python bench/grid_chart.py $t/pruned.png $t/noprunning.png --out $d/chart.png
+rm -r $t
 ```
 
 - **`build.sh`** runs on hopper because the CPU nodes have no CUDA toolkit. It

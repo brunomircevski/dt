@@ -33,7 +33,7 @@ Each bar is ./tree's training time (`train total`: GPU setup, presort, build and
 
 `cart_alpha_nodepth` (CART, fixed α = 1e-5) and `c45` (C4.5, CF 0.25). A bar's lighter part is the pruning.
 
-![airline on four mordor3 nodes, pruned trees](chart.png)
+![airline on four mordor3 nodes: pruned trees (left), unpruned trees (right)](chart.png)
 
 Training time, median of 3 runs (min–max):
 
@@ -63,8 +63,6 @@ Against the earlier code (medians of 3): before the tuning for these servers (a8
 The same trees grown without pruning, so CART and C4.5 do comparable work: each grows its full tree. The bars are not split, because nothing is pruned.
 - **CART** (`cart_full_nodepth`, `./tree --cart --no-prune`): without pruning, CART's early stop with a fixed α (docs/ALGORITHMS.md) does not apply. The tree grows until every leaf is pure or cannot be split.
 - **C4.5** (`c45_unpruned`, `./tree --c45 --no-prune`): C4.5's collapse of useless splits still runs. It is part of growing, done with or without pruning.
-
-![airline on four mordor3 nodes, unpruned trees](chart-noprunning.png)
 
 Training time, median of 3 runs (min–max):
 

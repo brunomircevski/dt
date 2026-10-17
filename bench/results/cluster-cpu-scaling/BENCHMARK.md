@@ -30,7 +30,7 @@ bench/cluster/scaling.sh -m 3 -d airline   # airline
 
 So on epyc1 up to 24 threads stay on one socket, and the second socket joins from 28 on. On dell1 every thread count from 2 on is spread over both sockets.
 
-All four charts in one image (HIGGS above airline, epyc left, dell right); each is also below in its own section:
+All four charts in one image (HIGGS above airline, epyc left, dell right):
 
 ![Thread scaling on epyc1 and dell1, HIGGS and airline](chart.png)
 
@@ -53,10 +53,6 @@ All four charts in one image (HIGGS above airline, epyc left, dell right); each 
 - **Speedups changed with the serial times:** every speedup below is over the new serial time.
 
 ## HIGGS
-
-![Thread scaling on epyc1](chart-epyc.png)
-
-![Thread scaling on dell1](chart-dell.png)
 
 Training time, median of 3 runs, and speedup over 1 thread:
 
@@ -93,10 +89,6 @@ The trees are CART 1,611 nodes (depth 19, training accuracy 71.79%) and C4.5 1,1
 - **Memory:** a constant 5.7 GiB (CART) and 6.0–6.1 GiB (C4.5) at every thread count, the same on both nodes: both backends keep a second copy of the columns for the out-of-place partition (serial needed 3.7 and 4.0 GiB before the rerun). C4.5 no longer keeps a copy of the sorted values (5.0 GiB serial and 7.1–7.2 GiB parallel before).
 
 ## Airline
-
-![Thread scaling on epyc1, airline](chart-epyc-airline.png)
-
-![Thread scaling on dell1, airline](chart-dell-airline.png)
 
 Training time, median of 3 runs, and speedup over 1 thread:
 
