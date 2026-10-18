@@ -44,7 +44,8 @@ void ThreadPool::submit(std::function<void()> task) {
     ++pending_;
   }
   push(
-      [this, task = std::move(task)]() {
+      [this, task = std::move(task), doing = trace::current()]() {
+        trace::Doing scope(doing); // the task does what its creator did (--profile)
         try {
           task();
         } catch (...) {
@@ -89,6 +90,7 @@ void ThreadPool::waitIdle() {
       continue;
     }
     std::unique_lock<std::mutex> lock(mutex_);
+    trace::Doing waiting(trace::Work::Idle);
     idleCv_.wait(lock, [this]() { return pending_ == 0 || !queue_.empty(); });
     if (pending_ == 0) {
       if (firstError_) {

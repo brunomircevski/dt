@@ -1,6 +1,7 @@
 #include "algo/c45_pruning.h"
 
 #include "core/profile.h"
+#include "core/trace.h"
 #include "core/thread_pool.h"
 
 #include <algorithm>
@@ -142,6 +143,8 @@ public:
       extraCounts_.reset(new std::uint32_t[tree.nodes.size() * classCount_]());
       firstExtra_.reset(new std::uint32_t[tree.nodes.size()]());
     }
+    trace::Phase phase("prune setup");
+    trace::Doing doing(trace::Work::PruneOther);
     ProfileScope scope(pSetup);
     constexpr std::size_t kChunk = 4096;
     parallelFor(pool_, (hops_.size() + kChunk - 1) / kChunk, [&](std::size_t chunk) {
@@ -154,10 +157,14 @@ public:
 
   void run() {
     {
+      trace::Phase phase("prune arrange rows");
+      trace::Doing doing(trace::Work::PruneArrange);
       ProfileScope scope(pArrangeWhole);
       arrange(0, 0, train_.rowCount);
     }
     {
+      trace::Phase phase("prune subtrees");
+      trace::Doing doing(trace::Work::Prune);
       ProfileScope scope(pRecursion);
       if (pool_) {
         pruneAsync(0, 0, train_.rowCount, [](double) {});
@@ -167,6 +174,8 @@ public:
       }
     }
     {
+      trace::Phase phase("prune compact");
+      trace::Doing doing(trace::Work::PruneOther);
       ProfileScope scope(pCompact);
       tree_.compact(pool_);
     }

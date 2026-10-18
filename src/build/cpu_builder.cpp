@@ -1,5 +1,7 @@
 #include "build/cpu_builder.h"
 
+#include "core/trace.h"
+
 #include <algorithm>
 #include <atomic>
 #include <bit>
@@ -298,6 +300,7 @@ void CpuTreeBuilder::recordLeaf(const Entry *entries, std::uint32_t count,
   if (!leafOfRow_) {
     return;
   }
+  trace::Doing doing(trace::Work::Leaves);
   auto range = [&](std::uint32_t from, std::uint32_t to) {
     for (std::uint32_t index = from; index < to; ++index) {
       leafOfRow_[codec_.row(entries[index].packed)] = leaf;
@@ -324,6 +327,7 @@ Entry *columnOf(const Columns &columns, const Subtree &item, std::uint32_t featu
 } // namespace
 
 void CpuTreeBuilder::grow(const Columns &columns, Subtree root) {
+  trace::Doing doing(trace::Work::Build);
   std::vector<Subtree> stack;
   stack.push_back(std::move(root));
   while (!stack.empty()) {
@@ -385,6 +389,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
     }
     item.cuts.reset();
   } else {
+    trace::Doing doing(trace::Work::Sweep);
     parallelFor(widePool, features.size(), [&](std::size_t index) {
       const std::uint32_t feature = features[index];
       cuts[feature] = scanFeature(columnOf(columns, item, feature) + begin, count, counts,
@@ -441,6 +446,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   // Out of place needs a slot that holds none of the node's columns.
   const bool outOfPlace = columns.leftBits && count >= kOutOfPlaceRows &&
                           (columns.slots > 0 ? columns.slots : featureCount_) > features.size();
+  std::optional<trace::Doing> marking(std::in_place, trace::Work::Mark);
   parallelFor(widePool, blocks, [&](std::size_t block) {
     const std::uint32_t end = static_cast<std::uint32_t>(std::size_t{count} * (block + 1) / blocks);
     for (std::uint32_t index = static_cast<std::uint32_t>(std::size_t{count} * block / blocks);
@@ -465,6 +471,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
       }
     }
   });
+  marking.reset();
   const Keep keep = leftTerminal ? Keep::Right : rightTerminal ? Keep::Left : Keep::Both;
   // Big children (two classes) are swept while the columns are partitioned.
   ChildSweep sweeps[2];
@@ -496,8 +503,11 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
       swept[child] = &sweeps[child];
     }
   }
+  std::optional<trace::Doing> partitioning(
+      std::in_place, swept[0] || swept[1] ? trace::Work::PartitionSweep : trace::Work::Partition);
   std::shared_ptr<const SlotMap> slots =
       partition(columns, item, decision.feature, leftCount, keep, outOfPlace, blocked, swept);
+  partitioning.reset();
 
   // 5. Children. A big left child becomes a pool task so idle threads can pick
   //    it up; this thread continues with the right one.
@@ -593,6 +603,7 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
                   const Entry *source = columns.slot(from[index]) + item.begin;
                   Entry *target = isWinner ? nullptr : columns.slot((*slots)[feature]) + item.begin;
                   if (waitFor[index] != kNone) {
+                    trace::Doing waiting(trace::Work::Idle);
                     std::atomic<std::uint32_t> &other = done[waitFor[index]];
                     while (other.load(std::memory_order_acquire) == 0) {
                       other.wait(0, std::memory_order_acquire);

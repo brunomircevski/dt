@@ -166,7 +166,13 @@ def yadt_accuracy(report, title):
     return correct / total, int(total)
 
 
-def build_command(case, kind, args, scratch):
+def profile_name(case, rep):
+    """./tree --profile: the trace of a run, in <run dir>/profiles/."""
+    dataset, protocol, impl, threads = case
+    return f"profiles/{protocol}-{impl}-t{threads}-r{rep}.json"
+
+
+def build_command(case, kind, args, scratch, rep=0):
     """-> (argv, extra env, parser of stdout -> result dict)."""
     dataset, protocol, impl, threads = case
     spec = B.PROTOCOLS[protocol]["impls"][impl]
@@ -186,8 +192,10 @@ def build_command(case, kind, args, scratch):
             backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
         dump = scratch / "tree.dump"
         predict = evaluate and not args.train_accuracy_only
+        profile = (["--profile", str(args.out_dir / profile_name(case, rep))]
+                   if args.profile and kind == "run" else [])
         argv = [str(binary)] + backend + flags + (["--dump", str(dump)] if predict else []) \
-            + [str(data / "train.csv")]
+            + profile + [str(data / "train.csv")]
 
         def parse(stdout):
             nodes, leaves, depth = re.search(r"nodes (\d+), leaves (\d+), depth (\d+)",
@@ -448,6 +456,9 @@ def main():
     parser.add_argument("--train-accuracy-only", action="store_true",
                         help="./tree: record only its own training accuracy, skip predicting "
                              "the training and test rows from its dumped tree (minutes on big trees)")
+    parser.add_argument("--profile", action="store_true",
+                        help="./tree: also write where its training time goes (--profile) to "
+                             "<run dir>/profiles/<protocol>-<impl>-t<threads>-r<rep>.json")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
     args.cpu_list = parse_cpus(args.cpus) if args.cpus else None
@@ -475,6 +486,9 @@ def main():
     run_id = args.run_id or f"{socket.gethostname()}-{datetime.datetime.now():%Y%m%d-%H%M%S}"
     out_dir = B.RESULTS / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
+    args.out_dir = out_dir
+    if args.profile:
+        (out_dir / "profiles").mkdir(exist_ok=True)
     json.dump(machine_info(args), open(out_dir / "machine.json", "w"), indent=1)
     datasets = sorted({case[0] for case in cases} | {B.BASELINE})
     print("checking the data (SHA-256 of every file, every CSV row against the binary files):")
@@ -524,7 +538,7 @@ def main():
         print(f"[{progress['done']}/{total}] {datetime.datetime.now():%H:%M:%S} "
               f"{'run ' + str(rep + 1) + '/' + str(args.reps) if kind == 'run' else 'footprint'}"
               f": {describe(case)} ...", flush=True)
-        argv, extra_env, parse = build_command(case, kind, args, scratch)
+        argv, extra_env, parse = build_command(case, kind, args, scratch, rep)
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
         run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl == "tree_cuda")
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
@@ -554,6 +568,8 @@ def main():
             row["peak_rss_train_bytes"] = row["peak_rss_bytes"]  # YaDT: the process only trains
         if row["status"] != "ok" and kind != "baseline":
             failed.add(case)
+        if args.profile and kind == "run" and impl in ("tree", "tree_cuda"):
+            row["profile"] = profile_name(case, rep)
         row["command"] = shlex.join(pin + argv)
         results.write(json.dumps(row) + "\n")
         results.flush()

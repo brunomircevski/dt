@@ -8,7 +8,8 @@
 #   -> bench/results/cluster-higgs/cuda-hopper-higgs/
 # threads: run.py's --threads (default all); "scaling" = 1, 2, 4, then every
 # 4 up to the node's CPU count (scaling.sh). timeout: seconds per ./tree process
-# (default 3600).
+# (default 3600). RUN_EXTRA (environment): more run.py arguments, e.g.
+# --profile (profile.sh).
 
 set -euo pipefail
 DIR="$1" NAME="$2" DATASET="$3" IMPLS="$4" RUNS="$5" PROTOCOLS="${6:-cart_alpha_nodepth,c45}" THREADS="${7:-all}" TIMEOUT="${8:-3600}"
@@ -45,7 +46,8 @@ echo "runs per case: $RUNS"
 
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
-  --cpus "$CPUS" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" --train-accuracy-only
+  --cpus "$CPUS" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" --train-accuracy-only \
+  ${RUN_EXTRA:-}
 
 step "3/3 tables and CSV files"
 "$PY" bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"

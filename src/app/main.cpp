@@ -5,12 +5,14 @@
 #include "core/thread_pool.h"
 #include "core/nvtx.h"
 #include "core/timing.h"
+#include "core/trace.h"
 #include "core/tree.h"
 
 #include <fstream>
 #include <future>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -104,7 +106,14 @@ int main(int argc, char *argv[]) {
       gpuReady.get();
     }
     TrainTimings timings;
+    const bool profile = !options.profilePath.empty();
+    if (profile) {
+      trace::start();
+    }
     const Tree tree = trainTree(train, options, &pool, timings);
+    if (profile) {
+      trace::stop();
+    }
     const long trainPeakKiB = peakResidentKiB();
 
     double evalSeconds = 0.0;
@@ -144,6 +153,38 @@ int main(int argc, char *argv[]) {
       std::cout << "Memory:\n  peak after training " << trainPeakKiB << " KiB\n";
     }
 
+    if (profile) {
+      auto text = [](const std::string &value) {
+        std::string quoted = "\"";
+        for (const char c : value) {
+          quoted += c == '"' || c == '\\' ? std::string("\\") + c : std::string(1, c);
+        }
+        return quoted + "\"";
+      };
+      auto number = [](double value) {
+        std::ostringstream out;
+        out << std::setprecision(9) << value;
+        return out.str();
+      };
+      trace::write(options.profilePath,
+                   {{"dataset", text(options.datasetPath)},
+                    {"backend", text(backendName(options.backend))},
+                    {"algorithm", text(algorithmName(options.algorithm))},
+                    {"pruning", text(pruningDescription(options))},
+                    {"threads", number(threadCount(options))},
+                    {"rows", number(static_cast<double>(train.rowCount))},
+                    {"features", number(static_cast<double>(train.featureCount()))},
+                    {"nodes", number(static_cast<double>(tree.nodeCount()))},
+                    {"depth", number(tree.depth())},
+                    {"load_seconds", number(loadSeconds)},
+                    {"train_seconds", number(timings.total())},
+                    {"timings", "{\"gpu_setup\": " + number(timings.gpuSetupSeconds) +
+                                    ", \"presort\": " + number(timings.presortSeconds) +
+                                    ", \"build\": " + number(timings.buildSeconds) +
+                                    ", \"cross_validation\": " + number(timings.cvSeconds) +
+                                    ", \"prune\": " + number(timings.pruneSeconds) + "}"},
+                    {"peak_rss_train_kib", number(static_cast<double>(trainPeakKiB))}});
+    }
     if (options.printTree) {
       tree.print(std::cout);
     }

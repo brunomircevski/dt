@@ -47,6 +47,7 @@
 #include "build/grower.h"
 #include "core/nvtx.h"
 #include "core/timing.h"
+#include "core/trace.h"
 
 #include <cub/cub.cuh>
 #include <cuda/std/tuple>
@@ -1583,24 +1584,43 @@ private:
   std::size_t capacity_ = 0;
 };
 
-// Optional per-kernel timing (--gpu-profile): CUDA events around launches.
+// Optional per-kernel timing: CUDA events around launches and copies. With
+// --gpu-profile report() prints the totals per name; with --profile every
+// span goes to the trace, timed from an origin event recorded at a known host
+// time (setOrigin()).
 class KernelProfile {
 public:
-  explicit KernelProfile(bool enabled) : enabled_(enabled) {}
+  KernelProfile(bool print, bool trace) : print_(print), trace_(trace) {}
   ~KernelProfile() {
     for (auto &entry : pending_) {
       cudaEventDestroy(entry.start);
       cudaEventDestroy(entry.stop);
     }
+    if (origin_) {
+      cudaEventDestroy(origin_);
+    }
   }
-  bool enabled() const { return enabled_; }
+  bool enabled() const { return print_ || trace_; }
+  bool printing() const { return print_; }
 
-  template <typename Launch> void run(const char *name, cudaStream_t stream, Launch &&launch) {
-    if (!enabled_) {
+  // `stream` must be idle.
+  void setOrigin(cudaStream_t stream) {
+    if (!trace_) {
+      return;
+    }
+    CUDA_CHECK(cudaEventCreate(&origin_));
+    CUDA_CHECK(cudaEventRecord(origin_, stream));
+    CUDA_CHECK(cudaEventSynchronize(origin_));
+    hostOrigin_ = trace::now();
+  }
+
+  template <typename Launch>
+  void run(const char *name, cudaStream_t stream, Launch &&launch, const char *lane = "compute") {
+    if (!enabled()) {
       launch();
       return;
     }
-    Pending entry{name, nullptr, nullptr};
+    Pending entry{name, lane, nullptr, nullptr};
     cudaEventCreate(&entry.start);
     cudaEventCreate(&entry.stop);
     cudaEventRecord(entry.start, stream);
@@ -1614,6 +1634,12 @@ public:
       float ms = 0.0f;
       cudaEventSynchronize(entry.stop);
       cudaEventElapsedTime(&ms, entry.start, entry.stop);
+      if (origin_) {
+        float startMs = 0.0f;
+        cudaEventElapsedTime(&startMs, origin_, entry.start);
+        trace::gpuSpan(entry.name, entry.lane, hostOrigin_ + startMs * 1e-3,
+                       hostOrigin_ + (startMs + ms) * 1e-3);
+      }
       cudaEventDestroy(entry.start);
       cudaEventDestroy(entry.stop);
       auto found = std::find_if(totals_.begin(), totals_.end(),
@@ -1626,7 +1652,9 @@ public:
     }
     pending_.clear();
     for (const auto &total : totals_) {
-      std::fprintf(stderr, "  %-20s %9.2f ms\n", total.first.c_str(), total.second);
+      if (print_) {
+        std::fprintf(stderr, "  %-20s %9.2f ms\n", total.first.c_str(), total.second);
+      }
     }
     totals_.clear();
   }
@@ -1634,10 +1662,14 @@ public:
 private:
   struct Pending {
     std::string name;
+    const char *lane;
     cudaEvent_t start;
     cudaEvent_t stop;
   };
-  bool enabled_;
+  bool print_;
+  bool trace_;
+  cudaEvent_t origin_ = nullptr;
+  double hostOrigin_ = 0.0;
   std::vector<Pending> pending_;
   std::vector<std::pair<std::string, float>> totals_;
 };
@@ -1770,7 +1802,7 @@ public:
         classCount_(static_cast<int>(train.classCount())),
         codec_(makeEntryCodec(train.classCount(), train.rowCount)),
         hostGoesLeft_(new std::uint8_t[train.rowCount]),
-        profile_(options.gpu.profile) {
+        profile_(options.gpu.profile, trace::on()) {
     if (classCount_ > kMaxGpuClasses) {
       throw std::runtime_error("The Cuda backend supports at most 64 classes.");
     }
@@ -1812,7 +1844,8 @@ public:
     params_.criterion = rules.criterion();
     {
       ScopedTimer timer(timings.prepareSeconds);
-      NvtxRange range("presort");
+      trace::Phase phase("presort");
+      trace::Doing doing(trace::Work::GpuHost);
       presort(rows, distinct);
       {
         std::lock_guard<std::mutex> lock(pinMutex_); // see setup()'s pinner
@@ -1859,21 +1892,29 @@ public:
     if (stride_ < minRows_) {
       growOnCpu(std::move(root));
     } else {
+      trace::Phase phase("gpu levels");
+      trace::Doing doing(trace::Work::GpuHost);
       growLevels(std::move(root));
     }
     double waitSeconds = 0.0;
     {
       ScopedTimer wait(waitSeconds);
-      NvtxRange range("wait cpu subtrees");
-      // Every hand-off has started its CPU tasks once its copy is done.
-      CUDA_CHECK(cudaStreamSynchronize(copyStream_));
+      trace::Phase phase("wait cpu subtrees");
+      {
+        // Every hand-off has started its CPU tasks once its copy is done.
+        trace::Doing doing(trace::Work::GpuWait);
+        CUDA_CHECK(cudaStreamSynchronize(copyStream_));
+      }
       pool_.waitIdle();
     }
-    if (profile_.enabled()) {
+    if (profile_.printing()) {
       std::fprintf(stderr, "  waiting for CPU subtrees: %.2f ms\n", waitSeconds * 1000.0);
+    }
+    if (profile_.enabled()) {
       profile_.report();
     }
-    NvtxRange range("merge, toTree");
+    trace::Phase phase("assemble tree");
+    trace::Doing doing(trace::Work::Assemble);
     if (leafOfRow) {
       mergeLeaves(leafOfRow->ids);
     }
@@ -1922,8 +1963,8 @@ public:
       return false;
     }
     float *arranged = reinterpret_cast<float *>(columns_.get());
-    uploadStaged(nodeSlots, slotOfId.data(), slotOfId.size_bytes());
-    uploadStaged(leaves, ids.data(), rows * sizeof(std::uint32_t));
+    uploadStaged(nodeSlots, slotOfId.data(), slotOfId.size_bytes(), "uploadArrange");
+    uploadStaged(leaves, ids.data(), rows * sizeof(std::uint32_t), "uploadArrange");
     profile_.run("arrangeSort", stream_, [&]() {
       leafSlotKernel<<<static_cast<unsigned>((rows + 255) / 256), 256, 0, stream_>>>(
           leaves, nodeSlots, rows, keys, rowIds);
@@ -1941,11 +1982,17 @@ public:
     });
     CUDA_CHECK(cudaGetLastError());
     // rowMajor is the arena (page-locked) when the pruning got the workspace.
-    CUDA_CHECK(cudaMemcpyAsync(rowMajor, arranged, rows * features_ * sizeof(float),
-                               cudaMemcpyDeviceToHost, stream_));
-    downloadStaged(labels, sortedLabels, rows * sizeof(std::uint16_t));
-    downloadStaged(slotCounts, counts, slots * classes * sizeof(std::uint32_t));
-    CUDA_CHECK(cudaStreamSynchronize(stream_));
+    trace::add("d2h_bytes", static_cast<double>(rows * features_ * sizeof(float)));
+    profile_.run("downloadArranged", stream_, [&]() {
+      CUDA_CHECK(cudaMemcpyAsync(rowMajor, arranged, rows * features_ * sizeof(float),
+                                 cudaMemcpyDeviceToHost, stream_));
+    }, "copy");
+    downloadStaged(labels, sortedLabels, rows * sizeof(std::uint16_t), "downloadArranged");
+    downloadStaged(slotCounts, counts, slots * classes * sizeof(std::uint32_t), "downloadArranged");
+    {
+      trace::Doing waiting(trace::Work::GpuWait);
+      CUDA_CHECK(cudaStreamSynchronize(stream_));
+    }
     if (profile_.enabled()) {
       profile_.report();
     }
@@ -1982,7 +2029,15 @@ private:
     onePass_ = options_.gpu.sweep == GpuSweep::OnePass ||
                (options_.gpu.sweep == GpuSweep::Auto && fp32PerFp64 <= 4);
     CUDA_CHECK(cudaDeviceGetAttribute(&smCount_, cudaDevAttrMultiProcessorCount, device));
-    if (profile_.enabled()) {
+    profile_.setOrigin(stream_);
+    if (trace::on()) {
+      cudaDeviceProp properties{};
+      CUDA_CHECK(cudaGetDeviceProperties(&properties, device));
+      trace::info("gpu", properties.name);
+      trace::info("gpu_sweep", onePass_ ? "one-pass" : "two-pass");
+      trace::add("gpu_context_seconds", contextSeconds);
+    }
+    if (profile_.printing()) {
       cudaDeviceProp properties{};
       CUDA_CHECK(cudaGetDeviceProperties(&properties, device));
       std::fprintf(stderr, "  gpu %s (sm_%d%d), fp32:fp64 = %d:1, %s sweep\n", properties.name,
@@ -2042,16 +2097,19 @@ private:
     double uploadSeconds = 0.0;
     {
       ScopedTimer timer(uploadSeconds);
-      NvtxRange range("upload");
+      trace::Phase phase("upload");
       uploadStaged(target, train_.values.data(), total * sizeof(float));
       uploadStaged(labels_.get(), train_.labels.data(), rows_ * sizeof(std::uint16_t));
       if (keepValues) {
         rawValues_.reserve(total);
-        CUDA_CHECK(cudaMemcpyAsync(rawValues_.get(), target, total * sizeof(float),
-                                   cudaMemcpyDeviceToDevice, stream_));
+        profile_.run("copyValues", stream_, [&]() {
+          CUDA_CHECK(cudaMemcpyAsync(rawValues_.get(), target, total * sizeof(float),
+                                     cudaMemcpyDeviceToDevice, stream_));
+        });
       }
     }
-    if (profile_.enabled()) {
+    trace::add("gpu_alloc_seconds", allocSeconds);
+    if (profile_.printing()) {
       std::fprintf(stderr, "  setup alloc %.2f ms, upload %.2f ms\n", allocSeconds * 1e3,
                    uploadSeconds * 1e3);
     }
@@ -2091,6 +2149,7 @@ private:
                              options_.cart.pruning == CartPruning::Alpha;
     pinDemand_ = fewHandOffs ? kPinAheadBytes : arenaBytes();
     pinner_ = std::thread([this, fewHandOffs]() {
+      trace::Doing doing(trace::Work::PageLock);
       if (!fewHandOffs) {
         // All of it at once, while the pool is still idle (the GPU presorts):
         // the pages are touched by all threads, so they are spread over the
@@ -2102,6 +2161,7 @@ private:
         NvtxRange range("pin arena");
         touchHostMemory(arena_.get(), arenaBytes());
         {
+          trace::Doing waiting(trace::Work::Idle);
           std::unique_lock<std::mutex> lock(pinMutex_);
           pinCv_.wait(lock, [&]() { return presortDone_ || pinStop_; });
           if (!presortDone_) {
@@ -2130,13 +2190,19 @@ private:
   // 0.32 s page-locked in pipelined chunks and 0.35 s page-locked at once; on
   // the A100 node 0.45-0.55 s either way. Smaller chunks cost more per chunk
   // than they gain, more threads gained nothing.
-  void uploadStaged(void *target, const void *source, std::size_t bytes) {
+  void uploadStaged(void *target, const void *source, std::size_t bytes,
+                    const char *name = "upload") {
     constexpr std::size_t kChunk = Staging::kBytes;
+    trace::add("h2d_bytes", static_cast<double>(bytes));
     if (bytes <= kChunk) {
-      CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyHostToDevice, stream_));
+      profile_.run(name, stream_, [&]() {
+        CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyHostToDevice, stream_));
+      }, "copy");
+      trace::Doing waiting(trace::Work::GpuWait);
       CUDA_CHECK(cudaStreamSynchronize(stream_));
       return;
     }
+    trace::Doing copying(trace::Work::Staging);
     staging().prepare();
     Staging &staging = dt::staging();
     const char *from = static_cast<const char *>(source);
@@ -2146,25 +2212,36 @@ private:
     for (std::size_t offset = 0, chunk = 0; offset < bytes; offset += kChunk, ++chunk) {
       const int buffer = static_cast<int>(chunk % Staging::kBuffers);
       const std::size_t size = std::min(kChunk, bytes - offset);
-      CUDA_CHECK(cudaEventSynchronize(staging.done[buffer])); // its last upload is done
+      {
+        trace::Doing waiting(trace::Work::GpuWait);
+        CUDA_CHECK(cudaEventSynchronize(staging.done[buffer])); // its last upload is done
+      }
       char *stage = staging.buffers[buffer];
       copiers.parallelFor(parts, [&](std::size_t part) {
         const std::size_t begin = size * part / parts;
         const std::size_t end = size * (part + 1) / parts;
         std::memcpy(stage + begin, from + offset + begin, end - begin);
       });
-      CUDA_CHECK(cudaMemcpyAsync(to + offset, stage, size, cudaMemcpyHostToDevice, stream_));
+      profile_.run(name, stream_, [&]() {
+        CUDA_CHECK(cudaMemcpyAsync(to + offset, stage, size, cudaMemcpyHostToDevice, stream_));
+      }, "copy");
       CUDA_CHECK(cudaEventRecord(staging.done[buffer], stream_));
     }
+    trace::Doing waiting(trace::Work::GpuWait);
     CUDA_CHECK(cudaStreamSynchronize(stream_));
   }
 
   // The reverse of uploadStaged(): chunks are downloaded into the staging
   // buffers, and the pool's threads copy each one out while the next ones
   // are downloaded.
-  void downloadStaged(void *target, const void *source, std::size_t bytes) {
+  void downloadStaged(void *target, const void *source, std::size_t bytes,
+                      const char *name = "download") {
     if (bytes <= Staging::kBytes / 8) {
-      CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyDeviceToHost, stream_));
+      trace::add("d2h_bytes", static_cast<double>(bytes));
+      profile_.run(name, stream_, [&]() {
+        CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyDeviceToHost, stream_));
+      }, "copy");
+      trace::Doing waiting(trace::Work::GpuWait);
       CUDA_CHECK(cudaStreamSynchronize(stream_));
       return;
     }
@@ -2172,7 +2249,8 @@ private:
     staging().prepare();
     ThreadPool &copiers = staging().copyPool(pool_);
     const std::size_t parts = std::min<std::size_t>(Staging::kCopyThreads, copiers.workerCount() + 1);
-    downloadChunks(source, bytes, [&](std::size_t offset, const char *stage, std::size_t size) {
+    downloadChunks(source, bytes, name, [&](std::size_t offset, const char *stage, std::size_t size) {
+      trace::Doing copying(trace::Work::Staging);
       copiers.parallelFor(parts, [&](std::size_t part) {
         const std::size_t begin = size * part / parts;
         const std::size_t end = size * (part + 1) / parts;
@@ -2185,8 +2263,9 @@ private:
   // (offset, chunk, size) takes each chunk in order, while the next ones are
   // downloaded.
   template <typename Consume>
-  void downloadChunks(const void *source, std::size_t bytes, Consume &&consume) {
+  void downloadChunks(const void *source, std::size_t bytes, const char *name, Consume &&consume) {
     constexpr std::size_t kChunk = Staging::kBytes;
+    trace::add("d2h_bytes", static_cast<double>(bytes));
     staging().prepare();
     Staging &staging = dt::staging();
     const char *from = static_cast<const char *>(source);
@@ -2194,8 +2273,10 @@ private:
     auto sizeOf = [&](std::size_t chunk) { return std::min(kChunk, bytes - chunk * kChunk); };
     auto download = [&](std::size_t chunk) {
       const int buffer = static_cast<int>(chunk % Staging::kBuffers);
-      CUDA_CHECK(cudaMemcpyAsync(staging.buffers[buffer], from + chunk * kChunk, sizeOf(chunk),
-                                 cudaMemcpyDeviceToHost, stream_));
+      profile_.run(name, stream_, [&]() {
+        CUDA_CHECK(cudaMemcpyAsync(staging.buffers[buffer], from + chunk * kChunk, sizeOf(chunk),
+                                   cudaMemcpyDeviceToHost, stream_));
+      }, "copy");
       CUDA_CHECK(cudaEventRecord(staging.done[buffer], stream_));
     };
     for (std::size_t chunk = 0; chunk < std::min<std::size_t>(chunks, Staging::kBuffers); ++chunk) {
@@ -2203,7 +2284,10 @@ private:
     }
     for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
       const int buffer = static_cast<int>(chunk % Staging::kBuffers);
-      CUDA_CHECK(cudaEventSynchronize(staging.done[buffer]));
+      {
+        trace::Doing waiting(trace::Work::GpuWait);
+        CUDA_CHECK(cudaEventSynchronize(staging.done[buffer]));
+      }
       consume(chunk * kChunk, staging.buffers[buffer], sizeOf(chunk));
       if (chunk + Staging::kBuffers < chunks) {
         download(chunk + Staging::kBuffers);
@@ -2229,7 +2313,7 @@ private:
       const std::size_t end = bytes * (chunk + 1) / kChunks;
       std::memset(static_cast<char *>(data) + begin, 0, end - begin);
     });
-    if (profile_.enabled()) {
+    if (profile_.printing()) {
       std::fprintf(stderr, "  touch %.1f MB: %.2f ms\n", bytes / 1e6,
                    std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
                            .count() * 1e3);
@@ -2240,7 +2324,7 @@ private:
     const auto started = std::chrono::steady_clock::now();
     const bool registered =
         cudaHostRegister(data, bytes, cudaHostRegisterDefault) == cudaSuccess;
-    if (profile_.enabled()) {
+    if (profile_.printing()) {
       std::fprintf(stderr, "  page-lock %.1f MB: %.2f ms\n", bytes / 1e6,
                    std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
                            .count() * 1e3);
@@ -2328,6 +2412,7 @@ private:
     if (distinct) {
       downloadDistinct(*distinct, taken);
     }
+    trace::Doing waiting(trace::Work::GpuWait);
     CUDA_CHECK(cudaStreamSynchronize(stream_));
   }
 
@@ -2384,7 +2469,8 @@ private:
       placed = feature + 1;
     }
     distinct.values.resize(distinct.offsets[features_]);
-    downloadStaged(distinct.values.data(), distinctPool(), distinct.offsets[placed] * sizeof(float));
+    downloadStaged(distinct.values.data(), distinctPool(), distinct.offsets[placed] * sizeof(float),
+                   "downloadDistinct");
     if (placed == features_) {
       return;
     }
@@ -2398,7 +2484,7 @@ private:
                                            distinctCounts_.get() + feature,
                                            static_cast<int>(stride_), stream_));
       downloadStaged(distinct.values.data() + distinct.offsets[feature], unique,
-                     static_cast<std::size_t>(counts[feature]) * sizeof(float));
+                     static_cast<std::size_t>(counts[feature]) * sizeof(float), "downloadDistinct");
     }
   }
 
@@ -2416,12 +2502,14 @@ private:
   void pinArena() {
     std::unique_lock<std::mutex> lock(pinMutex_);
     for (;;) {
+      std::optional<trace::Doing> waiting(std::in_place, trace::Work::Idle);
       pinCv_.wait(lock, [&]() {
         return pinStop_ || (pinDemand_ > pinnedBytes_ && pinnedBytes_ < arenaBytes());
       });
       if (pinStop_) {
         return;
       }
+      waiting.reset();
       const std::size_t begin = pinnedBytes_;
       const std::size_t end = std::min(arenaBytes(), begin + kPinChunkBytes);
       lock.unlock();
@@ -2441,6 +2529,7 @@ private:
   // for kPinAheadBytes more).
   void ensurePinned(std::size_t bytes) {
     bytes = std::min(bytes, arenaBytes());
+    trace::Doing waiting(trace::Work::PageLock);
     std::unique_lock<std::mutex> lock(pinMutex_);
     if (pinStop_) {
       return;
@@ -2497,7 +2586,11 @@ private:
         NvtxRange range(name.c_str());
         level = processLevel(level);
       }
-      if (profile_.enabled()) {
+      trace::row("gpu_levels", {{"depth", depth}, {"nodes", static_cast<double>(nodes)},
+                                {"rows", static_cast<double>(rows)},
+                                {"segments", static_cast<double>(segments)},
+                                {"end", trace::now()}, {"seconds", seconds}});
+      if (profile_.printing()) {
         std::fprintf(stderr, "  gpu level %2d: %6zu nodes %9zu rows %7zu segments %8.2f ms\n",
                      depth, nodes, rows, segments, seconds * 1000.0);
       }
@@ -2614,17 +2707,22 @@ private:
 
   template <typename T> void upload(DeviceArray<T> &target, const std::vector<T> &source) {
     target.reserve(source.size(), stream_);
-    CUDA_CHECK(cudaMemcpyAsync(target.get(), source.data(), source.size() * sizeof(T),
-                               cudaMemcpyHostToDevice, stream_));
+    profile_.run("uploadLevel", stream_, [&]() {
+      CUDA_CHECK(cudaMemcpyAsync(target.get(), source.data(), source.size() * sizeof(T),
+                                 cudaMemcpyHostToDevice, stream_));
+    }, "copy");
   }
 
   template <typename T>
   void download(std::vector<T> &target, const DeviceArray<T> &source, std::size_t count,
                 bool wait = true) {
     target.resize(count);
-    CUDA_CHECK(cudaMemcpyAsync(target.data(), source.get(), count * sizeof(T),
-                               cudaMemcpyDeviceToHost, stream_));
+    profile_.run("downloadLevel", stream_, [&]() {
+      CUDA_CHECK(cudaMemcpyAsync(target.data(), source.get(), count * sizeof(T),
+                                 cudaMemcpyDeviceToHost, stream_));
+    }, "copy");
     if (wait) {
+      trace::Doing waiting(trace::Work::GpuWait);
       CUDA_CHECK(cudaStreamSynchronize(stream_));
     }
   }
@@ -2941,7 +3039,7 @@ private:
   // holds those of the CPU tasks).
   void mergeLeaves(decltype(RowLeaves::ids) &leafOfRow) {
     constexpr std::size_t kPiece = 1 << 16; // rows
-    downloadChunks(leafOfRow_.get(), stride_ * sizeof(std::uint32_t),
+    downloadChunks(leafOfRow_.get(), stride_ * sizeof(std::uint32_t), "downloadLeaves",
                    [&](std::size_t offset, const char *stage, std::size_t size) {
                      const auto *gpuLeaves = reinterpret_cast<const std::uint32_t *>(stage);
                      std::uint32_t *leaves = leafOfRow.data() + offset / sizeof(std::uint32_t);
@@ -3007,6 +3105,11 @@ private:
       }
     }
     const std::size_t blockEntries = features_ * handOffRows;
+    trace::add("handoff_rows", static_cast<double>(handOffRows));
+    trace::add("handoff_nodes", static_cast<double>(children.size()));
+    trace::add("handoff_bytes", static_cast<double>(blockEntries * sizeof(Entry)));
+    trace::add("d2h_bytes", static_cast<double>(blockEntries * sizeof(Entry)));
+    trace::add("handoffs", 1);
     ensurePinned((arenaUsed_ + blockEntries) * sizeof(Entry));
     Entry *host = arena_.get() + arenaUsed_;
     arenaUsed_ += blockEntries;
@@ -3038,7 +3141,7 @@ private:
                                      copyStream_));
           at = to;
         }
-      });
+      }, "copy");
       CUDA_CHECK(cudaEventRecord(ringFree_[part], copyStream_));
     }
     auto tasks = std::make_unique<PendingTasks>();

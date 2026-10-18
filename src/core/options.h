@@ -108,6 +108,8 @@ struct Options {
 
   bool printTree = false; // print the tree as text to stdout
   std::string dumpPath;   // write the tree as text to a file
+  // Write where the training time goes, as JSON (src/core/trace.h).
+  std::string profilePath;
 
   // Pre-pruning (stopping rules), the same for both algorithms.
   int maxDepth = -1; // -1 = unlimited

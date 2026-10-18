@@ -1,6 +1,7 @@
 #include "build/cpu_builder.h"
 #include "build/grower.h"
 #include "core/timing.h"
+#include "core/trace.h"
 
 #include <algorithm>
 #include <bit>
@@ -8,6 +9,7 @@
 #include <cstring>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 
 namespace dt {
@@ -40,6 +42,8 @@ public:
     const std::size_t count = rows.empty() ? rows_ : rows.size();
     {
       ScopedTimer timer(timings.prepareSeconds);
+      trace::Phase phase("presort");
+      trace::Doing doing(trace::Work::Presort);
       prepare(rows);
       if (distinct) {
         distinctValues(count, *distinct);
@@ -49,6 +53,7 @@ public:
     tree.featureNames = train_.featureNames;
     tree.classNames = train_.classNames;
     ScopedTimer timer(timings.buildSeconds);
+    std::optional<trace::Phase> phase(std::in_place, "build");
     const std::vector<std::uint32_t> counts = countClasses(train_, rows, pool_);
     NodeStore store(train_.classCount(), 2 * count);
     Subtree root;
@@ -69,6 +74,8 @@ public:
     if (pool_) {
       pool_->waitIdle();
     }
+    phase.emplace("assemble tree");
+    trace::Doing doing(trace::Work::Assemble);
     store.toTree(tree, pool_, leafOfRow);
     return tree;
   }

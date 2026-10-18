@@ -6,6 +6,7 @@
 #include "build/grower.h"
 #include "core/nvtx.h"
 #include "core/timing.h"
+#include "core/trace.h"
 
 #include <algorithm>
 #include <cmath>
@@ -166,7 +167,8 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
     if (!pool) {
       throw std::logic_error("The Cuda backend needs a thread pool");
     }
-    NvtxRange range("gpu setup");
+    trace::Phase phase("gpu setup");
+    trace::Doing doing(trace::Work::GpuHost);
     grower = makeGpuGrower(train, options, *pool, crossValidate, timings.gpuSetupSeconds);
   } else {
     grower = makeCpuGrower(train, options, buildPool, crossValidate);
@@ -188,9 +190,13 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   if (!isCart) {
     ScopedTimer timer(timings.pruneSeconds);
     NvtxRange range("c45 prune");
-    // Part of growing in c4.5 (done with or without pruning).
-    c45CollapseUselessSplits(tree, buildPool, &leafOfRow);
-    c45UseTrainingValueThresholds(tree, distinct, buildPool);
+    {
+      trace::Phase phase("c45 collapse, thresholds");
+      trace::Doing doing(trace::Work::PruneOther);
+      // Part of growing in c4.5 (done with or without pruning).
+      c45CollapseUselessSplits(tree, buildPool, &leafOfRow);
+      c45UseTrainingValueThresholds(tree, distinct, buildPool);
+    }
     if (options.c45.prune) {
       if (verbose) {
         std::cout << "  unpruned: " << tree.nodeCount() << " nodes\n";
@@ -213,7 +219,8 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   }
   if (options.cart.pruning != CartPruning::None) {
     ScopedTimer timer(timings.pruneSeconds);
-    NvtxRange range("cart prune");
+    trace::Phase phase("cart prune");
+    trace::Doing doing(trace::Work::Prune);
     cartCostComplexityPrune(tree, alpha);
   }
   return tree;

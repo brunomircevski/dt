@@ -81,7 +81,11 @@ void printUsage(const char *program) {
       << GpuOptions::kAutoMaxMinRowsCart << ")\n"
       << "  --gpu-sweep MODE         auto | one-pass | two-pass (default auto: one-pass\n"
       << "                           on GPUs with fast double precision)\n"
-      << "  --gpu-profile            print per-level / per-kernel GPU times (slower)\n";
+      << "  --gpu-profile            print per-level / per-kernel GPU times (slower)\n"
+      << "\n"
+      << "Profiling:\n"
+      << "  --profile FILE           write where the training time goes as JSON: phases,\n"
+      << "                           thread time per kind of work, GPU kernels and copies\n";
 }
 
 namespace {
@@ -231,6 +235,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.printTree = true;
     } else if (arg == "--dump") {
       options.dumpPath = args.value(arg);
+    } else if (arg == "--profile") {
+      options.profilePath = args.value(arg);
     } else if (arg == "--alpha") {
       options.cart.pruning = CartPruning::Alpha;
       options.cart.alpha = parseReal(arg, args.value(arg));

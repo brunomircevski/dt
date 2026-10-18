@@ -11,6 +11,8 @@
 #include <thread>
 #include <vector>
 
+#include "core/trace.h"
+
 namespace dt {
 
 // A small work-queue thread pool with two ways to use it:
@@ -77,10 +79,12 @@ template <class Body> void ThreadPool::parallelFor(std::size_t count, Body &&bod
   auto state = std::make_shared<State>();
   state->count = count;
   auto *bodyPtr = &body; // stays alive until every claimed item is done
+  const trace::Work doing = trace::current(); // the helpers do the same (--profile)
 
   // Claim items until none are left. A helper that starts late finds
   // next >= count and returns without touching `body`.
-  auto work = [state, bodyPtr]() {
+  auto work = [state, bodyPtr, doing]() {
+    trace::Doing scope(doing);
     for (std::size_t index; (index = state->next.fetch_add(1)) < state->count;) {
       try {
         (*bodyPtr)(index);
@@ -101,6 +105,7 @@ template <class Body> void ThreadPool::parallelFor(std::size_t count, Body &&bod
     push(work, /*front=*/true);
   }
   work();
+  trace::Doing waiting(trace::Work::Idle);
   for (std::size_t done; (done = state->done.load()) < count;) {
     state->done.wait(done);
   }
