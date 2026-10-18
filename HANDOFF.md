@@ -54,7 +54,12 @@ What the numbers say:
 - **Change 1 (chunked page-locking): drop it as it is.**
   - It is faster on hopper and slower for C4.5 on ampere: registering chunks during the levels makes the level copies wait (`uploadLevel` 0.34 → 3.4 s). A 4 GB lead only brought C4.5 to 67.5 s.
   - It also has a bug. Forcing chunked mode on airline (`DT_PIN_AT_ONCE_MAX_GB=0`) crashed C4.5 after the grow with `CUDA error at gpu_grower.cu:1990: invalid argument` (line number in the knob build). Some later step assumes the arena is one registration, and ECBDL's chunked path may hit the same bug.
-- **Ampere's registration benchmark** (arrived later): 75 GB with 4 KB pages took 5.37 s (72 ms/GB), twice hopper's. Its huge-page and chunk runs printed nothing, so the ampere huge-page number is missing (`~/dt-fix/reg-ampere.log`); rerun it there first.
+- **Ampere's registration benchmark** (arrived later; `~/dt-fix/reg-ampere.log`), 4 KB pages → `MADV_HUGEPAGE`:
+  - register 75 GB: 5.4–5.8 s → 1.83 s;
+  - touch 75 GB: 3.7 s → 0.66 s;
+  - register 12 GB (airline-sized): 1.31 s → 0.31 s.
+
+  Registering in 4 GB chunks costs nothing extra when it runs alone, on either node. So chunked mode's slowdown comes from registering while the GPU levels run.
 - **Registration benchmark on hopper:** `cudaHostRegister` of a touched 75 GB buffer takes 2.67 s with 4 KB pages and 1.55 s with `MADV_HUGEPAGE`. Touching it drops from 2–3.5 s to 0.5 s. Hopper's transparent huge pages are set to `madvise`, so the arena gets no huge pages today. Log: `~/dt-fix/reg-hopper.log`.
 - **Suggested approach:** `madvise(MADV_HUGEPAGE)` on the arena, keeping the single registration. Fix the chunked-mode crash before using any chunked mode. The alternative is staged hand-off copies, which need no arena registration.
 - No `profile.sh` rerun was made and nothing of the fix is on `main`.
@@ -68,5 +73,5 @@ What the numbers say:
 ### Next steps
 
 1. Take change 2 (count tables) from the branch onto `main` (the three CPU files), and check it on epyc.
-2. For change 1, try `MADV_HUGEPAGE` on the arena with the single registration. Measure on hopper and ampere: ECBDL unpruned CART and C4.5, airline, HIGGS. Rerun `regbench.sh` on ampere first. Drop the chunked mode, or fix its crash before keeping it.
+2. For change 1, try `MADV_HUGEPAGE` on the arena with the single registration. Measure on hopper and ampere: ECBDL unpruned CART and C4.5, airline, HIGGS. Huge pages should also shrink airline's 0.2–0.3 s registration. Drop the chunked mode, or fix its crash before keeping it.
 3. Commit what is a net win to `main` (explicit paths: other sessions share the git index), push, then sync and rebuild `~/dt` on mordor3. Delete this file and the `wip/` branch when done.
