@@ -218,6 +218,9 @@ void start() {
 }
 
 void stop() {
+  if (!on()) {
+    return;
+  }
   Recorder &r = recorder();
   r.sampling = false;
   if (r.sampler.joinable()) {

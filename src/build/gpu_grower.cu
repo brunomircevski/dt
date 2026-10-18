@@ -1857,6 +1857,8 @@ public:
     tree.featureNames = train_.featureNames;
     tree.classNames = train_.classNames;
     ScopedTimer timer(timings.buildSeconds);
+    // Its CUDA calls wait while the pinner page-locks the arena (setup()).
+    std::optional<trace::Phase> setupPhase(std::in_place, "grow setup");
     NodeStore store(train_.classCount(), 2 * stride_);
     // Leaves of rows: the CPU tasks write theirs into `leafOfRow`, the GPU
     // levels into leafOfRow_ (all ones elsewhere), merged at the end.
@@ -1889,6 +1891,7 @@ public:
                                     GpuOptions::kAutoMinRows, GpuOptions::kAutoMaxMinRowsCart)
                        : std::clamp(stride_ / GpuOptions::kAutoMinRowsShare,
                                     GpuOptions::kAutoMinRows, GpuOptions::kAutoMaxMinRows);
+    setupPhase.reset();
     if (stride_ < minRows_) {
       growOnCpu(std::move(root));
     } else {

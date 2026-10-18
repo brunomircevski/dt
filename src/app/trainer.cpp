@@ -163,6 +163,11 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   const bool crossValidate = isCart && options.cart.pruning == CartPruning::CrossValidation;
 
   std::unique_ptr<Grower> grower;
+  // --profile: the trace ends with the training, before the grower frees its
+  // memory (destroyed after this).
+  struct TraceEnd {
+    ~TraceEnd() { trace::stop(); }
+  } traceEnd;
   if (options.backend == Backend::Cuda) {
     if (!pool) {
       throw std::logic_error("The Cuda backend needs a thread pool");

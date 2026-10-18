@@ -98,7 +98,8 @@ void info(const char *name, const std::string &value);
 
 // Start recording on the calling thread (the training thread).
 void start();
-// Stop, then write everything to `path` with `facts` (name, JSON value).
+// Stop recording (once; later calls do nothing), then write everything to
+// `path` with `facts` (name, JSON value).
 void stop();
 void write(const std::string &path, const std::vector<std::pair<std::string, std::string>> &facts);
 
