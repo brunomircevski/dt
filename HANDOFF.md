@@ -45,6 +45,19 @@ What the numbers say:
 - **Unexplained:** airline C4.5 (12 GB arena, so still registered at once) moved its 0.2 s stall from grow setup into level 0, and its levels got 0.2 s slower in 2 of 3 runs.
 - **Not measured yet:** the count-table change on epyc (CPU parallel), and whether it changes the trees there.
 
+### Final verdict of the fix session (after the above)
+
+- **Change 2 (count tables): keep.**
+  - The golden tests pass, and the HIGGS trees (28 threads, CART α 1e-5 and C4.5) are byte-identical.
+  - The single-thread stretch at the start of the build is gone. The train time on the desktop is unchanged within noise (HIGGS is small).
+  - The CUDA grower only uses the small default tables. Not measured on epyc yet.
+- **Change 1 (chunked page-locking): drop it as it is.**
+  - It is faster on hopper and slower for C4.5 on ampere: registering chunks during the levels makes the level copies wait (`uploadLevel` 0.34 → 3.4 s). A 4 GB lead only brought C4.5 to 67.5 s.
+  - It also has a bug. Forcing chunked mode on airline (`DT_PIN_AT_ONCE_MAX_GB=0`) crashed C4.5 after the grow with `CUDA error at gpu_grower.cu:1990: invalid argument` (line number in the knob build). Some later step assumes the arena is one registration, and ECBDL's chunked path may hit the same bug.
+- **Registration benchmark (hopper only; ampere's did not run):** `cudaHostRegister` of a touched 75 GB buffer takes 2.67 s with 4 KB pages and 1.55 s with `MADV_HUGEPAGE`. Touching it drops from 2–3.5 s to 0.5 s. Hopper's transparent huge pages are set to `madvise`, so the arena gets no huge pages today. Log: `~/dt-fix/reg-hopper.log`.
+- **Suggested approach:** `madvise(MADV_HUGEPAGE)` on the arena, keeping the single registration. Fix the chunked-mode crash before using any chunked mode. The alternative is staged hand-off copies, which need no arena registration.
+- No `profile.sh` rerun was made and nothing of the fix is on `main`.
+
 ### Still running on mordor3 when this machine went down
 
 - A/B jobs 932 (hopper) and 933 (ampere): `~/dt-fix/ab-<node>.log`, profiles in `~/dt-fix/ab/<node>/`.
@@ -53,14 +66,6 @@ What the numbers say:
 
 ### Next steps
 
-1. Read `~/dt-fix/reg-*.log` and the rest of `~/dt-fix/ab-*.log`.
-2. Pick the approach. Options:
-   - huge pages plus a single registration;
-   - larger chunks;
-   - register only between levels;
-   - keep chunking only for unpruned CART;
-   - drop change 1.
-
-   Keep airline and HIGGS no slower.
-3. Measure change 2 on epyc (`--parallel`, ECBDL 15M and HIGGS; same trees).
-4. Commit what is a net win to `main` (explicit paths: other sessions share the git index), push, then sync and rebuild `~/dt` on mordor3. Delete this file and the `wip/` branch when done.
+1. Take change 2 (count tables) from the branch onto `main` (the three CPU files), and check it on epyc.
+2. For change 1, try `MADV_HUGEPAGE` on the arena with the single registration. Measure on hopper and ampere: ECBDL unpruned CART and C4.5, airline, HIGGS. Rerun `regbench.sh` on ampere first. Drop the chunked mode, or fix its crash before keeping it.
+3. Commit what is a net win to `main` (explicit paths: other sessions share the git index), push, then sync and rebuild `~/dt` on mordor3. Delete this file and the `wip/` branch when done.
