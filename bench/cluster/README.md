@@ -96,6 +96,10 @@ rm -r $t
   `bench/run.py <dataset> --protocols cart_alpha_nodepth,c45 --impls tree|tree_cuda --threads all --cpus 0-<cores-1> --reps <-m> --run-id cluster-<…>/<run> --train-accuracy-only`
   and `report.py`: `tree_cuda` on the GPU nodes, `tree` (parallel) on the
   CPU nodes. Its log is `<run>/run.log`.
+- **`profile.sh`** queues the same job with `run.py --profile` on hopper,
+  ampere and epyc1, then (one after the other on each node) again without it
+  into `plain/`, to see what profiling costs:
+  [`cluster-ecbdl-profile`](../results/cluster-ecbdl-profile/BENCHMARK.md).
 - **`scaling.sh`** queues the same job on epyc1 and dell1 with the thread list
   `1,2,4,8,12,…,48` (1 thread: `--serial`); `run.log` records the CPU order
   the threads take (`lscpu`).

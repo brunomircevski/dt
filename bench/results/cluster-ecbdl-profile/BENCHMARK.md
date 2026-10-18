@@ -1,0 +1,128 @@
+# Where the training time goes: ECBDL'14 15M sample, profiled on the mordor3 cluster
+
+**Status:** one profiled run per case on 2026-10-18 15:04–15:11, commit f77d39d (hopper, ampere and epyc1 at the same time, each node alone). Then the same cases without `--profile` (`plain/`, 15:11–15:19) to see what profiling costs. Every case built the same tree with and without `--profile`, on every node, and the same tree as [cluster-ecbdl](../cluster-ecbdl/BENCHMARK.md) (cd18717).
+
+`./tree --profile FILE` writes where the training time went as JSON ([src/core/trace.h](../../../src/core/trace.h), and *What is measured* below). `bench/profile_chart.py` draws the charts and `profile.md` (every number behind them) from the `profiles/*.json` files.
+
+```bash
+bench/cluster/profile.sh          # on mordor3's login node: hopper, ampere and epyc1, with and without --profile
+d=bench/results/cluster-ecbdl-profile
+bench/.venv/bin/python bench/profile_chart.py $d/cuda-hopper-ecbdl_15m $d/cuda-ampere-ecbdl_15m \
+    $d/cpu-epyc-ecbdl_15m --plain $d/plain --out-dir $d
+```
+
+The dataset and the nodes are those of [cluster-ecbdl](../cluster-ecbdl/BENCHMARK.md): ECBDL'14's 15M-row sample (631 features, 9.5 G values, 2.15% positives), ./tree's defaults, the whole node.
+
+| Run | Node | CPU | GPU (GPU 0 used) | Backend |
+|---|---|---|---|---|
+| `cuda-hopper-ecbdl_15m` | hopper | 2× Xeon Gold 6444Y, 32 cores, DDR5-4800 | H100 PCIe 80 GB (PCIe 5) | CUDA (+ 32 CPU threads) |
+| `cuda-ampere-ecbdl_15m` | ampere | 2× EPYC 7402 (Zen 2), 48 cores, DDR4-3200 | A100 80 GB PCIe (PCIe 4) | CUDA (+ 48 CPU threads) |
+| `cpu-epyc-ecbdl_15m` | epyc1 | 2× EPYC 9255 (Zen 5), 48 cores, DDR5-6400 | – | parallel (48 threads) |
+
+Three protocols:
+- CART pruned at α = 1e-5: a single leaf on ECBDL, but the GPU still grows 53 levels before the pruning.
+- CART without pruning: 604,225 nodes, depth 94.
+- C4.5 with CF 0.25: 209,799 nodes after pruning, depth 266.
+
+**In short:**
+- On the GPU nodes, the GPU grows the tree and the CPU threads mostly wait. They grow the small subtrees the GPU hands over, in bursts after each level, and do C4.5's pruning.
+- The pruning is why C4.5 gains less from the GPU than CART. The H100 grows the C4.5 tree 2.5× faster than epyc's 48 threads, but prunes it 1.65× slower: the GPU nodes' host CPUs prune, and they are slower than epyc's.
+- On the GPU, moving the columns (partition) is about 2/3 of the kernel time, and the split search most of the rest.
+- On epyc, the partition fused with the children's sweeps is half to two thirds of all thread time. The 48 threads are busy 94–97% of the run.
+
+## The training thread's phases
+
+![phases of the training thread](chart-phases.png)
+
+| Seconds | GPU setup | upload | presort | grow | arrange rows | prune | total |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| CART · hopper | 0.05 | 0.70 | 0.53 | 6.73 | – | – | 8.03 |
+| CART · ampere | 0.10 | 1.73 | 0.68 | 9.14 | – | – | 11.67 |
+| CART · epyc | – | – | 1.66 | 15.14 | – | – | 16.80 |
+| unpruned CART · hopper | 0.05 | 0.70 | 0.53 | 16.97 | – | – | 18.29 |
+| unpruned CART · ampere | 0.11 | 1.75 | 0.68 | 23.00 | – | – | 25.59 |
+| unpruned CART · epyc | – | – | 1.59 | 33.83 | – | – | 35.43 |
+| C4.5 · hopper | 0.04 | 0.70 | 0.61 | 26.70 | 1.27 | 17.53 | 46.94 |
+| C4.5 · ampere | 1.97 | 1.68 | 0.78 | 34.03 | 1.80 | 26.20 | 66.56 |
+| C4.5 · epyc | – | – | 1.90 | 65.61 | 0.78 | 10.61 | 78.95 |
+
+(grow: the GPU levels on CUDA, with the CPU subtrees that are left after them, up to 0.14 s; the remaining up to 0.10 s, tree assembly and C4.5's collapsing, are in `profile.md`.)
+
+- **Growing: the H100 is 2.2× (CART), 2.0× (unpruned CART) and 2.5× (C4.5) faster than epyc**, the A100 1.7×, 1.5× and 1.9×. The GPU presorts in 0.53–0.78 s, against epyc's 1.6–1.9 s.
+- **C4.5's pruning takes 40% of a hopper run and 42% of an ampere run** (18.8 and 28.0 s with arranging the rows), against 14% on epyc (11.4 s). It runs on the host CPUs. Their thread time for the same pruning: epyc 497 thread-s, hopper 580, ampere 1,280; all three keep 31 of 32 or 44–46 of 48 threads busy on average. So an ampere thread (Zen 2, DDR4) prunes 2.6× slower than an epyc thread. **That is why C4.5 on the H100 is only 1.7× epyc, against 2.1× for CART.**
+- **The upload of the data** (37.9 GB of float32) takes 0.70 s on hopper (54 GB/s, PCIe 5) and 1.7 s on ampere (22 GB/s, PCIe 4): 9% and 15% of pruned CART.
+- **The page-locking of the hand-off arena stalls the GPU 1.1 s (hopper) to 1.7–1.9 s (ampere)** in unpruned CART and C4.5. These two hand most rows to the CPU, so ./tree page-locks the whole host arena for the hand-offs (75 GB) at once after the presort, in a background thread. `cudaHostRegister` holds the CUDA driver's lock meanwhile, so the next CUDA call of the training thread waits. On hopper and unpruned CART on ampere, that call is in the first GPU level: level 0 takes 1.31–1.99 s, the next levels 0.25–0.34 s. In C4.5 on ampere it is the setup before the levels: the 1.97 s of GPU setup. That is 6% of unpruned CART and 2–3% of C4.5. Pruned CART hands few rows over and page-locks in small chunks, as it needs them: no stall. (On airline the arena's registration was measured at 0.2 s, and one registration was faster than 12 chunks of 1 GB.)
+
+## What the CPU threads do
+
+![CPU threads by kind of work](chart-threads.png)
+
+Each bar is threads × training time. The training thread counts as busy while it drives the GPU, including waiting for it ("driving the GPU").
+
+- **On the GPU nodes the CPU threads are mostly idle:** 92–94% of the thread time for pruned CART, where only the training thread works (it drives the GPU); 67–73% for unpruned CART, whose pool grows the 49,187 small subtrees the GPU hands over (5.9M rows); 46–50% for C4.5, of which most of the busy time is the pruning (39–40% of all thread time).
+- **On epyc the threads are busy 94–97% of the run.** The partition fused with the children's sweeps takes 67% of the thread time (CART), 48% (unpruned CART) and 65% (C4.5). The separate sweeps and partitions take 16%, 43% and 15%, the presort 9%, 4% and 2%.
+
+## What the GPU runs
+
+![GPU kernels and copies](chart-gpu.png)
+
+| Busy seconds | kernels: presort | split search | partition | other | copies: upload | hand-off | other | GPU busy |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| CART · hopper | 0.53 | 2.03 | 4.45 | – | 0.69 | 0.04 | 0.07 | 87% |
+| CART · ampere | 0.68 | 2.59 | 6.24 | – | 1.72 | 0.13 | 0.09 | 82% |
+| unpruned CART · hopper | 0.53 | 4.91 | 9.06 | 0.05 | 0.69 | 0.54 | 1.53 | 79% |
+| unpruned CART · ampere | 0.68 | 6.14 | 12.73 | 0.06 | 1.74 | 2.02 | 0.39 | 77% |
+| C4.5 · hopper | 0.60 | 7.52 | 16.33 | 0.07 | 0.69 | 0.94 | 0.20 | 52% |
+| C4.5 · ampere | 0.78 | 9.50 | 22.82 | 0.08 | 1.67 | 2.97 | 0.18 | 50% |
+
+(GPU busy: share of the training time with a kernel running.)
+
+- **The partition (marking the rows that go left, moving every column) is 62–69% of the kernel time**, the split search (histograms, prefix sums, exact cut scans) 27–34%. The A100 takes 1.4× the H100's time for the partition and 1.25–1.3× for the search.
+- **The kernels run 87% (H100) and 82% (A100) of pruned CART**, 77–79% of unpruned CART, half of C4.5: the GPU is idle while the host prunes.
+- **Copies overlap with the kernels** (a separate copy stream) and are short: hand-offs move 29.8 GB to the host for unpruned CART and 44.6 GB for C4.5, in 0.54 and 0.94 s on hopper and 2.0 and 3.0 s on ampere. The upload of the data comes before the kernels.
+- **GPU levels:** 53 (CART), 91 (unpruned CART), 272 (C4.5). Hand-offs: 236 nodes and 0.3M rows (CART), 49,187 nodes and 5.9M rows (unpruned CART), 21,972 nodes and 8.8M rows (C4.5).
+
+## Timelines
+
+One chart per protocol, the three runs one above the other on the same time axis: the training thread's phases, how many CPU threads do each kind of work (every 5 ms), and how busy the GPU's kernels and copies are.
+
+![timeline, CART α](timeline-cart_alpha_nodepth.png)
+![timeline, CART without pruning](timeline-cart_full_nodepth.png)
+![timeline, C4.5](timeline-c45.png)
+
+- **CUDA: the CPU pool works in bursts**, one per GPU level: each level's hand-offs are grown on all threads in a fraction of the level's time, then the pool waits for the next level. The CPU side has room for more hand-offs.
+- **The stall of the first GPU level** (unpruned CART, C4.5) shows as a gap in the kernels while two threads page-lock.
+- **epyc: short single-thread stretches.** 0.28 s after the presort: the tables of x·log x and 1/x for every count up to the row count (2 × 15M doubles) are zero-filled on one thread (`std::vector::resize`) before the pool fills them (`fillCountTables`; 20 ms on HIGGS). The last 0.5 s of the C4.5 grow run on 1–10 threads (the last deep subtrees), and the first 0.37 s of arranging the rows by leaf on one.
+
+## What profiling costs
+
+| Train total (s) | profiled | plain | difference |
+|---|--:|--:|--:|
+| CART · hopper | 8.03 | 8.00 | +0.3% |
+| CART · ampere | 11.67 | 11.64 | +0.3% |
+| CART · epyc | 16.80 | 17.06 | −1.5% |
+| unpruned CART · hopper | 18.29 | 18.21 | +0.4% |
+| unpruned CART · ampere | 25.59 | 25.72 | −0.5% |
+| unpruned CART · epyc | 35.43 | 35.55 | −0.3% |
+| C4.5 · hopper | 46.94 | 46.88 | +0.1% |
+| C4.5 · ampere | 66.56 | 66.85 | −0.4% |
+| C4.5 · epyc | 78.95 | 77.37 | +2.0% |
+
+Within −1.5% to +2.0%, one run each: as far as one run can tell, profiling costs nothing measurable. The peak RAM differs by under 0.1%, the VRAM not at all.
+
+## What is measured
+
+`--profile FILE` ([src/core/trace.h](../../../src/core/trace.h)) records, from the start of the training to the end of the pruning:
+- **Phases:** wall-time spans of the training thread (GPU setup, upload, presort, GPU levels, CPU subtrees, pruning steps, tree assembly), also as NVTX ranges for Nsight Systems.
+- **What every thread does:** each thread is in one state at a time (sweep, partition, fused partition + sweeps, presort, marking rows, leaves, node bookkeeping, driving the GPU, staging copies, page-locking, pruning, idle...).
+  - The time in each state is summed per thread (`work_seconds`, thread-seconds).
+  - A sampler thread counts the threads in each state every 5 ms (`samples`, the timelines).
+  - Pool tasks and parallel-loop items count as the work of the thread that made them.
+  - A thread blocked on a condition variable, on a parallel loop's end or on another thread's column is idle.
+- **GPU kernels and copies:** a CUDA event before and after every kernel launch and copy, on the compute stream and the copy stream (`gpu`: name, lane, start, end). The kernels run on one stream, so they never overlap; copies on the two streams may, and are counted once.
+- **Per GPU level** (`tables.gpu_levels`): nodes, rows, segments, time.
+- **Facts:** bytes copied each way, hand-offs (nodes, rows, bytes), CUDA context and allocation time.
+
+When off (the default), every hook is one relaxed atomic load and a branch. When on, a state change is a few relaxed atomic stores to the thread's own record. The CUDA events are those `--gpu-profile` already used (it prints a per-kernel summary to stderr).
+
+The charts group the states, phases and kernels: `profile_chart.py`'s `PHASES`, `WORKS`, `KERNELS` and `COPIES` list which belong to which group.
