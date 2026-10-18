@@ -5,8 +5,8 @@
     RESULTS  holds <dataset>/<node>/results.jsonl, machine.json, pred/*.npy
     OUT      gets summary.csv, tables.md, chart-<dataset>.png
 
-Agreement: share of the 500,000 test rows that a tree classifies like ./tree's
-tree of the same case on the same node.
+Agreement: share of the test rows (TEST_ROWS) that a tree classifies like
+./tree's tree of the same case on the same node.
 """
 import csv, json, statistics, sys
 from pathlib import Path
@@ -18,7 +18,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 DATASETS = {"higgs": "HIGGS: 10,500,000 training rows, 28 features",
-            "airline": "airline: 114,569,017 training rows, 13 features"}
+            "airline": "airline: 114,569,017 training rows, 13 features",
+            "ecbdl_15m": "ECBDL'14, 15M sample: 15,000,000 training rows, 631 features"}
+TEST_ROWS = {"higgs": 500_000, "airline": 500_000, "ecbdl_15m": 100_000}
 NODES = {"hopper": "H100 PCIe 80 GB", "ampere": "A100 80 GB PCIe"}
 CASES = {"cart": "CART, depth ≤ 19", "c45": "C4.5, depth ≤ 19"}
 LABELS = {("tree", "cart"): "./tree CART (exact Gini)",
@@ -168,7 +170,7 @@ def chart(rows, dataset, path):
                 info.text(x, p, cell(got[k]), fontsize=9.5, color=INK, ha="left", va="center",
                           transform=info.get_yaxis_transform(),
                           fontweight="bold" if k == "tree" else "normal")
-        info.set_title("the tree (500,000 test rows)", loc="left", fontsize=11, color=INK,
+        info.set_title(f"the tree ({TEST_ROWS[dataset]:,} test rows)", loc="left", fontsize=11, color=INK,
                        fontweight="bold", pad=10)
         info.axis("off")
     handles = [plt.Rectangle((0, 0), 1, 1, color=COLORS[n]) for n in NODES]

@@ -1,17 +1,19 @@
-# HIGGS and airline on the mordor3 GPUs: ./tree against other GPU decision-tree builders
+# HIGGS, airline and ECBDL'14 on the mordor3 GPUs: ./tree against other GPU decision-tree builders
 
-**Status:** run on 2026-10-17, 3 runs per case. The libraries ran from 12:44 with ./tree at commit 00ae13f; **./tree's rows were rerun at 17:54 on cd18717** (one copy of the presorted columns on the GPU, [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), built for sm_80 and sm_90 in a separate clone (`~/gpu-dt-bench/dt`). The trees are the same as before, node for node; `machine.json` → `tree_rerun` records the rerun. Both GPU servers ran CUDA only, on GPU 0, with the whole node held through `--exclusive`. **One unpruned tree with depth ≤ 19 per case, CART and C4.5, on HIGGS and on airline.** 19 is the depth of ./tree's pruned CART tree on HIGGS. Each library runs with its default bins, its faster setting; the earlier 1024-bin runs were slower and agreed with ./tree only 1–2 points more.
+**Status:** run on 2026-10-17, 3 runs per case. The libraries ran from 12:44 with ./tree at commit 00ae13f; **./tree's rows were rerun at 17:54 on cd18717** (one copy of the presorted columns on the GPU, [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), built for sm_80 and sm_90 in a separate clone (`~/gpu-dt-bench/dt`). The trees are the same as before, node for node; `machine.json` → `tree_rerun` records the rerun. Both GPU servers ran CUDA only, on GPU 0, with the whole node held through `--exclusive`. **ECBDL'14's 15M-row sample was added on 2026-10-18** (15:19–15:27, one job per node, ./tree on cd18717 and the libraries in the same job, 3 runs per case). **One unpruned tree with depth ≤ 19 per case, CART and C4.5, on HIGGS, airline and ECBDL.** 19 is the depth of ./tree's pruned CART tree on HIGGS. Each library runs with its default bins, its faster setting; the earlier 1024-bin runs were slower and agreed with ./tree only 1–2 points more.
 
 **Bottom line:** ./tree is the fastest single-tree GPU builder found, and the only one with exact splits.
-- **Against cuML (the fastest of the others):** 2.2–2.4× faster on HIGGS and 2.4–3.2× faster on airline, for CART and for C4.5 against cuML's entropy tree.
-- **Against XGBoost (CART only):** 12–15× faster.
-- **CART test accuracy is the same within 0.3 points.** The histogram trees classify 83–91% of test rows the same as ./tree's exact tree.
+- **Against cuML (the fastest of the others):** 2.2–2.4× faster on HIGGS, 2.4–3.2× on airline and 2.0–3.0× on ECBDL, for CART and for C4.5 against cuML's entropy tree.
+- **Against XGBoost (CART only):** 12–15× faster on HIGGS and airline, 3.3–5.1× on ECBDL.
+- **CART test accuracy is the same within 0.3 points.** The histogram trees classify 83–91% of test rows the same as ./tree's exact tree on HIGGS and airline, 99.4–99.6% on ECBDL (mostly its 97.8% majority class).
 - **C4.5 is a different algorithm from cuML's entropy tree.** ./tree's C4.5 (gain ratio) builds a smaller tree at the same depth limit, with 1.2–3.1 points lower test accuracy (below).
-- **Memory:** ./tree uses 3.3–3.4 GiB on HIGGS and 13.3 GiB on airline, against 1.9–2.9 GiB and 9.5–13 GiB for the libraries: 1.8× cuML on HIGGS, 1.3–1.4× cuML and about the same as XGBoost on airline. Before the rerun it used 7.2 and 35 GiB.
+- **Memory:** ./tree uses 3.3–3.4 GiB on HIGGS and 13.3 GiB on airline, against 1.9–2.9 GiB and 9.5–13 GiB for the libraries: 1.8× cuML on HIGGS, 1.3–1.4× cuML and about the same as XGBoost on airline. Before the rerun it used 7.2 and 35 GiB. On ECBDL ./tree fills 73.5 GiB of the 80 GB, against 36 GiB for cuML and 71.5 GiB for XGBoost.
 
 ![HIGGS: CART and C4.5 per GPU library, depth 19](chart-higgs.png)
 
 ![airline: CART and C4.5 per GPU library, depth 19](chart-airline.png)
+
+![ECBDL'14 15M sample: CART and C4.5 per GPU library, depth 19](chart-ecbdl_15m.png)
 
 **Bins:** cuML and XGBoost don't test every possible split. Before growing the tree, they sort each feature's values into a fixed number of ranges (bins) with about the same number of rows each, and split only at bin edges. That gives at most 127 (cuML, 128 bins) or 255 (XGBoost, 256 bins) candidate thresholds per feature. ./tree tests every distinct value: millions per feature on HIGGS; on airline, from 7 (DayofWeek) to about 7,900 (FlightNum) in the 500,000 test rows.
 
@@ -35,6 +37,7 @@ Settings shared by every case: all training rows and all features, no bootstrap 
 |---|--:|--:|--:|
 | HIGGS | 10,500,000 | 28 (real-valued) | 500,000: the published split's last rows |
 | airline (gbm-bench, US flights 1987–2008) | 114,569,017 | 13 (integer) | 500,000: a random sample held out when the data was prepared |
+| ECBDL'14, 15M sample ([cluster-ecbdl](../cluster-ecbdl/BENCHMARK.md)) | 15,000,000 | 631 (539 real, 92 nominal as integer codes) | 100,000: a random sample held out when the data was prepared; 2.16% positives |
 
 No tool trains on the test rows, and no extra 80/20 split is needed. On airline, `ActualElapsedTime` partly gives the delay away, so its accuracies say little ([cluster-airlines](../cluster-airlines/BENCHMARK.md)).
 
@@ -45,7 +48,7 @@ No tool trains on the test rows, and no extra 80/20 split is needed. On airline,
   - **Libraries:** one Python process per case. The process first runs one untimed warm-up fit on 50,000 rows (imports, CUDA context, JIT), then 3 timed fits on the full float32 NumPy arrays.
   - **What a library fit includes:** the copy to the GPU and the binning. That is `QuantileDMatrix` for XGBoost; cuML bins inside `fit`.
 - **Accuracy:** each library's own `predict`. ./tree's test accuracy comes from its `--dump` tree (`treebench.py`, the same walk as `bench/benchlib.py`).
-- **Same as ./tree:** the share of the 500,000 test rows a tree classifies the same as ./tree's tree in the same case: its CART tree for CART, its C4.5 tree for C4.5.
+- **Same as ./tree:** the share of the test rows (500,000; ECBDL 100,000) a tree classifies the same as ./tree's tree in the same case: its CART tree for CART, its C4.5 tree for C4.5.
 - **VRAM:** peak `memory.used` of GPU 0 above its idle value (nvidia-smi every 20 ms; the idle value is read before the process starts). It includes the CUDA context and memory pools. For a library it is the peak of the whole process: the warm-up and all 3 fits.
 - **Determinism:** every tree is identical on the H100 and the A100. The test predictions are the same, byte for byte.
 
@@ -88,6 +91,23 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
 | ./tree C4.5 (exact gain ratio) | 1.32 s (1.31–1.32) | 1.89 s (1.88–1.96) | 190,337 | 19 | 73.15% | 73.02% | – | 13.30 GiB | 13.27 GiB | `f8 <= 70` |
 | cuML RF, entropy, 128 bins | 4.18 s (4.12–6.88) | 4.59 s (4.58–8.55) | 555,457 | 19 | 74.58% | 74.26% | 84.98% | 9.47 GiB | 9.95 GiB | `f8 <= 70` |
 
+### ECBDL'14 15M sample: CART, depth ≤ 19
+
+| Implementation | H100 time | A100 time | Nodes | Depth | Train acc. | Test acc. | Same as ./tree | VRAM H100 | VRAM A100 | Root split |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|
+| ./tree CART (exact Gini) | 7.57 s (7.56–7.70) | 11.27 s (11.27–11.29) | 55,715 | 19 | 98.22% | 97.69% | – | 73.57 GiB | 73.50 GiB | `f0 <= 40.5` |
+| cuML RF, Gini, 128 bins | 21.25 s (20.87–41.51) | 22.67 s (21.63–53.83) | 84,231 | 19 | 81.08%* | 97.58% | 99.38% | 36.24 GiB | 36.34 GiB | `f0 <= 40` |
+| XGBoost, squared error, 256 bins | 38.62 s (38.03–40.60) | 37.75 s (37.38–38.48) | 57,793 | 19 | 98.23% | 97.65% | 99.58% | 71.49 GiB | 71.44 GiB | `f0 < 41` |
+
+### ECBDL'14 15M sample: C4.5, depth ≤ 19
+
+| Implementation | H100 time | A100 time | Nodes | Depth | Train acc. | Test acc. | Same as ./tree | VRAM H100 | VRAM A100 | Root split |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|---|
+| ./tree C4.5 (exact gain ratio) | 7.48 s (7.48–7.51) | 11.07 s (11.01–11.19) | 10,889 | 19 | 97.93% | 97.80% | – | 73.47 GiB | 73.40 GiB | `f34 <= 0` |
+| cuML RF, entropy, 128 bins | 22.17 s (20.64–44.37) | 22.30 s (21.34–50.08) | 117,349 | 19 | 91.18%* | 97.54% | 99.39% | 36.24 GiB | 36.34 GiB | `f0 <= 54` |
+
+\* cuML's `predict` on all 15M training rows at once overflows (Observations); in 1M-row chunks: 98.31% (CART), 98.27% (entropy).
+
 ## Observations
 
 - **./tree is the fastest in every case, and the gap grows with the data.**
@@ -104,6 +124,14 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
   - **The reason is C4.5's own rules.** Gain ratio prefers uneven splits: on HIGGS its root is `f25 <= 1.837873`, against 1.08 for every Gini and entropy tree. Uneven splits use up the 19 levels on few rows. C4.5's minimum split size (up to 25 rows per side) and its collapse of useless splits stop it earlier still. Without the depth limit C4.5 grows deeper (depth 74 on airline, [cluster-airlines](../cluster-airlines/BENCHMARK.md)).
   - **Agreement:** the two trees agree on only 77% (HIGGS) and 85% (airline) of test rows.
   - **Timing still compares the same amount of data.** Every case reads the same rows, and ./tree's smaller C4.5 tree takes about as long as its CART tree.
+- **ECBDL'14 (631 features, 15M rows): ./tree still the fastest, the libraries closer.**
+  - **CART:** 7.57 s on the H100 against 21.3 s for cuML (2.8×) and 38.6 s for XGBoost (5.1×); on the A100 11.3 s against 22.7 s (2.0×) and 37.8 s (3.3×). **C4.5 against cuML's entropy tree:** 7.48 against 22.2 s (3.0×) on the H100, 11.1 against 22.3 s (2.0×) on the A100.
+  - **The libraries gain nothing from the H100** (cuML 21.3 against 22.7 s, XGBoost 38.6 against 37.8 s), ./tree 1.5×. ./tree's time is GPU work ([cluster-ecbdl-profile](../cluster-ecbdl-profile/BENCHMARK.md): 0.7 s of upload on the H100, 1.7 s on the A100, then the kernels). What bounds the libraries' fits (the binning, the copy to the GPU, the host) was not profiled.
+  - **Accuracy says little here.** 97.84% of the test rows are negatives, and every depth-19 tree is below always predicting the majority class: CART 97.58–97.69%, C4.5 97.80%, cuML's entropy tree 97.54%. The trees agree with ./tree on 99.4–99.6% of the test rows.
+  - **Trees:** CART 55,715 nodes for ./tree, 57,793 for XGBoost, 84,231 for cuML; C4.5 10,889 against 117,349 for cuML's entropy tree. ./tree's C4.5 has a different root (`f34 <= 0`, PredSA_freq_central_0) from every Gini and entropy tree (`f0`, the residues' separation).
+  - **cuML's training accuracy is not valid** (81.08% and 91.18%, below the majority class): `predict` on all 15M rows at once (9.5 G values) goes wrong from row 6,806,6xx on, about 2³² values / 631 features: a 32-bit index overflow in cuML. Predicted in chunks of 1M rows, the same trees reach 98.31% (CART) and 98.27% (entropy), next to ./tree's 98.22% and 97.93% (a separate job, 2026-10-18; `gpubench.py` now predicts in chunks). The test predictions (100,000 rows) are not affected.
+  - **VRAM:** ./tree 73.4–73.6 GiB of the 80 GB (one copy of the presorted columns, 632 slots × 15M rows × 8 bytes = 70.6 GiB, and the rest as on the other datasets), XGBoost 71.4–71.5 GiB, cuML 36.2–36.3 GiB. 15M rows are about the most ./tree fits on these GPUs ([cluster-ecbdl](../cluster-ecbdl/BENCHMARK.md)).
+  - **cuML's first full-size fit** took 41.5 and 44.4 s on the H100 (53.8 and 50.1 s on the A100), about 20–31 s more than the next two; the medians leave it out.
 - **Memory:** ./tree peaks at 3.3–3.4 GiB on HIGGS and 13.3 GiB on airline: one copy of the presorted columns (8 bytes per value) plus one spare column, a 512 MB hand-off ring and the CUDA context ([docs/CUDA.md](../../../docs/CUDA.md)). cuML uses 1.9 and 9.5–10 GiB, XGBoost 2.9 and 13 GiB. The libraries split on histogram bins and keep no presorted columns, so they need less; ./tree keeps every exact value with its row.
 - **Against ./tree on 00ae13f** (the libraries' run, earlier the same day): the GPU memory peak fell from 7.2 to 3.4 GiB (HIGGS) and from 35.0 to 13.3 GiB (airline), 53–62% less, with the same trees. Times moved within −5% to +3% (H100 HIGGS CART 0.39 → 0.39 s, A100 HIGGS C4.5 0.47 → 0.44 s, H100 airline CART 1.37 → 1.38 s and C4.5 1.30 → 1.32 s).
 - **H100 against A100:** ./tree is 1.2–1.3× faster on the H100 on HIGGS and 1.4× on airline. The libraries are 1.1–1.2× faster on it.
@@ -112,7 +140,7 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
 
 ## Run it
 
-Everything runs on mordor3 in `~/gpu-dt-bench`, outside this repository. Every computation is a SLURM job on hopper or ampere, with `--exclusive`. The scripts are in [`scripts/`](scripts/). The data is the prepared HIGGS and airline of [bench/cluster](../../cluster/README.md): `~/dt/bench/data/<dataset>`, with `train.csv` for ./tree and `train.f32`/`train.y.i32` and `test.*` for the libraries. The root is set by `DATA_ROOT`.
+Everything runs on mordor3 in `~/gpu-dt-bench`, outside this repository. Every computation is a SLURM job on hopper or ampere, with `--exclusive`. The scripts are in [`scripts/`](scripts/). The data is the prepared HIGGS, airline and ecbdl_15m of [bench/cluster](../../cluster/README.md): `~/dt/bench/data/<dataset>`, with `train.csv` for ./tree and `train.f32`/`train.y.i32` and `test.*` for the libraries. The root is set by `DATA_ROOT`.
 
 ```bash
 # on the mordor3 login node: a clone at the measured commit, the venv, the sources
@@ -122,20 +150,21 @@ git clone ~/dt dt && git -C dt checkout cd18717   # the libraries' rows: 00ae13f
 /usr/bin/virtualenv -p python3 venv          # python3-venv is missing on mordor3
 venv/bin/pip install --extra-index-url=https://pypi.nvidia.com cuml-cu12 xgboost matplotlib
 sbatch build.sh                              # ./tree for sm_80 + sm_90
-# the benchmark: about 4 min per node for both datasets
+# the benchmark: about 4 min per node for HIGGS and airline (the default)
 # only some: IMPLS="cuml xgboost" DATASETS=airline sbatch --export=ALL ... job.sh <node>
+# ECBDL (about 8 min per node): DATASETS=ecbdl_15m sbatch --export=ALL -p hopper --exclusive -t 06:00:00 -o results/hopper-ecbdl_15m.log job.sh hopper
 sbatch -p hopper --exclusive -t 03:00:00 -o results/hopper.log job.sh hopper
 sbatch -p ampere --exclusive -t 03:00:00 -o results/ampere.log job.sh ampere
 ```
 
-Then, anywhere with numpy and matplotlib, the tables (`tables.md`), `summary.csv` and the charts `chart-higgs.png` and `chart-airline.png`:
+Then, anywhere with numpy and matplotlib, the tables (`tables.md`), `summary.csv` and the charts `chart-higgs.png`, `chart-airline.png` and `chart-ecbdl_15m.png`:
 
 ```bash
 venv/bin/python summarize.py results <out dir>
 ```
 
-- **Results and logs:** the jobs write `results/<dataset>/<node>/results.jsonl` (one line per timed run), `machine.json`, and `failed.jsonl` (cases that crashed, if any). `results.jsonl` and `machine.json` are in `higgs/` and `airline/` here. The job logs stay on mordor3 (`~/gpu-dt-bench/results/<node>.log`).
-- **Predictions:** the test-set predictions in `results/<dataset>/<node>/pred/` (0.5 MB per tree) are not kept in the repository.
+- **Results and logs:** the jobs write `results/<dataset>/<node>/results.jsonl` (one line per timed run), `machine.json`, and `failed.jsonl` (cases that crashed, if any). `results.jsonl` and `machine.json` are in `higgs/`, `airline/` and `ecbdl_15m/` here. The job logs stay on mordor3 (`~/gpu-dt-bench/results/<node>.log`, `<node>-ecbdl_15m.log`).
+- **Predictions:** the test-set predictions in `results/<dataset>/<node>/pred/` (0.5 MB per tree, ECBDL 0.1 MB) are not kept in the repository.
 - **Never `scancel` a running `job.sh` started without `timeout --foreground`.** `timeout` puts the benchmark in its own process group, and SLURM's kill on mordor3 left it running, which happened once here. `job.sh` uses `--foreground`. To stop a case, kill it from inside the job: `srun --jobid=<id> --overlap -n1 kill <pid>`.
 - **What was replaced:** this directory was `cluster-higgs-vs-gpu-libs`: HIGGS only, CART only, depth 12 and 19, with 1024-bin runs of both libraries (commit 35cf315, 2026-10-15). Those results are in the git history. The first run of that version also covered LightGBM, which was dropped because its CUDA version ignores the depth limit.
 - **Pinned versions:** `scripts/requirements-freeze.txt`.
@@ -144,7 +173,7 @@ venv/bin/python summarize.py results <out dir>
 
 | File | Content |
 |---|---|
-| `chart-higgs.png`, `chart-airline.png` | Per dataset, CART and C4.5: training time per library and GPU, peak VRAM, and each tree's node count, depth, test accuracy and agreement with ./tree |
+| `chart-higgs.png`, `chart-airline.png`, `chart-ecbdl_15m.png` | Per dataset, CART and C4.5: training time per library and GPU, peak VRAM, and each tree's node count, depth, test accuracy and agreement with ./tree |
 | `summary.csv` | One row per dataset, node, case and library: times, tree size, accuracies, agreement, VRAM, root split |
-| `higgs/`, `airline/` | `<node>/results.jsonl` (every run), `<node>/machine.json` |
+| `higgs/`, `airline/`, `ecbdl_15m/` | `<node>/results.jsonl` (every run), `<node>/machine.json` |
 | `scripts/` | `build.sh`, `job.sh` (SLURM), `gpubench.py` (cuML, XGBoost), `treebench.py` (./tree), `summarize.py` (tables and charts), `requirements-freeze.txt` |

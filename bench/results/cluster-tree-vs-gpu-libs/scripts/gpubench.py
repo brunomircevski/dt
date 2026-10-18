@@ -5,7 +5,7 @@ per timed fit to OUT and saves the last tree's test predictions.
 
   gpubench.py IMPL DATASET CASE REPS OUT PRED_DIR
     IMPL     cuml | xgboost
-    DATASET  higgs | airline   (prepared in $DATA_ROOT/<dataset>)
+    DATASET  higgs | airline | ecbdl_15m   (prepared in $DATA_ROOT/<dataset>)
     CASE     cart   Gini (cuML) or the Gini-equivalent squared error (XGBoost)
              c45    entropy (cuML only; XGBoost has no entropy criterion)
 
@@ -84,7 +84,11 @@ def cuml_fit(X, y, case):
 
 
 def cuml_info(model, X, y, Xt):
-    acc = float(np.mean(model.predict(X) == y))
+    # In chunks: predict() on ECBDL's 15M x 631 values at once goes wrong past
+    # 2^32 values (row 6,806,6xx); 1M-row chunks give the tree's real accuracy.
+    chunk = 1_000_000
+    acc = float(np.mean(np.concatenate([model.predict(X[i:i + chunk])
+                                        for i in range(0, len(X), chunk)]) == y))
     pred = model.predict(Xt).astype(np.int8)
     tree = model.as_treelite().get_tree_accessor(0)
     left = np.asarray(tree.get_field("cleft")).astype(np.int64)
