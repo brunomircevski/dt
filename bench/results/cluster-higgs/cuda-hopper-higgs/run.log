@@ -1,46 +1,46 @@
-log: bench/results/cluster-higgs/cuda-hopper-higgs/run.log, job 588 on hopper, started 2026-10-17 17:47:50
+log: bench/results/cluster-higgs/cuda-hopper-higgs/run.log, job 956 on hopper, started 2026-10-19 15:10:53
 
-=== 17:47:50  1/3 machine check
+=== 15:10:53  1/3 machine check
 CPUs allocated: 32 (0-31), SLURM_JOB_CPUS_PER_NODE=32
 CPU governor: schedutil 
-load average: 0.61 0.91 1.73
+load average: 0.13 1.18 3.92
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:1/1/16 17:1/1/17 18:1/1/18 19:1/1/19 20:1/1/20 21:1/1/21 22:1/1/22 23:1/1/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31
 GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
-code: cd187178dd26-dirty (from submit.sh: hopper has no git)
+code: 051949ba26af-dirty (from submit.sh: hopper has no git)
 runs per case: 3
 
-=== 17:47:50  2/3 benchmark: higgs, cart_alpha_nodepth,c45, tree_cuda, threads all (of 32), 3 run(s) per case
+=== 15:10:53  2/3 benchmark: higgs, cart_alpha_nodepth,c45, tree_cuda, threads all (of 32), 3 run(s) per case
 2 cases, 9 processes:
   higgs | cart_alpha_nodepth | tree_cuda | 32
   higgs | c45 | tree_cuda | 32
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  higgs: identical in every format (10 s)
+  higgs: identical in every format (11 s)
 2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
-[1/9] 17:48:02 run 1/3: CART ./tree CUDA, 32 threads, higgs ...
-    ok: train 0.3902 s, peak 3,806 MiB, GPU 3,417 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m01s
-[2/9] 17:48:04 run 1/3: C4.5 ./tree CUDA, 32 threads, higgs ...
-    ok: train 1.043 s, peak 4,165 MiB, GPU 4,581 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m03s, about 0m07s left
-[3/9] 17:48:06 run 2/3: CART ./tree CUDA, 32 threads, higgs ...
-    ok: train 0.4176 s, peak 3,805 MiB, GPU 3,417 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m05s, about 0m05s left
-[4/9] 17:48:07 run 2/3: C4.5 ./tree CUDA, 32 threads, higgs ...
-    ok: train 1.224 s, peak 4,166 MiB, GPU 4,581 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m08s, about 0m03s left
-[5/9] 17:48:10 run 3/3: C4.5 ./tree CUDA, 32 threads, higgs ...
-    ok: train 1.241 s, peak 4,168 MiB, GPU 4,581 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m10s, about 0m01s left
-[6/9] 17:48:13 run 3/3: CART ./tree CUDA, 32 threads, higgs ...
-    ok: train 0.4106 s, peak 3,805 MiB, GPU 3,417 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m12s, about 0m00s left
+[1/9] 15:11:05 run 1/3: CART ./tree CUDA, 32 threads, higgs ...
+    ok: train 0.405 s, peak 3,805 MiB, GPU 3,417 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m01s
+[2/9] 15:11:07 run 1/3: C4.5 ./tree CUDA, 32 threads, higgs ...
+    ok: train 1.063 s, peak 4,165 MiB, GPU 4,581 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m03s, about 0m07s left
+[3/9] 15:11:09 run 2/3: CART ./tree CUDA, 32 threads, higgs ...
+    ok: train 0.417 s, peak 3,808 MiB, GPU 3,417 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m05s, about 0m05s left
+[4/9] 15:11:11 run 2/3: C4.5 ./tree CUDA, 32 threads, higgs ...
+    ok: train 1.228 s, peak 4,168 MiB, GPU 4,581 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m07s, about 0m03s left
+[5/9] 15:11:13 run 3/3: C4.5 ./tree CUDA, 32 threads, higgs ...
+    ok: train 1.275 s, peak 4,167 MiB, GPU 4,581 MiB, 1,159,295 nodes, depth 71, train acc 87.88% | process 0m02s, elapsed 0m10s, about 0m01s left
+[6/9] 15:11:16 run 3/3: CART ./tree CUDA, 32 threads, higgs ...
+    ok: train 0.4146 s, peak 3,809 MiB, GPU 3,417 MiB, 1,611 nodes, depth 19, train acc 71.79% | process 0m01s, elapsed 0m12s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/9] 17:48:14 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0397 s, peak 391 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m13s, about 0m00s left
-[8/9] 17:48:15 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0365 s, peak 391 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m14s, about 0m00s left
-[9/9] 17:48:16 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0364 s, peak 391 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m15s, about 0m00s left
+[7/9] 15:11:17 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0394 s, peak 391 MiB, GPU 507 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m13s, about 0m00s left
+[8/9] 15:11:19 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0367 s, peak 391 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m14s, about 0m00s left
+[9/9] 15:11:20 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0368 s, peak 391 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m15s, about 0m00s left
 results: /home/bmircevski/dt/bench/results/cluster-higgs/cuda-hopper-higgs/results.jsonl
 
-=== 17:48:17  3/3 tables and CSV files
-done 2026-10-17 17:48:18
+=== 15:11:21  3/3 tables and CSV files
+done 2026-10-19 15:11:21

@@ -1,7 +1,7 @@
 # Benchmarks against GPU libraries: results, what is timed, fairness
 
 Source: [bench/results/cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md)
-(run 2026-10-17; ./tree rows on cd18717; scripts in its `scripts/`).
+(run 2026-10-17; ./tree rows rerun on 051949b on 2026-10-19; scripts in its `scripts/`).
 
 ## Setup
 
@@ -23,10 +23,10 @@ Source: [bench/results/cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-v
 
 | Case | ./tree H100 | ./tree A100 | cuML H100 | cuML A100 | XGBoost H100 | XGBoost A100 |
 |---|--:|--:|--:|--:|--:|--:|
-| HIGGS CART | 0.39 s | 0.50 s | 0.94 s | 1.08 s | 5.41 s | 6.02 s |
+| HIGGS CART | 0.40 s | 0.48 s | 0.94 s | 1.08 s | 5.41 s | 6.02 s |
 | HIGGS C4.5 (cuML: entropy) | 0.36 s | 0.44 s | 0.87 s | 1.03 s | – | – |
-| airline CART | 1.38 s | 1.97 s | 4.23 s | 4.67 s | 20.40 s | 24.69 s |
-| airline C4.5 (cuML: entropy) | 1.32 s | 1.89 s | 4.18 s | 4.59 s | – | – |
+| airline CART | 1.39 s | 1.98 s | 4.23 s | 4.67 s | 20.40 s | 24.69 s |
+| airline C4.5 (cuML: entropy) | 1.30 s | 1.93 s | 4.18 s | 4.59 s | – | – |
 
 | Case | ./tree nodes / test acc. | cuML | XGBoost | Same predictions as ./tree |
 |---|---|---|---|---|
@@ -40,10 +40,10 @@ Source: [bench/results/cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-v
 | HIGGS | 3.3–3.4 GiB | 1.85–1.91 GiB | 2.86–2.90 GiB |
 | airline | 13.3 GiB | 9.5–10.0 GiB | 13.0 GiB |
 
-- Speed-up: CART 2.2–2.4× (HIGGS) and 2.4–3.1× (airline) over cuML,
+- Speed-up: CART 2.2–2.4× (HIGGS) and 2.4–3.0× (airline) over cuML,
   12–15× over XGBoost; C4.5 2.3–3.2× over cuML's entropy tree.
 - The gap grows with the data (airline > HIGGS). ./tree gains more from the
-  H100 over the A100 (1.2–1.4×) than the libraries (1.1–1.2×).
+  H100 over the A100 (1.2–1.5×) than the libraries (1.1–1.2×).
 - Binned trees agree with the exact tree on only 83–91% of test rows; the
   exact tree is the most accurate CART tree on both datasets (by ≤ 0.3 points).
   Root thresholds differ even on integer data (airline: ./tree 70.5, cuML 70,
