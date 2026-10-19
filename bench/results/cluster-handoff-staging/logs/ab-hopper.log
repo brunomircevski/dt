@@ -1,0 +1,37 @@
+job 1030 on hopper, 32 threads, 2026-10-19 17:52:28
+0, NVIDIA H100 PCIe, 0 MiB
+node 0 size: 515679 MB
+node 0 free: 120740 MB
+node 1 size: 516088 MB
+node 1 free: 337768 MB
+base ecbdl_15m --cart --no-prune        train   18.50 setup 0.74 grow-setup 0.01 L0 1.31 levels  17.17 wait 0.02 arrange 0.00 nodes 604225 tree d0d060b2ae58
+new  ecbdl_15m --cart --no-prune        train   17.47 setup 0.75 grow-setup 0.01 L0 0.12 levels  16.14 wait 0.01 arrange 0.00 nodes 604225 tree d0d060b2ae58
+base ecbdl_15m --c45                    train   47.66 setup 0.96 grow-setup 1.36 L0 0.12 levels  25.27 wait 0.11 arrange 1.32 nodes 209799 tree 4824811a4406
+new  ecbdl_15m --c45                    train   45.12 setup 0.74 grow-setup 0.01 L0 0.12 levels  25.35 wait 0.12 arrange 1.35 nodes 209799 tree 4824811a4406
+base ecbdl_15m --cart --alpha 1e-05     train    8.07 setup 0.75 grow-setup 0.01 L0 0.13 levels   6.76 wait 0.00 arrange 0.00 nodes 1 tree 292dadbf2e17
+new  ecbdl_15m --cart --alpha 1e-05     train    8.04 setup 0.73 grow-setup 0.01 L0 0.12 levels   6.76 wait 0.00 arrange 0.00 nodes 1 tree 292dadbf2e17
+base ecbdl_15m --cart --no-prune        train   18.57 setup 0.73 grow-setup 0.01 L0 1.49 levels  17.24 wait 0.02 arrange 0.00 nodes 604225 tree d0d060b2ae58
+new  ecbdl_15m --cart --no-prune        train   17.19 setup 0.73 grow-setup 0.01 L0 0.12 levels  15.87 wait 0.02 arrange 0.00 nodes 604225 tree d0d060b2ae58
+base ecbdl_15m --c45                    train   46.43 setup 0.80 grow-setup 1.33 L0 0.12 levels  25.37 wait 0.13 arrange 1.10 nodes 209799 tree 4824811a4406
+new  ecbdl_15m --c45                    train   45.67 setup 0.73 grow-setup 0.01 L0 0.12 levels  25.59 wait 0.12 arrange 1.33 nodes 209799 tree 4824811a4406
+base ecbdl_15m --cart --alpha 1e-05     train    8.07 setup 0.73 grow-setup 0.01 L0 0.12 levels   6.77 wait 0.00 arrange 0.00 nodes 1 tree 292dadbf2e17
+new  ecbdl_15m --cart --alpha 1e-05     train    8.02 setup 0.74 grow-setup 0.01 L0 0.12 levels   6.72 wait 0.00 arrange 0.00 nodes 1 tree 292dadbf2e17
+base airline --cart --no-prune          train    3.26 setup 0.15 grow-setup 0.02 L0 0.22 levels   1.29 wait 1.29 arrange 0.00 nodes 47146877 tree 78f5086b0c4f
+new  airline --cart --no-prune          train    3.20 setup 0.17 grow-setup 0.01 L0 0.02 levels   2.17 wait 0.36 arrange 0.00 nodes 47146877 tree 78f5086b0c4f
+base airline --c45                      train    5.16 setup 0.21 grow-setup 0.20 L0 0.02 levels   1.18 wait 1.16 arrange 0.34 nodes 8548725 tree 4b2c6540b832
+new  airline --c45                      train    5.37 setup 0.17 grow-setup 0.01 L0 0.02 levels   1.78 wait 0.73 arrange 0.39 nodes 8548725 tree 4b2c6540b832
+base airline --cart --alpha 1e-05       train    1.09 setup 0.18 grow-setup 0.01 L0 0.02 levels   0.82 wait 0.00 arrange 0.00 nodes 3013 tree 753646646413
+new  airline --cart --alpha 1e-05       train    1.13 setup 0.21 grow-setup 0.01 L0 0.02 levels   0.82 wait 0.00 arrange 0.00 nodes 3013 tree 753646646413
+base airline --cart --no-prune          train    3.69 setup 0.19 grow-setup 0.01 L0 0.21 levels   1.30 wait 1.45 arrange 0.00 nodes 47146877 tree 78f5086b0c4f
+new  airline --cart --no-prune          train    3.19 setup 0.16 grow-setup 0.01 L0 0.02 levels   2.00 wait 0.52 arrange 0.00 nodes 47146877 tree 78f5086b0c4f
+base airline --c45                      train    5.11 setup 0.15 grow-setup 0.21 L0 0.02 levels   1.18 wait 1.15 arrange 0.34 nodes 8548725 tree 4b2c6540b832
+new  airline --c45                      train    6.08 setup 0.20 grow-setup 0.01 L0 0.02 levels   1.91 wait 0.74 arrange 0.42 nodes 8548725 tree 4b2c6540b832
+base airline --cart --alpha 1e-05       train    1.09 setup 0.19 grow-setup 0.01 L0 0.02 levels   0.81 wait 0.00 arrange 0.00 nodes 3013 tree 753646646413
+new  airline --cart --alpha 1e-05       train    1.07 setup 0.17 grow-setup 0.01 L0 0.02 levels   0.81 wait 0.00 arrange 0.00 nodes 3013 tree 753646646413
+base airline --cart --no-prune          train    3.78 setup 0.21 grow-setup 0.02 L0 0.21 levels   1.31 wait 1.44 arrange 0.00 nodes 47146877 tree 78f5086b0c4f
+new  airline --cart --no-prune          train    3.20 setup 0.17 grow-setup 0.01 L0 0.02 levels   1.81 wait 0.74 arrange 0.00 nodes 47146877 tree 78f5086b0c4f
+base airline --c45                      train    5.11 setup 0.17 grow-setup 0.21 L0 0.02 levels   1.18 wait 1.15 arrange 0.34 nodes 8548725 tree 4b2c6540b832
+new  airline --c45                      train    5.73 setup 0.19 grow-setup 0.01 L0 0.02 levels   1.98 wait 0.62 arrange 0.39 nodes 8548725 tree 4b2c6540b832
+base airline --cart --alpha 1e-05       train    1.13 setup 0.21 grow-setup 0.01 L0 0.02 levels   0.82 wait 0.00 arrange 0.00 nodes 3013 tree 753646646413
+new  airline --cart --alpha 1e-05       train    1.14 setup 0.23 grow-setup 0.01 L0 0.02 levels   0.82 wait 0.00 arrange 0.00 nodes 3013 tree 753646646413
+done 2026-10-19 18:03:19

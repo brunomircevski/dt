@@ -82,24 +82,28 @@ anything.
 | 6 | `copyKernel` | Children with fewer than `--gpu-min-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer; only the columns that can still split them. |
 
 Small children become `CpuTreeBuilder` tasks on the thread pool, which grow them
-while the GPU continues with the next level. The host buffer they read from is
-page-locked in the background, so these copies run at full speed: all at once
-during the presort, or, for CART with a fixed `--alpha` (which stops early and
-hands over only a sixth of airline's rows), in 1 GB chunks just ahead of the
-hand-offs. Page-locking takes the driver's lock and stalls the level loop's
-CUDA calls, so less of it is better; but chunks registered during the levels
-made C4.5, which hands over nearly every row, slower.
+while the GPU continues with the next level. The host buffer they read from
+(the arena, room for every column of every row: 75 GB for ECBDL'14's 15M
+sample) is pageable. The copies go through two page-locked 128 MB buffers,
+one per copy stream, like the upload: a host function on the copy stream
+copies the buffer into the arena on the staging threads, and the two
+streams take turns, so that one downloads while the other's buffer is
+copied out. The arena's pages are touched on all threads in the background
+during the presort, so the copies do not fault them in; a hand-off waits
+only for the part of the arena it fills.
+Page-locking the arena instead took the CUDA driver's lock for 1.2-1.9 s
+(sometimes 4-6 s on the H100 node) and stalled the level loop's CUDA calls.
 
 The goes-left flags of step 5 are a bitmap (one bit per row, set with
 `atomicOr` for the left rows only, cleared every level): 14 MB for airline,
 which stays in L2, against 115 MB of bytes that did not. The H100's CART build
 on airline went from 1.73 to 1.09 s.
 
-When the device has room for a copy of all hand-offs (airline: 12 GB on
-both cluster GPUs), the gathered columns are copied to the host on a second
-stream, and a host callback on that stream (`cudaLaunchHostFunc`) starts the
-CPU tasks when the copy is done: the level loop goes on with the next level
-instead of waiting for each hand-off to arrive. Device buffers that change
+The columns are gathered into a 512 MB ring of four parts on the device and
+copied to the host on the copy streams, and a host callback there
+(`cudaLaunchHostFunc`) starts the CPU tasks when the copy is done: the level
+loop goes on with the next level instead of waiting for each hand-off to
+arrive. Device buffers that change
 size between levels use stream-ordered allocation (`cudaMallocAsync`, with a
 pool that keeps its memory), so a resize does not synchronize the device.
 
@@ -165,7 +169,7 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
   (power-limited GPU) full CART trees on SUSY were fastest around 512,
   covertype (54 features, 7 classes) around 4096.
 * `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
-  profile and the setup phases (allocation, upload, page-locking).
+  profile and the setup phases (allocation, upload).
 
 ## Memory
 

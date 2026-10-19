@@ -34,7 +34,7 @@ enum class Work : std::uint8_t {
   GpuHost,        // Cuda: preparing and launching GPU work
   GpuWait,        // Cuda: waiting for the GPU or a copy to finish
   Staging,        // Cuda: copying between pageable and page-locked memory
-  PageLock,       // Cuda: page-locking host memory, or waiting for it
+  PageLock,       // Cuda: touching host memory ahead of copies, or waiting for it
   PruneArrange,   // C4.5 pruning: rows ordered by leaf, row-major
   Prune,          // pruning proper: the error estimates of subtrees
   PruneOther,     // pruning: setup, collapsing, thresholds, compaction

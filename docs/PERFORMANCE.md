@@ -2,6 +2,35 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: hand-offs without page-locking the arena (CUDA, mordor3 cluster)
+
+The host arena that receives the hand-offs (75 GB for ECBDL'14's 15M sample)
+is no longer page-locked. Its registration held the CUDA driver's lock for
+1.2–1.9 s, and 4.8–11.5 s on ampere when the node's memory was busy, and the
+GPU loop waited for it. Now each hand-off piece is downloaded into one of two
+page-locked 128 MB buffers (one per copy stream), and a host function copies
+it into the arena on the staging threads while the other stream downloads the
+next piece ([CUDA.md](CUDA.md)). Same trees. Medians against e0a9106
+([cluster-handoff-staging](../bench/results/cluster-handoff-staging/BENCHMARK.md)):
+
+| Train total (s) | H100 before | H100 after | A100 before | A100 after |
+|---|--:|--:|--:|--:|
+| ECBDL 15M C4.5 | 52.73 | 51.25 | 74.68 | 65.73 |
+| ECBDL 15M CART, no pruning | 18.73 | 17.60 | 31.73 | 23.89 |
+| airline C4.5 | 6.19 | 6.08 | 5.95 | 5.65 |
+| airline CART, no pruning | 4.19 | 3.31 | 3.79 | 3.65 |
+| HIGGS C4.5 | 1.10 | 1.24 | 1.18 | 1.12 |
+
+* The arena is still touched on all threads during the presort: without that,
+  the copies faulted its pages in, and airline's levels on the H100 took
+  1.8–2.0 s instead of 1.2 s. `MADV_POPULATE_WRITE` instead of the memset holds
+  the process's mmap lock and stretched the presort from 0.5 to 4.2 s when the
+  node's memory was low.
+* 32 MB buffers (four times as many host functions, which run one at a time)
+  left the levels 0.2–0.4 s slower than 128 MB ones.
+* HIGGS C4.5 on the H100 lost 0.1 s: the pruning's arranged rows now go
+  through the staging buffers too.
+
 ## October 2026: one copy of the columns (CUDA, serial, parallel)
 
 The columns now live in **slots**, one per feature and a few spare ones, and a

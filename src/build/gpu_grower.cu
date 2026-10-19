@@ -1740,6 +1740,11 @@ struct Staging {
   static constexpr std::size_t kBytes = std::size_t{32} << 20;
   static constexpr std::size_t kCopyThreads = 32;
   char *buffers[kBuffers] = {};
+  // The hand-offs' own (GpuGrower::handOff), one per copy stream, each a
+  // part of the device's hand-off ring.
+  static constexpr int kHandOffBuffers = 2;
+  static constexpr std::size_t kHandOffBytes = std::size_t{128} << 20;
+  char *handOff[kHandOffBuffers] = {};
   cudaEvent_t done[kBuffers] = {};
   std::unique_ptr<ThreadPool> copiers; // on the GPU's node, if it is known
   std::once_flag once;
@@ -1766,6 +1771,11 @@ struct Staging {
           CUDA_CHECK(cudaMallocHost(&memory, kBytes));
           buffers[buffer] = static_cast<char *>(memory);
           CUDA_CHECK(cudaEventCreateWithFlags(&done[buffer], cudaEventDisableTiming));
+        }
+        for (char *&buffer : handOff) {
+          void *memory = nullptr;
+          CUDA_CHECK(cudaMallocHost(&memory, kHandOffBytes));
+          buffer = static_cast<char *>(memory);
         }
       }).join();
       if (cpus.size() > 1) {
@@ -1814,20 +1824,23 @@ public:
   }
 
   ~GpuGrower() override {
-    stopPinning();
-    for (const std::size_t chunk : pinnedChunks_) {
-      cudaHostUnregister(reinterpret_cast<char *>(arena_.get()) + chunk * kPinChunkBytes);
+    if (toucher_.joinable()) {
+      toucher_.join();
     }
-    if (gathered_) {
-      cudaEventDestroy(gathered_);
+    for (cudaEvent_t event : {gathered_, copied_}) {
+      if (event) {
+        cudaEventDestroy(event);
+      }
     }
     for (cudaEvent_t event : ringFree_) {
       if (event) {
         cudaEventDestroy(event);
       }
     }
-    if (copyStream_) {
-      cudaStreamDestroy(copyStream_);
+    for (cudaStream_t stream : copyStreams_) {
+      if (stream) {
+        cudaStreamDestroy(stream);
+      }
     }
     if (stream_) {
       cudaStreamDestroy(stream_);
@@ -1847,17 +1860,11 @@ public:
       trace::Phase phase("presort");
       trace::Doing doing(trace::Work::GpuHost);
       presort(rows, distinct);
-      {
-        std::lock_guard<std::mutex> lock(pinMutex_); // see setup()'s pinner
-        presortDone_ = true;
-      }
-      pinCv_.notify_all();
     }
     Tree tree;
     tree.featureNames = train_.featureNames;
     tree.classNames = train_.classNames;
     ScopedTimer timer(timings.buildSeconds);
-    // Its CUDA calls wait while the pinner page-locks the arena (setup()).
     std::optional<trace::Phase> setupPhase(std::in_place, "grow setup");
     NodeStore store(train_.classCount(), 2 * stride_);
     // Leaves of rows: the CPU tasks write theirs into `leafOfRow`, the GPU
@@ -1906,7 +1913,9 @@ public:
       {
         // Every hand-off has started its CPU tasks once its copy is done.
         trace::Doing doing(trace::Work::GpuWait);
-        CUDA_CHECK(cudaStreamSynchronize(copyStream_));
+        for (cudaStream_t stream : copyStreams_) {
+          CUDA_CHECK(cudaStreamSynchronize(stream));
+        }
       }
       pool_.waitIdle();
     }
@@ -1984,12 +1993,7 @@ public:
           labels_.get(), classCount_, arranged, sortedLabels, counts);
     });
     CUDA_CHECK(cudaGetLastError());
-    // rowMajor is the arena (page-locked) when the pruning got the workspace.
-    trace::add("d2h_bytes", static_cast<double>(rows * features_ * sizeof(float)));
-    profile_.run("downloadArranged", stream_, [&]() {
-      CUDA_CHECK(cudaMemcpyAsync(rowMajor, arranged, rows * features_ * sizeof(float),
-                                 cudaMemcpyDeviceToHost, stream_));
-    }, "copy");
+    downloadStaged(rowMajor, arranged, rows * features_ * sizeof(float), "downloadArranged");
     downloadStaged(labels, sortedLabels, rows * sizeof(std::uint16_t), "downloadArranged");
     downloadStaged(slotCounts, counts, slots * classes * sizeof(std::uint32_t), "downloadArranged");
     {
@@ -2004,7 +2008,7 @@ public:
 
   // The host arena: it only holds the columns of nodes handed to the CPU.
   std::span<std::byte> workspace() override {
-    stopPinning(); // the caller writes all of it
+    waitTouched(features_ * rows_ * sizeof(Entry)); // the caller writes all of it
     return {reinterpret_cast<std::byte *>(arena_.get()), features_ * rows_ * sizeof(Entry)};
   }
 
@@ -2016,8 +2020,11 @@ private:
       CUDA_CHECK(cudaFree(nullptr)); // creates the CUDA context if needed
     }
     CUDA_CHECK(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
-    CUDA_CHECK(cudaStreamCreateWithFlags(&copyStream_, cudaStreamNonBlocking));
+    for (cudaStream_t &stream : copyStreams_) {
+      CUDA_CHECK(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+    }
     CUDA_CHECK(cudaEventCreateWithFlags(&gathered_, cudaEventDisableTiming));
+    CUDA_CHECK(cudaEventCreateWithFlags(&copied_, cudaEventDisableTiming));
     int device = 0;
     CUDA_CHECK(cudaGetDevice(&device));
     // The level arrays grow in stream order (DeviceArray::reserve): keep what
@@ -2122,8 +2129,7 @@ private:
     CUDA_CHECK(cub::DeviceRadixSort::SortKeys(nullptr, tempBytes, buffers, static_cast<int>(rows_),
                                               EntryValue{}, 0, 32, stream_));
     // ... and room for C4.5's distinct values (distinctValues()): growing it
-    // there synchronizes, and the presort's later calls then wait behind the
-    // arena's page-locking (airline C4.5 on the A100: 0.1 -> 0.4 s).
+    // there would synchronize.
     std::size_t uniqueBytes = 0;
     CUDA_CHECK(cub::DeviceSelect::Unique(
         nullptr, uniqueBytes, thrust::make_transform_iterator(columns_.get(), ValueBits{}),
@@ -2141,47 +2147,19 @@ private:
 
     // Host memory for the columns of nodes handed to the CPU (every row is
     // handed over at most once per grow, so features * rows entries always
-    // suffice), and their partition scratch. The arena is page-locked in the
-    // background, so the copies run at full speed, only as far as the
-    // hand-offs get (see ensurePinned()).
+    // suffice), and their partition scratch. Pageable: the hand-offs go
+    // through page-locked buffers (see handOff()).
     arena_.reset(new Entry[total]);
     arenaScratch_.reset(new Entry[rows_]);
     // CART with a fixed alpha stops early and hands few rows to the CPU
-    // (airline: 2 of 12 GB); otherwise nearly every row is handed over.
+    // (airline: 2 of 12 GB): the copies fault in the few pages they need.
     const bool fewHandOffs = options_.algorithm == Algorithm::Cart &&
                              options_.cart.pruning == CartPruning::Alpha;
-    pinDemand_ = fewHandOffs ? kPinAheadBytes : arenaBytes();
-    pinner_ = std::thread([this, fewHandOffs]() {
-      trace::Doing doing(trace::Work::PageLock);
-      if (!fewHandOffs) {
-        // All of it at once, while the pool is still idle (the GPU presorts):
-        // the pages are touched by all threads, so they are spread over the
-        // NUMA nodes, and a single registration stalls the GPU loop least
-        // (12 chunks of 1 GB made C4.5 on airline 0.4 s slower on the H100).
-        // The registration holds the CUDA driver's lock (0.2 s for airline):
-        // only after the presort, whose calls would wait for it (C4.5 on
-        // airline: 0.1 -> 0.3 s); the level loop has queued GPU work then.
-        NvtxRange range("pin arena");
-        touchHostMemory(arena_.get(), arenaBytes());
-        {
-          trace::Doing waiting(trace::Work::Idle);
-          std::unique_lock<std::mutex> lock(pinMutex_);
-          pinCv_.wait(lock, [&]() { return presortDone_ || pinStop_; });
-          if (!presortDone_) {
-            return; // destroyed before growing
-          }
-        }
-        const bool pinned = registerHostMemory(arena_.get(), arenaBytes());
-        std::lock_guard<std::mutex> lock(pinMutex_);
-        if (pinned) {
-          pinnedChunks_.push_back(0);
-        }
-        pinnedBytes_ = arenaBytes();
-        pinCv_.notify_all();
-        return;
-      }
-      pinArena();
-    });
+    if (fewHandOffs) {
+      touchedBytes_ = total * sizeof(Entry);
+    } else {
+      toucher_ = std::thread([this, bytes = total * sizeof(Entry)]() { touchArena(bytes); });
+    }
     CUDA_CHECK(cudaStreamSynchronize(stream_));
   }
 
@@ -2298,62 +2276,40 @@ private:
     }
   }
 
-  // Page-lock host memory, so that copies run at full speed. The pages are
-  // touched first, on all threads (the pool is idle while the GPU presorts):
-  // registering memory that is already mapped is several times faster, and
-  // a registration holds up every other CUDA call. False if it failed
-  // (pageable copies still work, just slower).
-  bool pinHostMemory(void *data, std::size_t bytes) {
-    touchHostMemory(data, bytes);
-    return registerHostMemory(data, bytes);
-  }
-
-  // The process's memory on transparent huge pages, in KiB (--gpu-profile).
-  static long anonHugeKib() {
-    long kib = 0;
-    if (FILE *file = std::fopen("/proc/self/smaps_rollup", "r")) {
-      char line[256];
-      while (std::fgets(line, sizeof line, file)) {
-        if (std::strncmp(line, "AnonHugePages:", 14) == 0) {
-          kib = std::atol(line + 14);
-        }
-      }
-      std::fclose(file);
-    }
-    return kib;
-  }
-
-  void touchHostMemory(void *data, std::size_t bytes) {
+  // Touch the arena's pages on all threads, in the background (the pool is
+  // idle while the GPU presorts), so the hand-offs' copies into it do not
+  // fault them in: that made C4.5 on airline 0.2-0.9 s slower on the H100
+  // node. The pages are spread over the NUMA nodes, like the threads that
+  // read them. In chunks, in order: a hand-off waits only for the part it
+  // fills (waitTouched()). (MADV_POPULATE_WRITE, which leaves the contents
+  // alone, holds the process's mmap lock: other threads' allocations and
+  // page faults waited for it, and the H100 node's presort went from 0.5 to
+  // 4.2 s when its memory was low.)
+  void touchArena(std::size_t bytes) {
     constexpr std::size_t kChunks = 256;
-    const long hugeBefore = profile_.printing() ? anonHugeKib() : 0;
-    const auto started = std::chrono::steady_clock::now();
+    trace::Doing doing(trace::Work::PageLock);
+    std::vector<char> done(kChunks, 0);
+    std::size_t next = 0; // chunks below it are done (touchMutex_)
+    char *data = reinterpret_cast<char *>(arena_.get());
     pool_.parallelFor(kChunks, [&](std::size_t chunk) {
       const std::size_t begin = bytes * chunk / kChunks;
       const std::size_t end = bytes * (chunk + 1) / kChunks;
-      std::memset(static_cast<char *>(data) + begin, 0, end - begin);
+      std::memset(data + begin, 0, end - begin);
+      std::lock_guard<std::mutex> lock(touchMutex_);
+      done[chunk] = 1;
+      while (next < kChunks && done[next]) {
+        ++next;
+      }
+      touchedBytes_ = bytes * next / kChunks;
+      touchCv_.notify_all();
     });
-    if (profile_.printing()) {
-      std::fprintf(stderr, "  touch %.1f MB: %.2f ms (%.1f MB more on huge pages)\n", bytes / 1e6,
-                   std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
-                           .count() * 1e3,
-                   (anonHugeKib() - hugeBefore) * 1024 / 1e6);
-    }
   }
 
-  bool registerHostMemory(void *data, std::size_t bytes) {
-    const auto started = std::chrono::steady_clock::now();
-    const bool registered =
-        cudaHostRegister(data, bytes, cudaHostRegisterDefault) == cudaSuccess;
-    if (profile_.printing()) {
-      std::fprintf(stderr, "  page-lock %.1f MB: %.2f ms\n", bytes / 1e6,
-                   std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
-                           .count() * 1e3);
-    }
-    if (registered) {
-      return true;
-    }
-    cudaGetLastError();
-    return false;
+  // Wait until the first `bytes` of the arena are touched.
+  void waitTouched(std::size_t bytes) {
+    trace::Doing waiting(trace::Work::PageLock);
+    std::unique_lock<std::mutex> lock(touchMutex_);
+    touchCv_.wait(lock, [&]() { return touchedBytes_ >= bytes; });
   }
 
   // Where setup() uploads the raw values (column-major, rows_ per feature)
@@ -2508,76 +2464,13 @@ private:
     }
   }
 
-  // The arena is page-locked by a background thread. Page-locking takes the
-  // CUDA driver's lock, so it stalls the GPU loop's CUDA calls. When few rows
-  // will be handed over, it is page-locked in chunks of kPinChunkBytes, in
-  // order, and only kPinAheadBytes beyond what the hand-offs have asked for
-  // (CART on airline: 2 of 12 GB, 0.1-0.3 s faster); otherwise all at once
-  // (see setup()). Hand-offs fill the arena from the start.
-  static constexpr std::size_t kPinChunkBytes = std::size_t{1} << 30;
-  static constexpr std::size_t kPinAheadBytes = 2 * kPinChunkBytes;
-
-  std::size_t arenaBytes() const { return features_ * rows_ * sizeof(Entry); }
-
-  void pinArena() {
-    std::unique_lock<std::mutex> lock(pinMutex_);
-    for (;;) {
-      std::optional<trace::Doing> waiting(std::in_place, trace::Work::Idle);
-      pinCv_.wait(lock, [&]() {
-        return pinStop_ || (pinDemand_ > pinnedBytes_ && pinnedBytes_ < arenaBytes());
-      });
-      if (pinStop_) {
-        return;
-      }
-      waiting.reset();
-      const std::size_t begin = pinnedBytes_;
-      const std::size_t end = std::min(arenaBytes(), begin + kPinChunkBytes);
-      lock.unlock();
-      const bool pinned =
-          pinHostMemory(reinterpret_cast<char *>(arena_.get()) + begin, end - begin);
-      lock.lock();
-      if (pinned) {
-        pinnedChunks_.push_back(begin / kPinChunkBytes);
-      }
-      // A chunk that could not be page-locked is copied to pageably.
-      pinnedBytes_ = end;
-      pinCv_.notify_all();
-    }
-  }
-
-  // Wait until the first `bytes` of the arena are ready for copies (and ask
-  // for kPinAheadBytes more).
-  void ensurePinned(std::size_t bytes) {
-    bytes = std::min(bytes, arenaBytes());
-    trace::Doing waiting(trace::Work::PageLock);
-    std::unique_lock<std::mutex> lock(pinMutex_);
-    if (pinStop_) {
-      return;
-    }
-    pinDemand_ = std::max(pinDemand_, bytes + kPinAheadBytes);
-    pinCv_.notify_all();
-    pinCv_.wait(lock, [&]() { return pinnedBytes_ >= bytes; });
-  }
-
-  void stopPinning() {
-    {
-      std::lock_guard<std::mutex> lock(pinMutex_);
-      pinStop_ = true;
-    }
-    pinCv_.notify_all();
-    if (pinner_.joinable()) {
-      pinner_.join();
-    }
-  }
-
   // Too small for the GPU: copy the presorted columns and use the CPU.
   void growOnCpu(LevelNode root) {
-    ensurePinned(features_ * stride_ * sizeof(Entry));
+    waitTouched(features_ * stride_ * sizeof(Entry));
     for (std::size_t feature = 0; feature < features_; ++feature) {
-      CUDA_CHECK(cudaMemcpyAsync(arena_.get() + feature * stride_, column(feature),
-                                 stride_ * sizeof(Entry), cudaMemcpyDeviceToHost, stream_));
+      downloadStaged(arena_.get() + feature * stride_, column(feature), stride_ * sizeof(Entry),
+                     "downloadColumns");
     }
-    CUDA_CHECK(cudaStreamSynchronize(stream_));
     cpuBuilder_->grow(Columns{arena_.get(), stride_, arenaScratch_.get()},
                       Subtree{root.node, 0, root.count, 0, std::move(root.features), {}, {}});
   }
@@ -3080,10 +2973,21 @@ private:
   // a child are copied.
   //
   // The block goes in pieces of at most a ring part: each is gathered into
-  // the next part of the ring (once that part's last copy is done) and copied
-  // to the host on copyStream_, which starts the CPU tasks itself once the
-  // last piece is copied (startTasks()). The GPU goes on with the next levels
-  // meanwhile; it only waits when it gets a whole ring ahead of the copies.
+  // the next part of the ring (once that part's last copy is done) and
+  // copied to the host on the copy streams, which start the CPU tasks
+  // themselves once the last piece is copied (startTasks()). The GPU goes on
+  // with the next levels meanwhile; it only waits when it gets a whole ring
+  // ahead of the copies.
+  //
+  // The arena is pageable: a piece is downloaded into a page-locked
+  // hand-off buffer, and a host function on the copy stream copies it into
+  // the arena (drain()). The two copy streams take turns, so one downloads
+  // while the other's buffer is copied out. (Buffers of 32 MB, four times
+  // as many host functions, left the GPU levels of C4.5 on airline 0.2-0.4 s
+  // slower on both GPU nodes: the host functions run one at a time.)
+  // Page-locking the arena instead (75 GB for ECBDL'14) held the CUDA
+  // driver's lock 1.2-1.9 s, sometimes 4-6 s on the H100 node, and the GPU
+  // loop waited for it.
   void handOff(std::vector<LevelNode> &children) {
     NvtxRange range("hand-off copy");
     std::size_t handOffRows = 0;
@@ -3130,7 +3034,7 @@ private:
     trace::add("handoff_bytes", static_cast<double>(blockEntries * sizeof(Entry)));
     trace::add("d2h_bytes", static_cast<double>(blockEntries * sizeof(Entry)));
     trace::add("handoffs", 1);
-    ensurePinned((arenaUsed_ + blockEntries) * sizeof(Entry));
+    waitTouched((arenaUsed_ + blockEntries) * sizeof(Entry));
     Entry *host = arena_.get() + arenaUsed_;
     arenaUsed_ += blockEntries;
     Entry *scratch = arenaScratch_.get() + scratchUsed_;
@@ -3138,6 +3042,8 @@ private:
     if (!jobs.empty()) {
       upload(copyJobs_, jobs);
     }
+    staging().prepare();
+    Staging &staging = dt::staging();
     for (const Piece &piece : pieces) {
       const std::size_t part = ringNext_++ % kRingParts;
       Entry *ring = ring_.get() + part * ringPartEntries_;
@@ -3147,23 +3053,23 @@ private:
             columns_.get(), ring, copyJobs_.get() + piece.firstJob);
       });
       CUDA_CHECK(cudaGetLastError());
+      // Buffer b is only used on stream b: its next download waits there for
+      // its copy into the arena.
+      const int buffer = static_cast<int>(handOffNext_++ % Staging::kHandOffBuffers);
+      cudaStream_t stream = copyStreams_[buffer];
       CUDA_CHECK(cudaEventRecord(gathered_, stream_));
-      CUDA_CHECK(cudaStreamWaitEvent(copyStream_, gathered_, 0));
-      profile_.run("handOffCopy", copyStream_, [&]() {
-        // A copy into one page-locked chunk at a time runs at full speed.
-        const std::size_t chunkEntries = kPinChunkBytes / sizeof(Entry);
-        const std::size_t base = static_cast<std::size_t>(host - arena_.get());
-        for (std::size_t at = piece.begin; at < piece.end;) {
-          const std::size_t chunkEnd = ((base + at) / chunkEntries + 1) * chunkEntries - base;
-          const std::size_t to = std::min(piece.end, chunkEnd);
-          CUDA_CHECK(cudaMemcpyAsync(host + at, ring + (at - piece.begin),
-                                     (to - at) * sizeof(Entry), cudaMemcpyDeviceToHost,
-                                     copyStream_));
-          at = to;
-        }
+      CUDA_CHECK(cudaStreamWaitEvent(stream, gathered_, 0));
+      const std::size_t bytes = (piece.end - piece.begin) * sizeof(Entry);
+      char *stage = staging.handOff[buffer];
+      profile_.run("handOffCopy", stream, [&]() {
+        CUDA_CHECK(cudaMemcpyAsync(stage, ring, bytes, cudaMemcpyDeviceToHost, stream));
       }, "copy");
-      CUDA_CHECK(cudaEventRecord(ringFree_[part], copyStream_));
+      CUDA_CHECK(cudaLaunchHostFunc(stream, drain, new Drain{this, host + piece.begin, stage, bytes}));
+      CUDA_CHECK(cudaEventRecord(ringFree_[part], stream));
     }
+    // Both streams' pieces are in the arena before the tasks start.
+    CUDA_CHECK(cudaEventRecord(copied_, copyStreams_[1]));
+    CUDA_CHECK(cudaStreamWaitEvent(copyStreams_[0], copied_, 0));
     auto tasks = std::make_unique<PendingTasks>();
     tasks->grower = this;
     tasks->columns = Columns{host, handOffRows, scratch};
@@ -3173,7 +3079,32 @@ private:
                                  child.depth, std::move(child.features), {}, {}});
       offset += child.count;
     }
-    CUDA_CHECK(cudaLaunchHostFunc(copyStream_, startTasks, tasks.release()));
+    CUDA_CHECK(cudaLaunchHostFunc(copyStreams_[0], startTasks, tasks.release()));
+  }
+
+  // One hand-off buffer to copy into the arena (a stream callback: no CUDA
+  // calls). The copier threads are idle during the GPU levels.
+  struct Drain {
+    GpuGrower *grower;
+    void *target;
+    const char *stage;
+    std::size_t bytes;
+  };
+
+  static void CUDART_CB drain(void *data) {
+    std::unique_ptr<Drain> drain(static_cast<Drain *>(data));
+    constexpr std::size_t kMinPart = std::size_t{1} << 20;
+    trace::Doing copying(trace::Work::Staging);
+    ThreadPool &copiers = staging().copyPool(drain->grower->pool_);
+    const std::size_t parts = std::max<std::size_t>(
+        1, std::min({Staging::kCopyThreads, std::size_t{copiers.workerCount()} + 1,
+                     drain->bytes / kMinPart}));
+    char *to = static_cast<char *>(drain->target);
+    copiers.parallelFor(parts, [&](std::size_t part) {
+      const std::size_t begin = drain->bytes * part / parts;
+      const std::size_t end = drain->bytes * (part + 1) / parts;
+      std::memcpy(to + begin, drain->stage + begin, end - begin);
+    });
   }
 
   // The CPU tasks of one hand-off (a stream callback: no CUDA calls).
@@ -3220,18 +3151,16 @@ private:
   std::unique_ptr<Entry[]> arenaScratch_;
   std::size_t arenaUsed_ = 0;
   std::size_t scratchUsed_ = 0;
-  std::thread pinner_; // pinArena()
-  std::mutex pinMutex_;
-  std::condition_variable pinCv_;
-  std::size_t pinDemand_ = 0;  // bytes of the arena wanted page-locked (pinMutex_)
-  std::size_t pinnedBytes_ = 0; // bytes of the arena ready (pinMutex_)
-  bool pinStop_ = false;
-  bool presortDone_ = false; // the pinner registers the arena after it (pinMutex_)
-  std::vector<std::size_t> pinnedChunks_; // page-locked chunks, to unregister
+  std::size_t handOffNext_ = 0; // the next of Staging::handOff
+  std::thread toucher_; // touchArena()
+  std::mutex touchMutex_;
+  std::condition_variable touchCv_;
+  std::size_t touchedBytes_ = 0; // the first bytes of the arena are touched (touchMutex_)
 
   cudaStream_t stream_ = nullptr;
-  cudaStream_t copyStream_ = nullptr; // hand-off copies to the host
+  cudaStream_t copyStreams_[2] = {}; // hand-off copies to the host (handOff())
   cudaEvent_t gathered_ = nullptr;    // the last hand-off piece is gathered
+  cudaEvent_t copied_ = nullptr;      // copyStreams_[1] is done with a hand-off
 
   // The sorted columns, one per slot of slotEntries_ entries; slot_[f] holds
   // feature f (see PartitionTarget).
@@ -3250,6 +3179,7 @@ private:
   // Hand-off staging (see handOff()).
   static constexpr std::size_t kRingBytes = std::size_t{512} << 20;
   static constexpr std::size_t kRingParts = 4;
+  static_assert(kRingBytes / kRingParts <= Staging::kHandOffBytes);
   DeviceArray<Entry> ring_;
   std::size_t ringPartEntries_ = 0;
   std::size_t ringNext_ = 0;

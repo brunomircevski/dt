@@ -100,12 +100,12 @@ One chart per protocol, the three runs one above the other on the same time axis
   - On epyc1 (ECBDL 15M, parallel, 48 threads) the three trees (CART α 1e-4, unpruned CART, C4.5) are byte-identical before and after.
   - Train totals are unchanged within noise (unpruned CART 36.7/35.9 → 35.0/35.4 s, C4.5 78.8 → 79.3 s).
   - In this profile (051949b) the stretch after the presort on epyc, where fewer than half the threads work, shrank from 0.27 to 0.03 s (C4.5). The cluster benchmarks of 051949b built the same trees as cd18717 everywhere, within −5% to +5% of its times.
-- **The arena's page-locking was not changed.**
+- **The arena's page-locking was not changed in this follow-up.**
   - **Huge pages are already in use.** The arena comes from `new`, which puts every block of 2 MiB or more on transparent huge pages (`src/core/memory.cpp`). On hopper all 75.7 GB of it was on huge pages; `--gpu-profile` now prints this after the touch.
   - **Ampere:** registering 75 GB takes 1.8–1.9 s in ./tree, as in a standalone `cudaHostRegister` of a touched huge-page buffer. That is the cost of registration.
   - **Hopper** usually takes 1.2–1.3 s, but on 2026-10-18/19 it took 4.2–5.9 s in some jobs, whether the registration ran after the presort, during it, or with the level loop waiting. The standalone test reproduced this (2.4–6.6 s) only with 120 GB of other memory touched first, and only some of the time. At the time, NUMA node 0 held 156 GB of another user's `/dev/shm` and 382 GB of page cache (125 GB free of 516). Binding the process to either socket's CPUs made the standalone test fast again. Binding ./tree's page-locking thread to the GPU's node gave no gain in a run where hopper was fast either way, so it was not kept.
   - **Dropped: page-locking arenas over 16 GB in 1 GB chunks, ahead of the hand-offs.** It cut level 0 on hopper from 5.9 to 0.15 s (unpruned CART 23.0 → 18.6 s, C4.5 51.7 → 47.5 s). On ampere, though, the registrations during the GPU levels delayed the level copies, and C4.5 went from 67.0 to 68.5 s. Forcing chunks on airline also crashed C4.5 (`invalid argument` in a later CUDA call), so some later step assumes the arena is one registration.
-  - **Left to try:** hand-offs copied through the page-locked staging buffers (as `uploadStaged` does), which need no registration of the arena at all.
+  - **Fixed afterwards (2026-10-19), without page-locking the arena:** the hand-offs now go through two page-locked 128 MB buffers, one per copy stream, and are copied into the pageable arena on the staging threads. Same trees; ECBDL C4.5 −2.8% (hopper) and −12% (ampere), unpruned CART −6% and −25%, no stall left. See [cluster-handoff-staging](../cluster-handoff-staging/BENCHMARK.md).
 
 ## What profiling costs
 
