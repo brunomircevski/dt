@@ -2,7 +2,7 @@
 
 **Status:** run on 2026-10-19, 3 runs per case, at commit 051949b: cd18717 (one copy of the presorted columns on every backend, the GPU's hand-off through a 512 MB ring, [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)) plus `./tree --profile` and the count tables filled without a zero-fill on one thread. The same trees as on cd18717. `machine.json` says `-dirty` only because the previous result files had been removed from the cluster's checkout for the rerun; the code was committed.
 
-**CUDA rows rerun at 6f6cecb** (2026-10-19 from 20:20, 3 runs per case): the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([cluster-handoff-staging](../cluster-handoff-staging/BENCHMARK.md)), and the host threads partition big nodes in blocks (d9da007). The same trees; times −6% to +1%. The CPU rows are still 051949b's.
+**CUDA rows rerun at 6f6cecb** (2026-10-19 from 20:20, 3 runs per case): the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), and the host threads partition big nodes in blocks (d9da007). The same trees; times −6% to +1%. The CPU rows are still 051949b's.
 - **Pruned trees** (the run directories here): all four nodes from 15:11, each right after its HIGGS run ([cluster-higgs](../cluster-higgs/BENCHMARK.md)).
 - **Unpruned trees** (`noprunning/`): right after the pruned ones, from 15:12.
 - **Each node ran alone** and was used whole.

@@ -11,7 +11,7 @@ GPU loop waited for it. Now each hand-off piece is downloaded into one of two
 page-locked 128 MB buffers (one per copy stream), and a host function copies
 it into the arena on the staging threads while the other stream downloads the
 next piece ([CUDA.md](CUDA.md)). Same trees. Medians against e0a9106
-([cluster-handoff-staging](../bench/results/cluster-handoff-staging/BENCHMARK.md)):
+(A/B logs and scripts in git history: `bench/results/cluster-handoff-staging/` at 6f6cecb):
 
 | Train total (s) | H100 before | H100 after | A100 before | A100 after |
 |---|--:|--:|--:|--:|

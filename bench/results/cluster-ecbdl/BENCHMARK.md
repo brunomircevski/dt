@@ -2,7 +2,7 @@
 
 **Status:** one run per case, all on 2026-10-19, commit 051949b: cd18717 (one copy of the presorted columns on every backend, [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)) plus `./tree --profile` and the count tables filled without a zero-fill on one thread. The same trees as on cd18717, the times within −2% to +5%. `machine.json` says `-dirty` only because the previous result files had been removed from the cluster's checkout for the rerun; the code was committed.
 - **15M sample** (`*-ecbdl_15m`, pruned and `unpruned/`): dell2 15:10–15:22, epyc1 15:14–15:25, dell1 15:15–15:25.
-- **CUDA rows rerun at 6f6cecb** (hopper and ampere, 2026-10-19 20:25–20:40): the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([cluster-handoff-staging](../cluster-handoff-staging/BENCHMARK.md)), and the host threads partition big nodes in blocks (d9da007). The same trees. 051949b's CUDA times are given as "was" below.
+- **CUDA rows rerun at 6f6cecb** (hopper and ampere, 2026-10-19 20:25–20:40): the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), and the host threads partition big nodes in blocks (d9da007). The same trees. 051949b's CUDA times are given as "was" below.
 - **Full set** (`*-ecbdl`, pruned and `unpruned/`): dell2 15:23–15:51, epyc1 15:25–15:51, dell1 15:25–15:50.
 - **Each node ran alone** and was used whole. The jobs ran one after another on each node, after the other cluster benchmarks of the same commit.
 - **Same trees:** every case built the same tree on every node and backend, and the full set's trees are the same as before the rerun.

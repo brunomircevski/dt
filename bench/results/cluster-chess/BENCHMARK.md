@@ -1,7 +1,7 @@
 # Chess 3×3 on the mordor3 cluster: 1M to 1000M rows on two GPU and three CPU servers, unpruned CART and C4.5
 
 **Status:** three runs per case, all on 2026-10-19.
-- **GPU runs** (hopper, ampere): rerun 20:30–20:33 with commit 6f6cecb: the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([cluster-handoff-staging](../cluster-handoff-staging/BENCHMARK.md)), on top of d9da007. The first GPU runs (17:34–17:42, 2a9d64e = 5058ce1, ./tree as in 051949b) built the same trees; at 1000M the H100 is now 18% (CART) and 15% (C4.5) faster, the A100 unchanged.
+- **GPU runs** (hopper, ampere): rerun 20:30–20:33 with commit 6f6cecb: the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), on top of d9da007. The first GPU runs (17:34–17:42, 2a9d64e = 5058ce1, ./tree as in 051949b) built the same trees; at 1000M the H100 is now 18% (CART) and 15% (C4.5) faster, the A100 unchanged.
 - **CPU runs** (epyc, dell, dell512): rerun 19:08–19:12 with commit d9da007, which fixes a slowdown at 1000M rows ([below](#the-1000m-slowdown-and-its-fix)). The fix changes only the CPU builder for nodes of at least 2^20 rows with few columns. The CPU subtrees of a CUDA run have at most 4096 rows, so the fix cannot change the GPU runs.
 - **dell and dell512 at 1000M** are the 10-run medians of [the check below](#dell-against-dell512-10-runs-at-1000m), run with 41faca9 (the same CPU code as d9da007). Every other case has 3 runs.
 - **Each node ran alone** and was used whole (`--exclusive`). The four sizes ran one after another on every node, smallest first.
