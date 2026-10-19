@@ -54,13 +54,22 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "datasets"
-# sha256sum of the desktop's datasets/ (2026-10-14); airline, ecbdl: of their first build.
+# sha256sum of the desktop's datasets/ (2026-10-14); airline, ecbdl, chess: of their first build.
 EXPECTED = {
     "covertype": "fd7a387defeab82ea260a5be0c42b84e3426b963bb7feb490ffbafdaf89dac77",
     "higgs": "71f566a24e8a03ff51aa6961addc652d44ff8878b28f4198a7f8921f3c6af31c",
     "supersymmetry": "85ecf105d7667d88006de9d8dfafabbc703647fe651a40df51f9a1202d31108e",
     "airline": "255426039068522c2a5fb780b6fe4b31179bdc8988013d15db22ba914a742bcb",
     "ecbdl": "5bc39aecbec956ccb06b77295e292e0166db5f87c8341678b1e0ca35fd67120c",
+    # chess: the first build (mordor3, 2026-10-19), from files that no longer exist.
+    "chess_1m": "eeff397d59634960841140a732139a2a0b351db6d538a8bccbda7b385cffdcb1",
+    "chess_1m_test": "764f54b147078c4aad8e5d5279aac81a32ef5d0997b55d1e38f80ad3767b653a",
+    "chess_10m": "fff4315173bcef7f9672d689b058b3996b57bb98ca6ab8ec7212a853501b0add",
+    "chess_10m_test": "758a2c10f767f77de92616d43b89719c75cacba91640cf75e710fe9560b87742",
+    "chess_100m": "e25758a82f61198ac562443084baac161661eefe571ca6c2fac6a0a097742555",
+    "chess_100m_test": "758a2c10f767f77de92616d43b89719c75cacba91640cf75e710fe9560b87742",
+    "chess_1b": "8ca94cd83e586c94ae270643bf52576132faff8504f34e3b4d9ac8aedec6393d",
+    "chess_1b_test": "764f54b147078c4aad8e5d5279aac81a32ef5d0997b55d1e38f80ad3767b653a",
 }
 
 COVERTYPE_HEADER = ",".join(
