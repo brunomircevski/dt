@@ -9,8 +9,8 @@
  "dataset": "airline",
  "date": "2026-10-17 12:45:34",
  "tree_rerun": {
-  "tree_commit": "051949b",
-  "date": "2026-10-19 15:45:41",
+  "tree_commit": "6f6cecb",
+  "date": "2026-10-19 20:12:50",
   "note": "the ./tree rows of results.jsonl are from this rerun; the libraries rows from the run above"
  }
 }

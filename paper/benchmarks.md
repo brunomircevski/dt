@@ -1,7 +1,7 @@
 # Benchmarks against GPU libraries: results, what is timed, fairness
 
 Source: [bench/results/cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md)
-(run 2026-10-17; ./tree rows rerun on 051949b on 2026-10-19; scripts in its `scripts/`).
+(run 2026-10-17; ./tree rows rerun on 6f6cecb on 2026-10-19; scripts in its `scripts/`).
 
 ## Setup
 
@@ -23,10 +23,10 @@ Source: [bench/results/cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-v
 
 | Case | ./tree H100 | ./tree A100 | cuML H100 | cuML A100 | XGBoost H100 | XGBoost A100 |
 |---|--:|--:|--:|--:|--:|--:|
-| HIGGS CART | 0.40 s | 0.48 s | 0.94 s | 1.08 s | 5.41 s | 6.02 s |
-| HIGGS C4.5 (cuML: entropy) | 0.36 s | 0.44 s | 0.87 s | 1.03 s | – | – |
-| airline CART | 1.39 s | 1.98 s | 4.23 s | 4.67 s | 20.40 s | 24.69 s |
-| airline C4.5 (cuML: entropy) | 1.30 s | 1.93 s | 4.18 s | 4.59 s | – | – |
+| HIGGS CART | 0.35 s | 0.45 s | 0.94 s | 1.08 s | 5.41 s | 6.02 s |
+| HIGGS C4.5 (cuML: entropy) | 0.32 s | 0.40 s | 0.87 s | 1.03 s | – | – |
+| airline CART | 1.21 s | 1.73 s | 4.23 s | 4.67 s | 20.40 s | 24.69 s |
+| airline C4.5 (cuML: entropy) | 1.14 s | 1.65 s | 4.18 s | 4.59 s | – | – |
 
 | Case | ./tree nodes / test acc. | cuML | XGBoost | Same predictions as ./tree |
 |---|---|---|---|---|
@@ -40,10 +40,10 @@ Source: [bench/results/cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-v
 | HIGGS | 3.3–3.4 GiB | 1.85–1.91 GiB | 2.86–2.90 GiB |
 | airline | 13.3 GiB | 9.5–10.0 GiB | 13.0 GiB |
 
-- Speed-up: CART 2.2–2.4× (HIGGS) and 2.4–3.0× (airline) over cuML,
-  12–15× over XGBoost; C4.5 2.3–3.2× over cuML's entropy tree.
+- Speed-up: CART 2.4–2.7× (HIGGS) and 2.7–3.5× (airline) over cuML,
+  13–17× over XGBoost; C4.5 2.6–3.7× over cuML's entropy tree.
 - The gap grows with the data (airline > HIGGS). ./tree gains more from the
-  H100 over the A100 (1.2–1.5×) than the libraries (1.1–1.2×).
+  H100 over the A100 (1.25–1.45×) than the libraries (1.1–1.2×).
 - Binned trees agree with the exact tree on only 83–91% of test rows; the
   exact tree is the most accurate CART tree on both datasets (by ≤ 0.3 points).
   Root thresholds differ even on integer data (airline: ./tree 70.5, cuML 70,
@@ -66,22 +66,22 @@ either side: reading the file, prediction, accuracy.
 | build | all GPU levels, hand-offs, waiting for CPU threads to finish small subtrees, assembling the host tree |
 | prune | C4.5 only: collapse of useless splits and thresholds set to training values (part of C4.5 even with `--no-prune`) |
 
-Not in ./tree's total: CSV parsing; CUDA context creation and the 4×32 MB
-pinned staging buffers (both made on a background thread during the CSV load,
+Not in ./tree's total: CSV parsing; CUDA context creation and the pinned
+staging buffers (4×32 MB for uploads, 2×128 MB for the hand-offs) (both made on a background thread during the CSV load,
 `src/app/main.cpp`); evaluation; `--dump`.
 
 Phase medians (s):
 
 | Case | gpu setup | presort | build | total |
 |---|--:|--:|--:|--:|
-| H100 HIGGS CART | 0.090 | 0.018 | 0.280 | 0.387 |
-| H100 HIGGS C4.5 | 0.099 | 0.027 | 0.233 | 0.361 |
-| A100 HIGGS CART | 0.096 | 0.023 | 0.378 | 0.499 |
-| A100 HIGGS C4.5 | 0.097 | 0.032 | 0.310 | 0.442 |
-| H100 airline CART | 0.216 | 0.075 | 1.091 | 1.385 |
-| H100 airline C4.5 | 0.219 | 0.086 | 1.012 | 1.321 |
-| A100 airline CART | 0.325 | 0.098 | 1.553 | 1.969 |
-| A100 airline C4.5 | 0.320 | 0.110 | 1.452 | 1.888 |
+| H100 HIGGS CART | 0.094 | 0.018 | 0.243 | 0.352 |
+| H100 HIGGS C4.5 | 0.098 | 0.027 | 0.198 | 0.325 |
+| A100 HIGGS CART | 0.090 | 0.023 | 0.338 | 0.449 |
+| A100 HIGGS C4.5 | 0.089 | 0.034 | 0.277 | 0.403 |
+| H100 airline CART | 0.213 | 0.075 | 0.900 | 1.205 |
+| H100 airline C4.5 | 0.217 | 0.086 | 0.828 | 1.136 |
+| A100 airline CART | 0.320 | 0.098 | 1.286 | 1.725 |
+| A100 airline C4.5 | 0.314 | 0.111 | 1.222 | 1.650 |
 
 **cuML / XGBoost** (`gpubench.py`): one Python process loads row-major
 (C-order) NumPy float32 arrays, runs an **untimed warm-up fit on 50,000 rows**

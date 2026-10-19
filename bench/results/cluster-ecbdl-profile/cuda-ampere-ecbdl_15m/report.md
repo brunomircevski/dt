@@ -1,8 +1,8 @@
 ## cuda-ampere-ecbdl_15m
 
-**cuda-ampere-ecbdl_15m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree 051949ba26af-dirty, CPUs in order of use 0-47, 1 run(s) per case, warm-up 50000 rows
+**cuda-ampere-ecbdl_15m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree 6f6cecb8a9b8, CPUs in order of use 0-47, 1 run(s) per case, warm-up 50000 rows
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 385 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 641 MiB
 
 ### ecbdl_15m (15,000,000 train / 100,000 test rows, 631 features, 2 classes)
 
@@ -10,16 +10,16 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 385 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 11.7 s | 11.7 s–11.7 s |  | 39.78 GiB (+ GPU 73.30 GiB) | 39.41 GiB | 1 | 1 | 0 | 97.85% |  |
+| ./tree CUDA | 11.7 s | 11.7 s–11.7 s |  | 37.44 GiB (+ GPU 73.30 GiB) | 36.82 GiB | 1 | 1 | 0 | 97.85% |  |
 
 **CART, grown to pure leaves, no pruning, no depth limit** (`cart_full_nodepth`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 25.7 s | 25.7 s–25.7 s |  | 106.41 GiB (+ GPU 73.56 GiB) | 106.04 GiB | 604,225 | 302,113 | 94 | 100.00% |  |
+| ./tree CUDA | 24.1 s | 24.1 s–24.1 s |  | 106.65 GiB (+ GPU 73.42 GiB) | 106.03 GiB | 604,225 | 302,113 | 94 | 100.00% |  |
 
 **C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 67.1 s | 67.1 s–67.1 s |  | 107.57 GiB (+ GPU 73.49 GiB) | 107.19 GiB | 209,799 | 104,900 | 266 | 99.09% |  |
+| ./tree CUDA | 64.3 s | 64.3 s–64.3 s |  | 107.88 GiB (+ GPU 73.35 GiB) | 107.25 GiB | 209,799 | 104,900 | 266 | 99.09% |  |

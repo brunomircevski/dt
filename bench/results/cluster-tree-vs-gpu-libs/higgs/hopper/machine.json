@@ -9,8 +9,8 @@
  "dataset": "higgs",
  "date": "2026-10-17 12:44:45",
  "tree_rerun": {
-  "tree_commit": "051949b",
-  "date": "2026-10-19 16:04:50",
+  "tree_commit": "6f6cecb",
+  "date": "2026-10-19 20:12:38",
   "note": "the ./tree rows of results.jsonl are from this rerun; the libraries rows from the run above"
  }
 }

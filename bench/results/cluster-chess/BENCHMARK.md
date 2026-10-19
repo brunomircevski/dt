@@ -1,7 +1,7 @@
 # Chess 3×3 on the mordor3 cluster: 1M to 1000M rows on two GPU and three CPU servers, unpruned CART and C4.5
 
 **Status:** three runs per case, all on 2026-10-19.
-- **GPU runs** (hopper, ampere): 17:34–17:42, with commit 2a9d64e on the cluster. On the laptop that is 5058ce1, the same change cherry-picked onto e0a9106. ./tree itself is unchanged since 051949b.
+- **GPU runs** (hopper, ampere): rerun 20:30–20:33 with commit 6f6cecb: the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([cluster-handoff-staging](../cluster-handoff-staging/BENCHMARK.md)), on top of d9da007. The first GPU runs (17:34–17:42, 2a9d64e = 5058ce1, ./tree as in 051949b) built the same trees; at 1000M the H100 is now 18% (CART) and 15% (C4.5) faster, the A100 unchanged.
 - **CPU runs** (epyc, dell, dell512): rerun 19:08–19:12 with commit d9da007, which fixes a slowdown at 1000M rows ([below](#the-1000m-slowdown-and-its-fix)). The fix changes only the CPU builder for nodes of at least 2^20 rows with few columns. The CPU subtrees of a CUDA run have at most 4096 rows, so the fix cannot change the GPU runs.
 - **dell and dell512 at 1000M** are the 10-run medians of [the check below](#dell-against-dell512-10-runs-at-1000m), run with 41faca9 (the same CPU code as d9da007). Every other case has 3 runs.
 - **Each node ran alone** and was used whole (`--exclusive`). The four sizes ran one after another on every node, smallest first.
@@ -52,16 +52,16 @@ Training time (`train total`: presort and build, on CUDA also GPU setup and uplo
 
 | CART, no pruning | 1M | 10M | 100M | 1000M |
 |---|--:|--:|--:|--:|
-| CUDA · hopper (H100 PCIe + 32 threads) | 53 ms | **78 ms** | **154 ms** | **1.12 s** |
-| CUDA · ampere (A100 80GB PCIe + 48 threads) | 41 ms | 95 ms | 197 ms | 1.79 s |
+| CUDA · hopper (H100 PCIe + 32 threads) | 51 ms | **88 ms** | **133 ms** | **0.92 s** |
+| CUDA · ampere (A100 80GB PCIe + 48 threads) | 38 ms | **88 ms** | 190 ms | 1.78 s |
 | Parallel · epyc (EPYC 9255, 48 threads) | **23 ms** | 178 ms | 689 ms | 6.46 s |
 | Parallel · dell (Xeon 6542Y, 48 threads) | 78 ms | 184 ms | 1.21 s | 9.95 s |
 | Parallel · dell512 (the same, half the memory channels) | 65 ms | 250 ms | 1.32 s | 11.68 s |
 
 | C4.5, no pruning | 1M | 10M | 100M | 1000M |
 |---|--:|--:|--:|--:|
-| CUDA · hopper | 53 ms | **68 ms** | **159 ms** | **1.14 s** |
-| CUDA · ampere | 40 ms | 87 ms | 200 ms | 1.79 s |
+| CUDA · hopper | 49 ms | 89 ms | **148 ms** | **0.97 s** |
+| CUDA · ampere | 38 ms | **82 ms** | 205 ms | 1.80 s |
 | Parallel · epyc | **24 ms** | 190 ms | 660 ms | 7.31 s |
 | Parallel · dell | 73 ms | 271 ms | 1.51 s | 12.32 s |
 | Parallel · dell512 | 71 ms | 203 ms | 1.63 s | 14.32 s |
@@ -71,17 +71,17 @@ Peak memory (the same for CART and C4.5 within 0.01 GiB):
 | | 1M | 10M | 100M | 1000M |
 |---|--:|--:|--:|--:|
 | RAM, CPU servers | 0.06 GiB | 0.48 GiB | 4.68 GiB | 46.70 GiB |
-| RAM, CUDA (hopper / ampere) | 0.41 / 0.40 GiB | 0.63 / 0.62 GiB | 2.81 / 2.80 GiB | 24.62 / 24.61 GiB |
-| VRAM, GPU 0 (hopper / ampere) | 0.53 / 0.49 GiB | 0.89 / 0.85 GiB | 3.44 / 3.41 GiB | 25.46 / 25.44 GiB |
+| RAM, CUDA (hopper / ampere) | 0.66 / 0.65 GiB | 0.88 / 0.87 GiB | 3.06 / 3.05 GiB | 24.87 / 24.86 GiB |
+| VRAM, GPU 0 (hopper / ampere) | 0.53 / 0.49 GiB | 0.89 / 0.85 GiB | 3.44 / 3.41 GiB | 25.43 / 25.42 GiB |
 
 - **The GPUs pull away with the rows.** At 1M rows epyc is the fastest (23 ms): a GPU run's fixed costs (setup, transfers, kernel launches) are about 40–50 ms. From 10M rows on, the GPUs lead.
-  - The H100 is 2.3–2.8× faster than the best CPU server at 10M, 4.1–4.5× at 100M, and **5.8× (CART) to 6.4× (C4.5) at 1000M**. In every case the best CPU server is epyc.
+  - The H100 is 2.0–2.1× faster than the best CPU server at 10M, 4.5–5.2× at 100M, and **7.0× (CART) to 7.5× (C4.5) at 1000M**. In every case the best CPU server is epyc.
   - The A100 is 3.6–4.1× faster than epyc at 1000M.
 - **The GPU time grows slower than the rows**: 7× from 100M to 1000M on the H100, 9× on the A100. Even 100M rows do not keep a GPU busy; 1000M do.
 - **The CPU time grows with the rows**: 8–11× from 100M to 1000M. The presort grows 10× (epyc 0.20 → 1.91 s, dell 0.54 → 4.39 s), and so does the build (epyc CART 0.47 → 4.55 s, dell 0.69 → 5.61 s).
 - **epyc is 1.5–2.3× faster than dell** from 100M rows on, as on the other datasets.
 - **dell512 against dell:** with 3 runs per case, from 25% less time to 36% more (both at 10M, where the runs are noisy). With 10 runs at 1000M, **dell is faster in every phase, by 14–17%** ([below](#dell-against-dell512-10-runs-at-1000m)).
-- **Memory is linear in the rows:** 50 bytes per row on the CPU servers (46.7 GiB for 1000M rows, 2 G values: 25 bytes per value) and 27 bytes per row of VRAM (25.5 GiB of the 80 GB). Every size fits on every GPU; the 40 GB A100s of ampere would hold the 1000M set too. A CUDA run needs about half the host RAM of a CPU run (24.6 GiB at 1000M).
+- **Memory is linear in the rows:** 50 bytes per row on the CPU servers (46.7 GiB for 1000M rows, 2 G values: 25 bytes per value) and 27 bytes per row of VRAM (25.5 GiB of the 80 GB). Every size fits on every GPU; the 40 GB A100s of ampere would hold the 1000M set too. A CUDA run needs about half the host RAM of a CPU run (24.9 GiB at 1000M; 0.25 GiB of it at every size are the page-locked buffers of the uploads and hand-offs).
 
 ## The 1000M slowdown and its fix
 

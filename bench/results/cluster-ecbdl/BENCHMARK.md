@@ -1,7 +1,8 @@
 # ECBDL'14 on the mordor3 cluster: a 15M-row sample on two GPU and three CPU servers, the full 32M rows on the CPU servers
 
 **Status:** one run per case, all on 2026-10-19, commit 051949b: cd18717 (one copy of the presorted columns on every backend, [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)) plus `./tree --profile` and the count tables filled without a zero-fill on one thread. The same trees as on cd18717, the times within −2% to +5%. `machine.json` says `-dirty` only because the previous result files had been removed from the cluster's checkout for the rerun; the code was committed.
-- **15M sample** (`*-ecbdl_15m`, pruned and `unpruned/`): dell2 15:10–15:22, hopper and ampere 15:14–15:27, epyc1 15:14–15:25, dell1 15:15–15:25.
+- **15M sample** (`*-ecbdl_15m`, pruned and `unpruned/`): dell2 15:10–15:22, epyc1 15:14–15:25, dell1 15:15–15:25.
+- **CUDA rows rerun at 6f6cecb** (hopper and ampere, 2026-10-19 20:25–20:40): the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([cluster-handoff-staging](../cluster-handoff-staging/BENCHMARK.md)), and the host threads partition big nodes in blocks (d9da007). The same trees. 051949b's CUDA times are given as "was" below.
 - **Full set** (`*-ecbdl`, pruned and `unpruned/`): dell2 15:23–15:51, epyc1 15:25–15:51, dell1 15:25–15:50.
 - **Each node ran alone** and was used whole. The jobs ran one after another on each node, after the other cluster benchmarks of the same commit.
 - **Same trees:** every case built the same tree on every node and backend, and the full set's trees are the same as before the rerun.
@@ -51,16 +52,17 @@ Each bar is ./tree's training time (`train total`: GPU setup, presort, build and
 
 | | CART | CART unpruned | C4.5 (of which pruning) | RAM CART / unpruned / C4.5 | VRAM CART / unpruned / C4.5 |
 |---|--:|--:|--:|--:|--:|
-| CUDA · hopper (H100 PCIe + 32 threads) | **8.00 s** | **18.28 s** | **46.56 s** (18.66 s) | 39.8 / 106.4 / 107.3 GiB | 73.4 / 73.6 / 73.5 GiB |
-| CUDA · ampere (A100 80GB PCIe + 48 threads) | 11.68 s | 25.93 s | 66.95 s (28.36 s) | 39.8 / 106.4 / 107.6 GiB | 73.3 / 73.6 / 73.5 GiB |
+| CUDA · hopper (H100 PCIe + 32 threads) | **7.96 s** (was 8.00) | **17.35 s** (was 18.28) | **50.70 s** (24.00 s; was 46.56) | 37.4 / 106.6 / 107.6 GiB | 73.4 / 73.5 / 73.4 GiB |
+| CUDA · ampere (A100 80GB PCIe + 48 threads) | 11.67 s (was 11.68) | 23.69 s (was 25.93) | 65.53 s (28.67 s; was 66.95) | 37.4 / 106.6 / 107.8 GiB | 73.3 / 73.4 / 73.4 GiB |
 | Parallel · epyc (EPYC 9255, 48 threads) | 16.69 s | 35.78 s | 77.95 s (10.86 s) | 111.4 / 111.5 / 112.8 GiB | – |
 | Parallel · dell (Xeon 6542Y, 48 threads) | 24.85 s | 51.74 s | 113.52 s (14.53 s) | 111.4 / 111.5 / 112.8 GiB | – |
 | Parallel · dell512 (the same, half the memory channels) | 38.50 s | 80.08 s | 163.59 s (31.88 s) | 111.4 / 111.5 / 112.8 GiB | – |
 
-- **The H100 is 2.1× (CART), 2.0× (unpruned CART) and 1.7× (C4.5) faster than epyc**, a little more than on the 6M sample (1.8×, 1.7× and 1.6×), still less than on airline (6.3× for pruned CART). Profiled in [cluster-ecbdl-profile](../cluster-ecbdl-profile/BENCHMARK.md) (2026-10-18): the H100 grows 2.0–2.5× faster than epyc, but C4.5's pruning runs on the slower host CPUs, and the data's upload and the page-locking of the hand-off arena cost 0.7–1.1 s on hopper.
-- **C4.5's pruning is 40–42% of a CUDA run** (27–31% on the 6M sample) and slower than on the CPU servers (18.7 and 28.4 s against epyc's 10.9 s). It runs on the GPU nodes' slower host CPUs, and its first step (the rows sorted by leaf) runs on the host too: a copy of the raw values for doing it on the GPU (4 bytes per value, 35 GiB) no longer fits beside the columns, and ./tree keeps it only when it fits.
-- **VRAM: 73.3–73.6 GiB of the 80 GB** (79.6 GiB usable on the H100). The columns take 70.6 GiB: 632 slots (631 features and one spare) of 15M rows at 8 bytes; the rest is the 512 MB hand-off ring, the per-level arrays and the CUDA context.
-- **RAM:** the CPU servers hold the loaded float32 data (35 GiB) and the columns in 631 + 47 slots (76 GiB): 111–113 GiB. A CUDA run keeps 39.8 GiB on the host for pruned CART (the loaded data and the CPU's share of small subtrees), about 107 GiB for C4.5 and unpruned CART, whose many small subtrees are grown on the host from a host copy of the columns.
+- **The H100 is 2.1× (CART), 2.1× (unpruned CART) and 1.5× (C4.5) faster than epyc**, a little more than on the 6M sample (1.8×, 1.7× and 1.6×) except C4.5, still less than on airline (6.2× for pruned CART). Profiled in [cluster-ecbdl-profile](../cluster-ecbdl-profile/BENCHMARK.md): the H100 grows 2.0–2.5× faster than epyc, but C4.5's pruning runs on the slower host CPUs.
+- **6f6cecb against 051949b on the GPUs:** the page-locking of the 75 GB hand-off arena is gone (it held up the GPU loop 1.2–1.9 s): unpruned CART 18.28 → 17.35 s (H100) and 25.93 → 23.69 s (A100), A100 C4.5 66.95 → 65.53 s; pruned CART, which hands over little, is unchanged. The H100's C4.5 went 46.56 → 50.70 s, all in the pruning on the host CPUs (18.7 → 24.0 s; growing 27.9 → 26.7 s). Pruning does not touch the changed code: in a same-job comparison that evening both builds pruned equally slowly (52.7 s against 51.3 s in total), with hopper's NUMA node 0 nearly full (11–28 GB free of 516).
+- **C4.5's pruning is 44–47% of a CUDA run** (27–31% on the 6M sample) and slower than on the CPU servers (24.0 and 28.7 s against epyc's 10.9 s). It runs on the GPU nodes' slower host CPUs, and its first step (the rows sorted by leaf) runs on the host too: a copy of the raw values for doing it on the GPU (4 bytes per value, 35 GiB) no longer fits beside the columns, and ./tree keeps it only when it fits.
+- **VRAM: 73.3–73.5 GiB of the 80 GB** (79.6 GiB usable on the H100). The columns take 70.6 GiB: 632 slots (631 features and one spare) of 15M rows at 8 bytes; the rest is the 512 MB hand-off ring, the per-level arrays and the CUDA context.
+- **RAM:** the CPU servers hold the loaded float32 data (35 GiB) and the columns in 631 + 47 slots (76 GiB): 111–113 GiB. A CUDA run keeps 37.4 GiB on the host for pruned CART (the loaded data and the CPU's share of small subtrees; 39.8 GiB at 051949b, which touched the whole hand-off arena), about 107 GiB for C4.5 and unpruned CART, whose many small subtrees are grown on the host from a host copy of the columns.
 
 ## Full set (31.9M rows), CPU servers
 
@@ -75,7 +77,7 @@ Each bar is ./tree's training time (`train total`: GPU setup, presort, build and
 - **About 12.6 bytes per value of RAM** (254 GB): 4 for the loaded data and 8 × 678/631 for the columns in 631 + 47 slots (min(features − 1, threads) spare ones). It was 20 bytes per value (375.5–377.4 GiB) with the second copy of every column; 37% less.
 - **epyc is 1.5× faster than dell** on every case (CART 35.5 against 51.9 s, unpruned CART 83.4 against 121.9 s, C4.5 220.9 against 337.9 s).
 - **2.1× the sample's rows:** unpruned CART takes 2.3× (epyc) and 2.4× (dell) the sample's time, C4.5 2.8× and 3.0×; their trees have 2.0× and 2.2× the nodes.
-- **Against cd18717** (2026-10-17, the same trees): within −2% to +2.2% on the full set, dell's and dell2's sample and the GPUs (largest: H100 C4.5 45.58 → 46.56 s, A100 unpruned CART 25.38 → 25.93 s); epyc's sample +2% to +5% (CART 15.96 → 16.69 s, unpruned 34.31 → 35.78 s, C4.5 76.11 → 77.95 s), in one run each. Only `--profile` (off here) and the count tables' fill changed.
+- **051949b against cd18717** (2026-10-17, the same trees): within −2% to +2.2% on the full set, dell's and dell2's sample and the GPUs (largest: H100 C4.5 45.58 → 46.56 s, A100 unpruned CART 25.38 → 25.93 s); epyc's sample +2% to +5% (CART 15.96 → 16.69 s, unpruned 34.31 → 35.78 s, C4.5 76.11 → 77.95 s), in one run each. Only `--profile` (off here) and the count tables' fill changed.
 - **cd18717 against 8da0c12** (2026-10-17 00:29–10:35, the same trees): dell within 1–2% (C4.5 338.5 → 336.7 s, unpruned CART 123.0 → 121.9 s); dell512 −7% to +2% (CART 78.3 → 72.8 s, C4.5 452.4 → 458.6 s); epyc's pruned CART 51.6 → 35.4 s, its presort no longer 21 s (below), unpruned CART 83.6 → 84.3 s and C4.5 209.8 → 220.8 s (+5%, mostly the pruning, 27.4 → 35.9 s, in one run each; not looked into).
 
 ### Filling the memory of a 512 GB node
