@@ -9,6 +9,9 @@
 #   cpu-dell-<data>     dell1: 2x Xeon Gold 6542Y                     parallel
 #   cpu-dell512-<data>  dell2: the same CPUs, 512 GB instead of 1 TB  parallel
 #                       (only when named, e.g. for the memory pressure of full ECBDL)
+#   serial-epyc-<data>  epyc1, one thread                             serial
+#   serial-dell-<data>  dell1, one thread                             serial
+#                       (only when named; the job still owns the whole node)
 # The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
 # on a GPU node would measure a CPU that is only there to feed the GPU.
 # The epyc and dell partitions have more nodes: the runs always take epyc1
@@ -27,6 +30,8 @@
 #   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
 #       cuda-hopper-chess_1b cuda-ampere-chess_1b cpu-epyc-chess_1b cpu-dell-chess_1b \
 #       cpu-dell512-chess_1b                     # chess: 1m, 10m, 100m, 1b; with dell2
+#   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
+#       serial-epyc-chess_1b serial-dell-chess_1b    # one thread (--serial)
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well.
@@ -44,7 +49,7 @@ while getopts "m:d:p:o:a:h" option; do
     p) PROTOCOLS="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
     a) AFTER="$OPTARG" ;;
-    *) sed -n '2,31p' "$0"; exit 2 ;;
+    *) sed -n '2,37p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -68,17 +73,19 @@ for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$D
     { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 
-#        name                    partition  node    impls
-JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda"
-      "cuda-ampere-$DATASET  ampere     ampere  tree_cuda"
-      "cpu-epyc-$DATASET     epyc       epyc1   tree"
-      "cpu-dell-$DATASET     dell       dell1   tree")
+#        name                    partition  node    impls      threads
+JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda  all"
+      "cuda-ampere-$DATASET  ampere     ampere  tree_cuda  all"
+      "cpu-epyc-$DATASET     epyc       epyc1   tree       all"
+      "cpu-dell-$DATASET     dell       dell1   tree       all")
 
 # Full ECBDL needs about 160 GB of GPU memory: CPU nodes only.
 if [ "$DATASET" = ecbdl ]; then
   JOBS=("${JOBS[@]:2}")
 fi
-OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree")
+OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
+          "serial-epyc-$DATASET  epyc       epyc1   tree       1"
+          "serial-dell-$DATASET  dell       dell1   tree       1")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then
@@ -108,11 +115,11 @@ echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs
 
 ids=()
 for job in "${JOBS[@]}"; do
-  read -r name partition node impls <<<"$job"
+  read -r name partition node impls threads <<<"$job"
   mkdir -p "bench/results/$DIR/$name"
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "$LIMIT" \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
-    bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "$PROTOCOLS" all "$TIMEOUT")")
+    bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "$PROTOCOLS" "$threads" "$TIMEOUT")")
   echo "$name: job ${ids[-1]} on $node"
 done
 scontrol release "${ids[@]}"
