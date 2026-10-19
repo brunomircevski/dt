@@ -1,0 +1,5 @@
+
+=== 22:34:05 split /home/bmircevski/dt-viz/datasets/chess_1m.csv
+train: 800,000 rows, 55.51% B
+test: 200,000 rows, 55.48% B
+done 2026-10-19 22:34:07

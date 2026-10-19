@@ -1,0 +1,11 @@
+
+=== 22:34:59 compile J48Export
+
+=== 22:35:00 Weka J48 (CPU 0) and YaDT 1 thread (CPU 24) side by side
+WARNING: core mtj jar files are not available as resources to this classloader (jdk.internal.loader.ClassLoaders$AppClassLoader@4e0e2f2a)
+/home/bmircevski/dt-viz/bench/results/visualization/results/yadt-1t-c45.json: 17 nodes, depth 4, test 100.00%, median 0.1892 s
+/home/bmircevski/dt-viz/bench/results/visualization/results/j48-c45.json: 17 nodes, depth 4, test 100.00%, median 1.4798 s
+
+=== 22:35:05 YaDT 48 threads
+/home/bmircevski/dt-viz/bench/results/visualization/results/yadt-48t-c45.json: 17 nodes, depth 4, test 100.00%, median 0.1768 s
+done 2026-10-19 22:35:08

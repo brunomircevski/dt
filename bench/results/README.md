@@ -56,6 +56,12 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 |---|---|---|
 | [`cluster-tree-vs-gpu-libs`](cluster-tree-vs-gpu-libs/BENCHMARK.md) | full HIGGS, airline (115M rows), the ECBDL'14 15M sample (631 features) and chess 3×3 with 1000M rows: ./tree CUDA against cuML (`RandomForestClassifier`, 1 tree, 128 bins, Gini or entropy) and XGBoost (1 round, Gini-equivalent gain, 256 bins, CART only), with peak VRAM | ./tree is 2.4–3.7× faster than cuML and 13–17× faster than XGBoost on HIGGS and airline (airline CART, H100: 1.21 s against 4.23 s and 20.4 s); on ECBDL 2.4–3.5× and 4.0–6.0× (CART, H100: 6.45 s against 21.2 s and 38.6 s); on chess 1000M 7.0–10.3× and 79–118× (CART, H100: 0.90 s against 9.27 s and 106 s; the libraries' binned trees fill all 19 levels where ./tree's exact tree has 17 nodes). CART test accuracy is the same within 0.3 points; ./tree's C4.5 (gain ratio) builds a smaller, less accurate depth-19 tree than cuML's entropy tree. VRAM: ./tree 3.3–3.4 GiB on HIGGS and 13.3 GiB on airline (7.2 and 35 GiB on 00ae13f), cuML 1.9 and 9.5–10 GiB, XGBoost 2.9 and 13 GiB; ECBDL 73.3–73.4, 36 and 71.5 GiB; chess 25.4, 42.4 and 43.5 GiB. |
 
+**Tree visualizations** (2026-10-19, 3 runs per case, ./tree at 5c2e051): every implementation above, on CPU (dell1, dell2) or CUDA (hopper), one unpruned tree with depth ≤ 10 on chess 3×3 with 1M rows split 80/20, drawn as an SVG with the run's time, accuracy, depth and nodes.
+
+| Directory | What | Main result |
+|---|---|---|
+| [`visualization`](visualization/BENCHMARK.md) | 14 SVGs (`svg/`), the exported trees (`results/`), a log-scale timing chart and `summary.csv` | ./tree, scikit-learn, rpart, J48 and YaDT all find the same 17-node, depth-4 tree with 100% test accuracy. The binned cuML and XGBoost trees fill all 10 levels (389 and 479 nodes) at 98.78% and 99.51%. cuML is fastest at 16 ms; ./tree takes 44–59 ms on CPU and 45 ms on CUDA, scikit-learn 0.69 s, rpart 0.82 s, YaDT 0.18–0.19 s, J48 1.48 s, XGBoost 0.11 s. |
+
 ## A new machine
 
 1. Copy a directory and rename it for the machine, e.g. `cpu-server-susy-scaling`. (`cluster-susy-vs-others-cpu` instead takes a new machine as a case in its `run.sh`.)

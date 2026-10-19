@@ -1,0 +1,25 @@
+
+=== 22:34:08 build ./tree_cpu on dell1
+
+=== 22:34:14 ./tree serial cart
+/home/bmircevski/dt-viz/bench/results/visualization/results/tree-serial-cart.json: 17 nodes, depth 4, test 100.00%, median 0.0542 s
+
+=== 22:34:14 ./tree parallel cart
+/home/bmircevski/dt-viz/bench/results/visualization/results/tree-parallel-cart.json: 17 nodes, depth 4, test 100.00%, median 0.0438 s
+
+=== 22:34:15 ./tree serial c45
+/home/bmircevski/dt-viz/bench/results/visualization/results/tree-serial-c45.json: 17 nodes, depth 4, test 100.00%, median 0.0592 s
+
+=== 22:34:15 ./tree parallel c45
+/home/bmircevski/dt-viz/bench/results/visualization/results/tree-parallel-c45.json: 17 nodes, depth 4, test 100.00%, median 0.0483 s
+
+=== 22:34:15 scikit-learn (CPU 0) and rpart (CPU 24) side by side
+Warning message:
+In readLines(file.path(data, "meta.json")) :
+  incomplete final line found on '/home/bmircevski/dt-viz/bench/data/chess_1m_8020/meta.json'
+Warning message:
+In readLines(file.path(data, "meta.json")) :
+  incomplete final line found on '/home/bmircevski/dt-viz/bench/data/chess_1m_8020/meta.json'
+/home/bmircevski/dt-viz/bench/results/visualization/results/rpart-cart.json: 17 nodes, depth 4, test 100.00%, median 0.8151 s
+/home/bmircevski/dt-viz/bench/results/visualization/results/sklearn-cart.json: 17 nodes, depth 4, test 100.00%, median 0.6926 s
+done 2026-10-19 22:34:19

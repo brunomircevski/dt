@@ -1,0 +1,20 @@
+
+=== 22:39:25 SVGs
+/home/bmircevski/dt-viz/bench/results/visualization/svg/cuml-c45.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/cuml-cart.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/j48-c45.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/rpart-cart.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/sklearn-cart.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/tree-cuda-c45.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/tree-cuda-cart.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/tree-parallel-c45.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/tree-parallel-cart.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/tree-serial-c45.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/tree-serial-cart.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/xgboost-cart.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/yadt-1t-c45.svg
+/home/bmircevski/dt-viz/bench/results/visualization/svg/yadt-48t-c45.svg
+
+=== 22:39:25 chart
+/home/bmircevski/dt-viz/bench/results/visualization/chart.png
+done 2026-10-19 22:39:26

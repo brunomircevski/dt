@@ -1,0 +1,74 @@
+
+=== 22:35:26 build ./tree (CUDA, sm_90) on hopper
+src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t)>; std::size_t = long unsigned int]':
+src/build/gpu_grower.cu:2199:20:   required from here
+src/core/thread_pool.h:86:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::uploadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
+   86 |   auto work = [state, bodyPtr, doing]() {
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   87 |     trace::Doing scope(doing);
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   88 |     for (std::size_t index; (index = state->next.fetch_add(1)) < state->count;) {
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   89 |       try {
+      |       ~~~~~  
+   90 |         (*bodyPtr)(index);
+      |         ~~~~~~~~~~~~~~~~~~
+   91 |       } catch (...) {
+      |       ~~~~~~~~~~~~~~~
+   92 |         std::lock_guard<std::mutex> lock(state->errorMutex);
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   93 |         if (!state->error) {
+      |         ~~~~~~~~~~~~~~~~~~~~
+   94 |           state->error = std::current_exception();
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   95 |         }
+      |         ~    
+   96 |       }
+      |       ~      
+   97 |       if (state->done.fetch_add(1) + 1 == state->count) {
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   98 |         state->done.notify_all();
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~
+   99 |       }
+      |       ~      
+  100 |     }
+      |     ~        
+  101 |   };
+      |              
+src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::downloadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)>; std::size_t = long unsigned int]':
+src/build/gpu_grower.cu:2233:22:   required from here
+src/core/thread_pool.h:86:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::downloadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::downloadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::downloadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::downloadStaged(void*, const void*, std::size_t, const char*)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
+src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::touchArena(std::size_t)::<lambda(std::size_t)>; std::size_t = long unsigned int]':
+src/build/gpu_grower.cu:2292:20:   required from here
+src/core/thread_pool.h:86:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::touchArena(std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::touchArena(std::size_t)::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::touchArena(std::size_t)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::touchArena(std::size_t)::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
+src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(std::vector<unsigned int, dt::UninitializedAllocator<unsigned int> >&)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)>; std::size_t = long unsigned int]':
+src/build/gpu_grower.cu:2958:20:   required from here
+src/core/thread_pool.h:86:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(std::vector<unsigned int, dt::UninitializedAllocator<unsigned int> >&)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(std::vector<unsigned int, dt::UninitializedAllocator<unsigned int> >&)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(std::vector<unsigned int, dt::UninitializedAllocator<unsigned int> >&)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::mergeLeaves(std::vector<unsigned int, dt::UninitializedAllocator<unsigned int> >&)::<lambda(std::size_t, const char*, std::size_t)>::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
+src/core/thread_pool.h: In instantiation of 'void dt::ThreadPool::parallelFor(std::size_t, Body&&) [with Body = dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::drain(void*)::<lambda(std::size_t)>; std::size_t = long unsigned int]':
+src/build/gpu_grower.cu:3101:20:   required from here
+src/core/thread_pool.h:86:13: warning: 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::drain(void*)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::drain(void*)::<lambda(std::size_t)>&&)::<lambda()>' declared with greater visibility than the type of its field 'dt::ThreadPool::parallelFor<dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::drain(void*)::<lambda(std::size_t)> >(std::size_t, dt::_GLOBAL__N__a4653ef2_13_gpu_grower_cu_78a6339a::GpuGrower::drain(void*)::<lambda(std::size_t)>&&)::<lambda()>::<bodyPtr capture>' [-Wattributes]
+
+=== 22:37:15 ./tree --cuda cart
+/home/bmircevski/dt-viz/bench/results/visualization/results/tree-cuda-cart.json: 17 nodes, depth 4, test 100.00%, median 0.0453 s
+
+=== 22:37:18 cuML cart
+/home/bmircevski/dt-viz/bench/results/visualization/results/cuml-cart.json: 389 nodes, depth 10, test 98.78%, median 0.0165 s
+
+=== 22:37:23 ./tree --cuda c45
+/home/bmircevski/dt-viz/bench/results/visualization/results/tree-cuda-c45.json: 17 nodes, depth 4, test 100.00%, median 0.0455 s
+
+=== 22:37:26 cuML c45
+/home/bmircevski/dt-viz/bench/results/visualization/results/cuml-c45.json: 389 nodes, depth 10, test 98.78%, median 0.0164 s
+
+=== 22:37:30 XGBoost cart
+/home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/core.py:569: UserWarning: [22:37:32] WARNING: /__w/xgboost/xgboost/src/common/error_msg.cc:62: Falling back to prediction using DMatrix due to mismatched devices. This might lead to higher memory usage and slower performance. XGBoost is running on: cuda:0, while the input data is on: cpu.
+Potential solutions:
+- Use a data structure that matches the device ordinal in the booster.
+- Set the device for booster before call to inplace_predict.
+
+This warning will only be shown once.
+
+  return func(**kwargs)
+warning: the exported tree predicts 35 test rows differently from xgboost's own predict()
+/home/bmircevski/dt-viz/bench/results/visualization/results/xgboost-cart.json: 479 nodes, depth 10, test 99.50%, median 0.1131 s
+done 2026-10-19 22:37:33

@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1244" height="796" viewBox="0 0 1244 796" role="img">
+<title>./tree C45 tree, chess 1M, depth limit 10</title>
+<style>
+text { font-family: Inter, "Helvetica Neue", Arial, sans-serif; }
+.mono { font-family: "JetBrains Mono", Menlo, Consolas, monospace; }
+.title { font-size: 22px; font-weight: 700; } .sub { font-size: 13px; }
+.k { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.v { font-size: 20px; font-weight: 650; } .vs { font-size: 11.5px; }
+.edge { stroke-width: 1.4; fill: none; } .box { stroke-width: 1; }
+.leaf-A, .leaf-B { stroke-width: 1.2; }
+.rline { stroke-width: 0.6; fill: none; }
+.board { stroke-width: 1; fill: none; stroke-dasharray: 3 3; opacity: .55; }
+.frame { fill: none; } .rule { stroke-width: 1; }
+.split { font-size: 12.5px; font-weight: 650; } .n { font-size: 11px; } .lab { font-size: 10px; }
+
+.bg { fill: #fcfcfb; } text { fill: #0b0b0b; }
+.muted, .n, .vs, .k { fill: #52514e; } .faint, .lab { fill: #8a8984; }
+.edge { stroke: #b9b8b2; } .box { fill: #ffffff; stroke: #b9b8b2; }
+.leaf-A { fill: #d9e7f8; stroke: #2a78d6; } .leaf-B { fill: #fbe0d4; stroke: #eb6834; }
+.ca { fill: #2a78d6; } .cb { fill: #eb6834; } .rA { fill: #d9e7f8; } .rB { fill: #fbe0d4; }
+.rline { stroke: #fcfcfb; } .board { stroke: #0b0b0b; } .frame { stroke: #e4e3df; }
+.dot { fill: #52514e; } .rule { stroke: #e4e3df; }
+@media (prefers-color-scheme: dark) {
+.bg { fill: #1a1a19; } text { fill: #f0efec; }
+.muted, .n, .vs, .k { fill: #c3c2b7; } .faint, .lab { fill: #8f8e86; }
+.edge { stroke: #5d5c57; } .box { fill: #242422; stroke: #5d5c57; }
+.leaf-A { fill: #1f3550; stroke: #3987e5; } .leaf-B { fill: #4a2a1c; stroke: #d95926; }
+.ca { fill: #3987e5; } .cb { fill: #d95926; } .rA { fill: #1f3550; } .rB { fill: #4a2a1c; }
+.rline { stroke: #1a1a19; } .board { stroke: #f0efec; } .frame { stroke: #3a3936; }
+.dot { fill: #c3c2b7; } .rule { stroke: #3a3936; }
+}
+</style>
+<rect class="bg" width="1244" height="796"/>
+<text class="title" x="28" y="44">./tree · C4.5 · parallel, 48 threads</text>
+<text class="sub muted" x="28" y="66">C4.5: exact gain-ratio splits, unpruned · dell1 (INTEL(R) XEON(R) GOLD 6542Y) · 5c2e051bc09c</text>
+<text class="k" x="28" y="106">training time</text>
+<text class="v" x="28" y="134">48.3 ms</text>
+<text class="vs" x="28" y="153">median of 3, 41.8 ms – 65.1 ms</text>
+<text class="k" x="211" y="106">test accuracy</text>
+<text class="v" x="211" y="134">100.00%</text>
+<text class="vs" x="211" y="153">200,000 rows (last 20%)</text>
+<text class="k" x="394" y="106">train accuracy</text>
+<text class="v" x="394" y="134">100.00%</text>
+<text class="vs" x="394" y="153">800,000 rows (first 80%)</text>
+<text class="k" x="576" y="106">depth</text>
+<text class="v" x="576" y="134">4</text>
+<text class="vs" x="576" y="153">limit 10</text>
+<text class="k" x="759" y="106">nodes</text>
+<text class="v" x="759" y="134">17</text>
+<text class="vs" x="759" y="153">9 leaves</text>
+<text class="vs" x="28" y="182">chess 3x3, 1M rows (80/20) · no pruning · timed: ./tree&#x27;s `train total` (presort and build; on CUDA also GPU setup and upload), one fresh process per run</text>
+<text class="vs" x="28" y="198">run: /home/bmircevski/dt-viz/tree_cpu --parallel --threads 48 --c45 --no-prune -d 10 --dump /tmp/tmpabqcf3a7/t.dump train.csv</text>
+<text class="k" x="982" y="20">decision regions</text>
+<rect x="982.00" y="143.34" width="56.66" height="56.66" class="rB"/>
+<rect x="982.00" y="143.34" width="56.66" height="56.66" class="rline"/>
+<rect x="982.00" y="86.67" width="56.66" height="56.66" class="rA"/>
+<rect x="982.00" y="86.67" width="56.66" height="56.66" class="rline"/>
+<rect x="982.00" y="30.00" width="56.66" height="56.67" class="rB"/>
+<rect x="982.00" y="30.00" width="56.66" height="56.67" class="rline"/>
+<rect x="1038.66" y="143.34" width="56.66" height="56.66" class="rA"/>
+<rect x="1038.66" y="143.34" width="56.66" height="56.66" class="rline"/>
+<rect x="1038.66" y="86.67" width="56.66" height="56.66" class="rB"/>
+<rect x="1038.66" y="86.67" width="56.66" height="56.66" class="rline"/>
+<rect x="1038.66" y="30.00" width="56.66" height="56.67" class="rA"/>
+<rect x="1038.66" y="30.00" width="56.66" height="56.67" class="rline"/>
+<rect x="1095.33" y="143.34" width="56.67" height="56.66" class="rB"/>
+<rect x="1095.33" y="143.34" width="56.67" height="56.66" class="rline"/>
+<rect x="1095.33" y="86.67" width="56.67" height="56.66" class="rA"/>
+<rect x="1095.33" y="86.67" width="56.67" height="56.66" class="rline"/>
+<rect x="1095.33" y="30.00" width="56.67" height="56.67" class="rB"/>
+<rect x="1095.33" y="30.00" width="56.67" height="56.67" class="rline"/>
+<line class="board" x1="1038.7" y1="30" x2="1038.7" y2="200"/>
+<line class="board" x1="982" y1="86.7" x2="1152" y2="86.7"/>
+<line class="board" x1="1095.3" y1="30" x2="1095.3" y2="200"/>
+<line class="board" x1="982" y1="143.3" x2="1152" y2="143.3"/>
+<rect class="frame" x="982" y="30" width="170" height="170"/>
+<text class="lab" x="1067.0" y="213" text-anchor="middle">x  (dashed: the true 3×3 board)</text>
+<text class="lab" x="976" y="115.0" text-anchor="end">y</text>
+<line class="rule" x1="28" y1="238" x2="1216" y2="238"/>
+<rect x="28" y="245" width="12" height="12" rx="2" class="leaf-A"/>
+<text class="vs" x="46" y="255">class A</text>
+<rect x="108" y="245" width="12" height="12" rx="2" class="leaf-B"/>
+<text class="vs" x="126" y="255">class B</text>
+<text class="vs" x="198" y="255">left branch: the condition holds (yes). Bar: the class mix of the rows reaching the node.</text>
+<path class="edge" d="M160.0,561.0 C160.0,584.0 94.0,584.0 94.0,607.0"/>
+<text class="lab" x="123.0" y="581.0" text-anchor="end">yes</text>
+<path class="edge" d="M160.0,561.0 C160.0,584.0 226.0,584.0 226.0,607.0"/>
+<text class="lab" x="197.0" y="581.0" text-anchor="start">no</text>
+<path class="edge" d="M259.0,457.0 C259.0,480.0 160.0,480.0 160.0,503.0"/>
+<text class="lab" x="205.5" y="477.0" text-anchor="end">yes</text>
+<path class="edge" d="M259.0,457.0 C259.0,480.0 358.0,480.0 358.0,503.0"/>
+<text class="lab" x="312.5" y="477.0" text-anchor="start">no</text>
+<path class="edge" d="M688.0,665.0 C688.0,688.0 622.0,688.0 622.0,711.0"/>
+<text class="lab" x="651.0" y="685.0" text-anchor="end">yes</text>
+<path class="edge" d="M688.0,665.0 C688.0,688.0 754.0,688.0 754.0,711.0"/>
+<text class="lab" x="725.0" y="685.0" text-anchor="start">no</text>
+<path class="edge" d="M589.0,561.0 C589.0,584.0 490.0,584.0 490.0,607.0"/>
+<text class="lab" x="535.5" y="581.0" text-anchor="end">yes</text>
+<path class="edge" d="M589.0,561.0 C589.0,584.0 688.0,584.0 688.0,607.0"/>
+<text class="lab" x="642.5" y="581.0" text-anchor="start">no</text>
+<path class="edge" d="M952.0,665.0 C952.0,688.0 886.0,688.0 886.0,711.0"/>
+<text class="lab" x="915.0" y="685.0" text-anchor="end">yes</text>
+<path class="edge" d="M952.0,665.0 C952.0,688.0 1018.0,688.0 1018.0,711.0"/>
+<text class="lab" x="989.0" y="685.0" text-anchor="start">no</text>
+<path class="edge" d="M1051.0,561.0 C1051.0,584.0 952.0,584.0 952.0,607.0"/>
+<text class="lab" x="997.5" y="581.0" text-anchor="end">yes</text>
+<path class="edge" d="M1051.0,561.0 C1051.0,584.0 1150.0,584.0 1150.0,607.0"/>
+<text class="lab" x="1104.5" y="581.0" text-anchor="start">no</text>
+<path class="edge" d="M820.0,457.0 C820.0,480.0 589.0,480.0 589.0,503.0"/>
+<text class="lab" x="700.5" y="477.0" text-anchor="end">yes</text>
+<path class="edge" d="M820.0,457.0 C820.0,480.0 1051.0,480.0 1051.0,503.0"/>
+<text class="lab" x="939.5" y="477.0" text-anchor="start">no</text>
+<path class="edge" d="M539.5,353.0 C539.5,376.0 259.0,376.0 259.0,399.0"/>
+<text class="lab" x="395.2" y="373.0" text-anchor="end">yes</text>
+<path class="edge" d="M539.5,353.0 C539.5,376.0 820.0,376.0 820.0,399.0"/>
+<text class="lab" x="683.8" y="373.0" text-anchor="start">no</text>
+<g><title>depth 3
+rows 88,660
+A: 0  B: 88,660
+class B</title><rect x="35.0" y="607.0" width="118" height="58" rx="7" class="leaf-B"/>
+<text class="split" x="94.0" y="630.0" text-anchor="middle">class B</text>
+<text class="n" x="94.0" y="648.0" text-anchor="middle">88,660 rows · 100.0%</text>
+</g>
+<g><title>depth 3
+rows 88,496
+A: 88,496  B: 0
+class A</title><rect x="167.0" y="607.0" width="118" height="58" rx="7" class="leaf-A"/>
+<text class="split" x="226.0" y="630.0" text-anchor="middle">class A</text>
+<text class="n" x="226.0" y="648.0" text-anchor="middle">88,496 rows · 100.0%</text>
+</g>
+<g><title>depth 2
+y &lt;= 0.9999690055847168
+rows 177,156
+A: 88,496  B: 88,660</title><rect x="101.0" y="503.0" width="118" height="58" rx="7" class="box"/>
+<text class="split mono" x="160.0" y="522.0" text-anchor="middle">y ≤ 0.999969</text>
+<text class="n" x="160.0" y="538.0" text-anchor="middle">177,156 rows</text>
+<rect x="111.0" y="546.0" width="49.0" height="5" class="ca"/>
+<rect x="160.0" y="546.0" width="49.0" height="5" class="cb"/>
+</g>
+<g><title>depth 2
+rows 88,870
+A: 0  B: 88,870
+class B</title><rect x="299.0" y="503.0" width="118" height="58" rx="7" class="leaf-B"/>
+<text class="split" x="358.0" y="526.0" text-anchor="middle">class B</text>
+<text class="n" x="358.0" y="544.0" text-anchor="middle">88,870 rows · 100.0%</text>
+</g>
+<g><title>depth 1
+y &lt;= 1.99993896484375
+rows 266,026
+A: 88,496  B: 177,530</title><rect x="200.0" y="399.0" width="118" height="58" rx="7" class="box"/>
+<text class="split mono" x="259.0" y="418.0" text-anchor="middle">y ≤ 1.99994</text>
+<text class="n" x="259.0" y="434.0" text-anchor="middle">266,026 rows</text>
+<rect x="210.0" y="442.0" width="32.6" height="5" class="ca"/>
+<rect x="242.6" y="442.0" width="65.4" height="5" class="cb"/>
+</g>
+<g><title>depth 3
+rows 89,232
+A: 89,232  B: 0
+class A</title><rect x="431.0" y="607.0" width="118" height="58" rx="7" class="leaf-A"/>
+<text class="split" x="490.0" y="630.0" text-anchor="middle">class A</text>
+<text class="n" x="490.0" y="648.0" text-anchor="middle">89,232 rows · 100.0%</text>
+</g>
+<g><title>depth 4
+rows 88,988
+A: 0  B: 88,988
+class B</title><rect x="563.0" y="711.0" width="118" height="58" rx="7" class="leaf-B"/>
+<text class="split" x="622.0" y="734.0" text-anchor="middle">class B</text>
+<text class="n" x="622.0" y="752.0" text-anchor="middle">88,988 rows · 100.0%</text>
+</g>
+<g><title>depth 4
+rows 88,835
+A: 88,835  B: 0
+class A</title><rect x="695.0" y="711.0" width="118" height="58" rx="7" class="leaf-A"/>
+<text class="split" x="754.0" y="734.0" text-anchor="middle">class A</text>
+<text class="n" x="754.0" y="752.0" text-anchor="middle">88,835 rows · 100.0%</text>
+</g>
+<g><title>depth 3
+y &lt;= 1.99993896484375
+rows 177,823
+A: 88,835  B: 88,988</title><rect x="629.0" y="607.0" width="118" height="58" rx="7" class="box"/>
+<text class="split mono" x="688.0" y="626.0" text-anchor="middle">y ≤ 1.99994</text>
+<text class="n" x="688.0" y="642.0" text-anchor="middle">177,823 rows</text>
+<rect x="639.0" y="650.0" width="49.0" height="5" class="ca"/>
+<rect x="688.0" y="650.0" width="49.0" height="5" class="cb"/>
+</g>
+<g><title>depth 2
+y &lt;= 0.9999690055847168
+rows 267,055
+A: 178,067  B: 88,988</title><rect x="530.0" y="503.0" width="118" height="58" rx="7" class="box"/>
+<text class="split mono" x="589.0" y="522.0" text-anchor="middle">y ≤ 0.999969</text>
+<text class="n" x="589.0" y="538.0" text-anchor="middle">267,055 rows</text>
+<rect x="540.0" y="546.0" width="65.3" height="5" class="ca"/>
+<rect x="605.3" y="546.0" width="32.7" height="5" class="cb"/>
+</g>
+<g><title>depth 4
+rows 88,733
+A: 0  B: 88,733
+class B</title><rect x="827.0" y="711.0" width="118" height="58" rx="7" class="leaf-B"/>
+<text class="split" x="886.0" y="734.0" text-anchor="middle">class B</text>
+<text class="n" x="886.0" y="752.0" text-anchor="middle">88,733 rows · 100.0%</text>
+</g>
+<g><title>depth 4
+rows 89,353
+A: 89,353  B: 0
+class A</title><rect x="959.0" y="711.0" width="118" height="58" rx="7" class="leaf-A"/>
+<text class="split" x="1018.0" y="734.0" text-anchor="middle">class A</text>
+<text class="n" x="1018.0" y="752.0" text-anchor="middle">89,353 rows · 100.0%</text>
+</g>
+<g><title>depth 3
+y &lt;= 0.9999690055847168
+rows 178,086
+A: 89,353  B: 88,733</title><rect x="893.0" y="607.0" width="118" height="58" rx="7" class="box"/>
+<text class="split mono" x="952.0" y="626.0" text-anchor="middle">y ≤ 0.999969</text>
+<text class="n" x="952.0" y="642.0" text-anchor="middle">178,086 rows</text>
+<rect x="903.0" y="650.0" width="49.2" height="5" class="ca"/>
+<rect x="952.2" y="650.0" width="48.8" height="5" class="cb"/>
+</g>
+<g><title>depth 3
+rows 88,833
+A: 0  B: 88,833
+class B</title><rect x="1091.0" y="607.0" width="118" height="58" rx="7" class="leaf-B"/>
+<text class="split" x="1150.0" y="630.0" text-anchor="middle">class B</text>
+<text class="n" x="1150.0" y="648.0" text-anchor="middle">88,833 rows · 100.0%</text>
+</g>
+<g><title>depth 2
+y &lt;= 1.99993896484375
+rows 266,919
+A: 89,353  B: 177,566</title><rect x="992.0" y="503.0" width="118" height="58" rx="7" class="box"/>
+<text class="split mono" x="1051.0" y="522.0" text-anchor="middle">y ≤ 1.99994</text>
+<text class="n" x="1051.0" y="538.0" text-anchor="middle">266,919 rows</text>
+<rect x="1002.0" y="546.0" width="32.8" height="5" class="ca"/>
+<rect x="1034.8" y="546.0" width="65.2" height="5" class="cb"/>
+</g>
+<g><title>depth 1
+x &lt;= 1.99993896484375
+rows 533,974
+A: 267,420  B: 266,554</title><rect x="761.0" y="399.0" width="118" height="58" rx="7" class="box"/>
+<text class="split mono" x="820.0" y="418.0" text-anchor="middle">x ≤ 1.99994</text>
+<text class="n" x="820.0" y="434.0" text-anchor="middle">533,974 rows</text>
+<rect x="771.0" y="442.0" width="49.1" height="5" class="ca"/>
+<rect x="820.1" y="442.0" width="48.9" height="5" class="cb"/>
+</g>
+<g><title>depth 0
+x &lt;= 0.9999690055847168
+rows 800,000
+A: 355,916  B: 444,084</title><rect x="480.5" y="295.0" width="118" height="58" rx="7" class="box"/>
+<text class="split mono" x="539.5" y="314.0" text-anchor="middle">x ≤ 0.999969</text>
+<text class="n" x="539.5" y="330.0" text-anchor="middle">800,000 rows</text>
+<rect x="490.5" y="338.0" width="43.6" height="5" class="ca"/>
+<rect x="534.1" y="338.0" width="54.4" height="5" class="cb"/>
+</g>
+</svg>
