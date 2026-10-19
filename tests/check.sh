@@ -46,7 +46,8 @@ configs=("--cart --alpha 1e-4"
 backends=(--serial --parallel "--parallel --threads 3")
 if "$TREE_BIN" --cuda -d 0 tests/data/iris.csv > /dev/null 2>&1; then
   backends+=("--cuda --gpu-min-rows 2" "--cuda --gpu-min-rows 5000" "--cuda"
-             "--cuda --gpu-sweep one-pass --gpu-min-rows 2" "--cuda --gpu-sweep two-pass")
+             "--cuda --gpu-sweep one-pass --gpu-min-rows 2" "--cuda --gpu-sweep two-pass"
+             "--cuda --gpu-only --threads 1")
 fi
 
 slug() { echo "$*" | tr -s ' -' '_' | sed 's/^_//'; }

@@ -61,6 +61,7 @@ std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &optio
 
 // Create the CUDA context (slow: a few hundred ms). Call it early on another
 // thread, e.g. while the dataset loads, so training does not wait for it.
-void gpuPrepare();
+// `threads`: the most CPU threads its staged copies use (the caller included).
+void gpuPrepare(unsigned threads);
 
 } // namespace dt

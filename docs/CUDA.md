@@ -168,6 +168,11 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
   still waited on the node store; see docs/PERFORMANCE.md.) On the test laptop
   (power-limited GPU) full CART trees on SUSY were fastest around 512,
   covertype (54 features, 7 classes) around 4096.
+* `--gpu-only`: no node goes to the CPU; the GPU grows every level down to
+  the leaves, and the host arena for the hand-offs (8 bytes per value) is not
+  allocated. With `--threads 1` the CPU side is a single thread, the staged
+  copies included. For comparing the GPU alone with the GPU + CPU split
+  ([cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md)).
 * `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
   profile and the setup phases (allocation, upload).
 

@@ -79,6 +79,8 @@ void printUsage(const char *program) {
       << "                           CART: rows / " << GpuOptions::kAutoMinRowsShareCart
       << ", between " << GpuOptions::kAutoMinRows << " and "
       << GpuOptions::kAutoMaxMinRowsCart << ")\n"
+      << "  --gpu-only               grow every node on the GPU, no hand-offs to the CPU\n"
+      << "                           (with --threads 1: one CPU thread, copies included)\n"
       << "  --gpu-sweep MODE         auto | one-pass | two-pass (default auto: one-pass\n"
       << "                           on GPUs with fast double precision)\n"
       << "  --gpu-profile            print per-level / per-kernel GPU times (slower)\n"
@@ -184,7 +186,11 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
     refuse({"--task-rows", "--feature-parallel-rows"}, "is for --parallel and --cuda, not --serial");
   }
   if (options.backend != Backend::Cuda) {
-    refuse({"--gpu-min-rows", "--gpu-sweep", "--gpu-profile"}, "is for --cuda only");
+    refuse({"--gpu-min-rows", "--gpu-only", "--gpu-sweep", "--gpu-profile"},
+           "is for --cuda only");
+  }
+  if (options.gpu.only) {
+    refuse({"--gpu-min-rows"}, "contradicts --gpu-only (no node goes to the CPU)");
   }
   if (options.backend != Backend::Parallel) {
     refuse({"--spare-slots"}, "is for --parallel only");
@@ -256,6 +262,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.c45.confidence = parseReal(arg, args.value(arg));
     } else if (arg == "--gpu-min-rows") {
       options.gpu.minRows = parseCount(arg, args.value(arg));
+    } else if (arg == "--gpu-only") {
+      options.gpu.only = true;
     } else if (arg == "--gpu-sweep") {
       const std::string value = args.value(arg);
       if (value == "auto") {

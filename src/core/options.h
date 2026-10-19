@@ -86,6 +86,10 @@ struct GpuOptions {
   static constexpr std::size_t kAutoMinRowsShare = 4096;
   static constexpr std::size_t kAutoMaxMinRowsCart = 2048;
   static constexpr std::size_t kAutoMinRowsShareCart = 8192;
+  // Grow every node on the GPU: no hand-offs to the CPU, and no host arena
+  // for them (C4.5's pruning allocates it when it needs it). With --threads 1
+  // the CPU side is one thread (the staged copies too).
+  bool only = false;
   GpuSweep sweep = GpuSweep::Auto;
   // Print per-level and per-kernel GPU times. Synchronises after every
   // kernel, so it slows the build down.

@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
     // CUDA context creation is slow; do it while the CSV is being parsed.
     std::future<void> gpuReady;
     if (options.backend == Backend::Cuda) {
-      gpuReady = std::async(std::launch::async, gpuPrepare);
+      gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options));
     }
 
     // The calling thread works too, so threads - 1 workers. Loading and

@@ -6,7 +6,7 @@
 
 namespace dt {
 
-void gpuPrepare() {}
+void gpuPrepare(unsigned) {}
 
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &, const Options &, ThreadPool &, bool,
                                       double &) {

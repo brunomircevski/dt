@@ -1749,8 +1749,10 @@ struct Staging {
   std::unique_ptr<ThreadPool> copiers; // on the GPU's node, if it is known
   std::once_flag once;
 
-  void prepare() {
-    std::call_once(once, [this]() {
+  // `threads`: at most this many threads copy (the caller included); the
+  // first call decides.
+  void prepare(unsigned threads = kCopyThreads) {
+    std::call_once(once, [this, threads]() {
       const std::vector<int> cpus = gpuNodeCpus();
       auto pin = [cpus]() {
         cpu_set_t set;
@@ -1778,9 +1780,10 @@ struct Staging {
           buffer = static_cast<char *>(memory);
         }
       }).join();
-      if (cpus.size() > 1) {
-        copiers = std::make_unique<ThreadPool>(
-            static_cast<unsigned>(std::min(cpus.size(), kCopyThreads) - 1), pin);
+      const std::size_t copyThreads =
+          std::min({cpus.size(), kCopyThreads, static_cast<std::size_t>(threads)});
+      if (copyThreads > 1) {
+        copiers = std::make_unique<ThreadPool>(static_cast<unsigned>(copyThreads - 1), pin);
       }
     });
   }
@@ -1891,7 +1894,8 @@ public:
     std::iota(allFeatures.begin(), allFeatures.end(), 0u);
     LevelNode root{store.add(counts.data()), 0, static_cast<std::uint32_t>(stride_), 0,
                    std::move(allFeatures)};
-    minRows_ = options_.gpu.minRows > 0
+    minRows_ = options_.gpu.only ? 1
+               : options_.gpu.minRows > 0
                    ? options_.gpu.minRows
                    : options_.algorithm == Algorithm::Cart
                        ? std::clamp(stride_ / GpuOptions::kAutoMinRowsShareCart,
@@ -2008,6 +2012,9 @@ public:
 
   // The host arena: it only holds the columns of nodes handed to the CPU.
   std::span<std::byte> workspace() override {
+    if (!arena_) { // --gpu-only
+      arena_.reset(new Entry[features_ * rows_]);
+    }
     waitTouched(features_ * rows_ * sizeof(Entry)); // the caller writes all of it
     return {reinterpret_cast<std::byte *>(arena_.get()), features_ * rows_ * sizeof(Entry)};
   }
@@ -2146,13 +2153,17 @@ private:
     // Host memory for the columns of nodes handed to the CPU (every row is
     // handed over at most once per grow, so features * rows entries always
     // suffice), and their partition scratch. Pageable: the hand-offs go
-    // through page-locked buffers (see handOff()).
-    arena_.reset(new Entry[total]);
-    arenaScratch_.reset(new Entry[rows_]);
+    // through page-locked buffers (see handOff()). --gpu-only hands nothing
+    // over (workspace() allocates the arena if the pruning asks for it).
+    if (!options_.gpu.only) {
+      arena_.reset(new Entry[total]);
+      arenaScratch_.reset(new Entry[rows_]);
+    }
     // CART with a fixed alpha stops early and hands few rows to the CPU
     // (airline: 2 of 12 GB): the copies fault in the few pages they need.
-    const bool fewHandOffs = options_.algorithm == Algorithm::Cart &&
-                             options_.cart.pruning == CartPruning::Alpha;
+    const bool fewHandOffs = options_.gpu.only ||
+                             (options_.algorithm == Algorithm::Cart &&
+                              options_.cart.pruning == CartPruning::Alpha);
     if (fewHandOffs) {
       touchedBytes_ = total * sizeof(Entry);
     } else {
@@ -3224,9 +3235,9 @@ private:
 
 } // namespace
 
-void gpuPrepare() {
+void gpuPrepare(unsigned threads) {
   CUDA_CHECK(cudaFree(nullptr));
-  staging().prepare();
+  staging().prepare(threads);
 }
 
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &options,
