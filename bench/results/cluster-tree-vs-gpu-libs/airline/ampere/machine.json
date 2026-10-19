@@ -12,5 +12,10 @@
   "tree_commit": "6f6cecb",
   "date": "2026-10-19 20:12:47",
   "note": "the ./tree rows of results.jsonl are from this rerun; the libraries rows from the run above"
+ },
+ "tree_gpu_run": {
+  "tree_commit": "7b51a89",
+  "date": "2026-10-19 22:09:49",
+  "note": "the tree_gpu rows of results.jsonl (./tree --cuda --gpu-only --threads 1) are from this run"
  }
 }

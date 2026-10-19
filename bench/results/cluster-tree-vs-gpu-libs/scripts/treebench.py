@@ -3,9 +3,12 @@
 to OUT. The last run dumps the tree; its test predictions are saved for the
 agreement table.
 
-  treebench.py TREE DATASET CASE REPS OUT PRED_DIR SCRATCH
+  treebench.py TREE DATASET CASE REPS OUT PRED_DIR SCRATCH [MODE]
     DATASET  higgs | airline | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
     CASE     cart | c45        depth <= 19, no pruning
+    MODE     split (default, impl "tree"): the GPU with all CPU threads, which
+             finish the small nodes; gpu (impl "tree_gpu"): --gpu-only
+             --threads 1, every node on the GPU and one CPU thread
 """
 import json, os, re, socket, subprocess, sys, time
 import numpy as np
@@ -15,6 +18,8 @@ from gpubench import DATA_ROOT, DEPTH, GpuMemory, load  # noqa: E402
 
 FLAGS = {"cart": ["--cart", "--no-prune", "-d", str(DEPTH)],
          "c45": ["--c45", "--no-prune", "-d", str(DEPTH)]}
+MODES = {"split": ("tree", lambda: ["--threads", str(os.cpu_count())]),
+         "gpu": ("tree_gpu", lambda: ["--gpu-only", "--threads", "1"])}
 
 
 def parse_dump(path):
@@ -63,18 +68,18 @@ def predict(tree, X):
 
 def main():
     binary, dataset, case, reps, out, pred_dir, scratch = sys.argv[1:8]
-    threads = str(os.cpu_count())
-    dump = f"{scratch}/tree-{case}.dump"
+    impl, mode_flags = MODES[sys.argv[8] if len(sys.argv) > 8 else "split"]
+    dump = f"{scratch}/{impl}-{case}.dump"
     for rep in range(int(reps)):
         last = rep == int(reps) - 1
-        argv = [binary, "--cuda", "--threads", threads] + FLAGS[case] \
+        argv = [binary, "--cuda"] + mode_flags() + FLAGS[case] \
             + (["--dump", dump] if last else []) + [f"{DATA_ROOT}/{dataset}/train.csv"]
         gpu = GpuMemory()
         stdout = subprocess.run(argv, capture_output=True, text=True, check=True).stdout
         peak = gpu.stop()
         nodes, leaves, depth = map(int, re.search(r"nodes (\d+), leaves (\d+), depth (\d+)",
                                                   stdout).groups())
-        row = {"impl": "tree", "dataset": dataset, "case": case, "bins": "exact", "rep": rep,
+        row = {"impl": impl, "dataset": dataset, "case": case, "bins": "exact", "rep": rep,
                "train_seconds": float(re.search(r"train total\s+([\d.]+) ms", stdout).group(1)) / 1000,
                **{f"{k.replace(' ', '_')}_seconds": float(ms) / 1000 for k, ms in
                   re.findall(r"^  (gpu setup|presort|build|prune)\s+([\d.]+) ms$", stdout, re.M)},
@@ -86,7 +91,7 @@ def main():
             tree = parse_dump(dump)
             Xt, yt = load(dataset, "test")
             pred = predict(tree, Xt).astype(np.int8)
-            np.save(f"{pred_dir}/tree-{case}.npy", pred)
+            np.save(f"{pred_dir}/{impl}-{case}.npy", pred)
             row["test_accuracy"] = float(np.mean(pred == yt))
             f, t = tree[0][0], tree[1][0]
             row["root"] = f"f{f} <= {t:.7g}"

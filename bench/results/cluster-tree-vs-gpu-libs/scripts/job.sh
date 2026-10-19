@@ -3,7 +3,9 @@
 #   sbatch -p hopper --exclusive -t 02:00:00 -o results/hopper.log job.sh hopper
 #   IMPLS="cuml xgboost" DATASETS=airline sbatch ...   runs only those
 #   (default: tree cuml xgboost, on higgs and airline; ECBDL: DATASETS=ecbdl_15m;
-#   chess: DATASETS=chess_1b)
+#   chess: DATASETS=chess_1b; tree_gpu: ./tree --gpu-only --threads 1)
+# machine.json is written once per <dataset>/<node>; a later job that adds
+# rows writes machine-<job id>.json next to it.
 # Results: results/<dataset>/<node>/results.jsonl, test predictions in
 # results/<dataset>/<node>/pred/.
 #SBATCH -J gdb-bench
@@ -31,18 +33,21 @@ run() {  # timeout per process: a case that does not finish in 30 min is reporte
 for dataset in $DATASETS; do
   OUT=$B/results/$dataset/$NODE
   mkdir -p "$OUT/pred"
+  MACHINE=$OUT/machine.json
+  [ -e "$MACHINE" ] && MACHINE=$OUT/machine-${SLURM_JOB_ID:-$$}.json
   {
     echo "{\"host\": \"$(hostname)\", \"cpu\": \"$(lscpu | sed -n 's/^Model name: *//p' | head -1)\","
     echo " \"cpus\": $(nproc), \"gpu\": \"$(nvidia-smi --id=0 --query-gpu=name,memory.total --format=csv,noheader)\","
     echo " \"driver\": \"$(nvidia-smi --id=0 --query-gpu=driver_version --format=csv,noheader)\","
     echo " \"cuda\": \"$(/usr/local/cuda/bin/nvcc --version | tail -2 | head -1)\","
     echo " \"tree_commit\": \"$TREE_COMMIT\", \"dataset\": \"$dataset\", \"date\": \"$(date '+%F %T')\"}"
-  } > "$OUT/machine.json"
+  } > "$MACHINE"
   for impl in $IMPLS; do
     for case in cart c45; do
       [ "$impl" = xgboost ] && [ "$case" = c45 ] && continue  # no entropy criterion
-      if [ "$impl" = tree ]; then
-        run $PY $B/treebench.py "$TREE" $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" "$SCRATCH"
+      if [ "$impl" = tree ] || [ "$impl" = tree_gpu ]; then
+        mode=split; [ "$impl" = tree_gpu ] && mode=gpu
+        run $PY $B/treebench.py "$TREE" $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" "$SCRATCH" $mode
       else
         run $PY $B/gpubench.py $impl $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred"
       fi

@@ -7,6 +7,9 @@
 
 Agreement: share of the test rows (TEST_ROWS) that a tree classifies like
 ./tree's tree of the same case on the same node.
+
+./tree has two rows: "tree" (the GPU with all the node's CPU threads, which
+finish the small nodes) and "tree_gpu" (--gpu-only --threads 1).
 """
 import csv, json, statistics, sys
 from pathlib import Path
@@ -24,12 +27,20 @@ DATASETS = {"higgs": "HIGGS: 10,500,000 training rows, 28 features",
 TEST_ROWS = {"higgs": 500_000, "airline": 500_000, "ecbdl_15m": 100_000, "chess_1b": 1_000}
 NODES = {"hopper": "H100 PCIe 80 GB", "ampere": "A100 80 GB PCIe"}
 CASES = {"cart": "CART, depth ≤ 19", "c45": "C4.5, depth ≤ 19"}
-LABELS = {("tree", "cart"): "./tree CART (exact Gini)",
+SPLIT = "GPU + 32 (H100) / 48 (A100) CPU threads"
+GPU_ONLY = "GPU only, 1 CPU thread"
+LABELS = {("tree", "cart"): f"./tree CART (exact Gini)\n{SPLIT}",
+          ("tree_gpu", "cart"): f"./tree CART (exact Gini)\n{GPU_ONLY}",
           ("cuml", "cart"): "cuML RF, Gini, 128 bins",
           ("xgboost", "cart"): "XGBoost, squared error, 256 bins",
-          ("tree", "c45"): "./tree C4.5 (exact gain ratio)",
+          ("tree", "c45"): f"./tree C4.5 (exact gain ratio)\n{SPLIT}",
+          ("tree_gpu", "c45"): f"./tree C4.5 (exact gain ratio)\n{GPU_ONLY}",
           ("cuml", "c45"): "cuML RF, entropy, 128 bins"}
-IMPLS = ["tree", "cuml", "xgboost"]
+IMPLS = ["tree", "tree_gpu", "cuml", "xgboost"]
+
+
+def is_tree(impl):
+    return impl.startswith("tree")
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 COLORS = {"hopper": "#2a78d6", "ampere": "#eb6834"}
 
@@ -48,7 +59,8 @@ def load_rows(root):
                 last = rs[-1]
                 times = [r["train_seconds"] for r in rs]
                 row = {"dataset": dataset, "node": node, "impl": impl, "case": case,
-                       "bins": last["bins"], "label": LABELS[(impl, case)], "runs": len(rs),
+                       "bins": last["bins"], "label": LABELS[(impl, case)].replace("\n", ", "),
+                       "runs": len(rs),
                        "median_s": statistics.median(times), "min_s": min(times),
                        "max_s": max(times),
                        **{k: last.get(k) for k in ("nodes", "depth", "train_accuracy",
@@ -88,7 +100,7 @@ def tables(rows):
                 def mem(r):
                     return "–" if r is None else f"{r['gpu_peak_mib'] / 1024:.2f} GiB"
                 agree = ref.get("agreement")
-                md.append(f"| {LABELS[(impl, case)]} | {t(h)} | {t(a)} | {ref['nodes']:,} | "
+                md.append(f"| {LABELS[(impl, case)].replace(chr(10), ', ')} | {t(h)} | {t(a)} | {ref['nodes']:,} | "
                           f"{ref['depth']} | {100 * ref['train_accuracy']:.2f}% | "
                           f"{100 * ref['test_accuracy']:.2f}% | "
                           f"{'–' if agree is None else f'{100 * agree:.2f}%'} | "
@@ -112,7 +124,7 @@ def chart(rows, dataset, path):
     the same on both GPUs)."""
     cases = [c for c in CASES if any(r["dataset"] == dataset and r["case"] == c for r in rows)]
     heights = [len([i for i in IMPLS if (i, c) in LABELS]) for c in cases]
-    fig = plt.figure(figsize=(17, 2.2 + 0.95 * sum(heights) + 1.3 * len(cases)))
+    fig = plt.figure(figsize=(17, 2.35 + 0.95 * sum(heights) + 1.3 * len(cases)))
     grid = fig.add_gridspec(len(cases), 3, width_ratios=(1.15, 0.6, 0.75), wspace=0.04,
                             hspace=0.42, height_ratios=heights)
     dr = [r for r in rows if r["dataset"] == dataset]
@@ -135,7 +147,7 @@ def chart(rows, dataset, path):
                 v = got[k]["median_s"]
                 ax.barh(p, v, height=0.38, color=COLORS[node])
                 ax.text(v + tmax * 0.012, p, f"{v:.2f} s", va="center", fontsize=8.5, color=INK,
-                        fontweight="bold" if k == "tree" else "normal")
+                        fontweight="bold" if is_tree(k) else "normal")
                 g = got[k]["gpu_peak_mib"] / 1024
                 mem.barh(p, g, height=0.34, facecolor="white", edgecolor=COLORS[node],
                          linewidth=1.6)
@@ -146,7 +158,7 @@ def chart(rows, dataset, path):
         style(ax)
         ax.set_yticks(y, [LABELS[(k, case)] for k in keys], fontsize=9.5, color=INK)
         for label, k in zip(ax.get_yticklabels(), keys):
-            label.set_fontweight("bold" if k == "tree" else "normal")
+            label.set_fontweight("bold" if is_tree(k) else "normal")
             label.set_color(INK)
         ax.set_title(f"{CASES[case]}: training time", loc="left", fontsize=11, color=INK,
                      fontweight="bold", pad=10)
@@ -170,7 +182,7 @@ def chart(rows, dataset, path):
             for k, p in zip(keys, y):
                 info.text(x, p, cell(got[k]), fontsize=9.5, color=INK, ha="left", va="center",
                           transform=info.get_yaxis_transform(),
-                          fontweight="bold" if k == "tree" else "normal")
+                          fontweight="bold" if is_tree(k) else "normal")
         info.set_title(f"the tree ({TEST_ROWS[dataset]:,} test rows)", loc="left", fontsize=11, color=INK,
                        fontweight="bold", pad=10)
         info.axis("off")
@@ -190,10 +202,12 @@ def chart(rows, dataset, path):
              "every distinct value. Same as ./tree: share of test rows classified as by ./tree's tree.\n"
              "C4.5: ./tree follows Quinlan's C4.5 (gain ratio, MDL-corrected thresholds, at least 2 rows "
              "per side); cuML's closest is plain entropy (information gain). XGBoost has no entropy "
-             "criterion, so it is in CART only.",
+             "criterion, so it is in CART only.\n./tree: GPU + CPU threads hands nodes below 1,024–4,096 "
+             "rows to the CPU pool while the GPU grows the next level; GPU only (--gpu-only --threads 1) "
+             "grows every node on the GPU.",
              fontsize=8.5, color=MUTED, style="italic", va="bottom")
-    fig.subplots_adjust(left=0.15, right=0.99, top=1 - 1.25 / fig.get_figheight(),
-                        bottom=1.05 / fig.get_figheight())
+    fig.subplots_adjust(left=0.21, right=0.99, top=1 - 1.25 / fig.get_figheight(),
+                        bottom=1.2 / fig.get_figheight())
     fig.savefig(path, dpi=150)
     plt.close(fig)
 
