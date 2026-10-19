@@ -105,9 +105,13 @@ struct CountTables {
   }
 };
 
+// Storage for CountTables. Not zero-filled: fillCountTables() writes every
+// entry on the pool, which also touches the pages first (zero-filling 2 x 15M
+// doubles took 0.28 s on one thread).
+using CountTable = std::vector<double, UninitializedAllocator<double>>;
+
 // Fill `xlog` and `inverse` with the tables for counts 0 .. size - 1.
-void fillCountTables(std::size_t size, std::vector<double> &xlog, std::vector<double> &inverse,
-                     ThreadPool *pool);
+void fillCountTables(std::size_t size, CountTable &xlog, CountTable &inverse, ThreadPool *pool);
 
 struct SweepSetup; // what a threshold sweep needs from the builder (cpu_builder.cpp)
 

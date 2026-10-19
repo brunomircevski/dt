@@ -258,8 +258,7 @@ SlotMap presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *d
   return slotOf;
 }
 
-void fillCountTables(std::size_t size, std::vector<double> &xlog, std::vector<double> &inverse,
-                     ThreadPool *pool) {
+void fillCountTables(std::size_t size, CountTable &xlog, CountTable &inverse, ThreadPool *pool) {
   xlog.resize(size);
   inverse.resize(size);
   constexpr std::size_t kChunks = 64;
@@ -276,7 +275,7 @@ namespace {
 
 CountTables defaultCountTables() {
   static const auto tables = [] {
-    std::pair<std::vector<double>, std::vector<double>> both;
+    std::pair<CountTable, CountTable> both;
     fillCountTables(kLogTableSize, both.first, both.second, nullptr);
     return both;
   }();

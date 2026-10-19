@@ -2308,8 +2308,24 @@ private:
     return registerHostMemory(data, bytes);
   }
 
+  // The process's memory on transparent huge pages, in KiB (--gpu-profile).
+  static long anonHugeKib() {
+    long kib = 0;
+    if (FILE *file = std::fopen("/proc/self/smaps_rollup", "r")) {
+      char line[256];
+      while (std::fgets(line, sizeof line, file)) {
+        if (std::strncmp(line, "AnonHugePages:", 14) == 0) {
+          kib = std::atol(line + 14);
+        }
+      }
+      std::fclose(file);
+    }
+    return kib;
+  }
+
   void touchHostMemory(void *data, std::size_t bytes) {
     constexpr std::size_t kChunks = 256;
+    const long hugeBefore = profile_.printing() ? anonHugeKib() : 0;
     const auto started = std::chrono::steady_clock::now();
     pool_.parallelFor(kChunks, [&](std::size_t chunk) {
       const std::size_t begin = bytes * chunk / kChunks;
@@ -2317,9 +2333,10 @@ private:
       std::memset(static_cast<char *>(data) + begin, 0, end - begin);
     });
     if (profile_.printing()) {
-      std::fprintf(stderr, "  touch %.1f MB: %.2f ms\n", bytes / 1e6,
+      std::fprintf(stderr, "  touch %.1f MB: %.2f ms (%.1f MB more on huge pages)\n", bytes / 1e6,
                    std::chrono::duration<double>(std::chrono::steady_clock::now() - started)
-                           .count() * 1e3);
+                           .count() * 1e3,
+                   (anonHugeKib() - hugeBefore) * 1024 / 1e6);
     }
   }
 

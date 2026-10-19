@@ -204,8 +204,8 @@ private:
   std::unique_ptr<std::uint64_t[]> leftBits_; // Columns::leftBits
   std::unique_ptr<Entry[]> scratch_;
   std::unique_ptr<std::uint8_t[]> goesLeft_;
-  std::vector<double> countXlog_; // see countTables()
-  std::vector<double> countInverse_;
+  CountTable countXlog_; // see countTables()
+  CountTable countInverse_;
 };
 
 } // namespace

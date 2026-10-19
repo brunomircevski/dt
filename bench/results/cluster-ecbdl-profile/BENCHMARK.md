@@ -92,7 +92,19 @@ One chart per protocol, the three runs one above the other on the same time axis
 
 - **CUDA: the CPU pool works in bursts**, one per GPU level: each level's hand-offs are grown on all threads in a fraction of the level's time, then the pool waits for the next level. The CPU side has room for more hand-offs.
 - **The stall of the first GPU level** (unpruned CART, C4.5) shows as a gap in the kernels while two threads page-lock.
-- **epyc: short single-thread stretches.** 0.28 s after the presort: the tables of x·log x and 1/x for every count up to the row count (2 × 15M doubles) are zero-filled on one thread (`std::vector::resize`) before the pool fills them (`fillCountTables`; 20 ms on HIGGS). The last 0.5 s of the C4.5 grow run on 1–10 threads (the last deep subtrees), and the first 0.37 s of arranging the rows by leaf on one.
+- **epyc: short single-thread stretches.** 0.28 s after the presort: the tables of x·log x and 1/x for every count up to the row count (2 × 15M doubles) are zero-filled on one thread (`std::vector::resize`) before the pool fills them (`fillCountTables`; 20 ms on HIGGS; fixed since, see the follow-up below). The last 0.5 s of the C4.5 grow run on 1–10 threads (the last deep subtrees), and the first 0.37 s of arranging the rows by leaf on one.
+
+## Follow-up: the two findings (2026-10-18/19)
+
+- **The zero-filled count tables are fixed:** they are no longer zero-filled (`CountTable` in `src/build/cpu_builder.h`), so the pool writes them first.
+  - On epyc1 (ECBDL 15M, parallel, 48 threads) the three trees (CART α 1e-4, unpruned CART, C4.5) are byte-identical before and after.
+  - Train totals are unchanged within noise (unpruned CART 36.7/35.9 → 35.0/35.4 s, C4.5 78.8 → 79.3 s).
+- **The arena's page-locking was not changed.**
+  - **Huge pages are already in use.** The arena comes from `new`, which puts every block of 2 MiB or more on transparent huge pages (`src/core/memory.cpp`). On hopper all 75.7 GB of it was on huge pages; `--gpu-profile` now prints this after the touch.
+  - **Ampere:** registering 75 GB takes 1.8–1.9 s in ./tree, as in a standalone `cudaHostRegister` of a touched huge-page buffer. That is the cost of registration.
+  - **Hopper** usually takes 1.2–1.3 s, but on 2026-10-18/19 it took 4.2–5.9 s in some jobs, whether the registration ran after the presort, during it, or with the level loop waiting. The standalone test reproduced this (2.4–6.6 s) only with 120 GB of other memory touched first, and only some of the time. At the time, NUMA node 0 held 156 GB of another user's `/dev/shm` and 382 GB of page cache (125 GB free of 516). Binding the process to either socket's CPUs made the standalone test fast again. Binding ./tree's page-locking thread to the GPU's node gave no gain in a run where hopper was fast either way, so it was not kept.
+  - **Dropped: page-locking arenas over 16 GB in 1 GB chunks, ahead of the hand-offs.** It cut level 0 on hopper from 5.9 to 0.15 s (unpruned CART 23.0 → 18.6 s, C4.5 51.7 → 47.5 s). On ampere, though, the registrations during the GPU levels delayed the level copies, and C4.5 went from 67.0 to 68.5 s. Forcing chunks on airline also crashed C4.5 (`invalid argument` in a later CUDA call), so some later step assumes the arena is one registration.
+  - **Left to try:** hand-offs copied through the page-locked staging buffers (as `uploadStaged` does), which need no registration of the arena at all.
 
 ## What profiling costs
 
