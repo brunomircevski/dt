@@ -81,16 +81,19 @@ for d in chess_1m chess_10m chess_100m chess_1b; do
       cuda-hopper-$d cuda-ampere-$d cpu-epyc-$d cpu-dell-$d cpu-dell512-$d
 done
 d=bench/results/cluster-chess
+v=$d/dell-variance  # dell and dell512 at 1000M: the 10-run check (BENCHMARK.md)
 t=$(mktemp -d)
 for s in 1m 10m 100m 1b; do
-  bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45_unpruned \
-      $d/cuda-hopper-chess_$s $d/cuda-ampere-chess_$s $d/cpu-epyc-chess_$s \
-      $d/cpu-dell-chess_$s $d/cpu-dell512-chess_$s --out $t/$s.png
+  dell="$d/cpu-dell-chess_$s $d/cpu-dell512-chess_$s"
+  [ $s = 1b ] && dell="$v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b"
+  bench/.venv/bin/python bench/machines_chart.py --spread --protocols cart_full_nodepth,c45_unpruned \
+      $d/cuda-hopper-chess_$s $d/cuda-ampere-chess_$s $d/cpu-epyc-chess_$s $dell --out $t/$s.png
 done
 bench/.venv/bin/python bench/grid_chart.py $t/1m.png $t/10m.png $t/100m.png $t/1b.png --out $d/chart.png
 rm -r $t
 bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unpruned \
-    $d/{cuda-hopper,cuda-ampere,cpu-epyc,cpu-dell,cpu-dell512}-chess_* --out $d/chart-rows.png
+    $d/{cuda-hopper,cuda-ampere,cpu-epyc}-chess_* $d/{cpu-dell,cpu-dell512}-chess_{1m,10m,100m} \
+    $v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b --out $d/chart-rows.png
 ```
 
 The unpruned airline run and its chart (pruned and unpruned side by side in one image):

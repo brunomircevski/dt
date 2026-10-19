@@ -13,6 +13,9 @@ prepared files in plan.json) or did not build the same trees.
   bench/.venv/bin/python bench/machines_chart.py bench/results/cuda-legion-susy \\
       --reference bench/results/cluster-susy-vs-others-cpu/pc  # -> cuda-legion-susy/chart.png
 
+--spread draws on every time bar a whisker from the fastest to the slowest
+run and a dot per run, and writes their min and max.
+
 --more adds the cases of later runs kept in another directory under the same
 run names (e.g. cluster-ecbdl/unpruned/cpu-epyc-ecbdl next to
 cluster-ecbdl/cpu-epyc-ecbdl), so that one chart shows both.
@@ -50,6 +53,7 @@ LEFT = 0.215  # figure fraction left of the panels, for the row labels
 # Result directories are <backend>-<machine>-<dataset>; what to call each machine.
 MACHINES = {"pc": "desktop", "legion": "laptop"}
 MORE = []  # --more: directories with later runs of the same names
+SPREAD = False  # --spread: a min-max whisker and a dot per run on every time bar
 
 
 def sources(run):
@@ -97,6 +101,7 @@ def bars(run, reference):
             out.append({"protocol": protocol, "backend": backend, "hardware": hardware,
                         "run": run, "reference": reference,
                         "time": statistics.median(r["train_seconds"] for r in ok),
+                        "times": [r["train_seconds"] for r in ok],
                         "ram": statistics.median(r["peak_rss_train_bytes"] for r in ok) / 2**30,
                         "vram": statistics.median(gpu) / 2**30 if gpu else None,
                         # Median pruning time, if every run recorded it.
@@ -138,11 +143,15 @@ def main():
     parser.add_argument("--out", type=Path, help="default: <first run>/chart.png")
     parser.add_argument("--protocols", default="cart_alpha,c45",
                         help=f"the protocols to draw, one panel each, of: {', '.join(TITLES)}")
+    parser.add_argument("--spread", action="store_true",
+                        help="draw each time bar's min-max whisker and every run as a dot")
     parser.add_argument("--more", action="append", type=Path, default=[],
                         help="a directory with later runs of the same names, e.g. other "
                         "protocols (repeatable)")
     args = parser.parse_args()
     MORE.extend(args.more)
+    global SPREAD
+    SPREAD = args.spread
     PROTOCOLS.clear()
     PROTOCOLS.update((p, TITLES[p]) for p in args.protocols.split(","))
     runs = list(args.reference) + list(args.runs)
@@ -159,6 +168,7 @@ def main():
     gaps = max(len({e["backend"] for e in entries if e["protocol"] == p}) for p in PROTOCOLS) - 1
     header = 0.42 + 0.2 * len(runs)  # inches of the hardware lines
     footer = 0.18 if any(e["prune"] is not None and not e["reference"] for e in entries) else 0
+    footer += 0.18 if SPREAD else 0  # the footer's line on the whiskers
     # At least three bars high: the row labels take two lines each.
     count = len(PROTOCOLS)
     inches = 1.9 + header + footer + count * 0.58 * max(per_panel + 0.45 * gaps, 3)
@@ -166,11 +176,11 @@ def main():
     # Between the panels: the lower one's title and subtitle and the upper one's
     # tick labels, the same in inches however few bars the panels hold.
     gap = 0.92
-    panels = inches - (header + 1.05) - (1.08 if split else 0.9)
+    panels = inches - (header + 1.05) - (1.08 if split else 0.9) - (0.18 if SPREAD else 0)
     fig, axes = plt.subplots(count, 2, figsize=(13, inches), squeeze=False,
                              gridspec_kw={"width_ratios": [1.5, 1], "wspace": 0.12,
                                           "hspace": gap / ((panels - (count - 1) * gap) / count)})
-    max_time = max(e["time"] for e in entries)
+    max_time = max(max(e["times"]) if SPREAD else e["time"] for e in entries)
     max_gib = max(max(e["ram"], e["vram"] or 0) for e in entries)
     for row, protocol in enumerate(PROTOCOLS):
         ax_time, ax_mem = axes[row]
@@ -223,9 +233,21 @@ def main():
                 fastest = min(others, key=lambda o: times[(o, "parallel")], default=None)
                 notes += [f"{times[(other, 'parallel')] / t:.1f}× {where(other)} parallel"
                           for other in (run, fastest) if (other, "parallel") in times]
-            ax_time.text(t + max_time * 0.012, y, f"{t:.2f} s", va="center", fontsize=9,
+            end = t
+            if SPREAD and len(e["times"]) > 1:
+                low, high = min(e["times"]), max(e["times"])
+                ax_time.plot([low, high], [y, y], color=INK, linewidth=1.1, zorder=3)
+                for x in (low, high):
+                    ax_time.plot([x, x], [y - 0.17, y + 0.17], color=INK, linewidth=1.1, zorder=3)
+                # The runs in run order, spread a little vertically so equal times stay visible.
+                n = len(e["times"])
+                ax_time.scatter(e["times"], [y - 0.18 + 0.36 * k / (n - 1) for k in range(n)],
+                                s=11, color="white", edgecolor=INK, linewidth=0.7, zorder=4)
+                end = max(t, high)
+                notes.insert(0, f"min {low:.2f} · max {high:.2f} s")
+            ax_time.text(end + max_time * 0.012, y, f"{t:.2f} s", va="center", fontsize=9,
                          color=INK, fontweight="bold")
-            ax_time.annotate(" · ".join(notes), (t, y), xytext=(52, 0),
+            ax_time.annotate(" · ".join(notes), (end, y), xytext=(52, 0),
                              textcoords="offset points", va="center", fontsize=8, color=MUTED)
             name = f"{BACKENDS[backend]} · {where(run)}" + (" (reference)" if e["reference"]
                                                             else "")
@@ -292,8 +314,10 @@ def main():
     reps = {json.load(open(source / "machine.json"))["settings"]["reps"]
             for run in runs for source in sources(run)}
     runs_text = "one run per case" if reps == {1} else "median over the runs of each case"
+    if SPREAD and reps != {1}:
+        runs_text += " (whisker: fastest to slowest run; dots: every run).\n"
     fig.text(LEFT, 0.1 / inches,
-             f"Bars: {runs_text}. Time: ./tree's 'train total' (presort, build, prune; CUDA also "
+             f"Bars: {runs_text}{'' if runs_text.endswith(chr(10)) else '. '}Time: ./tree's 'train total' (presort, build, prune; CUDA also "
              "upload and device sort), not reading the CSV."
              + ("\nDarker: growing the tree (setup, presort, build); lighter: pruning it "
                 "(shown when it takes 1% or more)." if split else "")
@@ -302,7 +326,7 @@ def main():
              "memory during the process above idle, CUDA context included (nvidia-smi, every 10 ms).",
              fontsize=8, color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=LEFT, right=0.97, top=1 - (header + 1.05) / inches,
-                        bottom=(1.08 if split else 0.9) / inches)
+                        bottom=((1.08 if split else 0.9) + (0.18 if SPREAD else 0)) / inches)
     fig.savefig(out, dpi=150, facecolor="white")
     print(out)
 
