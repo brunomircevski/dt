@@ -5,7 +5,7 @@ per timed fit to OUT and saves the last tree's test predictions.
 
   gpubench.py IMPL DATASET CASE REPS OUT PRED_DIR
     IMPL     cuml | xgboost
-    DATASET  higgs | airline | ecbdl_15m   (prepared in $DATA_ROOT/<dataset>)
+    DATASET  higgs | airline | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
     CASE     cart   Gini (cuML) or the Gini-equivalent squared error (XGBoost)
              c45    entropy (cuML only; XGBoost has no entropy criterion)
 
@@ -117,7 +117,10 @@ def xgb_fit(X, y, case):
 
 
 def xgb_info(booster, X, y, Xt):
-    acc = float(np.mean((booster.inplace_predict(X) > 0.5) == y))
+    # In chunks, like cuML's (chess_1b: 10^9 rows).
+    chunk = 10_000_000
+    acc = float(np.mean(np.concatenate([booster.inplace_predict(X[i:i + chunk]) > 0.5
+                                        for i in range(0, len(X), chunk)]) == y))
     pred = (booster.inplace_predict(Xt) > 0.5).astype(np.int8)
     tree = json.loads(booster.save_raw("json"))["learner"]["gradient_booster"]["model"]["trees"][0]
     left = np.array(tree["left_children"], dtype=np.int64)

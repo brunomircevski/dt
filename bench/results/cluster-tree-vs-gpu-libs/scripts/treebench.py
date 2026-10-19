@@ -4,7 +4,7 @@ to OUT. The last run dumps the tree; its test predictions are saved for the
 agreement table.
 
   treebench.py TREE DATASET CASE REPS OUT PRED_DIR SCRATCH
-    DATASET  higgs | airline | ecbdl_15m   (prepared in $DATA_ROOT/<dataset>)
+    DATASET  higgs | airline | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
     CASE     cart | c45        depth <= 19, no pruning
 """
 import json, os, re, socket, subprocess, sys, time

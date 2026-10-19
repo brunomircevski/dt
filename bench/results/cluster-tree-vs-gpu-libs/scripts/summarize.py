@@ -19,8 +19,9 @@ from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 DATASETS = {"higgs": "HIGGS: 10,500,000 training rows, 28 features",
             "airline": "airline: 114,569,017 training rows, 13 features",
-            "ecbdl_15m": "ECBDL'14, 15M sample: 15,000,000 training rows, 631 features"}
-TEST_ROWS = {"higgs": 500_000, "airline": 500_000, "ecbdl_15m": 100_000}
+            "ecbdl_15m": "ECBDL'14, 15M sample: 15,000,000 training rows, 631 features",
+            "chess_1b": "chess 3×3: 1,000,000,000 training rows, 2 features"}
+TEST_ROWS = {"higgs": 500_000, "airline": 500_000, "ecbdl_15m": 100_000, "chess_1b": 1_000}
 NODES = {"hopper": "H100 PCIe 80 GB", "ampere": "A100 80 GB PCIe"}
 CASES = {"cart": "CART, depth ≤ 19", "c45": "C4.5, depth ≤ 19"}
 LABELS = {("tree", "cart"): "./tree CART (exact Gini)",

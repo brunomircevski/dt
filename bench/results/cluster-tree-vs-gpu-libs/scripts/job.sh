@@ -2,7 +2,8 @@
 # SLURM job: the whole GPU comparison on one node (GPU 0), e.g.
 #   sbatch -p hopper --exclusive -t 02:00:00 -o results/hopper.log job.sh hopper
 #   IMPLS="cuml xgboost" DATASETS=airline sbatch ...   runs only those
-#   (default: tree cuml xgboost, on higgs and airline; ECBDL: DATASETS=ecbdl_15m)
+#   (default: tree cuml xgboost, on higgs and airline; ECBDL: DATASETS=ecbdl_15m;
+#   chess: DATASETS=chess_1b)
 # Results: results/<dataset>/<node>/results.jsonl, test predictions in
 # results/<dataset>/<node>/pred/.
 #SBATCH -J gdb-bench
