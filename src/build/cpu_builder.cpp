@@ -56,6 +56,17 @@ constexpr std::uint32_t kOutOfPlaceRows = 1u << 15;
 constexpr std::uint32_t kBlockedRows = 1u << 20;
 constexpr std::uint32_t kPartitionBlock = 1u << 14;
 
+// Such nodes are also partitioned in blocks when their columns to move would
+// keep at most 1 / kFewColumns of the threads busy (one thread per column),
+// although the blocks lose the fused sweeps. With 2 features (1 column to
+// move) one thread moved all the rows of the root and its children while the
+// others waited, and a single thread's throughput drops as the columns grow:
+// on 1G rows the build took 30-48 s instead of 5 (epyc1, dell1: 48 threads;
+// 2.3x faster on 100M rows). On 48 threads, 12 columns (airline) were 0-15%
+// slower in blocks, 17 and 27 (SUSY, HIGGS) up to 50%: they keep the fused
+// sweeps. Between 1 and 12 columns the cut-off is not measured.
+constexpr std::size_t kFewColumns = 8;
+
 // Children with at least this many rows are swept during the out-of-place
 // partition of their parent, through staging buffers of kStageEntries.
 constexpr std::uint32_t kSweptChildRows = 1u << 12;
@@ -480,9 +491,11 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   // blocks lose the fused sweeps.
   const std::size_t freeSlots =
       outOfPlace ? (columns.slots > 0 ? columns.slots : featureCount_) - features.size() : 0;
+  const std::size_t moved = features.size() - 1; // every column but the winner's
+  const std::size_t threads = pool_ ? pool_->workerCount() + 1 : 1;
   const bool blocked = outOfPlace && pool_ && count >= kBlockedRows &&
-                       freeSlots < std::min<std::size_t>(features.size() - 1,
-                                                         pool_->workerCount() + 1);
+                       (freeSlots < std::min(moved, threads) ||
+                        (moved > 0 && moved * kFewColumns <= threads));
   if (outOfPlace && !blocked && classCount_ == 2) {
     for (int child = 0; child < 2; ++child) {
       const std::uint32_t *total = child == 0 ? leftCounts : rightCounts;
