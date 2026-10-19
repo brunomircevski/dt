@@ -75,7 +75,7 @@ Peak memory (the same for CART and C4.5 within 0.01 GiB):
 - **The GPU time grows slower than the rows**: 7× from 100M to 1000M on the H100, 9× on the A100. Even 100M rows do not keep a GPU busy; 1000M do.
 - **The CPU time grows with the rows**: 8–11× from 100M to 1000M. The presort grows 10× (epyc 0.20 → 1.91 s, dell 0.54 → 4.39 s), and so does the build (epyc CART 0.47 → 4.55 s, dell 0.69 → 6.65 s).
 - **epyc is 1.7–2.3× faster than dell** from 100M rows on, as on the other datasets.
-- **dell512 against dell:** from 25% less time to 36% more (both at 10M, where the runs are noisy), 4% less to 22% more at 1000M, unlike ECBDL'14, where half the memory channels made dell2 1.35–1.55× slower. With two features, the build is not bound by memory bandwidth.
+- **dell512 against dell:** with 3 runs per case, from 25% less time to 36% more (both at 10M, where the runs are noisy). With 10 runs at 1000M, **dell is faster in every phase, by 14–17%** ([below](#dell-against-dell512-10-runs-at-1000m)).
 - **Memory is linear in the rows:** 50 bytes per row on the CPU servers (46.7 GiB for 1000M rows, 2 G values: 25 bytes per value) and 27 bytes per row of VRAM (25.5 GiB of the 80 GB). Every size fits on every GPU; the 40 GB A100s of ampere would hold the 1000M set too. A CUDA run needs about half the host RAM of a CPU run (24.6 GiB at 1000M).
 
 ## The 1000M slowdown and its fix
@@ -111,6 +111,35 @@ Peak memory (the same for CART and C4.5 within 0.01 GiB):
 - epyc, and dell512 CART: unchanged.
 
 Some 10M cases had a single slow run (up to 0.77 s on epyc), which the median leaves out.
+
+## dell against dell512: 10 runs at 1000M
+
+The 3-run results above had dell512 sometimes faster than dell, although dell has twice the memory channels. To check, `chess_1b` ran 10 times per case on both nodes. That was commit 41faca9, the same CPU code as d9da007, on 2026-10-19 at 20:07–20:13. The results are in `dell-variance/`.
+
+```bash
+bench/cluster/submit.sh -m 10 -d chess_1b -p cart_full_nodepth,c45_unpruned -o cluster-chess/dell-variance \
+    cpu-dell-chess_1b cpu-dell512-chess_1b
+d=bench/results/cluster-chess/dell-variance
+bench/.venv/bin/python bench/runs_chart.py $d/cpu-dell-chess_1b $d/cpu-dell512-chess_1b --out $d/chart.png
+```
+
+![dell and dell512, chess 1000M: every run of train total, presort and build](dell-variance/chart.png)
+
+| Median of 10 (min–max) | dell (1 TB, 16 DIMMs) | dell512 (512 GB, 8 DIMMs) | dell512 / dell |
+|---|--:|--:|--:|
+| CART: train total | 9.95 s (9.07–10.49) | 11.68 s (10.45–16.40) | 1.17× |
+| CART: presort | 4.39 s | 4.92 s | 1.12× |
+| CART: build | 5.61 s | 6.84 s | 1.22× |
+| C4.5: train total | 12.32 s (12.10–14.03) | 14.32 s (13.73–16.32) | 1.16× |
+| C4.5: presort | 4.37 s | 5.08 s | 1.16× |
+| C4.5: build | 8.14 s | 9.34 s | 1.15× |
+| Memory bandwidth, 48 threads (triad) | 379 GB/s | 220 GB/s | 0.58× |
+| Memory bandwidth, 1 thread (triad) | 17.2 GB/s | 16.3 GB/s | 0.95× |
+
+- **dell is faster in every phase**, 12–22% in the medians, and in train total dell512's fastest run is slower than dell's median.
+- **The earlier "dell512 faster" was noise.** The 3-run CART medians were 11.18 s (dell) against 10.74 s (dell512), but the runs of one node spread by 10–15%, and dell512 had two slow CART runs out of 10 (16.4 s; build 11–12 s instead of 6–7 s).
+- **Bandwidth matters only partly.** With 48 threads dell512 has 58% of dell's bandwidth, but it takes only about 1.16× the time. So chess is partly limited by memory bandwidth, and partly by other work: the per-thread speed and the synchronisation between threads. One thread alone gets the same 16–17 GB/s on both nodes.
+- **The bandwidth was measured** with `bench/cluster/triad.c`, a STREAM-style copy and triad over 3 × 4 GiB arrays, best of 10. It was compiled `gcc -O3 -fopenmp` and run on each whole node. Logs: `dell-variance/triad-dell{1,2}.log`.
 
 ## One chart per size
 

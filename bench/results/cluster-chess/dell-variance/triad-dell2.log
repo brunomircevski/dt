@@ -1,0 +1,6 @@
+Model name:                              INTEL(R) XEON(R) GOLD 6542Y
+NUMA node(s):                            4
+0
+threads 48  copy 178.8 GB/s  triad 219.1 GB/s  (check 118097.0)
+threads 48  copy 178.8 GB/s  triad 220.2 GB/s  (check 118097.0)
+threads 1  copy 15.8 GB/s  triad 16.3 GB/s  (check 118097.0)
