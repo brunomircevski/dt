@@ -2,7 +2,7 @@
 # The cluster benchmark on mordor3: one SLURM job per node, one whole node
 # each, held until all are queued and then released together (run it on the
 # login node; it only calls sbatch). Results go to
-# bench/results/cluster-higgs/ or bench/results/cluster-airlines/:
+# bench/results/cluster-<dataset>/ (cluster-higgs, -airlines, -ecbdl, -chess):
 #   cuda-hopper-<data>  H100 PCIe (GPU 0 of 4), 2x Xeon Gold 6444Y   CUDA
 #   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          CUDA
 #   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
@@ -24,6 +24,9 @@
 #   bench/cluster/submit.sh -d ecbdl_15m -a 1234 # ECBDL'14, 15M rows, after job 1234
 #   bench/cluster/submit.sh -d ecbdl             # full ECBDL'14: CPU nodes only (no GPU
 #                                                # has the 160 GB it needs)
+#   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
+#       cuda-hopper-chess_1b cuda-ampere-chess_1b cpu-epyc-chess_1b cpu-dell-chess_1b \
+#       cpu-dell512-chess_1b                     # chess: 1m, 10m, 100m, 1b; with dell2
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well.
@@ -41,7 +44,7 @@ while getopts "m:d:p:o:a:h" option; do
     p) PROTOCOLS="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
     a) AFTER="$OPTARG" ;;
-    *) sed -n '2,28p' "$0"; exit 2 ;;
+    *) sed -n '2,31p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -52,7 +55,9 @@ case "$DATASET" in
   # ECBDL: the dell partition allows at most 12 hours.
   ecbdl_15m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
   ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
-  *) echo "-d: higgs, airline, ecbdl_15m or ecbdl" >&2; exit 2 ;;
+  chess_1m|chess_10m|chess_100m|chess_1b) DIR=cluster-chess; LIMIT=02:00:00 TIMEOUT=3600 ;;
+  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl or chess_1m, chess_10m, chess_100m, chess_1b" >&2
+     exit 2 ;;
 esac
 DIR="${OUTDIR:-$DIR}"
 

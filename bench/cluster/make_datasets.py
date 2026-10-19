@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rebuild datasets/{covertype,higgs,supersymmetry}.csv from public downloads,
-byte for byte as the copies on the desktop, make datasets/airline.csv and
-datasets/ecbdl.csv, and check them all by SHA-256.
+byte for byte as the copies on the desktop, make datasets/airline.csv,
+datasets/ecbdl.csv and datasets/chess_*.csv, and check them all by SHA-256.
 
   bench/.venv/bin/python -I bench/cluster/make_datasets.py ~/downloads [names...]
 
@@ -30,6 +30,11 @@ Sources, in <downloads>:
                            competition): 31,992,921 rows, 631 features, label 0/1.
                            On mordor3 a link to /home/Datasets/ECBDL (60.8 GB).
                            The expected SHA-256 is that of the first build (mordor3, 2026-10-16)
+  chess/chess3x3x*/        a 3x3 checkerboard in Quinlan's C4.5 format (.names, .data,
+                           .test): 1M, 10M, 100M and 1000M rows. Not public: it was
+                           in mordor3's ~/chess and was deleted after the first build
+                           (2026-10-19), so datasets/chess_*.csv are the only copies;
+                           the originals' SHA-256 are in bench/cluster/README.md
 
 A file whose SHA-256 differs from the expected one is left as <name>.csv.mismatch
 and the script fails.
@@ -42,6 +47,7 @@ import os
 import sys
 import zipfile
 from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -244,8 +250,55 @@ def ecbdl(downloads, out):
     assert rows == 31_992_921, rows
 
 
+# The chess sets: training rows (.data) and test rows (.test) of each source
+# directory. 1000M is the 100M file ten times over (its rows repeat), and the
+# 10M, 100M and 1000M sets share their test file.
+CHESS = {"chess_1m": ("chess3x3x001M", 1_000_000, 1_000),
+         "chess_10m": ("chess3x3x010M", 10_000_000, 4_500),
+         "chess_100m": ("chess3x3x100M", 100_000_000, 4_500),
+         "chess_1b": ("chess3x3x001MM", 1_000_000_000, 1_000)}
+
+
+def chess_csv(path, rows, out):
+    """One C4.5 file as ./tree's CSV: a header, values as written, the class
+    without C4.5's closing period. The sources mix their line ends (CRLF from
+    10M on), end with DOS's Ctrl-Z (100M; 1000M after each of its ten copies)
+    and space the test rows of 10M and up ("0.182, 0.025, B.")."""
+    out.write("x,y,class\n")
+    count, tail = 0, b""
+    with open(path, "rb") as source:
+        while True:
+            block = source.read(1 << 26)
+            text = tail + block
+            cut = len(text) if not block else text.rfind(b"\n") + 1
+            text, tail = text[:cut], text[cut:]
+            text = (text.replace(b"\x1a", b"").replace(b"\r", b"").replace(b" ", b"")
+                    .replace(b".\n", b"\n"))
+            if text and not text.endswith(b"\n"):
+                assert not block, path  # only the last line may lack its newline
+                text += b"\n"
+            lines = text.count(b"\n")
+            assert not text.translate(None, b"0123456789.,AB\n"), f"{path}: unexpected bytes"
+            assert text.count(b",") == 2 * lines, f"{path}: not 3 fields per row"
+            assert text.count(b"A\n") + text.count(b"B\n") == lines, f"{path}: class not A or B"
+            assert b"\n\n" not in text and not text.startswith(b"\n"), f"{path}: empty line"
+            out.write(text.decode("ascii"))
+            count += lines
+            if not block:
+                break
+    assert count == rows, f"{path}: {count:,} rows, expected {rows:,}"
+
+
+def chess(name, part, downloads, out):
+    source, train_rows, test_rows = CHESS[name]
+    extension, rows = (".data", train_rows) if part == "train" else (".test", test_rows)
+    chess_csv(downloads / "chess" / source / (source + extension), rows, out)
+
+
 BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmetry,
-            "airline": airline, "ecbdl": ecbdl}
+            "airline": airline, "ecbdl": ecbdl,
+            **{name: partial(chess, name, "train") for name in CHESS},
+            **{f"{name}_test": partial(chess, name, "test") for name in CHESS}}
 
 
 def main():

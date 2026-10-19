@@ -23,7 +23,16 @@ import pyarrow.csv as pacsv
 from benchlib import BASELINE, BENCH, DATA, ROOT, check_csv
 
 
-def split_rows(n, spec):
+def split_rows(n, spec, n_source):
+    """Row indices of the training and the test set. With test_source the test
+    rows are those read from it, after the source's n_source rows."""
+    if "test_source" in spec:
+        train, test = np.arange(n_source), np.arange(n_source, n)
+        if spec.get("train_rows"):
+            train = train[:spec["train_rows"]]
+        if spec.get("max_test_rows"):
+            test = test[:spec["max_test_rows"]]
+        return train, test
     if "test_rows" in spec:
         n_test = int(spec["test_rows"])
     else:
@@ -45,7 +54,15 @@ def split_rows(n, spec):
 
 
 def read_source(spec):
+    """Features, class names, float32 values and class indices of the source's
+    rows, then of test_source's if the spec has one; and the source's row count."""
     table = pacsv.read_csv(ROOT / spec["source"])
+    n_source = table.num_rows
+    if "test_source" in spec:  # a test set of its own, as for the chess sets
+        test = pacsv.read_csv(ROOT / spec["test_source"])
+        if test.column_names != table.column_names:
+            raise ValueError(f"{spec['test_source']} has other columns than {spec['source']}")
+        table = pa.concat_tables([table, test.cast(table.schema)])
     names = table.column_names
     label = names[-1] if spec.get("label", "last") == "last" else spec["label"]
     drop = set(spec.get("drop", [])) | {label}
@@ -57,9 +74,16 @@ def read_source(spec):
         if table[name].null_count:
             raise ValueError(f"feature {name!r} has missing values")
     X = np.column_stack([table[name].to_numpy().astype(np.float32) for name in features])
-    labels = pc.cast(table[label], pa.string()).to_numpy(zero_copy_only=False)
-    classes, y = np.unique(labels, return_inverse=True)
-    return features, [str(c) for c in classes], X, y.astype(np.int32)
+    # The class index is the rank of the label in sorted order, as np.unique
+    # would give, without a Python string per row (1G rows for chess_1b).
+    encoded = pc.dictionary_encode(pc.cast(table[label], pa.string()))
+    encoded = encoded.unify_dictionaries().combine_chunks()
+    names = np.array(encoded.dictionary.to_pylist())
+    order = np.argsort(names)
+    rank = np.empty(len(names), np.int32)
+    rank[order] = np.arange(len(names), dtype=np.int32)
+    y = rank[encoded.indices.to_numpy()]
+    return features, [str(c) for c in names[order]], X, y, n_source
 
 
 def write_dataset(name, features, classes, X, y, train, test, info, yadt=True):
@@ -132,11 +156,13 @@ def main():
             print(f"{name}: skipped, {spec['source']} not found")
             continue
         start = time.perf_counter()
-        key = (spec["source"], spec.get("label", "last"), tuple(spec.get("drop", [])))
+        key = (spec["source"], spec.get("test_source"), spec.get("label", "last"),
+               tuple(spec.get("drop", [])))
         if key not in sources:  # variants of one source share one read (kept one at a time)
+            sources = {}  # the previous source's arrays go first (chess_1b: tens of GB)
             sources = {key: read_source(spec)}
-        features, classes, X, y = sources[key]
-        train, test = split_rows(len(y), spec)
+        features, classes, X, y, n_source = sources[key]
+        train, test = split_rows(len(y), spec, n_source)
         write_dataset(name, features, classes, X, y, train, test, {"spec": spec},
                       yadt=spec.get("yadt", True))
         print(f"{name}: {len(train):,} train / {len(test):,} test rows, {len(features)} features, "
