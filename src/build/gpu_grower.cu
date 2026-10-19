@@ -2097,11 +2097,9 @@ private:
     }
 
     // Raw values: kept in their own buffer for repeated use, otherwise
-    // uploaded into the end of the column buffer (see presort()).
-    // Page-locking the source first makes the copy 2-5x faster, which more than
-    // pays for the registration (H100 PCIe: 55 instead of 10 GB/s). A plain
-    // registration: the read-only kind is not supported everywhere (H100 with
-    // HMM), and failing it meant a pageable copy.
+    // uploaded into the end of the column buffer (see presort()). Through
+    // page-locked staging buffers, without page-locking the source (see
+    // uploadStaged()).
     float *target = reusable_ ? values_.get() : uploadedValues();
     allocTimer.reset();
     double uploadSeconds = 0.0;
