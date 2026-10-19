@@ -1,15 +1,15 @@
-log: bench/results/cluster-chess/cpu-dell512-chess_10m/run.log, job 1016 on dell2, started 2026-10-19 17:34:58
+log: bench/results/cluster-chess/cpu-dell512-chess_10m/run.log, job 1063 on dell2, started 2026-10-19 19:08:50
 
-=== 17:34:58  1/3 machine check
+=== 19:08:50  1/3 machine check
 CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
 CPU governor: powersave 
-load average: 2.03 1.26 0.61
+load average: 2.40 0.50 0.16
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:2/1/1 2:1/0/2 3:3/1/3 4:0/0/4 5:2/1/5 6:1/0/6 7:3/1/7 8:0/0/8 9:2/1/9 10:1/0/10 11:3/1/11 12:0/0/12 13:2/1/13 14:1/0/14 15:3/1/15 16:0/0/16 17:2/1/17 18:1/0/18 19:3/1/19 20:0/0/20 21:2/1/21 22:1/0/22 23:3/1/23 24:0/0/24 25:2/1/25 26:1/0/26 27:3/1/27 28:0/0/28 29:2/1/29 30:1/0/30 31:3/1/31 32:0/0/32 33:2/1/33 34:1/0/34 35:3/1/35 36:0/0/36 37:2/1/37 38:1/0/38 39:3/1/39 40:0/0/40 41:2/1/41 42:1/0/42 43:3/1/43 44:0/0/44 45:2/1/45 46:1/0/46 47:3/1/47
-code: 2a9d64ee830b (from submit.sh: hopper has no git)
+code: d9da007f8989 (from submit.sh: hopper has no git)
 runs per case: 3
 
-=== 17:34:58  2/3 benchmark: chess_10m, cart_full_nodepth,c45_unpruned, tree, threads all (of 48), 3 run(s) per case
+=== 19:08:50  2/3 benchmark: chess_10m, cart_full_nodepth,c45_unpruned, tree, threads all (of 48), 3 run(s) per case
 2 cases, 9 processes:
   chess_10m | cart_full_nodepth | tree | 48
   chess_10m | c45_unpruned | tree | 48
@@ -17,26 +17,26 @@ checking the data (SHA-256 of every file, every CSV row against the binary files
   _baseline: identical in every format (0 s)
   chess_10m: identical in every format (1 s)
 2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
-[1/9] 17:35:00 run 1/3: CART ./tree, 48 threads, chess_10m ...
-    ok: train 0.2486 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m00s
-[2/9] 17:35:01 run 1/3: C4.5 ./tree, 48 threads, chess_10m ...
-    ok: train 0.3219 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m00s, about 0m01s left
-[3/9] 17:35:01 run 2/3: CART ./tree, 48 threads, chess_10m ...
-    ok: train 0.2448 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m01s, about 0m01s left
-[4/9] 17:35:01 run 2/3: C4.5 ./tree, 48 threads, chess_10m ...
-    ok: train 0.2893 s, peak 494 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m01s, about 0m00s left
-[5/9] 17:35:02 run 3/3: C4.5 ./tree, 48 threads, chess_10m ...
-    ok: train 0.2712 s, peak 494 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m01s, about 0m00s left
-[6/9] 17:35:02 run 3/3: CART ./tree, 48 threads, chess_10m ...
-    ok: train 0.2493 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m02s, about 0m00s left
+[1/9] 19:08:52 run 1/3: CART ./tree, 48 threads, chess_10m ...
+    ok: train 0.3439 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m00s
+[2/9] 19:08:53 run 1/3: C4.5 ./tree, 48 threads, chess_10m ...
+    ok: train 0.1998 s, peak 494 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m00s, about 0m01s left
+[3/9] 19:08:53 run 2/3: CART ./tree, 48 threads, chess_10m ...
+    ok: train 0.1726 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m00s, about 0m00s left
+[4/9] 19:08:53 run 2/3: C4.5 ./tree, 48 threads, chess_10m ...
+    ok: train 0.2741 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m01s, about 0m00s left
+[5/9] 19:08:53 run 3/3: C4.5 ./tree, 48 threads, chess_10m ...
+    ok: train 0.2033 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m01s, about 0m00s left
+[6/9] 19:08:54 run 3/3: CART ./tree, 48 threads, chess_10m ...
+    ok: train 0.2499 s, peak 493 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m00s, elapsed 0m01s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/9] 17:35:03 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.001 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m02s, about 0m00s left
-[8/9] 17:35:03 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.001 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m02s, about 0m00s left
-[9/9] 17:35:03 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.001 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m02s, about 0m00s left
-results: /home/bmircevski/dt/bench/results/cluster-chess/cpu-dell512-chess_10m/results.jsonl
+[7/9] 19:08:54 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0011 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m01s, about 0m00s left
+[8/9] 19:08:54 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0011 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m01s, about 0m00s left
+[9/9] 19:08:54 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0014 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m02s, about 0m00s left
+results: /home/bmircevski/dt-pf/bench/results/cluster-chess/cpu-dell512-chess_10m/results.jsonl
 
-=== 17:35:03  3/3 tables and CSV files
-done 2026-10-19 17:35:03
+=== 19:08:54  3/3 tables and CSV files
+done 2026-10-19 19:08:54

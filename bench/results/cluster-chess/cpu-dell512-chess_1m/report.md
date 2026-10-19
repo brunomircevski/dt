@@ -1,8 +1,8 @@
 ## cpu-dell512-chess_1m
 
-**cpu-dell512-chess_1m**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree 2a9d64ee830b, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**cpu-dell512-chess_1m**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree d9da007f8989, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 7 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
 
 ### chess_1m (1,000,000 train / 1,000 test rows, 2 features, 2 classes)
 
@@ -10,10 +10,10 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 7 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 57 ms | 54 ms–58 ms | 1.00× | 57 MiB | 49 MiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree | 65 ms | 64 ms–65 ms | 1.00× | 56 MiB | 49 MiB | 17 | 9 | 4 | 100.00% |  |
 
 **C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows** (`c45_unpruned`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 64 ms | 60 ms–74 ms | 1.00× | 58 MiB | 50 MiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree | 71 ms | 70 ms–73 ms | 1.00× | 57 MiB | 49 MiB | 17 | 9 | 4 | 100.00% |  |
