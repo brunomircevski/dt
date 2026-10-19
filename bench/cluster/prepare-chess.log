@@ -1,0 +1,50 @@
+job 1006 on dell2, 48 CPUs, 2026-10-19 17:26:54
+
+=== 17:26:54  1/3 datasets from /home/bmircevski/downloads, checked by SHA-256
+chess_1m: 20,000,010 bytes, sha256 eeff397d59634960841140a732139a2a0b351db6d538a8bccbda7b385cffdcb1 (nothing to compare with: record it in EXPECTED)
+chess_1m_test: 20,010 bytes, sha256 764f54b147078c4aad8e5d5279aac81a32ef5d0997b55d1e38f80ad3767b653a (nothing to compare with: record it in EXPECTED)
+chess_10m: 200,000,010 bytes, sha256 fff4315173bcef7f9672d689b058b3996b57bb98ca6ab8ec7212a853501b0add (nothing to compare with: record it in EXPECTED)
+chess_10m_test: 62,040 bytes, sha256 758a2c10f767f77de92616d43b89719c75cacba91640cf75e710fe9560b87742 (nothing to compare with: record it in EXPECTED)
+chess_100m: 2,000,000,010 bytes, sha256 e25758a82f61198ac562443084baac161661eefe571ca6c2fac6a0a097742555 (nothing to compare with: record it in EXPECTED)
+chess_100m_test: 62,040 bytes, sha256 758a2c10f767f77de92616d43b89719c75cacba91640cf75e710fe9560b87742 (nothing to compare with: record it in EXPECTED)
+chess_1b: 20,000,000,010 bytes, sha256 8ca94cd83e586c94ae270643bf52576132faff8504f34e3b4d9ac8aedec6393d (nothing to compare with: record it in EXPECTED)
+chess_1b_test: 20,010 bytes, sha256 764f54b147078c4aad8e5d5279aac81a32ef5d0997b55d1e38f80ad3767b653a (nothing to compare with: record it in EXPECTED)
+
+=== 17:30:02  2/3 prepare chess_1m chess_10m chess_100m chess_1b for bench/run.py
+chess_1m: 1,000,000 train / 1,000 test rows, 2 features, 2 classes (0.7 s)
+chess_10m: 10,000,000 train / 4,500 test rows, 2 features, 2 classes (4.5 s)
+chess_100m: 100,000,000 train / 4,500 test rows, 2 features, 2 classes (25.5 s)
+chess_1b: 1,000,000,000 train / 1,000 test rows, 2 features, 2 classes (236.7 s)
+
+=== 17:34:30  3/3 SHA-256 of the prepared files (for higgs: compare with plan.json of pc-legion-higgs/cuda-legion-higgs)
+92841741983347f304df8330fee9fe9aa8bce44f703714a61348044df5aab69a  bench/data/chess_1m/meta.json
+193cf1d7f3dc8fcdff938dae7dbc29a9d503aa4e74b731b19d9646b31ede75e2  bench/data/chess_1m/test.f32
+b64fc32af24e2cf993822bb0668361f8094d2a58d4471a8a356dd725f7917fe7  bench/data/chess_1m/test.yadt.csv
+976125d62ce026228ec0d3bb2635f5af385741eef6cb3eced6180ba491183676  bench/data/chess_1m/test.y.i32
+e627a390685d94edf73cec0fe90ff3bfcdbda6e4fb0f20c9bfb33eb895cee18a  bench/data/chess_1m/train.csv
+27569a7fe5f07f08bdefaffe52c42590fd6e47a13018a781937deec5305038df  bench/data/chess_1m/train.f32
+c84eba5f25d3d8d17455445000fd5d563778d7f20567bf73051afa3584dd534e  bench/data/chess_1m/train.yadt.csv
+16b3e4f0cc196081086ac8042526dff8b7d7e8c5635b7b21fbbd28b6439622fe  bench/data/chess_1m/train.y.i32
+92880eb04bf7d299d8fc998f3f6ec1b70731a54d826886bc81011582bcd18189  bench/data/chess_1m/yadt.names
+d92c420b354233a15cf9e59b8e8ee0f9a333d4891bc36d154bb19350b732e12b  bench/data/chess_10m/meta.json
+aed1167f5ea60a9e792f5ecf6eb72a9cb2b02d2971676b8432eeb9adf8eb127d  bench/data/chess_10m/test.f32
+b63d84dde8ba2581b6f3becc0caf647215d6523dc17762b1a4b7e1d5a240719a  bench/data/chess_10m/test.yadt.csv
+171ac8992a8813959d0e5eec94615929b8946d00f55f3166f19f8b837052cc64  bench/data/chess_10m/test.y.i32
+68d6c5d4fc84f059955255f6197a26863f356161433774a43d1028e1f4d9443c  bench/data/chess_10m/train.csv
+68485d5092969969bc0e78d8552d51dc183dfc4f3a00e0755349ca228b8f6103  bench/data/chess_10m/train.f32
+d8208f04537943e8872182b66991515eccede8ac7534bad157fadbb0bf0a8729  bench/data/chess_10m/train.yadt.csv
+9efb540d94514f11ca1cc81894653ca5c8eeddff6b6b706a67b913c04d2530ca  bench/data/chess_10m/train.y.i32
+92880eb04bf7d299d8fc998f3f6ec1b70731a54d826886bc81011582bcd18189  bench/data/chess_10m/yadt.names
+01ebf3083800786bddcf4be4b2c434fb5ee120dc402b6a0072fc2a6c8bdd97c9  bench/data/chess_100m/meta.json
+aed1167f5ea60a9e792f5ecf6eb72a9cb2b02d2971676b8432eeb9adf8eb127d  bench/data/chess_100m/test.f32
+171ac8992a8813959d0e5eec94615929b8946d00f55f3166f19f8b837052cc64  bench/data/chess_100m/test.y.i32
+944a3be648eb70de844473dc64abf164b84e56de67eec7b0c209b4caf0b630fe  bench/data/chess_100m/train.csv
+08ab35104b5643dea12b23e1704111d7fbaf5f25ef28ae6c5e3b5d965f73f134  bench/data/chess_100m/train.f32
+d00e31508e135034524d8a7db799f4d70a965379c1f65ba5e491b9e954da953d  bench/data/chess_100m/train.y.i32
+67631b43d7cc0e3d4615628e3fef23ee3ead5259df40cbd8a27a34b41d0293c5  bench/data/chess_1b/meta.json
+193cf1d7f3dc8fcdff938dae7dbc29a9d503aa4e74b731b19d9646b31ede75e2  bench/data/chess_1b/test.f32
+976125d62ce026228ec0d3bb2635f5af385741eef6cb3eced6180ba491183676  bench/data/chess_1b/test.y.i32
+124073b81a26e28a693ce3ce4a5e3ccf8edc41d8dcdcd7a2431fb642fb42fca1  bench/data/chess_1b/train.csv
+9ebca8e0a4876a0e8caaee6172bfc395b17ad29e8b7507e83bda65fd0690026e  bench/data/chess_1b/train.f32
+f83dd5165e8f3c02403ec5e2e3df0cf245a8b371bfec7099cf47bb0e1a2db21e  bench/data/chess_1b/train.y.i32
+done 2026-10-19 17:34:53

@@ -13,7 +13,7 @@ machines_chart.py checks.
 
   d=bench/results/cluster-chess
   bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unpruned \\
-      $d/*-chess_* --out $d/chart-rows.png
+      $d/{cuda-hopper,cuda-ampere,cpu-epyc,cpu-dell,cpu-dell512}-chess_* --out $d/chart-rows.png
 """
 
 import argparse
@@ -48,7 +48,7 @@ def seconds_label(value, _=None):
 
 
 def gib_label(value, _=None):
-    return f"{value:g} GiB" if value >= 1 else f"{value * 1024:g} MiB"
+    return f"{value:g} GiB"
 
 
 def value_text(field, value):
@@ -158,8 +158,6 @@ def main():
                             if e["protocol"] == protocol and e["rows"] == first)
                 ax.plot(all_rows, [start * r / first for r in all_rows], color=MUTED,
                         linewidth=1, linestyle=":", zorder=2)
-                ax.text(all_rows[-1], start * all_rows[-1] / first, "  ∝ rows",
-                        fontsize=8, color=MUTED, va="center")
             # At least a factor 4 between the axis ends: a flat line (VRAM) is drawn flat.
             low, high = ax.get_ylim()
             if high / low < 4:

@@ -7,6 +7,7 @@ cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 - [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees
 - [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS and airline with 1 to 48 threads on the two CPU nodes
 - [`bench/results/cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md): ECBDL'14 (631 features): a 15M-row sample on all four nodes, the full 32M rows on the CPU nodes, both also on dell2 (512 GB); pruned and unpruned CART, C4.5
+- [`bench/results/cluster-chess/`](../results/cluster-chess/BENCHMARK.md): a 3×3 checkerboard (2 features) at 1M, 10M, 100M and 1000M rows on all four nodes and dell2; unpruned CART and C4.5
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
 only, the CPU nodes (epyc1, dell1) parallel only:** a GPU node's CPU is
@@ -68,6 +69,28 @@ done
 bench/.venv/bin/python bench/grid_chart.py $t/epyc.png $t/dell.png \
     $t/epyc-airline.png $t/dell-airline.png --out $s/chart.png  # 2x2: HIGGS above airline
 rm -r $t
+```
+
+The chess sets, unpruned, on the four nodes and dell2, each size after the
+other on every node (`-a`: after the job that prepared them), and their charts:
+one per size in a 2×2 grid, and time and memory against the rows:
+
+```bash
+for d in chess_1m chess_10m chess_100m chess_1b; do
+  bench/cluster/submit.sh -m 3 -d $d -p cart_full_nodepth,c45_unpruned -a <prepare job> \
+      cuda-hopper-$d cuda-ampere-$d cpu-epyc-$d cpu-dell-$d cpu-dell512-$d
+done
+d=bench/results/cluster-chess
+t=$(mktemp -d)
+for s in 1m 10m 100m 1b; do
+  bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45_unpruned \
+      $d/cuda-hopper-chess_$s $d/cuda-ampere-chess_$s $d/cpu-epyc-chess_$s \
+      $d/cpu-dell-chess_$s $d/cpu-dell512-chess_$s --out $t/$s.png
+done
+bench/.venv/bin/python bench/grid_chart.py $t/1m.png $t/10m.png $t/100m.png $t/1b.png --out $d/chart.png
+rm -r $t
+bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unpruned \
+    $d/{cuda-hopper,cuda-ampere,cpu-epyc,cpu-dell,cpu-dell512}-chess_* --out $d/chart-rows.png
 ```
 
 The unpruned airline run and its chart (pruned and unpruned side by side in one image):
@@ -192,6 +215,26 @@ values, about 72 GiB of GPU memory). Until 2026-10-17 the GPU needed 16 bytes pe
 value and the sample had 6M rows. `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
 `5bc39aec…` (first build). Logs: `prepare-ecbdl.log` (the full set; it also made the earlier 6M sample), `prepare-ecbdl_15m.log` (the 15M sample, `bench/prepare.py ecbdl_15m` alone in a job on dell3). The pre-converted `.bin` files under
 `/home/Datasets/IMM` lack the label and the nominal attributes.
+
+The **chess** sets are a 3×3 checkerboard: x and y uniform in [0, 3] with six
+decimals, the class (`A`, `B`) alternating over the nine unit squares (`B` on
+5 of them, 55.5% of the rows), no noise; a tree of 9 leaves and depth 4 is
+exact. They came as C4.5 files (`.names`, `.data`, `.test`) in mordor3's
+`~/chess`, not public: `chess3x3x001M`, `010M`, `100M` and `001MM` (1M, 10M,
+100M and 1000M rows). `make_datasets.py` turns them into `datasets/chess_*.csv`
+and `chess_*_test.csv` (a header `x,y,class`, the values as written, the class
+without C4.5's closing period). The sources were uneven: 10M and up had CRLF
+line ends, 100M ended with DOS's Ctrl-Z (byte 0x1a, which ./tree cannot parse),
+and their shared test file spaced its fields (`0.182, 0.025, B.`). The sizes
+nest: 1M is the first million rows of 10M, 10M the first 10M of 100M, and
+**1000M is the 100M file ten times over** (with its Ctrl-Z after each copy), so
+it has only 100M distinct rows. 1M and 1000M share one test file (1,000 rows,
+the generator's), 10M and 100M another (4,500 rows on a grid of 3 decimals).
+The originals were deleted after the conversion (2026-10-19): the CSVs are the
+only copies, and `chess-originals.sha256` lists the originals' SHA-256.
+`datasets.toml` takes each set's own test file (`test_source`) and writes no YaDT
+files from 100M on. CSVs: 20 bytes per row, 20.0 GB for 1000M; preparing all four
+took 5 minutes (`prepare-chess.log`).
 
 HIGGS's prepared files (`bench/data/higgs/`) have the SHA-256 recorded in
 `plan.json` of `pc-legion-higgs/cpu-pc-higgs` and `pc-legion-higgs/cuda-legion-higgs` (desktop and laptop).
