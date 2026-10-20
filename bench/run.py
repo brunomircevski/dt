@@ -62,9 +62,16 @@ ADAPTERS = B.BENCH / "adapters"
 
 # ------------------------------------------------------------------ measuring
 
+def gpu_index():
+    """The GPU ./tree uses, in nvidia-smi's numbering: the first of CUDA_VISIBLE_DEVICES
+    (bench/cluster/job.sh sets it with CUDA_DEVICE_ORDER=PCI_BUS_ID, nvidia-smi's order)."""
+    first = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")[0].strip()
+    return first if first.isdigit() else "0"
+
+
 def gpu_memory_used_mib():
     out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits",
-                          "--id=0"], capture_output=True, text=True, timeout=30, check=True)
+                          f"--id={gpu_index()}"], capture_output=True, text=True, timeout=30, check=True)
     return int(out.stdout.split()[0])
 
 
@@ -82,7 +89,7 @@ def measure(command, env, timeout, pin=(), gpu=False):
     wall_seconds     from fork to exit, including start-up, loading, everything.
     gpu_peak_bytes   (gpu=True) the most GPU memory in use while the process ran,
                      minus what was in use just before it started: nvidia-smi
-                     samples the whole device every 10 ms, so nothing else may
+                     samples the whole device (gpu_index()) every 10 ms, so nothing else may
                      use the GPU during the run. The samples go to a file: in a
                      pipe read only at the end, nvidia-smi blocked once 64 KiB
                      were written (about 170 s) and missed the training.
@@ -94,7 +101,7 @@ def measure(command, env, timeout, pin=(), gpu=False):
         if gpu:
             idle_mib = gpu_memory_used_mib()
             sampler = subprocess.Popen(["nvidia-smi", "--query-gpu=memory.used",
-                                        "--format=csv,noheader,nounits", "--id=0", "-lms", "10"],
+                                        "--format=csv,noheader,nounits", f"--id={gpu_index()}", "-lms", "10"],
                                        stdout=gpu_samples, stderr=subprocess.DEVNULL)
         start = time.perf_counter()
         # Its own session, so a timeout (or Ctrl+C here) kills the whole tool.
@@ -387,8 +394,13 @@ def machine_info(args):
             "yadt": command_output([str(B.YADT)], env={"LD_LIBRARY_PATH": str(B.YADT.parent)})
             .splitlines()[0] if B.YADT.exists() else None,
         },
+        # Free memory per NUMA node at the start: a node whose memory is taken
+        # (e.g. by /dev/shm or page cache) sends a pinned run's pages to the other.
+        "numa_mem_free_kb": numa_mem_free_kb(),
+        "gpu_index": gpu_index(),
         "settings": {"alpha": args.alpha, "warmup_rows": args.warmup_rows,
-                     "java_heap": args.java_heap, "cpus": args.cpus, "reps": args.reps,
+                     "java_heap": args.java_heap, "cpus": args.cpus, "membind": args.membind,
+                     "reps": args.reps,
                      "timeout": args.timeout, "cooldown": args.cooldown},
     }
 
@@ -404,6 +416,15 @@ def parse_cpus(text):
         elif part:
             cpus.append(int(part))
     return cpus
+
+
+def numa_mem_free_kb():
+    free = {}
+    for node in sorted(Path("/sys/devices/system/node").glob("node[0-9]*")):
+        match = re.search(r"MemFree:\s+(\d+)", read_text(node / "meminfo") or "")
+        if match:
+            free[node.name] = int(match.group(1))
+    return free
 
 
 def plan_cases(args):
@@ -448,6 +469,9 @@ def main():
                         f"(default {B.CART_ALPHA})")
     parser.add_argument("--cpus", help="logical CPUs to pin to, in order of use, e.g. 0,2,4,6 "
                         "or 0-11; N threads use the first N (default: no pinning)")
+    parser.add_argument("--membind", type=int, metavar="NODE",
+                        help="run every process under numactl --membind=NODE: its memory only "
+                        "from that NUMA node (pair it with --cpus of that node)")
     parser.add_argument("--reps", type=int, default=1, help="runs (fresh processes) per case")
     parser.add_argument("--warmup-rows", default=str(B.WARMUP_ROWS),
                         help="rows of the untimed warm-up fit of the managed runtimes "
@@ -547,6 +571,8 @@ def main():
               f": {describe(case)} ...", flush=True)
         argv, extra_env, parse = build_command(case, kind, args, scratch, rep)
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
+        if args.membind is not None:
+            pin = ["numactl", f"--membind={args.membind}"] + pin
         run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl in ("tree_cuda", "tree_gpu_only"))
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
                "threads": threads, "kind": kind, "rep": rep,

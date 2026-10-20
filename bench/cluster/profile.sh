@@ -14,20 +14,23 @@
 #                                                          # (only when named)
 #
 # -p: run.py's protocols (default cart_alpha_nodepth,cart_full_nodepth,c45);
-# -o: the directory under bench/results/ (default cluster-<dataset>-profile, ecbdl_15m: cluster-ecbdl-profile).
+# -o: the directory under bench/results/ (default cluster-<dataset>-profile, ecbdl_15m: cluster-ecbdl-profile);
+# -n: threads, memory and GPU on that NUMA node (submit.sh -n).
 
 set -euo pipefail
 RUNS=1
 DATASET=ecbdl_15m
 PROTOCOLS=cart_alpha_nodepth,cart_full_nodepth,c45
 OUTDIR=
-while getopts "m:d:p:o:h" option; do
+NUMA=
+while getopts "m:d:p:o:n:h" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
     d) DATASET="$OPTARG" ;;
     p) PROTOCOLS="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
-    *) sed -n '2,17p' "$0"; exit 2 ;;
+    n) NUMA="$OPTARG" ;;
+    *) sed -n '2,18p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -67,17 +70,17 @@ done
 git diff --quiet HEAD -- src bench Makefile ||
   echo "warning: uncommitted changes in src/, bench/ or Makefile: machine.json will say -dirty"
 export TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)"
-echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs per case: $RUNS"
+echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs per case: $RUNS${NUMA:+, NUMA node $NUMA}"
 
 ids=()
 for job in "${JOBS[@]}"; do
   read -r name partition node impl threads <<<"$job"
   mkdir -p "bench/results/$DIR/$name" "bench/results/$DIR/plain/$name"
   profiled=$(sbatch --parsable --hold -J "dt-prof-$name" -p "$partition" -w "$node" --exclusive \
-    -t 04:00:00 --export=ALL,RUN_EXTRA=--profile -o "bench/results/$DIR/$name/run.log" \
+    -t 04:00:00 --export=ALL,RUN_EXTRA=--profile${NUMA:+,NUMA_NODE=$NUMA} -o "bench/results/$DIR/$name/run.log" \
     bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impl" "$RUNS" "$PROTOCOLS" "$threads" 3600)
   plain=$(sbatch --parsable -J "dt-plain-$name" -p "$partition" -w "$node" --exclusive \
-    -t 04:00:00 --dependency=afterany:"$profiled" -o "bench/results/$DIR/plain/$name/run.log" \
+    -t 04:00:00 --dependency=afterany:"$profiled" --export=ALL${NUMA:+,NUMA_NODE=$NUMA} -o "bench/results/$DIR/plain/$name/run.log" \
     bench/cluster/job.sh "$DIR/plain" "$name" "$DATASET" "$impl" "$RUNS" "$PROTOCOLS" "$threads" 3600)
   ids+=("$profiled")
   echo "$name: jobs $profiled (profiled), then $plain (plain) on $node"

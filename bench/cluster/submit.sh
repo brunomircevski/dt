@@ -38,22 +38,26 @@
 #       gpuonly-hopper-chess_1b gpuonly-ampere-chess_1b  # every node on the GPU
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
-# that job (e.g. prepare.sh) ended well.
+# that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
+# NUMA node (job.sh NUMA_NODE), e.g. -n 1 for the one-thread GPU only runs when
+# node 0's memory is taken (hopper: another user's /dev/shm, 2026-10).
 
 set -euo pipefail
 RUNS=1
 DATASET=higgs
 PROTOCOLS=cart_alpha_nodepth,c45
 OUTDIR=
+NUMA=
 AFTER=
-while getopts "m:d:p:o:a:h" option; do
+while getopts "m:d:p:o:a:n:h" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
     d) DATASET="$OPTARG" ;;
     p) PROTOCOLS="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
     a) AFTER="$OPTARG" ;;
-    *) sed -n '2,41p' "$0"; exit 2 ;;
+    n) NUMA="$OPTARG" ;;
+    *) sed -n '2,45p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -117,13 +121,14 @@ done
 git diff --quiet HEAD -- src bench Makefile ||
   echo "warning: uncommitted changes in src/, bench/ or Makefile: machine.json will say -dirty"
 export TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)"
-echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs per case: $RUNS"
+echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs per case: $RUNS${NUMA:+, NUMA node $NUMA}"
 
 ids=()
 for job in "${JOBS[@]}"; do
   read -r name partition node impls threads <<<"$job"
   mkdir -p "bench/results/$DIR/$name"
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "$LIMIT" \
+    --export=ALL${NUMA:+,NUMA_NODE=$NUMA} \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
     bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "$PROTOCOLS" "$threads" "$TIMEOUT")")
   echo "$name: job ${ids[-1]} on $node"
