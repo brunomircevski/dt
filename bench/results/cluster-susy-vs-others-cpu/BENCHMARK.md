@@ -41,7 +41,7 @@ bench/.venv/bin/python bench/vs_others_chart.py bench/results/cluster-susy-vs-ot
 
   | File | Content |
   |---|---|
-  | `chart.png` | All machines: time and peak RSS per tool, then the trees |
+  | `chart.png` | All machines: time (./tree: growing darker, pruning lighter) and peak RSS per tool, then the trees |
   | `summary.csv` | One row per machine and case |
   | `<machine>/report.md` | That machine's tables |
   | `<machine>/summary.csv`, `runs.csv` | One row per case, per process |

@@ -2,7 +2,8 @@
 """One chart of a benchmark against other implementations run on several
 machines (bench/results/cluster-susy-vs-others-cpu/<machine>/): for CART and C4.5,
 training time and peak RSS of every implementation on every machine (log
-scales; one thread solid, every CPU hatched), then the trees they built
+scales; one thread solid, every CPU hatched; ./tree's pruning in a lighter
+shade at the end of its bar), then the trees they built
 (nodes, depth, test accuracy with its 95% interval). Also writes summary.csv
 with every machine's cases.
 
@@ -27,6 +28,7 @@ from matplotlib.transforms import blended_transform_factory  # noqa: E402
 
 import benchlib as B  # noqa: E402
 from chart import COLORS, GRID, INK, MUTED, NAMES, collect, seconds_tick  # noqa: E402
+from machines_chart import lighter  # noqa: E402
 
 PROTOCOLS = {"cart_alpha": "CART  ·  Gini, depth ≤ 30, cost-complexity pruning at α = 1e-5",
              "c45": "C4.5  ·  gain ratio, error-based pruning with CF 0.25"}
@@ -46,9 +48,25 @@ def load(top, names):
             continue
         times, memory, tree, status, _ = collect(run)
         machines[name] = {"times": times, "memory": memory, "tree": tree, "status": status,
+                          "prune": prunes(run),
                           "machine": json.load(open(run / "machine.json")),
                           "plan": json.load(open(run / "plan.json"))}
     return machines
+
+
+def prunes(run):
+    """Median pruning time per case, for the cases whose every run recorded it
+    (only ./tree does)."""
+    seconds, runs = {}, {}
+    for line in open(run / "results.jsonl"):
+        r = json.loads(line)
+        if r["kind"] != "run" or r["status"] != "ok":
+            continue
+        key = (r["dataset"], r["protocol"], r["impl"], r["threads"])
+        runs[key] = runs.get(key, 0) + 1
+        if r.get("prune_seconds") is not None:
+            seconds.setdefault(key, []).append(r["prune_seconds"])
+    return {k: statistics.median(v) for k, v in seconds.items() if len(v) == runs[k]}
 
 
 def all_threads(data):
@@ -151,8 +169,15 @@ def bars(fig, spec, machines, protocol, limits):
             continue
         values = data["times"][key]
         mid = statistics.median(values)
-        ax_time.barh(y, mid - limits["time"][0], left=limits["time"][0], height=0.66,
+        low = limits["time"][0]
+        prune = data["prune"].get(key)
+        grow = max(mid - prune, low) if prune else mid
+        # Growing (everything but pruning), then ./tree's pruning in a lighter shade.
+        ax_time.barh(y, grow - low, left=low, height=0.66,
                      color=color, hatch=hatch, edgecolor="white", linewidth=0, zorder=2)
+        if grow < mid:
+            ax_time.barh(y, mid - grow, left=grow, height=0.66, color=lighter(color),
+                         hatch=hatch, edgecolor="white", linewidth=0, zorder=2)
         if len(values) > 1:
             ax_time.plot([min(values), max(values)], [y, y], color=INK, linewidth=1, zorder=3)
             ax_time.plot([min(values)] * 2 + [None] + [max(values)] * 2,
@@ -160,6 +185,8 @@ def bars(fig, spec, machines, protocol, limits):
                          linewidth=1, zorder=3)
         tree_key = (key[0], key[1], "tree", threads)
         note = []
+        if prune and prune >= 0.01 * mid:
+            note.append(f"prune {seconds_label(prune)} ({100 * prune / mid:.0f}%)")
         if impl != "tree" and tree_key in data["times"]:
             note.append(f"{mid / statistics.median(data['times'][tree_key]):.0f}× ./tree")
         single = (key[0], key[1], impl, 1)
@@ -354,12 +381,14 @@ def main():
     handles = [Patch(facecolor=COLORS[impl], label=B.IMPLS[impl]["label"]) for impl in shown]
     handles += [Patch(facecolor="#9b9a96", label="one thread"),
                 Patch(facecolor="#9b9a96", hatch=HATCH, edgecolor="white", linewidth=0,
-                      label="every CPU (parallel)")]
+                      label="every CPU (parallel)"),
+                Patch(facecolor=lighter("#9b9a96"), label="lighter: ./tree's pruning")]
     fig.legend(handles=handles, loc="upper left", ncol=len(handles), frameon=False,
                fontsize=9.5, bbox_to_anchor=(x0 - 0.004, 1 - (0.82 + 0.22 * len(machines)) / inches),
                handlelength=1.6, handleheight=1.1, columnspacing=1.6)
     runs = run_counts(machines)
-    fig.text(x0, 0.75 / inches, f"Bars: {runs}.\nTraining time excludes reading the data; "
+    fig.text(x0, 0.75 / inches, f"Bars: {runs}. ./tree's bars: growing the tree (darker), then pruning it "
+             "(lighter: its prune timer).\nTraining time excludes reading the data; "
              "\"× ./tree\": how many times longer than ./tree on the same machine and thread "
              "count. Peak RSS: the highest resident memory of the training process up to the "
              "end of training (runtime, data, warm-up, training).\nscikit-learn, rpart and "
