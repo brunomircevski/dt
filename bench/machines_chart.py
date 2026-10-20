@@ -38,8 +38,10 @@ from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 
 # Categorical slots 1-3 of the reference palette (validated all-pairs, CVD dE
 # >= 9.2); slot 3 is below 3:1 on white, so every bar carries a value label.
-COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "cuda": "#1baf7a"}
-BACKENDS = {"serial": "Serial", "parallel": "Parallel", "cuda": "CUDA"}
+# Slot 4 for ./tree --cuda --gpu-only (every node on the GPU, one CPU thread).
+COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "cuda": "#1baf7a", "gpu_only": "#eda100"}
+BACKENDS = {"serial": "Serial", "parallel": "Parallel", "cuda": "CUDA", "gpu_only": "GPU only"}
+GPU = {"cuda", "gpu_only"}
 TITLES = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25",
           "cart_full": "CART, no pruning, depth ≤ 30", "c45_unpruned": "C4.5, no pruning",
           "cart_alpha_nodepth": "CART, fixed α = 1e-5", "cart_full_nodepth": "CART, no pruning"}
@@ -86,15 +88,18 @@ def bars(run, reference):
     info = B.hardware(json.load(open(run / "machine.json")))
     out = []
     for protocol in PROTOCOLS:
-        for impl, single in (("tree", True), ("tree", False), ("tree_cuda", False)):
+        for impl, single in (("tree", True), ("tree", False), ("tree_cuda", False),
+                             ("tree_gpu_only", True)):
             ok = [r for r in rows if r["kind"] == "run" and r["status"] == "ok"
                   and r["protocol"] == protocol and r["impl"] == impl
                   and (r["threads"] == 1) == single]
             if not ok:
                 continue
             threads = ok[0]["threads"]
-            backend = "cuda" if impl == "tree_cuda" else "serial" if single else "parallel"
-            hardware = (f"{short_gpu(info)} + {threads} CPU threads" if backend == "cuda"
+            backend = {"tree_cuda": "cuda", "tree_gpu_only": "gpu_only"}.get(
+                impl, "serial" if single else "parallel")
+            hardware = (f"{short_gpu(info)} + {threads} CPU thread{'s' if threads > 1 else ''}"
+                        if backend in GPU
                         else f"{short_cpu(info)}, {threads} thread{'s' if threads > 1 else ''}")
             gpu = [r["gpu_peak_bytes"] for r in ok if r.get("gpu_peak_bytes") is not None]
             prune = [r["prune_seconds"] for r in ok if r.get("prune_seconds") is not None]
@@ -233,7 +238,7 @@ def main():
                      if prune is not None and prune >= 0.01 * t else [])
             if backend != "serial" and (run, "serial") in times:
                 notes.append(f"{times[(run, 'serial')] / t:.1f}× {where(run)} serial")
-            if backend == "cuda":
+            if backend in GPU:
                 others = [o for o in runs if o != run and (o, "parallel") in times]
                 fastest = min(others, key=lambda o: times[(o, "parallel")], default=None)
                 notes += [f"{times[(other, 'parallel')] / t:.1f}× {where(other)} parallel"
@@ -285,7 +290,7 @@ def main():
     # Hardware: one line per machine (see `machines` above).
     for index, (name, mine) in enumerate(machines.items()):
         machine = json.load(open(mine[0] / "machine.json"))
-        used_gpu = any(e["run"] in mine and e["backend"] == "cuda" for e in entries)
+        used_gpu = any(e["run"] in mine and e["backend"] in GPU for e in entries)
         roles, dates = [], []
         for run in mine:
             # Only ./tree is drawn: when its cases were rerun later, that is the date.

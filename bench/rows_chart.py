@@ -212,7 +212,7 @@ def main():
     inches = fig.get_figheight()
     for index, (name, run) in enumerate(machines.items()):
         info = json.load(open(run / "machine.json"))
-        used_gpu = run.name.startswith("cuda-")
+        used_gpu = run.name.startswith(("cuda-", "gpuonly-"))
         fig.text(0.04, 0.985 - (0.36 + 0.2 * index) / inches, name.capitalize(), fontsize=9,
                  color=INK, fontweight="bold", va="top")
         fig.text(0.1, 0.985 - (0.36 + 0.2 * index) / inches,

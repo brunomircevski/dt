@@ -1,9 +1,10 @@
 # Chess 3×3 on the mordor3 cluster: 1M to 1000M rows on two GPU and three CPU servers, unpruned CART and C4.5
 
-**Status:** three runs per case, all on 2026-10-19.
+**Status:** three runs per case, on 2026-10-19 and (GPU only) 2026-10-20.
 - **GPU runs** (hopper, ampere): rerun 20:30–20:33 with commit 6f6cecb: the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), on top of d9da007. The first GPU runs (17:34–17:42, 2a9d64e = 5058ce1, ./tree as in 051949b) built the same trees; at 1000M the H100 is now 18% (CART) and 15% (C4.5) faster, the A100 unchanged.
 - **CPU runs** (epyc, dell, dell512): rerun 19:08–19:12 with commit d9da007, which fixes a slowdown at 1000M rows ([below](#the-1000m-slowdown-and-its-fix)). The fix changes only the CPU builder for nodes of at least 2^20 rows with few columns. The CPU subtrees of a CUDA run have at most 4096 rows, so the fix cannot change the GPU runs.
 - **Serial runs** (epyc, dell; one thread): 2026-10-19, 23:01–23:21, with commit 673217f. It has the same CPU code as d9da007; the commit only adds the serial runs to `submit.sh`. [Below](#serial-one-thread).
+- **GPU-only runs** (hopper, ampere; `--cuda --gpu-only --threads 1`): 2026-10-20, 08:46–08:59, with commit 0b3a2de. It has the same ./tree as 6f6cecb plus `--gpu-only`. [Below](#gpu-only-one-cpu-thread).
 - **dell and dell512 at 1000M** are the 10-run medians of [the check below](#dell-against-dell512-10-runs-at-1000m), run with 41faca9 (the same CPU code as d9da007). Every other case has 3 runs.
 - **Each node ran alone** and was used whole (`--exclusive`). The four sizes ran one after another on every node, smallest first.
 - **Same trees:** every case built the same tree on every node and backend: 17 nodes (9 leaves), depth 4, 100% training accuracy, at every size. That is the exact tree of a 3×3 board.
@@ -18,10 +19,10 @@ for d in chess_1m chess_10m chess_100m chess_1b; do
 done
 ```
 
-The CPU rerun named only `cpu-epyc-$d cpu-dell-$d cpu-dell512-$d`, without `-a`. The serial runs were submitted with `serial-epyc-$d serial-dell-$d`, after a rebuild job (`-a <build job>`).
+The CPU rerun named only `cpu-epyc-$d cpu-dell-$d cpu-dell512-$d`, without `-a`. The serial runs were submitted with `serial-epyc-$d serial-dell-$d`, after a rebuild job (`-a <build job>`), and the GPU-only runs with `gpuonly-hopper-$d gpuonly-ampere-$d`.
 
 The charts are drawn as shown in the README:
-- `chart.png`: one `machines_chart.py --spread` chart per size, in a 2×2 grid. The bars are medians, the whiskers run from the fastest to the slowest run, and the dots are the single runs.
+- `chart-1m.png`, `chart-10m.png`, `chart-100m.png`, `chart-1b.png`: one `machines_chart.py --spread` chart per size. The bars are medians, the whiskers run from the fastest to the slowest run, and the dots are the single runs.
 - `chart-rows.png`: drawn by `rows_chart.py`.
 
 Both use the 10-run results for dell and dell512 at 1000M.
@@ -46,6 +47,8 @@ Both use the 10-run results for dell and dell512 at 1000M.
 | `cpu-dell512-*` | dell2 | the same as dell1 | 512 GB DDR5-5200 (8 × 64 GB) | – | parallel (48 threads) |
 | `serial-epyc-*` | epyc1 | as `cpu-epyc-*` | | – | serial (1 thread, the whole node reserved) |
 | `serial-dell-*` | dell1 | as `cpu-dell-*` | | – | serial (1 thread, the whole node reserved) |
+| `gpuonly-hopper-*` | hopper | as `cuda-hopper-*` | | H100 PCIe 80 GB | CUDA, `--gpu-only` (+ 1 CPU thread, the whole node reserved) |
+| `gpuonly-ampere-*` | ampere | as `cuda-ampere-*` | | A100 80 GB PCIe | CUDA, `--gpu-only` (+ 1 CPU thread, the whole node reserved) |
 
 ## Time and memory against the rows
 
@@ -57,6 +60,8 @@ Training time (`train total`: presort and build, on CUDA also GPU setup and uplo
 |---|--:|--:|--:|--:|
 | CUDA · hopper (H100 PCIe + 32 threads) | 51 ms | **88 ms** | **133 ms** | **0.92 s** |
 | CUDA · ampere (A100 80GB PCIe + 48 threads) | 38 ms | **88 ms** | 190 ms | 1.78 s |
+| GPU only · hopper (H100 PCIe + 1 thread) | 43 ms | 72 ms | 226 ms | 2.33 s |
+| GPU only · ampere (A100 80GB PCIe + 1 thread) | 33 ms | 56 ms | 253 ms | 2.61 s |
 | Parallel · epyc (EPYC 9255, 48 threads) | **23 ms** | 178 ms | 689 ms | 6.46 s |
 | Parallel · dell (Xeon 6542Y, 48 threads) | 78 ms | 184 ms | 1.21 s | 9.95 s |
 | Parallel · dell512 (the same, half the memory channels) | 65 ms | 250 ms | 1.32 s | 11.68 s |
@@ -67,6 +72,8 @@ Training time (`train total`: presort and build, on CUDA also GPU setup and uplo
 |---|--:|--:|--:|--:|
 | CUDA · hopper | 49 ms | 89 ms | **148 ms** | **0.97 s** |
 | CUDA · ampere | 38 ms | **82 ms** | 205 ms | 1.80 s |
+| GPU only · hopper | 43 ms | 72 ms | 228 ms | 2.34 s |
+| GPU only · ampere | 34 ms | 56 ms | 255 ms | 2.63 s |
 | Parallel · epyc | **24 ms** | 190 ms | 660 ms | 7.31 s |
 | Parallel · dell | 73 ms | 271 ms | 1.51 s | 12.32 s |
 | Parallel · dell512 | 71 ms | 203 ms | 1.63 s | 14.32 s |
@@ -79,7 +86,8 @@ Peak memory (the same for CART and C4.5 within 0.01 GiB):
 |---|--:|--:|--:|--:|
 | RAM, CPU servers (serial and parallel) | 0.06 GiB | 0.48 GiB | 4.68 GiB | 46.70 GiB |
 | RAM, CUDA (hopper / ampere) | 0.66 / 0.65 GiB | 0.88 / 0.87 GiB | 3.06 / 3.05 GiB | 24.87 / 24.86 GiB |
-| VRAM, GPU 0 (hopper / ampere) | 0.53 / 0.49 GiB | 0.89 / 0.85 GiB | 3.44 / 3.41 GiB | 25.43 / 25.42 GiB |
+| RAM, GPU only (hopper and ampere) | 0.64 GiB | 0.73 GiB | 1.57 GiB | 9.96 GiB |
+| VRAM, GPU 0 (hopper / ampere; GPU only the same) | 0.53 / 0.49 GiB | 0.89 / 0.85 GiB | 3.44 / 3.41 GiB | 25.43 / 25.42 GiB |
 
 - **The GPUs pull away with the rows.** At 1M rows epyc is the fastest (23 ms): a GPU run's fixed costs (setup, transfers, kernel launches) are about 40–50 ms. From 10M rows on, the GPUs lead.
   - The H100 is 2.0–2.1× faster than the best CPU server at 10M, 4.5–5.2× at 100M, and **7.0× (CART) to 7.5× (C4.5) at 1000M**. In every case the best CPU server is epyc.
@@ -113,6 +121,26 @@ Medians of 3 runs; train total = presort + build (prune ≈ 0).
 - **At 1000M epyc loses its lead:** epyc's serial build takes 10% longer than dell's (CART 86.7 s against 78.6 s), and the train totals are within 2% (CART) and 7% (C4.5). epyc's presort is still 1.8× faster. The build here waits on memory, row by row, so it measures memory latency more than the core.
 - **Parallelism pays off only with the rows.** At 1M rows, 48 threads are hardly faster than one, and dell CART is even slower (0.9×). The speed-up grows to 5× at 100M and 9–15× at 1000M. The 1000M speed-ups include the serial build's slowdown, which the threads avoid.
 - **Memory is the same** as with 48 threads (46.70 GiB at 1000M).
+
+## GPU only (one CPU thread)
+
+`--cuda --gpu-only --threads 1`: every node is grown on the GPU, with no hand-offs to the CPU and no host arena for them, and the CPU side is one thread. The whole node was reserved. Medians of 3 runs, CART (C4.5 within 1%):
+
+| | 1M | 10M | 100M | 1000M |
+|---|--:|--:|--:|--:|
+| hopper, CUDA: GPU setup / build | 46 / 4 ms | 73 / 13 ms | 92 / 31 ms | 0.23 / 0.58 s |
+| hopper, GPU only: GPU setup / build | 39 / 3 ms | 56 / 15 ms | 100 / 115 ms | 0.75 / 1.47 s |
+| ampere, CUDA: GPU setup / build | 34 / 3 ms | 41 / 42 ms | 89 / 86 ms | 0.52 / 1.13 s |
+| ampere, GPU only: GPU setup / build | 30 / 3 ms | 38 / 16 ms | 92 / 147 ms | 0.61 / 1.87 s |
+| train total, GPU only / CUDA: hopper | 0.84× | 0.83× | 1.70× | **2.53×** |
+| train total, GPU only / CUDA: ampere | 0.87× | 0.64× | 1.33× | **1.47×** |
+| whole process (`wall_seconds`, CSV read included), GPU only / CUDA: hopper, ampere | 1.0 / 1.1 s, 0.6 / 0.7 s | 1.7 / 1.1 s, 1.6 / 0.7 s | 7.8 / 1.3 s, 11.0 / 0.9 s | **71.9 / 4.7 s, 106.2 / 6.0 s** |
+
+- **Up to 10M rows GPU only is a little faster** (13–36% less time): one CPU thread starts and syncs faster than 32 or 48, and the fixed costs dominate.
+- **From 100M rows on it is slower:** at 1000M 2.5× the CUDA time on the H100 (2.33 s against 0.92 s) and 1.5× on the A100 (2.61 s against 1.78 s). Both the setup with the upload (H100 0.23 → 0.75 s) and the build (0.58 → 1.47 s) take longer; the presort does not change. The tree has only 17 nodes, all of them far above the hand-off size, so the hand-offs are not what the other threads speed up here; what the one thread waits on was not profiled.
+- **Still faster than every CPU server:** 2.8× (H100) and 2.5× (A100) faster than epyc's 48 threads at 1000M, and 43× and 38× faster than one epyc thread.
+- **Less than half the host RAM:** 9.96 GiB at 1000M against 24.87 GiB with hand-offs (no host arena) and 46.70 GiB on the CPU servers. The VRAM is the same as with hand-offs.
+- **Reading the CSV is the cost:** with one thread, the whole 1000M process takes 72 s (hopper) and 106 s (ampere) instead of 4.7 and 6.0 s, nearly all of it parsing the 20 GB CSV. The training time above excludes it.
 
 ## The 1000M slowdown and its fix
 
@@ -179,10 +207,16 @@ bench/.venv/bin/python bench/runs_chart.py $d/cpu-dell-chess_1b $d/cpu-dell512-c
 
 ## One chart per size
 
-![chess 3x3: 1M, 10M (top), 100M and 1000M (bottom) on five mordor3 nodes](chart.png)
+![chess 3x3, 1M rows, on five mordor3 nodes](chart-1m.png)
+
+![chess 3x3, 10M rows, on five mordor3 nodes](chart-10m.png)
+
+![chess 3x3, 100M rows, on five mordor3 nodes](chart-100m.png)
+
+![chess 3x3, 1000M rows, on five mordor3 nodes](chart-1b.png)
 
 ## Notes
 
-- **Not timed:** reading the CSV, and the data check before each job (SHA-256 of every prepared file and every CSV row against the binary files: 113 s for `chess_1b` on ampere, 33 GB over NFS). A whole `chess_1b` process (`wall_seconds`, reading the 20 GB CSV included) took 5.2–6.5 s on the GPU nodes and 9–18 s on the CPU nodes (37–52 s before the fix).
+- **Not timed:** reading the CSV, and the data check before each job (SHA-256 of every prepared file and every CSV row against the binary files: 113 s for `chess_1b` on ampere, 33 GB over NFS). A whole `chess_1b` process (`wall_seconds`, reading the 20 GB CSV included) took 5.2–6.5 s on the GPU nodes and 9–18 s on the CPU nodes (37–52 s before the fix); with one thread 72 s (hopper) and 106 s (ampere) GPU only, and 155–159 s serial on epyc.
 - **Hopper's and ampere's 1M and 10M runs** are dominated by fixed costs; their order there says little about the GPUs.
 - **The originals** (C4.5 files from mordor3's `~/chess`) were deleted after the conversion; `datasets/chess_*.csv` on mordor3 are the only copies. Their SHA-256 and those of the originals are in [bench/cluster/README.md](../../cluster/README.md) and `bench/cluster/chess-originals.sha256`.

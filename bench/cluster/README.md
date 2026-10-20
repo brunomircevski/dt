@@ -7,7 +7,7 @@ cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 - [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees
 - [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS and airline with 1 to 48 threads on the two CPU nodes
 - [`bench/results/cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md): ECBDL'14 (631 features): a 15M-row sample on all four nodes, the full 32M rows on the CPU nodes, both also on dell2 (512 GB); pruned and unpruned CART, C4.5
-- [`bench/results/cluster-chess/`](../results/cluster-chess/BENCHMARK.md): a 3×3 checkerboard (2 features) at 1M, 10M, 100M and 1000M rows on all four nodes and dell2, and with one thread on epyc1 and dell1; unpruned CART and C4.5
+- [`bench/results/cluster-chess/`](../results/cluster-chess/BENCHMARK.md): a 3×3 checkerboard (2 features) at 1M, 10M, 100M and 1000M rows on all four nodes and dell2, with one thread on epyc1 and dell1, and `--gpu-only` on hopper and ampere; unpruned CART and C4.5
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
 only, the CPU nodes (epyc1, dell1) parallel only:** a GPU node's CPU is
@@ -73,7 +73,7 @@ rm -r $t
 
 The chess sets, unpruned, on the four nodes and dell2, each size after the
 other on every node (`-a`: after the job that prepared them), and their charts:
-one per size in a 2×2 grid, and time and memory against the rows:
+one per size (`chart-<size>.png`), and time and memory against the rows:
 
 ```bash
 for d in chess_1m chess_10m chess_100m chess_1b; do
@@ -81,22 +81,23 @@ for d in chess_1m chess_10m chess_100m chess_1b; do
       cuda-hopper-$d cuda-ampere-$d cpu-epyc-$d cpu-dell-$d cpu-dell512-$d
   # one thread (--serial) on epyc1 and dell1; -a <build job> when it ran after a rebuild
   bench/cluster/submit.sh -m 3 -d $d -p cart_full_nodepth,c45_unpruned serial-epyc-$d serial-dell-$d
+  # --gpu-only (one CPU thread) on hopper and ampere
+  bench/cluster/submit.sh -m 3 -d $d -p cart_full_nodepth,c45_unpruned gpuonly-hopper-$d gpuonly-ampere-$d
 done
 d=bench/results/cluster-chess
 v=$d/dell-variance  # dell and dell512 at 1000M: the 10-run check (BENCHMARK.md)
-t=$(mktemp -d)
 for s in 1m 10m 100m 1b; do
   dell="$d/cpu-dell-chess_$s $d/cpu-dell512-chess_$s"
   [ $s = 1b ] && dell="$v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b"
   bench/.venv/bin/python bench/machines_chart.py --spread --protocols cart_full_nodepth,c45_unpruned \
       $d/cuda-hopper-chess_$s $d/cuda-ampere-chess_$s $d/cpu-epyc-chess_$s $dell \
-      $d/serial-epyc-chess_$s $d/serial-dell-chess_$s --out $t/$s.png
+      $d/serial-epyc-chess_$s $d/serial-dell-chess_$s $d/gpuonly-hopper-chess_$s $d/gpuonly-ampere-chess_$s \
+      --out $d/chart-$s.png
 done
-bench/.venv/bin/python bench/grid_chart.py $t/1m.png $t/10m.png $t/100m.png $t/1b.png --out $d/chart.png
-rm -r $t
 bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unpruned \
     $d/{cuda-hopper,cuda-ampere,cpu-epyc}-chess_* $d/{cpu-dell,cpu-dell512}-chess_{1m,10m,100m} \
-    $v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b $d/{serial-epyc,serial-dell}-chess_* --out $d/chart-rows.png
+    $v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b $d/{serial-epyc,serial-dell,gpuonly-hopper,gpuonly-ampere}-chess_* \
+    --out $d/chart-rows.png
 ```
 
 The unpruned airline run and its chart (pruned and unpruned side by side in one image):
