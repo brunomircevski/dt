@@ -192,6 +192,12 @@
      "--no-prune",
      "-d",
      "30"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
     ]
    }
   },
@@ -213,6 +219,12 @@
      "maxdepth": 12
     },
     "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "12"
+    ],
+    "tree_gpu_only": [
      "--cart",
      "--no-prune",
      "-d",
@@ -246,6 +258,13 @@
      "30",
      "--alpha",
      "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "30",
+     "--alpha",
+     "{alpha}"
     ]
    }
   },
@@ -261,6 +280,11 @@
      "--cart",
      "--alpha",
      "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--alpha",
+     "{alpha}"
     ]
    }
   },
@@ -272,6 +296,10 @@
      "--no-prune"
     ],
     "tree_cuda": [
+     "--cart",
+     "--no-prune"
+    ],
+    "tree_gpu_only": [
      "--cart",
      "--no-prune"
     ]
@@ -295,6 +323,9 @@
     ],
     "tree_cuda": [
      "--c45"
+    ],
+    "tree_gpu_only": [
+     "--c45"
     ]
    }
   },
@@ -316,6 +347,10 @@
     "tree_cuda": [
      "--c45",
      "--no-prune"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune"
     ]
    }
   }
@@ -329,6 +364,11 @@
   "tree_cuda": {
    "label": "./tree CUDA",
    "threads": "all",
+   "warmup": false
+  },
+  "tree_gpu_only": {
+   "label": "./tree CUDA, GPU only",
+   "threads": "single",
    "warmup": false
   },
   "sklearn": {
@@ -445,11 +485,9 @@
    "meta.json": "dfe41f9d65026bf0158a316dbee4c636a83461bf6b0e4c7c12dc208a81b348f5",
    "test.f32": "ef0520dbaee3b5e6245122b9c3163d2391ac0e01f3a7ce521fb62797e0bc3e44",
    "test.y.i32": "1ccaf4337b445795cb6485e903736f50d80f34e0ee32d4d4d80ca4578456bad4",
-   "test.yadt.csv": "4bff70d1a70cf89bb35307251287fb1284af912927e59dc5a04cbbb0411150e5",
    "train.csv": "829ebeb673c3a91797fc8e20394c32c94cf5ce8923aa4943186e7f5c483a2c8b",
    "train.f32": "5b7864baa764bf42d6c797e900c4958cb65d384eac438bfb0d2605660cb825db",
    "train.y.i32": "d1eb07be68ded6333cb4d8ed94834d1d432669b56f6f12299459c63d9796d14d",
-   "train.yadt.csv": "71bc2ceea8fe93038a865d03740d783d88d85905874993cd29881a1ae3354d9b",
    "yadt.names": "21b440c6d7525a4a543c73d35f24caf3ced8d7a38284f3793e6eb2785134de57"
   }
  }

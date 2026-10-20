@@ -124,14 +124,14 @@
  },
  "tree_rerun": {
   "note": "./tree rows rerun on the newer code; the other tools' rows are from the first run",
-  "started": "2026-10-19T17:02:31+02:00",
-  "command": "/home/bmircevski/dt/bench/.venv/bin/python bench/run.py susy --protocols cart_alpha,c45 --threads 1,all --cpus 0-47 --reps 3 --timeout 3600 --warmup-rows 50000 --java-heap 15g --impls tree --run-id cluster-susy-vs-others-cpu/epyc/tree-rerun",
-  "tree_git": "051949ba26af-dirty",
-  "loadavg_at_start": "19.05 13.49 12.70 2/939 297311",
+  "started": "2026-10-20T15:12:43+02:00",
+  "command": "/home/bmircevski/dt-bench/bench/.venv/bin/python bench/run.py susy --protocols cart_alpha,c45 --threads 1,all --cpus 0-47 --reps 3 --timeout 3600 --warmup-rows 50000 --java-heap 15g --impls tree --run-id cluster-susy-vs-others-cpu/epyc/tree-rerun",
+  "tree_git": "8b1ecd151dd2",
+  "loadavg_at_start": "7.15 10.57 13.56 1/942 331580",
   "governors": [
    "performance"
   ],
   "reps": 3,
-  "replaced_tree_git": "cd187178dd26-dirty"
+  "replaced_tree_git": "051949ba26af-dirty"
  }
 }

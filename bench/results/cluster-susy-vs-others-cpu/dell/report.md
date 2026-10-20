@@ -1,6 +1,6 @@
 ## dell
 
-**dell**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 1007 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree 3cbdb6f9272f, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows; ./tree cases rerun on 2026-10-19, the other tools' rows are from 2026-10-16 (./tree cd187178dd26-dirty then)
+**dell**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 1007 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree 3cbdb6f9272f, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows; ./tree cases rerun on 2026-10-20, the other tools' rows are from 2026-10-16 (./tree 051949ba26af-dirty then)
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): Weka J48 48 MiB, rpart 71 MiB, scikit-learn 120 MiB, ./tree 8 MiB, YaDT 5 MiB
 
@@ -10,29 +10,29 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): Weka J48 48 MiB, 
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 6.84 s | 6.81 s–7.52 s | 1.00× | 1.04 GiB | 1.04 GiB | 723 | 362 | 19 | 79.68% | 79.65% |
-| scikit-learn | 546 s | 545 s–546 s | 79.74× | 656 MiB | 536 MiB | 1,059 | 530 | 17 | 79.46% | 79.48% |
-| rpart | 900 s | 900 s–901 s | 131.53× | 3.55 GiB | 3.48 GiB | 701 | 351 | 19 | 79.67% | 79.64% |
+| ./tree | 6.75 s | 6.74 s–6.8 s | 1.00× | 1.04 GiB | 1.04 GiB | 723 | 362 | 19 | 79.68% | 79.65% |
+| scikit-learn | 546 s | 545 s–546 s | 80.79× | 656 MiB | 536 MiB | 1,059 | 530 | 17 | 79.46% | 79.48% |
+| rpart | 900 s | 900 s–901 s | 133.26× | 3.55 GiB | 3.48 GiB | 701 | 351 | 19 | 79.67% | 79.64% |
 
 **CART, one tree pruned at a fixed alpha (cost-complexity)** (`cart_alpha`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 491 ms | 448 ms–500 ms | 1.00× | 1.59 GiB | 1.58 GiB | 723 | 362 | 19 | 79.68% | 79.65% |
+| ./tree | 502 ms | 500 ms–662 ms | 1.00× | 1.59 GiB | 1.59 GiB | 723 | 362 | 19 | 79.68% | 79.65% |
 
 **C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 1 thread
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 9.04 s | 8.99 s–9.25 s | 1.00× | 1.20 GiB | 1.19 GiB | 15,113 | 7,557 | 38 | 80.67% | 79.74% |
-| Weka J48 | 1.34e+03 s | 1.34e+03 s–1.34e+03 s | 147.80× | 9.46 GiB | 9.41 GiB | 15,479 | 7,740 | 38 | 80.68% | 79.71% |
-| YaDT | 215 s | 215 s–215 s | 23.76× | 3.33 GiB | 3.32 GiB | 15,487 | 7,744 | 33 | 80.67% | 79.75% |
+| ./tree | 8.94 s | 8.9 s–8.98 s | 1.00× | 1.20 GiB | 1.19 GiB | 15,113 | 7,557 | 38 | 80.67% | 79.74% |
+| Weka J48 | 1.34e+03 s | 1.34e+03 s–1.34e+03 s | 149.59× | 9.46 GiB | 9.41 GiB | 15,479 | 7,740 | 38 | 80.68% | 79.71% |
+| YaDT | 215 s | 215 s–215 s | 24.05× | 3.33 GiB | 3.32 GiB | 15,487 | 7,744 | 33 | 80.67% | 79.75% |
 
 **C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 699 ms | 696 ms–766 ms | 1.00× | 1.86 GiB | 1.85 GiB | 15,113 | 7,557 | 38 | 80.67% | 79.74% |
-| YaDT | 30.9 s | 29.7 s–33.6 s | 44.25× | 5.59 GiB | 5.58 GiB | 15,487 | 7,744 | 33 | 80.67% | 79.75% |
+| ./tree | 753 ms | 700 ms–806 ms | 1.00× | 1.86 GiB | 1.85 GiB | 15,113 | 7,557 | 38 | 80.67% | 79.74% |
+| YaDT | 30.9 s | 29.7 s–33.6 s | 41.03× | 5.59 GiB | 5.58 GiB | 15,487 | 7,744 | 33 | 80.67% | 79.75% |
 
 Test accuracy is measured on 500,000 rows: its 95% interval is ±0.11 percentage points at most.

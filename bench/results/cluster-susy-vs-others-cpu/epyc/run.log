@@ -234,3 +234,63 @@ replaced the ./tree rows: 15 old, 15 new
 === 17:03:35  4/4 tables and CSV files
 done 2026-10-19 17:03:35: /home/bmircevski/dt/bench/results/cluster-susy-vs-others-cpu/epyc
 when all machines are done: bench/.venv/bin/python bench/vs_others_chart.py /home/bmircevski/dt/bench/results/cluster-susy-vs-others-cpu
+
+=== ./tree rerun (run.sh epyc -t -m 3), 2026-10-20: the ./tree rows above are replaced by these
+log: /home/bmircevski/dt-bench/bench/results/cluster-susy-vs-others-cpu/epyc/run.log, epyc1, job 1312, started 2026-10-20 15:12:42
+
+=== 15:12:42  1/4 machine check
+CPU governor: performance
+load average: 7.15 10.57 13.56
+CPUs: 0-47 (48 available), 1 thread on CPU 0
+runs per case: 3
+
+=== 15:12:42  2/4 tools (built on the login node)
+code: 8b1ecd151dd2
+
+=== 15:12:42  3/4 benchmark: full SUSY, pruned CART and C4.5, 1 and all threads, 3 run(s) per case, ./tree only
+4 cases, 15 processes:
+  susy | cart_alpha | tree | 1
+  susy | cart_alpha | tree | 48
+  susy | c45 | tree | 1
+  susy | c45 | tree | 48
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy: identical in every format (4 s)
+4 cases x 3 run(s), then 1 footprint run(s) x 3: 15 processes. Time left is shown once every case has run once.
+[1/15] 15:12:47 run 1/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 6.35 s, peak 1,229 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m08s, elapsed 0m09s
+[2/15] 15:12:56 run 1/3: CART ./tree, 1 thread, susy ...
+    ok: train 4.906 s, peak 1,070 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m06s, elapsed 0m16s
+[3/15] 15:13:03 run 1/3: CART ./tree, 48 threads, susy ...
+    ok: train 0.4846 s, peak 1,632 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m17s
+[4/15] 15:13:05 run 1/3: C4.5 ./tree, 48 threads, susy ...
+    ok: train 0.6638 s, peak 1,892 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m19s, about 0m31s left
+[5/15] 15:13:07 run 2/3: CART ./tree, 1 thread, susy ...
+    ok: train 4.89 s, peak 1,070 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m06s, elapsed 0m27s, about 0m25s left
+[6/15] 15:13:14 run 2/3: CART ./tree, 48 threads, susy ...
+    ok: train 0.486 s, peak 1,632 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m28s, about 0m24s left
+[7/15] 15:13:15 run 2/3: C4.5 ./tree, 48 threads, susy ...
+    ok: train 0.6537 s, peak 1,900 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m30s, about 0m24s left
+[8/15] 15:13:17 run 2/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 6.42 s, peak 1,230 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m08s, elapsed 0m39s, about 0m16s left
+[9/15] 15:13:27 run 3/3: CART ./tree, 1 thread, susy ...
+    ok: train 4.89 s, peak 1,069 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m06s, elapsed 0m47s, about 0m09s left
+[10/15] 15:13:34 run 3/3: C4.5 ./tree, 1 thread, susy ...
+    ok: train 6.492 s, peak 1,230 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m08s, elapsed 0m56s, about 0m01s left
+[11/15] 15:13:44 run 3/3: CART ./tree, 48 threads, susy ...
+    ok: train 0.5022 s, peak 1,632 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m58s, about 0m00s left
+[12/15] 15:13:45 run 3/3: C4.5 ./tree, 48 threads, susy ...
+    ok: train 0.5422 s, peak 1,909 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m59s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[13/15] 15:13:47 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0005 s, peak 7 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m59s, about 0m00s left
+[14/15] 15:13:47 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0004 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m59s, about 0m00s left
+[15/15] 15:13:47 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0005 s, peak 8 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m59s, about 0m00s left
+results: /home/bmircevski/dt-bench/bench/results/cluster-susy-vs-others-cpu/epyc/tree-rerun/results.jsonl
+replaced the ./tree rows: 15 old, 15 new
+
+=== 15:13:47  4/4 tables and CSV files
+done 2026-10-20 15:13:47: /home/bmircevski/dt-bench/bench/results/cluster-susy-vs-others-cpu/epyc
+when all machines are done: bench/.venv/bin/python bench/vs_others_chart.py /home/bmircevski/dt-bench/bench/results/cluster-susy-vs-others-cpu

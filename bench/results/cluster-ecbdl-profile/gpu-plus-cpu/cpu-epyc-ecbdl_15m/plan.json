@@ -42,6 +42,12 @@
      "--no-prune",
      "-d",
      "30"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
     ]
    }
   },
@@ -63,6 +69,12 @@
      "maxdepth": 12
     },
     "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "12"
+    ],
+    "tree_gpu_only": [
      "--cart",
      "--no-prune",
      "-d",
@@ -96,6 +108,13 @@
      "30",
      "--alpha",
      "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "30",
+     "--alpha",
+     "{alpha}"
     ]
    }
   },
@@ -111,6 +130,11 @@
      "--cart",
      "--alpha",
      "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--alpha",
+     "{alpha}"
     ]
    }
   },
@@ -122,6 +146,10 @@
      "--no-prune"
     ],
     "tree_cuda": [
+     "--cart",
+     "--no-prune"
+    ],
+    "tree_gpu_only": [
      "--cart",
      "--no-prune"
     ]
@@ -145,6 +173,9 @@
     ],
     "tree_cuda": [
      "--c45"
+    ],
+    "tree_gpu_only": [
+     "--c45"
     ]
    }
   },
@@ -166,6 +197,10 @@
     "tree_cuda": [
      "--c45",
      "--no-prune"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune"
     ]
    }
   }
@@ -179,6 +214,11 @@
   "tree_cuda": {
    "label": "./tree CUDA",
    "threads": "all",
+   "warmup": false
+  },
+  "tree_gpu_only": {
+   "label": "./tree CUDA, GPU only",
+   "threads": "single",
    "warmup": false
   },
   "sklearn": {

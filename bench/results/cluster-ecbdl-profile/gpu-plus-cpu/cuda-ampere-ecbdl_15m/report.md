@@ -1,6 +1,6 @@
 ## cuda-ampere-ecbdl_15m
 
-**cuda-ampere-ecbdl_15m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree 6f6cecb8a9b8, CPUs in order of use 0-47, 1 run(s) per case, warm-up 50000 rows
+**cuda-ampere-ecbdl_15m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree 8b1ecd151dd2, CPUs in order of use 0-47, 1 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 641 MiB
 
@@ -10,16 +10,16 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 641 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 11.7 s | 11.7 s–11.7 s |  | 37.44 GiB (+ GPU 73.30 GiB) | 36.82 GiB | 1 | 1 | 0 | 97.85% |  |
+| ./tree CUDA | 11.6 s | 11.6 s–11.6 s |  | 37.48 GiB (+ GPU 73.30 GiB) | 36.85 GiB | 1 | 1 | 0 | 97.85% |  |
 
 **CART, grown to pure leaves, no pruning, no depth limit** (`cart_full_nodepth`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 24.1 s | 24.1 s–24.1 s |  | 106.65 GiB (+ GPU 73.42 GiB) | 106.03 GiB | 604,225 | 302,113 | 94 | 100.00% |  |
+| ./tree CUDA | 23.7 s | 23.7 s–23.7 s |  | 106.65 GiB (+ GPU 73.39 GiB) | 106.03 GiB | 604,225 | 302,113 | 94 | 100.00% |  |
 
 **C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 64.3 s | 64.3 s–64.3 s |  | 107.88 GiB (+ GPU 73.35 GiB) | 107.25 GiB | 209,799 | 104,900 | 266 | 99.09% |  |
+| ./tree CUDA | 65.3 s | 65.3 s–65.3 s |  | 107.90 GiB (+ GPU 73.35 GiB) | 107.28 GiB | 209,799 | 104,900 | 266 | 99.09% |  |

@@ -1,2 +1,2 @@
 run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cpu-dell512-ecbdl,ecbdl,cart_full_nodepth,tree,48,ok,True,176.70170000000002,176.70170000000002,176.70170000000002,176.70170000000002,,1,1.0,191.43180655594915,254488002560,254488002560,254488002560,254479912960,1205683,602842,111,1.0,,,,0.0
+cpu-dell512-ecbdl,ecbdl,cart_full_nodepth,tree,48,ok,True,192.41379999999998,192.41379999999998,192.41379999999998,192.41379999999998,,1,1.0,205.81652706093155,254487990272,254487990272,254487990272,254479736832,1205683,602842,111,1.0,,,,0.0

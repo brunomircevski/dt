@@ -1,7 +1,8 @@
 # HIGGS on the mordor3 cluster: ./tree CUDA on two GPU servers, parallel on two CPU servers
 
-**Status:** run on 2026-10-19 from 15:10, 3 runs per case, at commit 051949b: cd18717 (one copy of the presorted columns on every backend, the GPU's hand-off through a 512 MB ring, [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)) plus `./tree --profile` and the count tables filled without a zero-fill on one thread. The same trees as on cd18717, the times within 3%. `machine.json` says `-dirty` only because the previous result files had been removed from the cluster's checkout for the rerun; the code was committed.
-- **CUDA rows rerun at 6f6cecb** (2026-10-19 from 20:15, 3 runs per case): the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), and the host threads partition big nodes in blocks (d9da007). The same trees; CART 5–7% faster, C4.5 2–5%. The CPU rows are still 051949b's.
+**Status:** every row rerun on 2026-10-20 from 13:52, 3 runs per case, at commit 8b1ecd1: 6521330 (the class counts kept per thread in local histograms instead of a shared, false-shared array; the staged GPU copies use at least 8 threads) plus the cluster scripts' NUMA options (unused here: each run had the whole node). The same trees as before; ampere's CART 13% faster, dell 5–7%, the rest within 3%. `machine.json` says `-dirty` only because the previous result files had been removed from the cluster's checkout for the rerun; the code was committed.
+- **Before:** the CPU rows were 051949b's (2026-10-19 from 15:10), the CUDA rows 6f6cecb's (2026-10-19 from 20:15): the GPU's hand-offs through page-locked buffers, the host partition in blocks ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)). Their medians are in the history table below.
+- **epyc rerun** on 2026-10-20 at 1a2d9a9, the same code with `run.py --drop-cache`: our own cached dataset files had filled epyc1's NUMA node 1, which made the 48-thread runs allocate across the sockets. HIGGS was hardly affected (CART 1.06 → 1.07 s, C4.5 1.69 s both times); the larger datasets were ([cluster-ecbdl](../cluster-ecbdl/BENCHMARK.md)). The jobs now also drop the datasets from the page cache when they end (99688fa).
 - **Each node ran alone** and was used whole. All four started together.
 - **Settings:** ./tree's defaults on every node. They were the best found for each machine; other values of `--task-rows`, `--feature-parallel-rows` and `--gpu-min-rows`, and running on one socket only, were no faster (docs/PERFORMANCE.md).
 - **Same trees:** every case built the same tree on every node and backend, as in the earlier runs and on the desktop and laptop.
@@ -28,10 +29,10 @@ Training time, median of 3 runs (min–max):
 
 | | CART | C4.5 | of which C4.5 pruning |
 |---|--:|--:|--:|
-| CUDA · hopper (H100 PCIe + 32 threads) | **0.39 s** (0.38–0.40) | 1.20 s (1.05–1.21) | 0.50 s |
-| CUDA · ampere (A100 80GB PCIe + 48 threads) | 0.52 s (0.52–0.52) | **1.13 s** (1.13–1.14) | 0.40 s |
-| Parallel · epyc (EPYC 9255, 48 threads) | 1.09 s (1.07–1.10) | 1.73 s (1.72–1.73) | 0.19 s |
-| Parallel · dell (Xeon 6542Y, 48 threads) | 1.26 s (1.20–1.26) | 2.24 s (2.20–2.32) | 0.28 s |
+| CUDA · hopper (H100 PCIe + 32 threads) | **0.39 s** (0.39–0.41) | 1.21 s (1.06–1.22) | 0.53 s |
+| CUDA · ampere (A100 80GB PCIe + 48 threads) | 0.45 s (0.45–0.47) | **1.10 s** (1.06–1.14) | 0.39 s |
+| Parallel · epyc (EPYC 9255, 48 threads) | 1.07 s (1.04–1.08) | 1.69 s (1.69–1.74) | 0.19 s |
+| Parallel · dell (Xeon 6542Y, 48 threads) | 1.18 s (1.18–1.22) | 2.14 s (2.13–2.15) | 0.27 s |
 
 The trees:
 - **CART:** 1,611 nodes, depth 19, training accuracy 71.79%. It prunes in 1–2 ms: with a fixed α it does not grow what pruning would cut back.
@@ -39,16 +40,16 @@ The trees:
 
 ### Against the earlier code
 
-Before the tuning for these servers (commit ab8ebdd, the first cluster run, 2026-10-14 at 12:45; its files are no longer in the repository, commit 781f28b still has them in `bench/results/cluster-higgs/before/`), a83b6ec (2026-10-14 at 19:53), 35cf315 (2026-10-15 at 16:51), 8da0c12 (2026-10-15 at 23:23), cd18717 (2026-10-17 at 17:47), and now (CPU: 051949b; CUDA: 6f6cecb, with 051949b's times in brackets). Medians of 3.
+Before the tuning for these servers (commit ab8ebdd, the first cluster run, 2026-10-14 at 12:45; its files are no longer in the repository, commit 781f28b still has them in `bench/results/cluster-higgs/before/`), a83b6ec (2026-10-14 at 19:53), 35cf315 (2026-10-15 at 16:51), 8da0c12 (2026-10-15 at 23:23), cd18717 (2026-10-17 at 17:47), 6f6cecb for CUDA and 051949b for the CPUs (2026-10-19), and now (8b1ecd1, 2026-10-20). Medians of 3.
 
-| | CART: before → a83b6ec → 35cf315 → 8da0c12 → cd18717 → now | C4.5: before → a83b6ec → 35cf315 → 8da0c12 → cd18717 → now |
+| | CART: before → a83b6ec → 35cf315 → 8da0c12 → cd18717 → 6f6cecb/051949b → now | C4.5: before → a83b6ec → 35cf315 → 8da0c12 → cd18717 → 6f6cecb/051949b → now |
 |---|--:|--:|
-| CUDA · hopper | 1.14 → 0.44 → 0.41 → 0.41 → 0.41 → **0.39 s** (0.41) | 2.33 → 1.50 → 1.39 → 1.24 → 1.22 → **1.20 s** (1.23) |
-| CUDA · ampere | 1.34 → 0.63 → 0.64 → 0.52 → 0.56 → **0.52 s** (0.55) | 2.48 → 1.46 → 1.37 → 1.15 → 1.22 → **1.13 s** (1.19) |
-| Parallel · epyc | 1.91 → 1.07 → 1.10 → 1.09 → 1.09 → **1.09 s** | 2.43 → 1.84 → 1.82 → 1.73 → 1.74 → **1.73 s** |
-| Parallel · dell | 1.96 → 1.23 → 1.29 → 1.26 → 1.30 → **1.26 s** | 2.85 → 2.32 → 2.30 → 2.30 → 2.26 → **2.24 s** |
+| CUDA · hopper | 1.14 → 0.44 → 0.41 → 0.41 → 0.41 → 0.39 → **0.39 s** | 2.33 → 1.50 → 1.39 → 1.24 → 1.22 → 1.20 → **1.21 s** |
+| CUDA · ampere | 1.34 → 0.63 → 0.64 → 0.52 → 0.56 → 0.52 → **0.45 s** | 2.48 → 1.46 → 1.37 → 1.15 → 1.22 → 1.13 → **1.10 s** |
+| Parallel · epyc | 1.91 → 1.07 → 1.10 → 1.09 → 1.09 → 1.09 → **1.07 s** | 2.43 → 1.84 → 1.82 → 1.73 → 1.74 → 1.73 → **1.69 s** |
+| Parallel · dell | 1.96 → 1.23 → 1.29 → 1.26 → 1.30 → 1.26 → **1.18 s** | 2.85 → 2.32 → 2.30 → 2.30 → 2.26 → 2.24 → **2.14 s** |
 
-What changed is in [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md). From 051949b to 6f6cecb (CUDA rows) the hand-offs stopped page-locking the arena and the host partition works in blocks: the same trees, CART 5–7% and C4.5 2–5% faster. From cd18717 to 051949b only `--profile` (off here) and the count tables' fill changed: the same trees, every time within −3% to +1%. Since 8da0c12 the presorted columns are kept once, not twice, on every backend: a partition moves each column into a free slot (one spare slot on the GPU) instead of into a second copy. The GPU's mirror of the hand-offs to the host became a 512 MB ring.
+What changed is in [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md). From 6f6cecb/051949b to 8b1ecd1 the class counts moved to per-thread local histograms (6521330): the same trees, ampere's CART 0.52 → 0.45 s, dell 6–7% faster (CART 1.26 → 1.18 s, C4.5 2.24 → 2.14 s), the others within 3%. From 051949b to 6f6cecb (CUDA rows) the hand-offs stopped page-locking the arena and the host partition works in blocks: the same trees, CART 5–7% and C4.5 2–5% faster. From cd18717 to 051949b only `--profile` (off here) and the count tables' fill changed: the same trees, every time within −3% to +1%. Since 8da0c12 the presorted columns are kept once, not twice, on every backend: a partition moves each column into a free slot (one spare slot on the GPU) instead of into a second copy. The GPU's mirror of the hand-offs to the host became a 512 MB ring.
 - **GPU memory halved** with the same trees: 7.1–7.2 → 3.3 GiB (CART), 8.3 → 4.4–4.5 GiB (C4.5), Memory below.
 - **The times barely moved,** except ampere (CART 0.52 → 0.56 s, C4.5 1.15 → 1.22 s). A same-job comparison on ampere, the old and the new binary interleaved, 5 runs each (`~/vram-dt/ab.sh`), gave 0.50 → 0.51 s (CART) and 1.19 → 1.16 s (C4.5): most of the gap is the run-to-run drift between days, not the change.
 - **C4.5's presort** got faster on both GPUs (hopper 0.07 → 0.03 s, ampere 0.08 → 0.04 s): it sorts straight into the column slots.
@@ -56,10 +57,10 @@ What changed is in [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md). From 051
 
 ## Observations
 
-- **CART:** the H100 takes 0.39 s, 2.8× the fastest CPU node (epyc, 1.09 s), and the A100 0.52 s (2.1×). Only 1.2 GB of data moves to the GPU, so the GPU setup and the per-level round trips are a large part of these times.
-- **C4.5:** the GPUs gain less: 1.13 s (A100) and 1.20 s (H100), against 1.73 s on epyc's 48 cores (1.4–1.5×). The pruning runs on the host CPU and is 0.40–0.50 s of a CUDA run, 35–42%. The 1.16-million-node tree's small subtrees also grow on the host. Both GPU nodes have slower CPUs than epyc, which prunes in 0.19 s.
-- **Hopper against ampere on C4.5:** ampere is slightly ahead (1.13 against 1.20 s; 1.19 against 1.23 s at 051949b). Without the pruning hopper is faster (0.70 against 0.73 s); ampere prunes faster (0.40 against 0.50 s): the pruning runs on the host, and ampere has 48 cores, hopper 32. hopper's C4.5 also varied the most (1.05–1.21 s).
-- **CPU nodes:** dell takes 16–30% longer than epyc (CART 1.26 against 1.09 s, C4.5 2.24 against 1.73 s). How each scales with the thread count: [cluster-cpu-scaling](../cluster-cpu-scaling/BENCHMARK.md).
+- **CART:** the H100 takes 0.39 s, 2.7× the fastest CPU node (epyc, 1.07 s), and the A100 0.45 s (2.4×). Only 1.2 GB of data moves to the GPU, so the GPU setup and the per-level round trips are a large part of these times.
+- **C4.5:** the GPUs gain less: 1.10 s (A100) and 1.21 s (H100), against 1.69 s on epyc's 48 cores (1.4–1.5×). The pruning runs on the host CPU and is 0.39–0.53 s of a CUDA run, 35–44%. The 1.16-million-node tree's small subtrees also grow on the host. Both GPU nodes have slower CPUs than epyc, which prunes in 0.19 s.
+- **Hopper against ampere on C4.5:** ampere is slightly ahead (1.10 against 1.21 s; 1.13 against 1.20 s at 6f6cecb). Without the pruning hopper is faster (0.68 against 0.71 s); ampere prunes faster (0.39 against 0.53 s): the pruning runs on the host, and ampere has 48 cores, hopper 32. hopper's C4.5 also varied the most (1.06–1.22 s).
+- **CPU nodes:** dell takes 10–27% longer than epyc (CART 1.18 against 1.07 s, C4.5 2.14 against 1.69 s). How each scales with the thread count: [cluster-cpu-scaling](../cluster-cpu-scaling/BENCHMARK.md).
 - **Against the laptop and desktop** ([`pc-legion-higgs`](../pc-legion-higgs/BENCHMARK.md)): CART took 1.37 s on the RTX 5070 Laptop GPU, 3.22 s on the laptop's 20 threads and 3.47 s on the desktop's 28. That was older code (49b7f47), so it is not a like-for-like comparison; the current code was not measured there.
 - **Memory:** the same on every node of a kind.
   - Parallel: 5.6 GiB (CART) and 6.0 GiB (C4.5) peak RSS (5.7 and 6.1 GiB before). With 48 threads and 28 features the parallel backend keeps min(features − 1, threads) = 27 spare column slots, so it saves little here; with fewer threads it saves more ([cluster-cpu-scaling](../cluster-cpu-scaling/BENCHMARK.md)).

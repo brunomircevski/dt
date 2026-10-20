@@ -1,3 +1,3 @@
 run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-gpuonly-hopper-chess_10m,chess_10m,cart_full_nodepth,tree_gpu_only,1,ok,True,0.0716,0.0715,0.0723,0.07179999999999999,0.0004358898943540719,3,,1.722141977865249,782262272,782176256,782295040,102965248,17,9,4,1.0,,,953155584,0.0
-gpuonly-hopper-chess_10m,chess_10m,c45_unpruned,tree_gpu_only,1,ok,True,0.0725,0.0725,0.0725,0.0725,0.0,3,,1.7220531380735338,783302656,783245312,783306752,104005632,17,9,4,1.0,,,951058432,0.0
+gpuonly-hopper-chess_10m,chess_10m,cart_full_nodepth,tree_gpu_only,1,ok,True,0.06,0.0598,0.060399999999999995,0.060066666666666664,0.00030550504633038747,3,,1.7298670569434762,782266368,782229504,782360576,102899712,17,9,4,1.0,,,951058432,0.0
+gpuonly-hopper-chess_10m,chess_10m,c45_unpruned,tree_gpu_only,1,ok,True,0.0606,0.0606,0.0643,0.06183333333333333,0.0021361959960016124,3,,1.7107607570942491,783253504,783183872,783323136,103886848,17,9,4,1.0,,,951058432,0.0

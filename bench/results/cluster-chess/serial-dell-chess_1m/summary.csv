@@ -1,3 +1,3 @@
 run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-serial-dell-chess_1m,chess_1m,cart_full_nodepth,tree,1,ok,True,0.0742,0.06720000000000001,0.0745,0.07196666666666666,0.004130778780488406,3,1.0,0.18736269790679216,61628416,61054976,61685760,53493760,17,9,4,1.0,,,,0.0
-serial-dell-chess_1m,chess_1m,c45_unpruned,tree,1,ok,True,0.0848,0.0697,0.0852,0.0799,0.008835722947218298,3,1.0,0.198487559100613,62451712,62418944,62500864,54317056,17,9,4,1.0,,,,0.0
+serial-dell-chess_1m,chess_1m,cart_full_nodepth,tree,1,ok,True,0.07390000000000001,0.0733,0.07390000000000001,0.0737,0.00034641016151377735,3,1.0,0.18964856280945241,61657088,61587456,61661184,53145600,17,9,4,1.0,,,,0.0
+serial-dell-chess_1m,chess_1m,c45_unpruned,tree,1,ok,True,0.08170000000000001,0.08159999999999999,0.08270000000000001,0.082,0.000608276253029828,3,1.0,0.19756640493869781,62410752,62332928,62427136,53899264,17,9,4,1.0,,,,0.0

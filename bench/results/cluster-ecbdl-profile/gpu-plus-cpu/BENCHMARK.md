@@ -1,8 +1,10 @@
 # Where the training time goes: ECBDL'14 15M sample, profiled on the mordor3 cluster
 
-**Status:** one profiled run per case on 2026-10-19, commit 051949b (hopper and ampere 15:26–15:34, epyc1 15:51–15:58, each node alone, after the other cluster benchmarks of the same commit). Then the same cases without `--profile` (`plain/`, hopper and ampere 15:34–15:42, epyc1 15:58–16:04) to see what profiling costs. Every case built the same tree with and without `--profile`, on every node, and the same tree as [cluster-ecbdl](../../cluster-ecbdl/BENCHMARK.md). The first profile (2026-10-18, f77d39d) is in the git history; since then the count tables are no longer zero-filled on one thread (follow-up below).
+**Status:** one profiled run per case on 2026-10-20, each node alone and reserved whole, then the same cases without `--profile` (`plain/`) to see what profiling costs:
+- hopper and ampere at 8b1ecd1: hopper 14:09–14:16 (plain 14:16–14:24), ampere 14:14–14:21 (plain 14:21–14:28);
+- epyc1 at 1a2d9a9, which drops the datasets from the page cache before every run (`run.py --drop-cache`): 16:08–16:16 (plain 16:16–16:25). The run at 8b1ecd1 had found NUMA node 1 nearly full with our own cached CSV files, and the 48 threads' memory partly on the other socket ([cluster-ecbdl](../../cluster-ecbdl/BENCHMARK.md)).
 
-**CUDA runs rerun at 6f6cecb** (hopper and ampere, 2026-10-19 20:34–20:50, profiled then plain): the hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../../docs/PERFORMANCE.md)), on top of d9da007's block partition. The same trees. The page-locking stall is gone; hopper's C4.5 pruning, on its host CPUs, was slower that evening (22.6 s against 17.7 s at 051949b; it does not touch the changed code, see [cluster-ecbdl](../../cluster-ecbdl/BENCHMARK.md)). The epyc rows are still 051949b's.
+Every case built the same tree with and without `--profile`, on every node, and the same tree as [cluster-ecbdl](../../cluster-ecbdl/BENCHMARK.md). The earlier profiles (2026-10-18 f77d39d, 2026-10-19 051949b, and the CUDA runs at 6f6cecb, the evening of 2026-10-19) are in the git history. Since 6f6cecb the hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../../docs/PERFORMANCE.md)), and since 6521330 each thread counts the classes in its own histogram.
 
 The same CUDA cases with `--gpu-only` and one CPU thread: [gpu-only](../gpu-only/BENCHMARK.md).
 
@@ -30,9 +32,9 @@ Three protocols:
 
 **In short:**
 - On the GPU nodes, the GPU grows the tree and the CPU threads mostly wait. They grow the small subtrees the GPU hands over, in bursts after each level, and do C4.5's pruning.
-- The pruning is why C4.5 gains less from the GPU than CART. The H100 grows the C4.5 tree 2.5× faster than epyc's 48 threads, but prunes it 2.2× slower (1.7× at 051949b): the GPU nodes' host CPUs prune, and they are slower than epyc's.
+- The pruning is why C4.5 gains less from the GPU than CART. The H100 grows the C4.5 tree 2.5× faster than epyc's 48 threads, but prunes it 1.8× slower (2.2× at 6f6cecb): the GPU nodes' host CPUs prune, and they are slower than epyc's.
 - On the GPU, moving the columns (partition) is about 2/3 of the kernel time, and the split search most of the rest.
-- On epyc, the partition fused with the children's sweeps is half to two thirds of all thread time. The 48 threads are busy 96–97% of the run.
+- On epyc, the partition fused with the children's sweeps is half to two thirds of all thread time. The 48 threads are busy 97% of the run.
 
 ## The training thread's phases
 
@@ -40,22 +42,22 @@ Three protocols:
 
 | Seconds | GPU setup | upload | presort | grow | arrange rows | prune | total |
 |---|--:|--:|--:|--:|--:|--:|--:|
-| CART · hopper | 0.05 | 0.70 | 0.53 | 6.74 | – | – | 8.04 |
-| CART · ampere | 0.09 | 1.78 | 0.68 | 9.11 | – | – | 11.69 |
-| CART · epyc | – | – | 1.63 | 14.90 | – | – | 16.53 |
-| unpruned CART · hopper | 0.07 | 0.70 | 0.53 | 16.03 | – | – | 17.35 |
-| unpruned CART · ampere | 0.10 | 1.79 | 0.68 | 21.49 | – | – | 24.12 |
-| unpruned CART · epyc | – | – | 1.40 | 33.11 | – | – | 34.51 |
-| C4.5 · hopper | 0.07 | 0.70 | 0.61 | 25.70 | 1.65 | 22.62 | 51.43 |
-| C4.5 · ampere | 0.18 | 1.70 | 0.78 | 34.24 | 2.50 | 24.74 | 64.26 |
-| C4.5 · epyc | – | – | 1.90 | 65.23 | 0.48 | 10.36 | 77.99 |
+| CART · hopper | 0.04 | 0.70 | 0.53 | 6.75 | – | – | 8.03 |
+| CART · ampere | 0.04 | 1.72 | 0.68 | 9.12 | – | – | 11.59 |
+| CART · epyc | – | – | 1.39 | 14.54 | – | – | 15.93 |
+| unpruned CART · hopper | 0.05 | 0.70 | 0.53 | 15.93 | – | – | 17.24 |
+| unpruned CART · ampere | 0.05 | 1.76 | 0.68 | 21.20 | – | – | 23.75 |
+| unpruned CART · epyc | – | – | 1.39 | 32.87 | – | – | 34.26 |
+| C4.5 · hopper | 0.04 | 0.70 | 0.61 | 25.82 | 1.78 | 17.47 | 46.53 |
+| C4.5 · ampere | 0.08 | 1.71 | 0.78 | 34.12 | 2.49 | 26.01 | 65.28 |
+| C4.5 · epyc | – | – | 1.56 | 64.40 | 0.50 | 9.59 | 76.07 |
 
-(grow: the GPU levels on CUDA, with the CPU subtrees that are left after them, up to 0.14 s; the remaining up to 0.10 s, tree assembly and C4.5's collapsing, are in `profile.md`.)
+(grow: the GPU levels on CUDA, with the CPU subtrees that are left after them, up to 0.13 s; the remaining up to 0.12 s, tree assembly and C4.5's collapsing, are in `profile.md`.)
 
-- **Growing: the H100 is 2.2× (CART), 2.1× (unpruned CART) and 2.5× (C4.5) faster than epyc**, the A100 1.6×, 1.5× and 1.9×. The GPU presorts in 0.53–0.78 s, against epyc's 1.4–1.9 s.
-- **C4.5's pruning takes 47% of a hopper run and 42% of an ampere run** (24.3 and 27.2 s with arranging the rows; hopper 18.8 s at 051949b), against 14% on epyc (10.8 s). It runs on the host CPUs. Their thread time for the same pruning: epyc 489 thread-s, hopper 745 (580 at 051949b), ampere 1,246; all three keep most of their threads busy. So an ampere thread (Zen 2, DDR4) prunes 2.5× slower than an epyc thread. **That is why C4.5 on the H100 is only 1.5× epyc (1.7× at 051949b), against 2.1× for CART.**
-- **The upload of the data** (37.9 GB of float32) takes 0.70 s on hopper (54 GB/s, PCIe 5) and 1.7–1.8 s on ampere (22 GB/s, PCIe 4): 9% and 15% of pruned CART.
-- **No page-locking stall any more.** At 051949b the whole 75 GB hand-off arena was page-locked after the presort, and `cudaHostRegister` held the CUDA driver's lock 1.2 s (hopper) to 1.8–1.9 s (ampere), in level 0 of unpruned CART and the setup of C4.5 (C4.5's GPU setup 1.25 and 2.02 s, now 0.07 and 0.18 s). Now the hand-offs go through page-locked buffers into a pageable arena ([docs/PERFORMANCE.md](../../../../docs/PERFORMANCE.md)): unpruned CART 18.48 → 17.35 s (hopper) and 25.67 → 24.12 s (ampere).
+- **Growing: the H100 is 2.2× (CART), 2.1× (unpruned CART) and 2.5× (C4.5) faster than epyc**, the A100 1.6×, 1.6× and 1.9×. The GPU presorts in 0.53–0.78 s, against epyc's 1.39–1.56 s (1.4–1.9 s at 051949b, before the page cache was dropped).
+- **C4.5's pruning takes 41% of a hopper run and 44% of an ampere run** (19.3 and 28.5 s with arranging the rows; 24.3 and 27.2 s at 6f6cecb), against 13% on epyc (10.1 s). It runs on the host CPUs. Their thread time for the same pruning: epyc 450 thread-s, hopper 587 (745 at 6f6cecb), ampere 1,305; all three keep most of their threads busy. So an ampere thread (Zen 2, DDR4) prunes 2.9× slower than an epyc thread. **That is why C4.5 on the H100 is only 1.6× epyc, against 2.0× for CART.** Hopper's pruning was slow on the evening of 2026-10-19 (22.6 s); 17.5 s now is back to 051949b's 17.7 s.
+- **The upload of the data** (37.9 GB of float32) takes 0.70 s on hopper (54 GB/s, PCIe 5) and 1.71–1.76 s on ampere (22 GB/s, PCIe 4): 9% and 15% of pruned CART.
+- **No page-locking stall any more.** At 051949b the whole 75 GB hand-off arena was page-locked after the presort, and `cudaHostRegister` held the CUDA driver's lock 1.2 s (hopper) to 1.8–1.9 s (ampere), in level 0 of unpruned CART and the setup of C4.5 (C4.5's GPU setup 1.25 and 2.02 s, now 0.04 and 0.08 s). Since 6f6cecb the hand-offs go through page-locked buffers into a pageable arena ([docs/PERFORMANCE.md](../../../../docs/PERFORMANCE.md)): unpruned CART 18.48 → 17.24 s (hopper) and 25.67 → 23.75 s (ampere).
 
 ## What the CPU threads do
 
@@ -63,8 +65,8 @@ Three protocols:
 
 Each bar is threads × training time. The training thread counts as busy while it drives the GPU, including waiting for it ("driving the GPU").
 
-- **On the GPU nodes the CPU threads are mostly idle:** 91–94% of the thread time for pruned CART, where only the training thread works (it drives the GPU); 62–70% for unpruned CART, whose pool grows the 49,187 small subtrees the GPU hands over (5.9M rows) and copies the hand-offs into the arena; 39–48% for C4.5, of which most of the busy time is the pruning (40–45% of all thread time).
-- **On epyc the threads are busy 96–97% of the run.** The partition fused with the children's sweeps takes 69% of the thread time (CART), 49% (unpruned CART) and 65% (C4.5). The separate sweeps and partitions take 17%, 42% and 15%, the presort 10%, 4% and 2%.
+- **On the GPU nodes the CPU threads are mostly idle:** 93–94% of the thread time for pruned CART, where only the training thread works (it drives the GPU); 64–70% for unpruned CART, whose pool grows the 49,187 small subtrees the GPU hands over (5.9M rows) and copies the hand-offs into the arena; 44–47% for C4.5, of which most of the busy time is the pruning (39–42% of all thread time).
+- **On epyc the threads are busy 96–97% of the run.** The partition fused with the children's sweeps takes 71% of the thread time (CART), 50% (unpruned CART) and 66% (C4.5). The separate sweeps and partitions take 17%, 43% and 15%, the presort 9%, 4% and 2%.
 
 ## What the GPU runs
 
@@ -72,18 +74,18 @@ Each bar is threads × training time. The training thread counts as busy while i
 
 | Busy seconds | kernels: presort | split search | partition | other | copies: upload | hand-off | other | GPU busy |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|
-| CART · hopper | 0.53 | 2.04 | 4.47 | – | 0.69 | 0.04 | 0.07 | 88% |
-| CART · ampere | 0.68 | 2.59 | 6.24 | – | 1.77 | 0.10 | 0.07 | 81% |
-| unpruned CART · hopper | 0.53 | 4.91 | 9.05 | 0.05 | 0.69 | 0.69 | 0.38 | 84% |
-| unpruned CART · ampere | 0.68 | 6.14 | 12.73 | 0.06 | 1.78 | 1.59 | 0.46 | 81% |
-| C4.5 · hopper | 0.60 | 7.52 | 16.32 | 0.07 | 0.69 | 0.93 | 0.27 | 48% |
-| C4.5 · ampere | 0.77 | 9.50 | 22.83 | 0.08 | 1.70 | 2.39 | 0.22 | 52% |
+| CART · hopper | 0.53 | 2.03 | 4.45 | – | 0.69 | 0.04 | 0.08 | 87% |
+| CART · ampere | 0.68 | 2.59 | 6.24 | – | 1.71 | 0.10 | 0.09 | 82% |
+| unpruned CART · hopper | 0.53 | 4.92 | 9.07 | 0.05 | 0.69 | 0.67 | 0.34 | 85% |
+| unpruned CART · ampere | 0.68 | 6.13 | 12.73 | 0.06 | 1.75 | 1.62 | 0.47 | 83% |
+| C4.5 · hopper | 0.60 | 7.58 | 16.43 | 0.07 | 0.69 | 0.93 | 0.24 | 53% |
+| C4.5 · ampere | 0.77 | 9.49 | 22.82 | 0.08 | 1.71 | 2.42 | 0.25 | 51% |
 
 (GPU busy: share of the training time with a kernel running.)
 
 - **The partition (marking the rows that go left, moving every column) is 62–69% of the kernel time**, the split search (histograms, prefix sums, exact cut scans) 27–34%. The A100 takes 1.4× the H100's time for the partition and 1.25–1.3× for the search.
-- **The kernels run 88% (H100) and 81% (A100) of pruned CART**, 81–84% of unpruned CART (76–79% with 051949b's page-locking stall), half of C4.5: the GPU is idle while the host prunes.
-- **Copies overlap with the kernels** (a separate copy stream) and are short: hand-offs move 29.8 GB to the host for unpruned CART and 44.6 GB for C4.5, in 0.69 and 0.93 s on hopper and 1.6 and 2.4 s on ampere, through two 128 MB page-locked buffers on two copy streams. The upload of the data comes before the kernels.
+- **The kernels run 87% (H100) and 82% (A100) of pruned CART**, 83–85% of unpruned CART (76–79% with 051949b's page-locking stall), half of C4.5: the GPU is idle while the host prunes.
+- **Copies overlap with the kernels** (a separate copy stream) and are short: hand-offs move 29.8 GB to the host for unpruned CART and 44.6 GB for C4.5, in 0.67 and 0.93 s on hopper and 1.6 and 2.4 s on ampere, through two 128 MB page-locked buffers on two copy streams. The upload of the data comes before the kernels.
 - **GPU levels:** 53 (CART), 91 (unpruned CART), 272 (C4.5). Hand-offs: 236 nodes and 0.3M rows (CART), 49,187 nodes and 5.9M rows (unpruned CART), 21,972 nodes and 8.8M rows (C4.5).
 
 ## Timelines
@@ -96,14 +98,14 @@ One chart per protocol, the three runs one above the other on the same time axis
 
 - **CUDA: the CPU pool works in bursts**, one per GPU level: each level's hand-offs are grown on all threads in a fraction of the level's time, then the pool waits for the next level. The CPU side has room for more hand-offs.
 - **The page-locking stall of 051949b** (level 0 of unpruned CART, the setup of C4.5; a gap in the kernels while two threads page-locked) is gone. The pool's threads now also copy the hand-offs out of the page-locked buffers ("feed").
-- **epyc: short single-thread stretches.** In the first profile (f77d39d), 0.27 s after the presort: the tables of x·log x and 1/x for every count up to the row count (2 × 15M doubles) were zero-filled on one thread (`std::vector::resize`) before the pool filled them (`fillCountTables`). Now the pool writes them first, and fewer than half the threads are busy for only 0.03 s after the presort (follow-up below). The last 0.5 s of the C4.5 grow run on 1–10 threads (the last deep subtrees). Arranging the rows by leaf now takes 0.48 s, 0.02 s of it on one thread (0.78 and 0.34 s in the first profile; one run each, not looked into).
+- **epyc: short single-thread stretches.** In the first profile (f77d39d), 0.27 s after the presort: the tables of x·log x and 1/x for every count up to the row count (2 × 15M doubles) were zero-filled on one thread (`std::vector::resize`) before the pool filled them (`fillCountTables`). Now the pool writes them first, and at 051949b fewer than half the threads were busy for only 0.03 s after the presort (follow-up below). The last 0.5 s of the C4.5 grow ran on 1–10 threads (the last deep subtrees). Arranging the rows by leaf takes 0.50 s (0.48 s at 051949b, 0.78 and 0.34 s in the first profile; one run each, not looked into).
 
 ## Follow-up: the two findings (2026-10-18/19)
 
 - **The zero-filled count tables are fixed:** they are no longer zero-filled (`CountTable` in `src/build/cpu_builder.h`), so the pool writes them first.
   - On epyc1 (ECBDL 15M, parallel, 48 threads) the three trees (CART α 1e-4, unpruned CART, C4.5) are byte-identical before and after.
   - Train totals are unchanged within noise (unpruned CART 36.7/35.9 → 35.0/35.4 s, C4.5 78.8 → 79.3 s).
-  - In this profile (051949b) the stretch after the presort on epyc, where fewer than half the threads work, shrank from 0.27 to 0.03 s (C4.5). The cluster benchmarks of 051949b built the same trees as cd18717 everywhere, within −5% to +5% of its times.
+  - In the 051949b profile the stretch after the presort on epyc, where fewer than half the threads work, shrank from 0.27 to 0.03 s (C4.5). The cluster benchmarks of 051949b built the same trees as cd18717 everywhere, within −5% to +5% of its times.
 - **The arena's page-locking was not changed in this follow-up.**
   - **Huge pages are already in use.** The arena comes from `new`, which puts every block of 2 MiB or more on transparent huge pages (`src/core/memory.cpp`). On hopper all 75.7 GB of it was on huge pages; `--gpu-profile` now prints this after the touch.
   - **Ampere:** registering 75 GB takes 1.8–1.9 s in ./tree, as in a standalone `cudaHostRegister` of a touched huge-page buffer. That is the cost of registration.
@@ -115,17 +117,17 @@ One chart per protocol, the three runs one above the other on the same time axis
 
 | Train total (s) | profiled | plain | difference |
 |---|--:|--:|--:|
-| CART · hopper | 8.04 | 7.99 | +0.6% |
-| CART · ampere | 11.69 | 11.66 | +0.3% |
-| CART · epyc | 16.53 | 16.81 | −1.7% |
-| unpruned CART · hopper | 17.35 | 17.40 | −0.3% |
-| unpruned CART · ampere | 24.12 | 23.91 | +0.9% |
-| unpruned CART · epyc | 34.51 | 35.35 | −2.4% |
-| C4.5 · hopper | 51.43 | 51.11 | +0.6% |
-| C4.5 · ampere | 64.26 | 65.41 | −1.8% |
-| C4.5 · epyc | 77.99 | 79.29 | −1.6% |
+| CART · hopper | 8.03 | 8.00 | +0.4% |
+| CART · ampere | 11.59 | 11.69 | −0.9% |
+| CART · epyc | 15.93 | 15.92 | +0.1% |
+| unpruned CART · hopper | 17.24 | 17.18 | +0.3% |
+| unpruned CART · ampere | 23.75 | 23.72 | +0.1% |
+| unpruned CART · epyc | 34.26 | 34.26 | 0.0% |
+| C4.5 · hopper | 46.53 | 46.34 | +0.4% |
+| C4.5 · ampere | 65.28 | 65.61 | −0.5% |
+| C4.5 · epyc | 76.07 | 76.08 | 0.0% |
 
-Within −2.4% to +0.9%, one run each (−2.4% to +1.8% at 051949b, −1.5% to +2.0% in the first profile): as far as one run can tell, profiling costs nothing measurable. The peak RAM differs by under 0.1%, the VRAM by at most 32 MB (hopper, CART).
+Within −0.9% to +0.4%, one run each (−2.4% to +0.9% at 6f6cecb, −1.5% to +2.0% in the first profile): as far as one run can tell, profiling costs nothing measurable. The peak RAM differs by under 0.1%, the VRAM by at most 32 MB (ampere, unpruned CART).
 
 ## What is measured
 

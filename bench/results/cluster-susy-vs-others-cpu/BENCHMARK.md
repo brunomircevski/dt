@@ -2,9 +2,11 @@
 
 **Status:** run on 2026-10-16 on mordor3's epyc1 and dell1 (every tool, 3 runs per case, commit 3cbdb6f) and on the desktop (./tree only, 3 runs per case; the other tools' rows are the desktop's runs of 2026-10-09, one run each; ./tree's rows: see the rerun below). Results at the end; files in `pc/`, `epyc/`, `dell/`.
 
-**./tree rerun again on 2026-10-19 on epyc1 and dell1** (`run.sh <machine> -t -m 3`, commit 051949b: cd18717 plus `./tree --profile` and the count tables filled without a zero-fill on one thread; epyc 17:02, dell 17:23). The epyc and dell ./tree rows are from this rerun; the desktop's stay from 2026-10-17 (cd18717). cd18717 → 051949b, median of 3: CART one thread 5.01 → 4.93 s (epyc), 6.80 → 6.84 s (dell); C4.5 6.38 → 6.39 s, 8.93 → 9.04 s; CART on every CPU 0.47 → 0.49 s, 0.48 → 0.49 s; C4.5 0.63 → 0.57 s, 0.70 → 0.70 s. The same trees and peak RSS (within 0.02 GiB).
+**./tree rerun a third time on 2026-10-20 on epyc1 and dell1** (`run.sh <machine> -t -m 3`, commit 8b1ecd1: 051949b plus each thread counting the classes in its own histogram (6521330) and the GPU hand-off changes; epyc 15:13, dell 16:13, each job alone on its node). The epyc and dell ./tree rows are from this rerun. 051949b → 8b1ecd1, median of 3: CART one thread 4.93 → 4.89 s (epyc), 6.84 → 6.75 s (dell); C4.5 6.39 → 6.42 s, 9.04 → 8.94 s; CART on every CPU 0.49 → 0.49 s, 0.49 → 0.50 s; C4.5 0.57 → 0.65 s (+14%), 0.70 → 0.75 s (+8%). The same trees and peak RSS (within 0.01 GiB). The C4.5 all-thread runs vary most from run to run (epyc 0.54–0.66 s now, 0.54–0.67 s at 051949b; dell 0.70–0.81 s), so the two medians are within each other's range. Unlike the cluster jobs (`job.sh`), `run.sh` does not drop the datasets from the page cache (1a2d9a9).
 
-**./tree rerun on 2026-10-17 on epyc1, dell1 and the desktop** (`run.sh <machine> -t -m 3`, commit cd18717; epyc 19:27, dell 20:00, desktop 20:16): the presorted columns are kept once, with one spare column slot on one thread and min(features − 1, threads) on all of them ([docs/CPU.md](../../../docs/CPU.md)). Every ./tree row of `pc/` is from that rerun, those of `epyc/` and `dell/` from the 2026-10-19 one (`machine.json` → `tree_rerun`), every other tool's row from the runs above. Before (the one-thread rows of the serial rerun on 3bd3a46, the all-thread rows of 3cbdb6f, the desktop's of 45cd3c3) → after, median of 3: CART one thread 4.98 → 5.01 s (epyc), 6.84 → 6.80 s (dell), 4.53 → 4.44 s (desktop); C4.5 6.77 → 6.38 s, 9.06 → 8.93 s, 5.90 → 5.84 s; CART on every CPU 0.49 → 0.47 s, 0.56 → 0.48 s, 0.80 → 0.79 s (desktop, 28 threads); C4.5 0.61 → 0.63 s, 0.72 → 0.70 s, 1.19 → 1.18 s. Peak RSS on one thread 1.61 → 1.04 GiB (CART) and 1.77 → 1.20 GiB (C4.5) on all three machines, on every CPU 1.62–1.63 → 1.59 GiB and 1.87–1.89 → 1.85–1.87 GiB. The same trees.
+**./tree rerun again on 2026-10-19 on epyc1 and dell1** (`run.sh <machine> -t -m 3`, commit 051949b: cd18717 plus `./tree --profile` and the count tables filled without a zero-fill on one thread; epyc 17:02, dell 17:23). The desktop's ./tree rows stay from 2026-10-17 (cd18717). cd18717 → 051949b, median of 3: CART one thread 5.01 → 4.93 s (epyc), 6.80 → 6.84 s (dell); C4.5 6.38 → 6.39 s, 8.93 → 9.04 s; CART on every CPU 0.47 → 0.49 s, 0.48 → 0.49 s; C4.5 0.63 → 0.57 s, 0.70 → 0.70 s. The same trees and peak RSS (within 0.02 GiB).
+
+**./tree rerun on 2026-10-17 on epyc1, dell1 and the desktop** (`run.sh <machine> -t -m 3`, commit cd18717; epyc 19:27, dell 20:00, desktop 20:16): the presorted columns are kept once, with one spare column slot on one thread and min(features − 1, threads) on all of them ([docs/CPU.md](../../../docs/CPU.md)). Every ./tree row of `pc/` is from that rerun, those of `epyc/` and `dell/` from the 2026-10-20 one (`machine.json` → `tree_rerun`), every other tool's row from the runs above. Before (the one-thread rows of the serial rerun on 3bd3a46, the all-thread rows of 3cbdb6f, the desktop's of 45cd3c3) → after, median of 3: CART one thread 4.98 → 5.01 s (epyc), 6.84 → 6.80 s (dell), 4.53 → 4.44 s (desktop); C4.5 6.77 → 6.38 s, 9.06 → 8.93 s, 5.90 → 5.84 s; CART on every CPU 0.49 → 0.47 s, 0.56 → 0.48 s, 0.80 → 0.79 s (desktop, 28 threads); C4.5 0.61 → 0.63 s, 0.72 → 0.70 s, 1.19 → 1.18 s. Peak RSS on one thread 1.61 → 1.04 GiB (CART) and 1.77 → 1.20 GiB (C4.5) on all three machines, on every CPU 1.62–1.63 → 1.59 GiB and 1.87–1.89 → 1.85–1.87 GiB. The same trees.
 
 ![SUSY on three machines: training time, peak memory and the trees](chart.png)
 
@@ -149,40 +151,40 @@ No tool is tuned to match another tool's tree size; each reports the tree it bui
 | Java | OpenJDK 17.0.20.1 | OpenJDK 17.0.18 (conda-forge) | the same |
 
 - **Every case** is a fresh process measuring time and memory together; each repetition runs the cases in a new random order. `OMP/OPENBLAS/MKL_NUM_THREADS=1` for every process. Timeout 1 hour per process (none was reached).
-- **Load:** the servers' jobs own their node (`--exclusive`), load average 0.3–0.4 at the start. The ./tree reruns started at 34–36 (2026-10-17) and 19–20 (2026-10-19): the one-minute average still counted the previous job on the node (a ./tree benchmark that had just ended); nothing else ran. The desktop's ./tree rerun started at load 1.0 (the desktop session and a browser were open, nothing else ran); its other tools ran on 2026-10-09 at load 1.2–4.2.
+- **Load:** the servers' jobs own their node (`--exclusive`), load average 0.3–0.4 at the start. The ./tree reruns started at 34–36 (2026-10-17), 19–20 (2026-10-19) and 7–20 (2026-10-20): the one-minute average still counted the previous job on the node (a ./tree benchmark that had just ended); nothing else ran. The desktop's ./tree rerun started at load 1.0 (the desktop session and a browser were open, nothing else ran); its other tools ran on 2026-10-09 at load 1.2–4.2.
 
 ## Results
 
-Run on 2026-10-16, ./tree's rows rerun on 2026-10-17 (desktop, cd18717) and 2026-10-19 (epyc and dell, 051949b; above). Training time is the median of 3 runs (the desktop's scikit-learn, rpart, J48 and YaDT: one run, 2026-10-09), "×" the ratio to ./tree on the same machine and thread count; peak RSS is the median of the same runs.
+Run on 2026-10-16, ./tree's rows rerun on 2026-10-17 (desktop, cd18717) and 2026-10-20 (epyc and dell, 8b1ecd1; above). Training time is the median of 3 runs (the desktop's scikit-learn, rpart, J48 and YaDT: one run, 2026-10-09), "×" the ratio to ./tree on the same machine and thread count; peak RSS is the median of the same runs.
 
 **CART, one thread:** training time (× ./tree) · peak RSS
 
 | Implementation | pc | epyc | dell |
 |---|--:|--:|--:|
-| **./tree** | 4.44 s · 1.04 GiB | 4.93 s · 1.04 GiB | 6.84 s · 1.04 GiB |
-| scikit-learn | 412 s (93×) · 0.65 GiB | 499 s (101×) · 0.64 GiB | 546 s (80×) · 0.64 GiB |
-| rpart | 362 s (81×) · 3.55 GiB | 840 s (170×) · 3.55 GiB | 900 s (132×) · 3.55 GiB |
+| **./tree** | 4.44 s · 1.04 GiB | 4.89 s · 1.04 GiB | 6.75 s · 1.04 GiB |
+| scikit-learn | 412 s (93×) · 0.65 GiB | 499 s (102×) · 0.64 GiB | 546 s (81×) · 0.64 GiB |
+| rpart | 362 s (81×) · 3.55 GiB | 840 s (172×) · 3.55 GiB | 900 s (133×) · 3.55 GiB |
 
 **CART, every CPU (pc 28, epyc 48, dell 48 threads):** training time (× ./tree) · peak RSS
 
 | Implementation | pc | epyc | dell |
 |---|--:|--:|--:|
-| **./tree** | 787 ms · 1.59 GiB | 487 ms · 1.59 GiB | 491 ms · 1.59 GiB |
+| **./tree** | 787 ms · 1.59 GiB | 486 ms · 1.59 GiB | 502 ms · 1.59 GiB |
 
 **C4.5, one thread:** training time (× ./tree) · peak RSS
 
 | Implementation | pc | epyc | dell |
 |---|--:|--:|--:|
-| **./tree** | 5.84 s · 1.20 GiB | 6.39 s · 1.20 GiB | 9.04 s · 1.20 GiB |
-| Weka J48 | 829 s (142×) · 11.0 GiB | 855 s (134×) · 9.46 GiB | 1337 s (148×) · 9.46 GiB |
+| **./tree** | 5.84 s · 1.20 GiB | 6.42 s · 1.20 GiB | 8.94 s · 1.20 GiB |
+| Weka J48 | 829 s (142×) · 11.0 GiB | 855 s (133×) · 9.46 GiB | 1337 s (150×) · 9.46 GiB |
 | YaDT | 126 s (22×) · 3.32 GiB | 179 s (28×) · 3.33 GiB | 215 s (24×) · 3.33 GiB |
 
 **C4.5, every CPU (pc 28, epyc 48, dell 48 threads):** training time (× ./tree) · peak RSS
 
 | Implementation | pc | epyc | dell |
 |---|--:|--:|--:|
-| **./tree** | 1.18 s · 1.85 GiB | 575 ms · 1.85 GiB | 699 ms · 1.86 GiB |
-| YaDT | 33.5 s (28×) · 4.68 GiB | 31.8 s (55×) · 5.52 GiB | 30.9 s (44×) · 5.59 GiB |
+| **./tree** | 1.18 s · 1.85 GiB | 654 ms · 1.86 GiB | 753 ms · 1.86 GiB |
+| YaDT | 33.5 s (28×) · 4.68 GiB | 31.8 s (49×) · 5.52 GiB | 30.9 s (41×) · 5.59 GiB |
 
 **The trees** are the same on every machine and thread count:
 
@@ -197,9 +199,9 @@ Run on 2026-10-16, ./tree's rows rerun on 2026-10-17 (desktop, cd18717) and 2026
 
 **Reading the results**
 
-- **Speed, one thread:** ./tree is 80–101× faster than scikit-learn, 81–170× faster than rpart, 134–148× faster than J48 and 22–28× faster than YaDT.
-- **Speed, every CPU:** ./tree builds the CART tree in 0.49 s (epyc and dell) and 0.79 s (pc), the C4.5 tree in 0.57, 0.70 and 1.18 s; YaDT needs 31–34 s, 28–55× longer.
-- **Speedup over one thread:** ./tree 10.1–11.1× on epyc, 12.9–13.9× on dell, 5.0–5.6× on the desktop; YaDT 5.6×, 7.0× and 3.8×. Dell's larger speedups come from its slower single thread (./tree 1.4× slower than on epyc), not from a fast parallel run: epyc is the fastest machine in parallel.
+- **Speed, one thread:** ./tree is 81–102× faster than scikit-learn, 81–172× faster than rpart, 133–150× faster than J48 and 22–28× faster than YaDT.
+- **Speed, every CPU:** ./tree builds the CART tree in 0.49–0.50 s (epyc and dell) and 0.79 s (pc), the C4.5 tree in 0.65, 0.75 and 1.18 s; YaDT needs 31–34 s, 28–49× longer.
+- **Speedup over one thread:** ./tree 9.8–10.1× on epyc, 11.9–13.4× on dell, 5.0–5.6× on the desktop; YaDT 5.6×, 7.0× and 3.8×. Dell's larger speedups come from its slower single thread (./tree 1.4× slower than on epyc), not from a fast parallel run: epyc is the fastest machine in parallel.
 - **Machines, one thread:** the desktop is the fastest for ./tree (4.4–5.8 s), epyc 1.1× slower (4.9–6.4 s); dell is 1.4× slower than epyc for ./tree, 1.1–1.6× for the other tools.
 - **rpart is 2.3–2.5× slower on the servers** (840 and 900 s against 362 s), much more than the other tools (scikit-learn 1.2–1.3×). Not because of its build: the servers' conda-forge R, with rpart built the same way, timed on the desktop's CPU 2 on 2026-10-17 (a check outside the benchmark, one run each, governor `powersave`), took 410 s against 368 s for Arch's R: 12% slower, the same tree. So the servers' single core is about 2× slower for rpart, while it is within 1.1× of the desktop for ./tree (epyc) — probably because rpart is bound by memory latency, which is higher on the two-socket servers, and ./tree by bandwidth.
 - **Memory:** the other tools' peaks are the same on every machine for one thread, except J48, whose heap fills to 9.5 GiB on the servers and 11.0 GiB on the desktop (the same 15 GB cap). scikit-learn has the lowest peak for CART (0.65 GiB against ./tree's 1.04 GiB): ./tree keeps every feature presorted, one copy plus a spare column (the same 1.04 GiB on the desktop). For C4.5 ./tree needs the least (1.20 GiB on every machine, against YaDT's 3.3 and J48's 9.5–11 GiB); in parallel 1.6–1.9 GiB against YaDT's 4.7–5.6 GiB.

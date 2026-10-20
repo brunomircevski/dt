@@ -1,6 +1,6 @@
 ## cuda-ampere-chess_100m
 
-**cuda-ampere-chess_100m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree 6f6cecb8a9b8, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**cuda-ampere-chess_100m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree 8b1ecd151dd2, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 641 MiB
 
@@ -10,10 +10,10 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 641 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 190 ms | 184 ms–205 ms |  | 3.05 GiB (+ GPU 3.41 GiB) | 2.43 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree CUDA | 131 ms | 128 ms–131 ms |  | 3.05 GiB (+ GPU 3.41 GiB) | 2.43 GiB | 17 | 9 | 4 | 100.00% |  |
 
 **C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows** (`c45_unpruned`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 205 ms | 201 ms–208 ms |  | 3.05 GiB (+ GPU 3.41 GiB) | 2.43 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree CUDA | 136 ms | 132 ms–137 ms |  | 3.05 GiB (+ GPU 3.41 GiB) | 2.43 GiB | 17 | 9 | 4 | 100.00% |  |
