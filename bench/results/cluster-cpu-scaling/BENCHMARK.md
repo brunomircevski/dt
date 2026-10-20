@@ -29,7 +29,7 @@ bench/cluster/scaling.sh -m 3 -d airline   # airline
 
 So on epyc1 up to 24 threads stay on one socket, and the second socket joins from 28 on. On dell1 every thread count from 2 on is spread over both sockets.
 
-All four charts in one image (HIGGS above airline, epyc left, dell right):
+All four charts in one image (HIGGS above airline, epyc left, dell right). Threads and time are on log axes, so ideal scaling (dotted: the 1-thread time divided by the threads) is a straight line:
 
 ![Thread scaling on epyc1 and dell1, HIGGS and airline](chart.png)
 

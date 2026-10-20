@@ -19,9 +19,10 @@ prepared files in plan.json) or did not build the same trees.
 run and a dot per run, and writes their min and max.
 
 --log draws the time and memory axes on a log scale (sizes that differ by
-orders of magnitude, e.g. serial against CUDA) and writes every case's recorded
-pruning time next to its bar (if any), also for the unpruned protocols (where it
-is only C4.5's collapse of useless splits) and below 1%.
+orders of magnitude, e.g. serial against CUDA), the default when the slowest
+bar takes 10 times the fastest or more (--linear: never), and writes every
+case's recorded pruning time next to its bar (if any), also for the unpruned
+protocols (where it is only C4.5's collapse of useless splits) and below 1%.
 
 --more adds the cases of later runs kept in another directory under the same
 run names (e.g. cluster-ecbdl/unpruned/cpu-epyc-ecbdl next to
@@ -198,8 +199,12 @@ def main():
                         help="draw each time bar's min-max whisker and every run as a dot")
     parser.add_argument("--no-vram", action="append", default=[], metavar="RUN",
                         help="a run name whose VRAM sample is wrong: drawn without VRAM (repeatable)")
-    parser.add_argument("--log", action="store_true",
-                        help="log-scale axes, and every case's recorded pruning time")
+    scale = parser.add_mutually_exclusive_group()
+    scale.add_argument("--log", action="store_true", default=None,
+                       help="log-scale axes, and every case's recorded pruning time "
+                       "(default: when the slowest bar takes 10× the fastest or more)")
+    scale.add_argument("--linear", dest="log", action="store_false",
+                       help="linear axes, however far apart the bars are")
     parser.add_argument("--more", action="append", type=Path, default=[],
                         help="a directory with later runs of the same names, e.g. other "
                         "protocols (repeatable)")
@@ -208,13 +213,14 @@ def main():
     NO_VRAM.update(args.no_vram)
     global SPREAD, LOG
     SPREAD = args.spread
-    LOG = args.log
     PROTOCOLS.clear()
     PROTOCOLS.update((p, TITLES[p]) for p in args.protocols.split(","))
     runs = list(args.reference) + list(args.runs)
     out = args.out or args.runs[0] / "chart.png"
     dataset, meta = check_same(runs)
     entries = [b for run in runs for b in bars(run, run in args.reference)]
+    times = [e["time"] for e in entries]
+    LOG = args.log if args.log is not None else max(times) >= 10 * min(times)
     for protocol in PROTOCOLS:
         trees = {e["tree"][:2] for e in entries if e["protocol"] == protocol}
         if len(trees) > 1:

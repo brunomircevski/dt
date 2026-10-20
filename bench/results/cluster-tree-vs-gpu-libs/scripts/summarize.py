@@ -19,7 +19,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.ticker import FuncFormatter  # noqa: E402
+from matplotlib.ticker import FuncFormatter, NullFormatter  # noqa: E402
 
 DATASETS = {"higgs": "HIGGS: 10,500,000 training rows, 28 features",
             "airline": "airline: 114,569,017 training rows, 13 features",
@@ -138,6 +138,8 @@ def chart(rows, dataset, path):
         mem = fig.add_subplot(grid[row_index, 1], sharey=ax)
         info = fig.add_subplot(grid[row_index, 2], sharey=ax)
         tmax = max(r["median_s"] for r in cr)
+        tmin = min(r["median_s"] for r in cr)
+        log = tmax >= 10 * tmin  # log time axis when the slowest bar is 10x the fastest
         mmax = max(r["gpu_peak_mib"] for r in cr) / 1024
         for i, node in enumerate(NODES):
             got = {r["impl"]: r for r in cr if r["node"] == node}
@@ -147,13 +149,18 @@ def chart(rows, dataset, path):
                     continue
                 v = got[k]["median_s"]
                 ax.barh(p, v, height=0.38, color=COLORS[node])
-                ax.text(v + tmax * 0.012, p, f"{v:.2f} s", va="center", fontsize=8.5, color=INK,
+                ax.text(v * 1.05 if log else v + tmax * 0.012, p, f"{v:.2f} s", va="center", fontsize=8.5, color=INK,
                         fontweight="bold" if is_tree(k) else "normal")
                 g = got[k]["gpu_peak_mib"] / 1024
                 mem.barh(p, g, height=0.34, facecolor="white", edgecolor=COLORS[node],
                          linewidth=1.6)
                 mem.text(g + mmax * 0.02, p, f"{g:.2f} GiB", va="center", fontsize=8.5, color=INK)
-        ax.set_xlim(0, tmax * 1.12)
+        if log:
+            ax.set_xscale("log")
+            ax.set_xlim(10 ** np.floor(np.log10(tmin)), tmax * 2.2)  # room for the labels
+            ax.xaxis.set_minor_formatter(NullFormatter())
+        else:
+            ax.set_xlim(0, tmax * 1.12)
         ax.set_ylim(-0.6, len(keys) - 0.4)
         ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
         style(ax)
@@ -161,7 +168,7 @@ def chart(rows, dataset, path):
         for label, k in zip(ax.get_yticklabels(), keys):
             label.set_fontweight("bold" if is_tree(k) else "normal")
             label.set_color(INK)
-        ax.set_title(f"{CASES[case]}: training time", loc="left", fontsize=11, color=INK,
+        ax.set_title(f"{CASES[case]}: training time" + (" (log scale)" if log else ""), loc="left", fontsize=11, color=INK,
                      fontweight="bold", pad=10)
         mem.set_xlim(0, mmax * 1.3)
         mem.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GiB"))
@@ -198,7 +205,7 @@ def chart(rows, dataset, path):
     fig.text(0.01, 0.012,
              f"Time: median of {run_text} runs, from host memory to the finished tree (copy to the "
              "GPU, binning or presort, growing). VRAM: peak GPU memory above idle, CUDA context and "
-             "memory pools included (nvidia-smi, every 20 ms).\n"
+             "memory pools included (nvidia-smi, every 20 ms). Time on a log axis where the slowest bar is 10x the fastest.\n"
              "Bins: the libraries split only at the edges of per-feature quantile bins; ./tree tests "
              "every distinct value. Same as ./tree: share of test rows classified as by ./tree's tree.\n"
              "C4.5: ./tree follows Quinlan's C4.5 (gain ratio, MDL-corrected thresholds, at least 2 rows "

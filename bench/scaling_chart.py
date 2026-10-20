@@ -2,6 +2,8 @@
 """Thread-scaling chart of ./tree: training time (solid lines, left axis) and peak
 memory (dashed lines, right axis) against the number of threads, one colour per
 protocol (CART, C4.5); dot = median over the runs, bar = min-max of the time.
+Threads and time on log axes, so that ideal scaling (dotted: the 1-thread time
+divided by the threads) is a straight line; memory on a linear axis.
 
 Also writes scaling.csv: one row per (protocol, threads) with the median time,
 speedup over 1 thread (serial backend), parallel efficiency and peak RSS.
@@ -21,7 +23,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
-from matplotlib.ticker import FuncFormatter  # noqa: E402
+from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter, NullLocator  # noqa: E402
 
 import benchlib as B  # noqa: E402
 from chart import GRID, INK, MUTED, NAMES  # noqa: E402
@@ -81,17 +83,21 @@ def figure(run, dataset, protocols, series, machine, out):
     meta = json.load(open(run / "plan.json"))["datasets"][dataset]
     threads = sorted({p["threads"] for points in series.values() for p in points})
     fig, ax = plt.subplots(figsize=(8.6, 5.4))
-    ax.set_xlim(0, max(threads) * 1.13)  # room for the end labels
-    ax.set_xticks(threads)
+    ax.set_xscale("log", base=2)
+    ax.set_xlim(min(threads) / 1.15, max(threads) * 1.45)  # room for the end labels
+    ax.xaxis.set_minor_locator(NullLocator())
+    ax.set_xticks([t for t in threads if t in (1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128)
+                   or t == max(threads)])
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     ax.tick_params(colors=MUTED, labelsize=8.5, length=0)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
     for side in ("left", "bottom"):
         ax.spines[side].set_color(GRID)
-    ax.grid(axis="y", color=GRID, linewidth=0.8)
+    ax.grid(axis="both", color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
     ax.set_xlabel("threads", fontsize=9, color=MUTED)
-    ax.set_title("Training time (solid, left) and peak RAM, RSS (dashed, right)", loc="left",
+    ax.set_title("Training time (solid, left, log) and peak RAM, RSS (dashed, right)", loc="left",
                  fontsize=10.5, color=INK, fontweight="bold")
     mem = ax.twinx()
     mem.tick_params(colors=MUTED, labelsize=8.5, length=0)
@@ -102,6 +108,10 @@ def figure(run, dataset, protocols, series, machine, out):
     for protocol in protocols:
         points, color = series[protocol], COLORS.get(protocol, INK)
         xs = [p["threads"] for p in points]
+        serial = next((p["time_median"] for p in points if p["threads"] == 1), None)
+        if serial:  # ideal scaling: n threads take 1/n of the serial time
+            ax.plot(xs, [serial / x for x in xs], color=color, linewidth=1, linestyle=":",
+                    alpha=0.7, zorder=1)
         ax.plot(xs, [p["time_median"] for p in points], color=color, linewidth=2, marker="o",
                 markersize=7, markeredgecolor="white", markeredgewidth=1.5, zorder=3)
         ax.vlines(xs, [p["time_min"] for p in points], [p["time_max"] for p in points],
@@ -109,7 +119,11 @@ def figure(run, dataset, protocols, series, machine, out):
         mem.plot(xs, [p["peak_rss_median"] / 1e9 for p in points], color=color, linewidth=1.6,
                  linestyle=(0, (4, 2.5)), marker="s", markersize=5, markerfacecolor="white",
                  markeredgecolor=color, markeredgewidth=1.4, zorder=3)
-    ax.set_ylim(bottom=0)
+    every = [p[k] for points in series.values() for p in points for k in ("time_min", "time_max")]
+    ax.set_yscale("log")
+    ax.set_ylim(min(every) / 1.6, max(every) * 1.4)
+    ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
+    ax.yaxis.set_minor_formatter(NullFormatter())
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
     mem.set_ylim(0, 1.15 * max(p["peak_rss_median"] for points in series.values()
                                for p in points) / 1e9)
@@ -161,9 +175,10 @@ def figure(run, dataset, protocols, series, machine, out):
     fig.text(0.08, 0.015,
              f"Dot: {runs}. 1 thread = the serial backend, more = the parallel backend;\n"
              "every thread count builds the same tree. Training time excludes reading the data;\n"
-             "peak memory is the peak RSS up to the end of training, the loaded data included.",
+             "peak memory is the peak RSS up to the end of training, the loaded data included.\n"
+             "Log axes for time and threads; dotted: ideal scaling (the 1-thread time divided by the threads).",
              fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.08, right=0.84, top=1 - 1.25 / 5.4, bottom=0.2)
+    fig.subplots_adjust(left=0.08, right=0.84, top=1 - 1.25 / 5.4, bottom=0.235)
     fig.savefig(out, dpi=150, facecolor="white")
     return out
 
