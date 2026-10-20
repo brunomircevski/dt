@@ -3,6 +3,7 @@
 **Status:** three runs per case, all on 2026-10-19.
 - **GPU runs** (hopper, ampere): rerun 20:30–20:33 with commit 6f6cecb: the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), on top of d9da007. The first GPU runs (17:34–17:42, 2a9d64e = 5058ce1, ./tree as in 051949b) built the same trees; at 1000M the H100 is now 18% (CART) and 15% (C4.5) faster, the A100 unchanged.
 - **CPU runs** (epyc, dell, dell512): rerun 19:08–19:12 with commit d9da007, which fixes a slowdown at 1000M rows ([below](#the-1000m-slowdown-and-its-fix)). The fix changes only the CPU builder for nodes of at least 2^20 rows with few columns. The CPU subtrees of a CUDA run have at most 4096 rows, so the fix cannot change the GPU runs.
+- **Serial runs** (epyc, dell; one thread): 2026-10-19, 23:01–23:21, with commit 673217f. It has the same CPU code as d9da007; the commit only adds the serial runs to `submit.sh`. [Below](#serial-one-thread).
 - **dell and dell512 at 1000M** are the 10-run medians of [the check below](#dell-against-dell512-10-runs-at-1000m), run with 41faca9 (the same CPU code as d9da007). Every other case has 3 runs.
 - **Each node ran alone** and was used whole (`--exclusive`). The four sizes ran one after another on every node, smallest first.
 - **Same trees:** every case built the same tree on every node and backend: 17 nodes (9 leaves), depth 4, 100% training accuracy, at every size. That is the exact tree of a 3×3 board.
@@ -17,7 +18,7 @@ for d in chess_1m chess_10m chess_100m chess_1b; do
 done
 ```
 
-The CPU rerun named only `cpu-epyc-$d cpu-dell-$d cpu-dell512-$d`, without `-a`.
+The CPU rerun named only `cpu-epyc-$d cpu-dell-$d cpu-dell512-$d`, without `-a`. The serial runs were submitted with `serial-epyc-$d serial-dell-$d`, after a rebuild job (`-a <build job>`).
 
 The charts are drawn as shown in the README:
 - `chart.png`: one `machines_chart.py --spread` chart per size, in a 2×2 grid. The bars are medians, the whiskers run from the fastest to the slowest run, and the dots are the single runs.
@@ -43,6 +44,8 @@ Both use the 10-run results for dell and dell512 at 1000M.
 | `cpu-epyc-*` | epyc1 | 2× EPYC 9255 (Zen 5), 48 cores | 512 GB DDR5-6400 | – | parallel (48 threads) |
 | `cpu-dell-*` | dell1 | 2× Xeon Gold 6542Y, 48 cores | 1 TB DDR5-5200 (16 × 64 GB) | – | parallel (48 threads) |
 | `cpu-dell512-*` | dell2 | the same as dell1 | 512 GB DDR5-5200 (8 × 64 GB) | – | parallel (48 threads) |
+| `serial-epyc-*` | epyc1 | as `cpu-epyc-*` | | – | serial (1 thread, the whole node reserved) |
+| `serial-dell-*` | dell1 | as `cpu-dell-*` | | – | serial (1 thread, the whole node reserved) |
 
 ## Time and memory against the rows
 
@@ -57,6 +60,8 @@ Training time (`train total`: presort and build, on CUDA also GPU setup and uplo
 | Parallel · epyc (EPYC 9255, 48 threads) | **23 ms** | 178 ms | 689 ms | 6.46 s |
 | Parallel · dell (Xeon 6542Y, 48 threads) | 78 ms | 184 ms | 1.21 s | 9.95 s |
 | Parallel · dell512 (the same, half the memory channels) | 65 ms | 250 ms | 1.32 s | 11.68 s |
+| Serial · epyc (1 thread) | 30 ms | 348 ms | 3.35 s | 99.53 s |
+| Serial · dell (1 thread) | 74 ms | 558 ms | 6.46 s | 101.78 s |
 
 | C4.5, no pruning | 1M | 10M | 100M | 1000M |
 |---|--:|--:|--:|--:|
@@ -65,12 +70,14 @@ Training time (`train total`: presort and build, on CUDA also GPU setup and uplo
 | Parallel · epyc | **24 ms** | 190 ms | 660 ms | 7.31 s |
 | Parallel · dell | 73 ms | 271 ms | 1.51 s | 12.32 s |
 | Parallel · dell512 | 71 ms | 203 ms | 1.63 s | 14.32 s |
+| Serial · epyc | 35 ms | 392 ms | 3.75 s | 103.07 s |
+| Serial · dell | 85 ms | 625 ms | 7.28 s | 110.77 s |
 
 Peak memory (the same for CART and C4.5 within 0.01 GiB):
 
 | | 1M | 10M | 100M | 1000M |
 |---|--:|--:|--:|--:|
-| RAM, CPU servers | 0.06 GiB | 0.48 GiB | 4.68 GiB | 46.70 GiB |
+| RAM, CPU servers (serial and parallel) | 0.06 GiB | 0.48 GiB | 4.68 GiB | 46.70 GiB |
 | RAM, CUDA (hopper / ampere) | 0.66 / 0.65 GiB | 0.88 / 0.87 GiB | 3.06 / 3.05 GiB | 24.87 / 24.86 GiB |
 | VRAM, GPU 0 (hopper / ampere) | 0.53 / 0.49 GiB | 0.89 / 0.85 GiB | 3.44 / 3.41 GiB | 25.43 / 25.42 GiB |
 
@@ -82,6 +89,30 @@ Peak memory (the same for CART and C4.5 within 0.01 GiB):
 - **epyc is 1.5–2.3× faster than dell** from 100M rows on, as on the other datasets.
 - **dell512 against dell:** with 3 runs per case, from 25% less time to 36% more (both at 10M, where the runs are noisy). With 10 runs at 1000M, **dell is faster in every phase, by 14–17%** ([below](#dell-against-dell512-10-runs-at-1000m)).
 - **Memory is linear in the rows:** 50 bytes per row on the CPU servers (46.7 GiB for 1000M rows, 2 G values: 25 bytes per value) and 27 bytes per row of VRAM (25.5 GiB of the 80 GB). Every size fits on every GPU; the 40 GB A100s of ampere would hold the 1000M set too. A CUDA run needs about half the host RAM of a CPU run (24.9 GiB at 1000M; 0.25 GiB of it at every size are the page-locked buffers of the uploads and hand-offs).
+
+## Serial (one thread)
+
+Medians of 3 runs; train total = presort + build (prune ≈ 0).
+
+| | 1M | 10M | 100M | 1000M | 1000M / 100M |
+|---|--:|--:|--:|--:|--:|
+| epyc CART: presort | 9 ms | 127 ms | 1.28 s | 12.85 s | 10.0× |
+| epyc CART: build | 20 ms | 221 ms | 2.07 s | 86.67 s | **41.9×** |
+| dell CART: presort | 33 ms | 238 ms | 2.40 s | 23.12 s | 9.6× |
+| dell CART: build | 41 ms | 322 ms | 4.06 s | 78.60 s | **19.4×** |
+| epyc C4.5: build | 24 ms | 256 ms | 2.39 s | 89.41 s | 37.5× |
+| dell C4.5: build | 49 ms | 365 ms | 4.69 s | 85.79 s | 18.3× |
+
+| Speed-up of 48 threads over 1 (train total) | 1M | 10M | 100M | 1000M |
+|---|--:|--:|--:|--:|
+| epyc CART / C4.5 | 1.3× / 1.5× | 2.0× / 2.1× | 4.9× / 5.7× | **15.4× / 14.1×** |
+| dell CART / C4.5 (1000M: 10-run medians) | 0.9× / 1.2× | 3.0× / 2.3× | 5.3× / 4.8× | **10.2× / 9.0×** |
+
+- **Up to 100M rows, the serial time grows with the rows** (about 10× per 10× rows), and epyc is 1.6–2.5× faster than dell.
+- **At 1000M the serial build is 19–42× its 100M time**, while the presort stays at 10×. It is the slowdown of [the next section](#the-1000m-slowdown-and-its-fix): one thread moves a column of 1G rows. That costs about 3.5 ns per row at 100M and about 30 ns at 1000M, far beyond the caches. The fix (blocked partition by all threads) needs more than one thread, so it does not apply here.
+- **At 1000M epyc loses its lead:** epyc's serial build takes 10% longer than dell's (CART 86.7 s against 78.6 s), and the train totals are within 2% (CART) and 7% (C4.5). epyc's presort is still 1.8× faster. The build here waits on memory, row by row, so it measures memory latency more than the core.
+- **Parallelism pays off only with the rows.** At 1M rows, 48 threads are hardly faster than one, and dell CART is even slower (0.9×). The speed-up grows to 5× at 100M and 9–15× at 1000M. The 1000M speed-ups include the serial build's slowdown, which the threads avoid.
+- **Memory is the same** as with 48 threads (46.70 GiB at 1000M).
 
 ## The 1000M slowdown and its fix
 

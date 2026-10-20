@@ -164,12 +164,24 @@ def main():
                 middle = math.sqrt(low * high)
                 low, high = middle / 2, middle * 2
                 ax.set_ylim(low, high)
+            # Lines ending on the same value share one label, when there are too many
+            # labels to spread (a merged label is wider: few labels stay apart).
+            merged = {}
+            for key, x, value in (ends if len(ends) > 4 else []):
+                text = value_text(field, value)
+                if (x, text) in merged:
+                    merged[(x, text)][0].append(key[1])
+                else:
+                    merged[(x, text)] = ([key[1]], value)
+            ends = ([((", ".join(dict.fromkeys(names)),), x, value)
+                     for (x, _), (names, value) in merged.items()] if merged
+                    else [((key[1],), x, value) for key, x, value in ends])
             # Direct labels right of the last points, spread so they do not overlap.
             span = math.log10(high) - math.log10(low)
             ys = spread([math.log10(v) for _, _, v in ends], gap=span * 0.075)
             ax.set_xlim(right=max(all_rows) * 3.2)
             for (key, x, value), y in zip(ends, ys):
-                ax.annotate(f"{key[1]} {value_text(field, value)}",
+                ax.annotate(f"{key[0]} {value_text(field, value)}",
                             (x, value), xytext=(x * 1.25, 10 ** y), fontsize=8.3, color=INK,
                             va="center", annotation_clip=False,
                             arrowprops=dict(arrowstyle="-", color=GRID, linewidth=0.8,

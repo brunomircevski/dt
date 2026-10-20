@@ -166,7 +166,12 @@ def main():
     order = list(BACKENDS)
     per_panel = max(sum(e["protocol"] == p for e in entries) for p in PROTOCOLS)
     gaps = max(len({e["backend"] for e in entries if e["protocol"] == p}) for p in PROTOCOLS) - 1
-    header = 0.42 + 0.2 * len(runs)  # inches of the hardware lines
+    # One hardware line per machine, the run being reported first; a machine with
+    # several runs (e.g. serial and parallel) lists them all.
+    machines = {}
+    for run in reversed(runs):
+        machines.setdefault(where(run), []).append(run)
+    header = 0.42 + 0.2 * len(machines)  # inches of the hardware lines
     footer = 0.18 if any(e["prune"] is not None and not e["reference"] for e in entries) else 0
     footer += 0.18 if SPREAD else 0  # the footer's line on the whiskers
     # At least three bars high: the row labels take two lines each.
@@ -277,20 +282,22 @@ def main():
                  f"{len(meta['features'])} features): "
                  + " vs ".join(dict.fromkeys(where(r) for r in reversed(runs))),
                  x=0.012, y=top, ha="left", fontsize=12, color=INK, fontweight="bold")
-    # Hardware: one line per machine, the run being reported first.
-    for index, run in enumerate(reversed(runs)):
-        machine = json.load(open(run / "machine.json"))
-        used_gpu = any(e["run"] == run and e["backend"] == "cuda" for e in entries)
-        # Only ./tree is drawn: when its cases were rerun later, that is the date.
-        started = machine.get("tree_rerun", machine)["started"][:10]
-        later = sources(run)[1:]
-        dates = list(dict.fromkeys(
-            [started] + [json.load(open(more / "machine.json"))["started"][:10] for more in later]))
-        role = (("reference: " if run in args.reference else "") + run.name
-                + "".join(f" + {more.parent.name}/" for more in later)
-                + f", run {' and '.join(dates)}")
+    # Hardware: one line per machine (see `machines` above).
+    for index, (name, mine) in enumerate(machines.items()):
+        machine = json.load(open(mine[0] / "machine.json"))
+        used_gpu = any(e["run"] in mine and e["backend"] == "cuda" for e in entries)
+        roles, dates = [], []
+        for run in mine:
+            # Only ./tree is drawn: when its cases were rerun later, that is the date.
+            info = json.load(open(run / "machine.json"))
+            dates.append(info.get("tree_rerun", info)["started"][:10])
+            later = sources(run)[1:]
+            dates += [json.load(open(more / "machine.json"))["started"][:10] for more in later]
+            roles.append(("reference: " if run in args.reference else "") + run.name
+                         + "".join(f" + {more.parent.name}/" for more in later))
+        role = " and ".join(roles) + f", run {' and '.join(dict.fromkeys(dates))}"
         line_y = top - (0.36 + 0.2 * index) / inches
-        fig.text(0.012, line_y, f"{where(run).capitalize()}", fontsize=9.2, color=INK,
+        fig.text(0.012, line_y, f"{name.capitalize()}", fontsize=9.2, color=INK,
                  fontweight="bold", va="top")
         line = f"{B.hardware_line(machine, used_gpu)}   ({role})"
         # About 170 characters fit at 9.2 pt; a longer line is set smaller.
