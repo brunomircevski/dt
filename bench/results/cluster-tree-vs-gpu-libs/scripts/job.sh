@@ -4,6 +4,9 @@
 #   IMPLS="cuml xgboost" DATASETS=airline sbatch ...   runs only those
 #   (default: tree cuml xgboost, on higgs and airline; ECBDL: DATASETS=ecbdl_15m;
 #   chess: DATASETS=chess_1b; tree_gpu: ./tree --gpu-only --threads 1)
+#   NUMA_NODE=1 sbatch ...   the first GPU on NUMA node 1, and every case but
+#   ./tree's split mode (all CPUs) bound to that node's CPUs and memory
+#   (numactl): hopper's node 0 had 40 GB free in 2026-10
 # machine.json is written once per <dataset>/<node>; a later job that adds
 # rows writes machine-<job id>.json next to it.
 # Results: results/<dataset>/<node>/results.jsonl, test predictions in
@@ -16,11 +19,23 @@ TREE_COMMIT=$(cut -c1-7 $B/dt/.git/HEAD)  # detached at the measured commit; no 
 SCRATCH=$(mktemp -d /tmp/gdb.XXXXXX)  # node-local tmpfs, for the tree dumps
 trap 'rm -rf "$SCRATCH"' EXIT
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1
+BIND=()
+if [ -n "${NUMA_NODE:-}" ]; then
+  BIND=(numactl --cpunodebind="$NUMA_NODE" --membind="$NUMA_NODE")
+  # nvidia-smi's bus id (00000000:2A:00.0) ends in the sysfs one (0000:2a:00.0).
+  CUDA_VISIBLE_DEVICES="$(nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader | tr A-Z a-z |
+    while IFS=', ' read -r index bus; do
+      [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$NUMA_NODE" ] && { echo "$index"; break; }
+    done || true)"
+  [ -n "$CUDA_VISIBLE_DEVICES" ] || { echo "no GPU on NUMA node $NUMA_NODE" >&2; exit 1; }
+fi
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64
 PY=$B/venv/bin/python
 TREE=$B/dt/tree
 echo "job ${SLURM_JOB_ID:-} on $(hostname), $(nproc) CPUs, $(date '+%F %T'), reps $REPS, ./tree $TREE_COMMIT"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
+echo "free memory per NUMA node: $(numactl -H | awk '/ free:/ { printf "%snode %s %d GiB", (n++ ? ", " : ""), $2, $4 / 1024 }')"
+[ -z "${NUMA_NODE:-}" ] || echo "NUMA node $NUMA_NODE: GPU $CUDA_VISIBLE_DEVICES, ${BIND[*]} (all but ./tree's split mode)"
 echo "CPU governor: $(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort -u | tr '\n' ' ')"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,driver_version,power.limit --format=csv,noheader
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | sed 's/^/GPU process: /'
@@ -37,9 +52,10 @@ for dataset in $DATASETS; do
   [ -e "$MACHINE" ] && MACHINE=$OUT/machine-${SLURM_JOB_ID:-$$}.json
   {
     echo "{\"host\": \"$(hostname)\", \"cpu\": \"$(lscpu | sed -n 's/^Model name: *//p' | head -1)\","
-    echo " \"cpus\": $(nproc), \"gpu\": \"$(nvidia-smi --id=0 --query-gpu=name,memory.total --format=csv,noheader)\","
-    echo " \"driver\": \"$(nvidia-smi --id=0 --query-gpu=driver_version --format=csv,noheader)\","
+    echo " \"cpus\": $(nproc), \"gpu\": \"$(nvidia-smi --id=$CUDA_VISIBLE_DEVICES --query-gpu=name,memory.total --format=csv,noheader)\","
+    echo " \"driver\": \"$(nvidia-smi --id=$CUDA_VISIBLE_DEVICES --query-gpu=driver_version --format=csv,noheader)\","
     echo " \"cuda\": \"$(/usr/local/cuda/bin/nvcc --version | tail -2 | head -1)\","
+    echo " \"numa_node\": \"${NUMA_NODE:-}\", \"gpu_index\": $CUDA_VISIBLE_DEVICES,"
     echo " \"tree_commit\": \"$TREE_COMMIT\", \"dataset\": \"$dataset\", \"date\": \"$(date '+%F %T')\"}"
   } > "$MACHINE"
   for impl in $IMPLS; do
@@ -47,9 +63,10 @@ for dataset in $DATASETS; do
       [ "$impl" = xgboost ] && [ "$case" = c45 ] && continue  # no entropy criterion
       if [ "$impl" = tree ] || [ "$impl" = tree_gpu ]; then
         mode=split; [ "$impl" = tree_gpu ] && mode=gpu
-        run $PY $B/treebench.py "$TREE" $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" "$SCRATCH" $mode
+        bind=("${BIND[@]}"); [ "$impl" = tree ] && bind=()  # split mode: every CPU
+        run ${bind[@]+"${bind[@]}"} $PY $B/treebench.py "$TREE" $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" "$SCRATCH" $mode
       else
-        run $PY $B/gpubench.py $impl $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred"
+        run ${BIND[@]+"${BIND[@]}"} $PY $B/gpubench.py $impl $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred"
       fi
     done
   done
