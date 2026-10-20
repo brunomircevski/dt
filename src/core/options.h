@@ -52,7 +52,7 @@ struct C45Options {
 };
 
 struct ParallelOptions {
-  int threads = 0; // 0 = std::thread::hardware_concurrency()
+  int threads = 0; // 0 = every CPU the process may run on (threadCount())
   // Nodes with at least this many rows build their left child as a pool task.
   std::size_t nodeTaskRows = 4096;
   // Nodes with at least this many rows scan / partition features in parallel.
@@ -130,7 +130,7 @@ struct Options {
 const char *backendName(Backend backend);
 const char *algorithmName(Algorithm algorithm);
 
-// Threads to use (options.parallel.threads, or all cores).
+// Threads to use (options.parallel.threads, or every CPU the process may run on).
 unsigned threadCount(const Options &options);
 
 // Parse argv on top of `options`. Throws std::runtime_error on bad input.

@@ -6,9 +6,11 @@ agreement table.
   treebench.py TREE DATASET CASE REPS OUT PRED_DIR SCRATCH [MODE]
     DATASET  higgs | airline | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
     CASE     cart | c45        depth <= 19, no pruning
-    MODE     split (default, impl "tree"): the GPU with all CPU threads, which
-             finish the small nodes; gpu (impl "tree_gpu"): --gpu-only
-             --threads 1, every node on the GPU and one CPU thread
+    MODE     split (default, impl "tree"): the GPU with the CPU threads, which
+             finish the small nodes; gpu (impl "tree_gpu"): --gpu-only, every
+             node on the GPU. Both on ./tree's default threads, like the
+             libraries: every CPU the process may run on (job.sh binds it to
+             the GPU's NUMA node)
 """
 import json, os, re, socket, subprocess, sys, time
 import numpy as np
@@ -18,8 +20,8 @@ from gpubench import DATA_ROOT, DEPTH, GpuMemory, load  # noqa: E402
 
 FLAGS = {"cart": ["--cart", "--no-prune", "-d", str(DEPTH)],
          "c45": ["--c45", "--no-prune", "-d", str(DEPTH)]}
-MODES = {"split": ("tree", lambda: ["--threads", str(os.cpu_count())]),
-         "gpu": ("tree_gpu", lambda: ["--gpu-only", "--threads", "1"])}
+MODES = {"split": ("tree", lambda: []),
+         "gpu": ("tree_gpu", lambda: ["--gpu-only"])}
 
 
 def parse_dump(path):

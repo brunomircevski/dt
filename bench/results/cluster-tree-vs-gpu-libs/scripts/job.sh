@@ -3,10 +3,13 @@
 #   sbatch -p hopper --exclusive -t 02:00:00 -o results/hopper.log job.sh hopper
 #   IMPLS="cuml xgboost" DATASETS=airline sbatch ...   runs only those
 #   (default: tree cuml xgboost, on higgs and airline; ECBDL: DATASETS=ecbdl_15m;
-#   chess: DATASETS=chess_1b; tree_gpu: ./tree --gpu-only --threads 1)
-#   NUMA_NODE=1 sbatch ...   the first GPU on NUMA node 1, and every case but
-#   ./tree's split mode (all CPUs) bound to that node's CPUs and memory
-#   (numactl): hopper's node 0 had 40 GB free in 2026-10
+#   chess: DATASETS=chess_1b; tree_gpu: ./tree --gpu-only)
+#   NUMA_NODE=1 sbatch ...   the first GPU on NUMA node 1, and every case bound
+#   to that node's CPUs and memory (numactl): hopper's node 0 had 40 GB free in
+#   2026-10. Every library and ./tree runs on its default threads, all the CPUs
+#   it may use: the same CPUs for everyone.
+#   REPLACE=1 sbatch ...   first moves the IMPLS' earlier rows out of each
+#   dataset's results.jsonl (to results.jsonl.before-<job id>)
 # machine.json is written once per <dataset>/<node>; a later job that adds
 # rows writes machine-<job id>.json next to it.
 # Results: results/<dataset>/<node>/results.jsonl, test predictions in
@@ -40,7 +43,7 @@ TREE=$B/dt/tree
 echo "job ${SLURM_JOB_ID:-} on $(hostname), $(nproc) CPUs, $(date '+%F %T'), reps $REPS, ./tree $TREE_COMMIT"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "free memory per NUMA node: $(numactl -H | awk '/ free:/ { printf "%snode %s %d GiB", (n++ ? ", " : ""), $2, $4 / 1024 }')"
-[ -z "${NUMA_NODE:-}" ] || echo "NUMA node $NUMA_NODE: GPU $CUDA_VISIBLE_DEVICES, ${BIND[*]} (all but ./tree's split mode)"
+[ -z "${NUMA_NODE:-}" ] || echo "NUMA node $NUMA_NODE: GPU $CUDA_VISIBLE_DEVICES, ${BIND[*]}, CPUs $(cat /sys/devices/system/node/node$NUMA_NODE/cpulist)"
 echo "CPU governor: $(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort -u | tr '\n' ' ')"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,driver_version,power.limit --format=csv,noheader
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | sed 's/^/GPU process: /'
@@ -63,13 +66,20 @@ for dataset in $DATASETS; do
     echo " \"numa_node\": \"${NUMA_NODE:-}\", \"gpu_index\": $CUDA_VISIBLE_DEVICES,"
     echo " \"tree_commit\": \"$TREE_COMMIT\", \"dataset\": \"$dataset\", \"date\": \"$(date '+%F %T')\"}"
   } > "$MACHINE"
+  if [ -n "${REPLACE:-}" ] && [ -e "$OUT/results.jsonl" ]; then
+    mv "$OUT/results.jsonl" "$OUT/results.jsonl.before-${SLURM_JOB_ID:-$$}"
+    IMPLS="$IMPLS" $PY -c 'import json, os, sys
+drop = set(os.environ["IMPLS"].split())
+for line in open(sys.argv[1]):
+    if json.loads(line)["impl"] not in drop:
+        sys.stdout.write(line)' "$OUT/results.jsonl.before-${SLURM_JOB_ID:-$$}" > "$OUT/results.jsonl"
+  fi
   for impl in $IMPLS; do
     for case in cart c45; do
       [ "$impl" = xgboost ] && [ "$case" = c45 ] && continue  # no entropy criterion
       if [ "$impl" = tree ] || [ "$impl" = tree_gpu ]; then
         mode=split; [ "$impl" = tree_gpu ] && mode=gpu
-        bind=("${BIND[@]}"); [ "$impl" = tree ] && bind=()  # split mode: every CPU
-        run ${bind[@]+"${bind[@]}"} $PY $B/treebench.py "$TREE" $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" "$SCRATCH" $mode
+        run ${BIND[@]+"${BIND[@]}"} $PY $B/treebench.py "$TREE" $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" "$SCRATCH" $mode
       else
         run ${BIND[@]+"${BIND[@]}"} $PY $B/gpubench.py $impl $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred"
       fi

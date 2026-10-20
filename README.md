@@ -63,7 +63,7 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
 |------|---------|---------|
 | `--serial` / `--parallel` / `--cuda` | `--parallel` | Where the tree is grown. All three grow the same tree. |
 | `--cart` / `--c45` | `--cart` | Algorithm. |
-| `--threads N` | 0 = all cores | CPU threads for `--parallel`, the CPU part of `--cuda`, loading and evaluation. |
+| `--threads N` | 0 = every CPU it may run on (all cores, or those `taskset`/`numactl` allow) | CPU threads for `--parallel`, the CPU part of `--cuda`, loading and evaluation. |
 
 **Pre-pruning** (stop growing early; the same two rules for both algorithms)
 

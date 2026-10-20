@@ -1,6 +1,7 @@
 #include "core/options.h"
 
 #include <algorithm>
+#include <sched.h>
 #include <initializer_list>
 #include <iostream>
 #include <set>
@@ -32,6 +33,13 @@ unsigned threadCount(const Options &options) {
   if (options.parallel.threads > 0) {
     return static_cast<unsigned>(options.parallel.threads);
   }
+  // The CPUs this process may run on (taskset, numactl --cpunodebind, a
+  // SLURM allocation), not every CPU of the machine.
+  cpu_set_t allowed;
+  CPU_ZERO(&allowed);
+  if (sched_getaffinity(0, sizeof allowed, &allowed) == 0 && CPU_COUNT(&allowed) > 0) {
+    return static_cast<unsigned>(CPU_COUNT(&allowed));
+  }
   return std::max(1u, std::thread::hardware_concurrency());
 }
 
@@ -51,7 +59,7 @@ void printUsage(const char *program) {
       << "  --seed N                 random seed for the holdout split and CART's CV\n"
       << "                           folds (default 1)\n"
       << "  -m N                     duplicate rows N times in memory (stress tests)\n"
-      << "  --threads N              CPU threads (0 = all cores)\n"
+      << "  --threads N              CPU threads (0 = every CPU it may run on)\n"
       << "  --print                  print the tree\n"
       << "  --dump FILE              write the tree as text\n"
       << "\n"

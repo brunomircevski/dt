@@ -8,8 +8,9 @@
 Agreement: share of the test rows (TEST_ROWS) that a tree classifies like
 ./tree's tree of the same case on the same node.
 
-./tree has two rows: "tree" (the GPU with all the node's CPU threads, which
-finish the small nodes) and "tree_gpu" (--gpu-only --threads 1).
+./tree has two rows: "tree" (the GPU with the CPU threads, which finish the
+small nodes) and "tree_gpu" (--gpu-only, every node on the GPU). Every row ran
+on its default threads, bound to the GPU's NUMA node (job.sh NUMA_NODE).
 """
 import csv, json, statistics, sys
 from pathlib import Path
@@ -27,8 +28,8 @@ DATASETS = {"higgs": "HIGGS: 10,500,000 training rows, 28 features",
 TEST_ROWS = {"higgs": 500_000, "airline": 500_000, "ecbdl_15m": 100_000, "chess_1b": 1_000}
 NODES = {"hopper": "H100 PCIe 80 GB", "ampere": "A100 80 GB PCIe"}
 CASES = {"cart": "CART, depth ≤ 19", "c45": "C4.5, depth ≤ 19"}
-SPLIT = "GPU + 32 (H100) / 48 (A100) CPU threads"
-GPU_ONLY = "GPU only, 1 CPU thread"
+SPLIT = "GPU + 16 (H100) / 24 (A100) CPU threads"
+GPU_ONLY = "GPU only"
 LABELS = {("tree", "cart"): f"./tree CART (exact Gini)\n{SPLIT}",
           ("tree_gpu", "cart"): f"./tree CART (exact Gini)\n{GPU_ONLY}",
           ("cuml", "cart"): "cuML RF, Gini, 128 bins",
@@ -203,8 +204,8 @@ def chart(rows, dataset, path):
              "C4.5: ./tree follows Quinlan's C4.5 (gain ratio, MDL-corrected thresholds, at least 2 rows "
              "per side); cuML's closest is plain entropy (information gain). XGBoost has no entropy "
              "criterion, so it is in CART only.\n./tree: GPU + CPU threads hands nodes below 1,024–4,096 "
-             "rows to the CPU pool while the GPU grows the next level; GPU only (--gpu-only --threads 1) "
-             "grows every node on the GPU.",
+             "rows to the CPU pool while the GPU grows the next level; GPU only (--gpu-only) "
+             "grows every node on the GPU. Every row on its default threads, on the CPUs of the GPU's NUMA node.",
              fontsize=8.5, color=MUTED, style="italic", va="bottom")
     fig.subplots_adjust(left=0.21, right=0.99, top=1 - 1.25 / fig.get_figheight(),
                         bottom=1.2 / fig.get_figheight())

@@ -110,7 +110,7 @@ def xgb_fit(X, y, case):
               "eta": 1.0, "lambda": 0.0, "alpha": 0.0, "gamma": 0.0,
               "min_child_weight": 1.0, "base_score": float(y.mean()),
               "max_bin": BINS["xgboost"],
-              "subsample": 1.0, "colsample_bytree": 1.0, "nthread": os.cpu_count(),
+              "subsample": 1.0, "colsample_bytree": 1.0,  # nthread: its default, the CPUs it may use
               "max_depth": DEPTH, "grow_policy": "depthwise"}
     booster = xgb.train(params, dtrain, num_boost_round=1)
     return booster
