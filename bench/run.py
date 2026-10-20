@@ -83,17 +83,19 @@ def measure(command, env, timeout, pin=(), gpu=False):
     gpu_peak_bytes   (gpu=True) the most GPU memory in use while the process ran,
                      minus what was in use just before it started: nvidia-smi
                      samples the whole device every 10 ms, so nothing else may
-                     use the GPU during the run.
+                     use the GPU during the run. The samples go to a file: in a
+                     pipe read only at the end, nvidia-smi blocked once 64 KiB
+                     were written (about 170 s) and missed the training.
     """
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err, \
-            tempfile.TemporaryDirectory() as folder:
+            tempfile.TemporaryFile() as gpu_samples, tempfile.TemporaryDirectory() as folder:
         usage_file = Path(folder) / "rusage"
         sampler = None
         if gpu:
             idle_mib = gpu_memory_used_mib()
             sampler = subprocess.Popen(["nvidia-smi", "--query-gpu=memory.used",
                                         "--format=csv,noheader,nounits", "--id=0", "-lms", "10"],
-                                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                                       stdout=gpu_samples, stderr=subprocess.DEVNULL)
         start = time.perf_counter()
         # Its own session, so a timeout (or Ctrl+C here) kills the whole tool.
         process = subprocess.Popen(list(pin) + [str(B.RUSAGE), str(usage_file)] + list(command),
@@ -118,7 +120,9 @@ def measure(command, env, timeout, pin=(), gpu=False):
         wall = time.perf_counter() - start
         gpu_peak = None
         if sampler:
-            samples = [int(line) for line in sampler.communicate()[0].split() if line.isdigit()]
+            sampler.wait()
+            gpu_samples.seek(0)
+            samples = [int(line) for line in gpu_samples.read().decode().split() if line.isdigit()]
             gpu_peak = (max(samples) - idle_mib) * 2**20 if samples else None
         process.returncode = os.waitstatus_to_exitcode(status)
         out.seek(0)
