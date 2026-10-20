@@ -12,6 +12,8 @@
 #   serial-epyc-<data>  epyc1, one thread                             serial
 #   serial-dell-<data>  dell1, one thread                             serial
 #                       (only when named; the job still owns the whole node)
+#   gpuonly-hopper-<data>  hopper, --cuda --gpu-only, one CPU thread   CUDA, GPU only
+#   gpuonly-ampere-<data>  ampere, the same                           (only when named)
 # The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
 # on a GPU node would measure a CPU that is only there to feed the GPU.
 # The epyc and dell partitions have more nodes: the runs always take epyc1
@@ -32,6 +34,8 @@
 #       cpu-dell512-chess_1b                     # chess: 1m, 10m, 100m, 1b; with dell2
 #   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
 #       serial-epyc-chess_1b serial-dell-chess_1b    # one thread (--serial)
+#   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
+#       gpuonly-hopper-chess_1b gpuonly-ampere-chess_1b  # every node on the GPU
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well.
@@ -49,7 +53,7 @@ while getopts "m:d:p:o:a:h" option; do
     p) PROTOCOLS="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
     a) AFTER="$OPTARG" ;;
-    *) sed -n '2,37p' "$0"; exit 2 ;;
+    *) sed -n '2,41p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -85,7 +89,9 @@ if [ "$DATASET" = ecbdl ]; then
 fi
 OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
           "serial-epyc-$DATASET  epyc       epyc1   tree       1"
-          "serial-dell-$DATASET  dell       dell1   tree       1")
+          "serial-dell-$DATASET  dell       dell1   tree       1"
+          "gpuonly-hopper-$DATASET  hopper  hopper  tree_gpu_only  1"
+          "gpuonly-ampere-$DATASET  ampere  ampere  tree_gpu_only  1")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then

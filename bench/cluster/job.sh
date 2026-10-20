@@ -35,7 +35,7 @@ echo "CPU governor: ${governors:-unknown}"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "CPU order (the threads take them from the first): CPU, NUMA node, socket, core"
 lscpu -e=CPU,NODE,SOCKET,CORE | awk 'NR > 1 { printf "%s%s:%s/%s/%s", (NR > 2 ? " " : ""), $1, $2, $3, $4 } END { print "" }'
-if [[ "$IMPLS" == *tree_cuda* ]]; then
+if [[ "$IMPLS" == *tree_cuda* || "$IMPLS" == *tree_gpu_only* ]]; then
   nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu,power.limit,pstate \
     --format=csv,noheader | sed 's/^/GPU /'
   nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader |

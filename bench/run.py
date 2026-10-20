@@ -183,10 +183,12 @@ def build_command(case, kind, args, scratch, rep=0):
         warmup_rows = m["n_train"] if args.warmup_rows == "all" else int(args.warmup_rows)
     data = B.DATA / dataset
 
-    if impl in ("tree", "tree_cuda"):
+    if impl in ("tree", "tree_cuda", "tree_gpu_only"):
         flags = [fill(flag, args.alpha) for flag in spec]
         if impl == "tree_cuda":
             binary, backend = B.TREE_CUDA, ["--cuda", "--threads", str(threads)]
+        elif impl == "tree_gpu_only":
+            binary, backend = B.TREE_CUDA, ["--cuda", "--gpu-only", "--threads", str(threads)]
         else:
             binary = B.TREE
             backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
@@ -424,7 +426,8 @@ def plan_cases(args):
 
 
 # Which protocol measures each tool's runtime footprint on the _baseline dataset.
-BASELINE_PROTOCOL = {"tree": "cart_full", "tree_cuda": "cart_full", "sklearn": "cart_full",
+BASELINE_PROTOCOL = {"tree": "cart_full", "tree_cuda": "cart_full", "tree_gpu_only": "cart_full",
+                     "sklearn": "cart_full",
                      "rpart": "cart_full",
                      "j48": "c45", "yadt": "c45"}
 
@@ -540,7 +543,7 @@ def main():
               f": {describe(case)} ...", flush=True)
         argv, extra_env, parse = build_command(case, kind, args, scratch, rep)
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
-        run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl == "tree_cuda")
+        run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl in ("tree_cuda", "tree_gpu_only"))
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
                "threads": threads, "kind": kind, "rep": rep,
                "time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -568,7 +571,7 @@ def main():
             row["peak_rss_train_bytes"] = row["peak_rss_bytes"]  # YaDT: the process only trains
         if row["status"] != "ok" and kind != "baseline":
             failed.add(case)
-        if args.profile and kind == "run" and impl in ("tree", "tree_cuda"):
+        if args.profile and kind == "run" and impl in ("tree", "tree_cuda", "tree_gpu_only"):
             row["profile"] = profile_name(case, rep)
         row["command"] = shlex.join(pin + argv)
         results.write(json.dumps(row) + "\n")
