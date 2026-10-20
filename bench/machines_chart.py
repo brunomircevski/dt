@@ -4,8 +4,10 @@ training time and peak memory of every backend the runs hold (serial, parallel,
 CUDA), one panel per protocol (CART above C4.5). Colour follows the backend; the reference run's bars
 are hatched. The header names every machine's CPU, RAM and GPU; memory is split
 into RAM (host, peak RSS) and VRAM (GPU) bars. When the runs recorded ./tree's
-phases, a time bar is split into growing the tree (setup, presort, build) and,
-lighter, pruning it.
+phases, a time bar is split into the GPU's setup (darker; allocation, waiting
+for page-locked memory: a fixed cost), growing the tree (presort, build) and,
+lighter, pruning it; a part is drawn when it takes 1% of the bar or more. On
+log axes each part's length is its share of the bar.
 
 Refuses to draw when the runs did not read the same data (SHA-256 of the
 prepared files in plan.json) or did not build the same trees.
@@ -18,8 +20,8 @@ run and a dot per run, and writes their min and max.
 
 --log draws the time and memory axes on a log scale (sizes that differ by
 orders of magnitude, e.g. serial against CUDA) and writes every case's recorded
-pruning time next to its bar, also for the unpruned protocols (where it is only
-C4.5's collapse of useless splits) and below 1%.
+pruning time next to its bar (if any), also for the unpruned protocols (where it
+is only C4.5's collapse of useless splits) and below 1%.
 
 --more adds the cases of later runs kept in another directory under the same
 run names (e.g. cluster-ecbdl/unpruned/cpu-epyc-ecbdl next to
@@ -69,6 +71,25 @@ LOG = False  # --log: log-scale axes, and every case's pruning time in its notes
 def after(value, largest):
     """Where a label goes just right of a bar ending at `value`."""
     return value * 1.06 if LOG else value + largest * 0.012
+
+
+def darker(color, amount=0.4):
+    """`color` mixed with black: the GPU setup part of a time bar."""
+    rgb = [int(color[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(c * (1 - amount)):02x}" for c in rgb)
+
+
+def spans(parts, low):
+    """-> (left, width) of each part of a bar made of the durations `parts`,
+    from 0. On a log axis starting at `low`, each part's length on the axis is
+    its share of the bar (log(t) - log(low)), as on a linear axis."""
+    total, out, start, done = sum(parts), [], 0.0, 0.0
+    for part in parts:
+        done += part
+        end = low * (total / low) ** (done / total) if LOG and total > low else done
+        out.append((start, end - start))
+        start = end
+    return out
 
 
 def duration(seconds):
@@ -122,6 +143,7 @@ def bars(run, reference):
                         else f"{short_cpu(info)}, {threads} thread{'s' if threads > 1 else ''}")
             gpu = [r["gpu_peak_bytes"] for r in ok if r.get("gpu_peak_bytes") is not None]
             prune = [r["prune_seconds"] for r in ok if r.get("prune_seconds") is not None]
+            setup = [r["gpu_setup_seconds"] for r in ok if r.get("gpu_setup_seconds") is not None]
             out.append({"protocol": protocol, "backend": backend, "hardware": hardware,
                         "run": run, "reference": reference,
                         "time": statistics.median(r["train_seconds"] for r in ok),
@@ -133,6 +155,9 @@ def bars(run, reference):
                         "prune": (statistics.median(prune)
                                   if len(prune) == len(ok) and protocol not in UNPRUNED else None),
                         "pruned": statistics.median(prune) if len(prune) == len(ok) else None,
+                        # Median GPU setup (fixed cost), if every run recorded it.
+                        "setup": (statistics.median(setup)
+                                  if len(setup) == len(ok) and backend in GPU else None),
                         # Test accuracy, or training accuracy where only that was
                         # recorded (run.py --train-accuracy-only).
                         "tree": (ok[0]["nodes"], ok[0]["depth"],
@@ -204,16 +229,23 @@ def main():
     for run in reversed(runs):
         machines.setdefault(where(run), []).append(run)
     header = 0.42 + 0.2 * len(machines)  # inches of the hardware lines
-    footer = 0.18 if any(e["prune"] is not None and not e["reference"] for e in entries) else 0
-    footer += 0.18 if SPREAD else 0  # the footer's line on the whiskers
+    for e in entries:  # the parts drawn: 1% of the bar or more, not on reference bars
+        for part in ("prune", "setup"):
+            if e[part] is not None and (e["reference"] or e[part] < 0.01 * e["time"]):
+                e[part + "_bar"] = None
+            else:
+                e[part + "_bar"] = e[part]
+    split = any(e["prune_bar"] or e["setup_bar"] for e in entries)
+    # The footer's lines on the bar parts (two on log axes) and the whiskers.
+    footer = (0.36 if LOG else 0.18) if split else 0
+    footer += 0.18 if SPREAD else 0
     # At least three bars high: the row labels take two lines each.
     count = len(PROTOCOLS)
     inches = 1.9 + header + footer + count * 0.58 * max(per_panel + 0.45 * gaps, 3)
-    split = any(e["prune"] is not None and not e["reference"] for e in entries)
     # Between the panels: the lower one's title and subtitle and the upper one's
     # tick labels, the same in inches however few bars the panels hold.
     gap = 0.92
-    panels = inches - (header + 1.05) - (1.08 if split else 0.9) - (0.18 if SPREAD else 0)
+    panels = inches - (header + 1.05) - ((1.26 if LOG else 1.08) if split else 0.9) - (0.18 if SPREAD else 0)
     fig, axes = plt.subplots(count, 2, figsize=(13, inches), squeeze=False,
                              gridspec_kw={"width_ratios": [1.5, 1], "wspace": 0.12,
                                           "hspace": gap / ((panels - (count - 1) * gap) / count)})
@@ -252,22 +284,27 @@ def main():
         times = {(e["run"], e["backend"]): e["time"] for e in mine}
         for y, e in zip(ys, mine):
             run, backend, t = e["run"], e["backend"], e["time"]
-            prune = e["prune"]
-            if prune is not None and not e["reference"]:
-                # Growing (everything but pruning), then pruning in a lighter shade.
-                ax_time.barh(y, t - prune, height=0.62, zorder=2, **style(e))
-                ax_time.barh(y, prune, left=t - prune, height=0.62, zorder=2,
-                             color=lighter(COLORS[backend]))
-            else:
-                ax_time.barh(y, t, height=0.62, zorder=2, **style(e))
+            prune, setup = e["prune_bar"] or 0, e["setup_bar"] or 0
+            # GPU setup darker, growing, pruning lighter.
+            low = 10 ** math.floor(math.log10(min_time))
+            for (left, width), part in zip(spans([setup, t - setup - prune, prune], low),
+                                           ("setup", "grow", "prune")):
+                if width <= 0:
+                    continue
+                look = (style(e) if part == "grow" else
+                        dict(color=darker(COLORS[backend]) if part == "setup"
+                             else lighter(COLORS[backend])))
+                ax_time.barh(y, width, left=left, height=0.62, zorder=2, **look)
+            prune = e["prune"] if e["prune_bar"] else None
             # Pruning's share; speedup over the same machine's serial run; CUDA
             # also over the same machine's parallel run and the fastest other
             # machine's.
-            if LOG and e["pruned"] is not None:
-                notes = [f"prune {duration(e['pruned'])}"]
-            else:
-                notes = ([f"prune {prune:.2f} s ({100 * prune / t:.0f}%)"]
-                         if prune is not None and prune >= 0.01 * t else [])
+            notes = ([f"setup {duration(setup)} ({100 * setup / t:.0f}%)"] if setup else [])
+            if LOG and e["pruned"] is not None and e["pruned"] >= 0.00005:
+                notes.append(f"prune {duration(e['pruned'])}")
+            elif prune is not None:
+                notes.append(f"prune {duration(prune) if LOG else f'{prune:.2f} s'} "
+                             f"({100 * prune / t:.0f}%)")
             if backend != "serial" and (run, "serial") in times:
                 notes.append(f"{times[(run, 'serial')] / t:.1f}× {where(run)} serial")
             if backend in GPU:
@@ -353,7 +390,9 @@ def main():
                  va="top")
     handles = [Patch(color=COLORS[b], label=BACKENDS[b]) for b in BACKENDS
                if any(e["backend"] == b for e in entries)]
-    if split:
+    if any(e["setup_bar"] for e in entries):
+        handles.append(Patch(color=darker(MUTED), label="darker: GPU setup"))
+    if any(e["prune_bar"] for e in entries):
         handles.append(Patch(color=lighter(MUTED), label="lighter: pruning"))
     if args.reference:
         handles.append(Patch(facecolor="white", edgecolor=MUTED, hatch="////",
@@ -375,15 +414,21 @@ def main():
              f"Bars: {runs_text}{'' if runs_text.endswith(chr(10)) else '. '}Time: ./tree's 'train total' (presort, build, prune; CUDA also "
              "upload and device sort), not reading the CSV."
              + (" Log-scale axes; 'prune': ./tree's prune timer." if LOG else "")
-             + ("\nDarker: growing the tree (setup, presort, build); lighter: pruning it "
-                "(shown when it takes 1% or more)." if split else "")
+             + ("\nBar parts, each shown when it takes 1% or more: "
+                + ("GPU setup (darkest: allocation, page-locking host memory, a fixed cost), "
+                   if any(e["setup_bar"] for e in entries) else "")
+                + "growing the tree (presort, build)"
+                + (", pruning (lightest)" if any(e["prune_bar"] for e in entries) else "")
+                + (".\nLog axes: a part's length is its share of the bar, as on a linear axis."
+                   if LOG else ".")
+                if split else "")
              + "\nSame data files (SHA-256) on every "
              "machine. RAM: peak RSS of the process up to the end of training.\nVRAM: peak GPU "
              "memory during the process above idle, CUDA context included (nvidia-smi, every 10 ms)."
              + (f" Not recorded correctly: {', '.join(sorted(NO_VRAM))}." if NO_VRAM else ""),
              fontsize=8, color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=LEFT, right=0.97, top=1 - (header + 1.05) / inches,
-                        bottom=((1.08 if split else 0.9) + (0.18 if SPREAD else 0)) / inches)
+                        bottom=(((1.26 if LOG else 1.08) if split else 0.9) + (0.18 if SPREAD else 0)) / inches)
     fig.savefig(out, dpi=150, facecolor="white")
     print(out)
 
