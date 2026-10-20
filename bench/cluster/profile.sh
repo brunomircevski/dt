@@ -10,7 +10,7 @@
 #   bench/cluster/profile.sh -m 3 -d higgs    # HIGGS, each case 3 times
 #   bench/cluster/profile.sh cpu-epyc-ecbdl_15m   # only the named runs
 #   bench/cluster/profile.sh -o cluster-ecbdl-profile/gpu-only \
-#       gpuonly-hopper-ecbdl_15m gpuonly-ampere-ecbdl_15m  # --gpu-only, one CPU thread
+#       gpuonly-hopper-ecbdl_15m gpuonly-ampere-ecbdl_15m  # --gpu-only, every CPU
 #                                                          # (only when named)
 #
 # -p: run.py's protocols (default cart_alpha_nodepth,cart_full_nodepth,c45);
@@ -46,8 +46,8 @@ done
 JOBS=("cuda-hopper-$DATASET hopper hopper tree_cuda all"
       "cuda-ampere-$DATASET ampere ampere tree_cuda all"
       "cpu-epyc-$DATASET    epyc   epyc1  tree      all")
-OPTIONAL=("gpuonly-hopper-$DATASET hopper hopper tree_gpu_only 1"
-          "gpuonly-ampere-$DATASET ampere ampere tree_gpu_only 1")
+OPTIONAL=("gpuonly-hopper-$DATASET hopper hopper tree_gpu_only all"
+          "gpuonly-ampere-$DATASET ampere ampere tree_gpu_only all")
 if [ $# -gt 0 ]; then
   selected=()
   for job in "${JOBS[@]}" "${OPTIONAL[@]}"; do

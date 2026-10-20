@@ -12,7 +12,7 @@
 #   serial-epyc-<data>  epyc1, one thread                             serial
 #   serial-dell-<data>  dell1, one thread                             serial
 #                       (only when named; the job still owns the whole node)
-#   gpuonly-hopper-<data>  hopper, --cuda --gpu-only, one CPU thread   CUDA, GPU only
+#   gpuonly-hopper-<data>  hopper, --cuda --gpu-only, every CPU       CUDA, GPU only
 #   gpuonly-ampere-<data>  ampere, the same                           (only when named)
 # The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
 # on a GPU node would measure a CPU that is only there to feed the GPU.
@@ -39,7 +39,7 @@
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
-# NUMA node (job.sh NUMA_NODE), e.g. -n 1 for the one-thread GPU only runs when
+# NUMA node (job.sh NUMA_NODE), e.g. -n 1 when
 # node 0's memory is taken (hopper: another user's /dev/shm, 2026-10).
 
 set -euo pipefail
@@ -94,8 +94,8 @@ fi
 OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
           "serial-epyc-$DATASET  epyc       epyc1   tree       1"
           "serial-dell-$DATASET  dell       dell1   tree       1"
-          "gpuonly-hopper-$DATASET  hopper  hopper  tree_gpu_only  1"
-          "gpuonly-ampere-$DATASET  ampere  ampere  tree_gpu_only  1")
+          "gpuonly-hopper-$DATASET  hopper  hopper  tree_gpu_only  all"
+          "gpuonly-ampere-$DATASET  ampere  ampere  tree_gpu_only  all")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then

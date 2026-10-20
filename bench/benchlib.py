@@ -117,7 +117,7 @@ for _protocol in PROTOCOLS.values():
 # threads: "multi" = runs with every thread count asked for, "single" = only 1,
 #   "all" = only the largest thread count asked for (./tree --cuda: the CPU pool
 #   that grows the small subtrees gets every CPU). ./tree --cuda --gpu-only grows
-#   every node on the GPU: "single", one CPU thread.
+#   every node on the GPU, and its CPU threads feed the GPU and prune: "all" too.
 # warmup: True for the managed runtimes (Python, R, JVM): before the timed fit,
 #   the adapter fits one untimed tree on the first WARMUP_ROWS training rows in
 #   the same process (imports, first-call costs, JIT compilation). The native
@@ -125,7 +125,7 @@ for _protocol in PROTOCOLS.values():
 IMPLS = {
     "tree": {"label": "./tree", "threads": "multi", "warmup": False},
     "tree_cuda": {"label": "./tree CUDA", "threads": "all", "warmup": False},
-    "tree_gpu_only": {"label": "./tree CUDA, GPU only", "threads": "single", "warmup": False},
+    "tree_gpu_only": {"label": "./tree CUDA, GPU only", "threads": "all", "warmup": False},
     "sklearn": {"label": "scikit-learn", "threads": "single", "warmup": True},
     "rpart": {"label": "rpart", "threads": "single", "warmup": True},
     "j48": {"label": "Weka J48", "threads": "single", "warmup": True},

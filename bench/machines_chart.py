@@ -44,7 +44,7 @@ from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 
 # Categorical slots 1-3 of the reference palette (validated all-pairs, CVD dE
 # >= 9.2); slot 3 is below 3:1 on white, so every bar carries a value label.
-# Slot 4 for ./tree --cuda --gpu-only (every node on the GPU, one CPU thread).
+# Slot 4 for ./tree --cuda --gpu-only (every node on the GPU, the CPU threads feed it and prune).
 COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "cuda": "#1baf7a", "gpu_only": "#eda100"}
 BACKENDS = {"serial": "Serial", "parallel": "Parallel", "cuda": "CUDA", "gpu_only": "GPU only"}
 GPU = {"cuda", "gpu_only"}

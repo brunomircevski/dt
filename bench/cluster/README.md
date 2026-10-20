@@ -81,7 +81,7 @@ for d in chess_1m chess_10m chess_100m chess_1b; do
       cuda-hopper-$d cuda-ampere-$d cpu-epyc-$d cpu-dell-$d cpu-dell512-$d
   # one thread (--serial) on epyc1 and dell1; -a <build job> when it ran after a rebuild
   bench/cluster/submit.sh -m 3 -d $d -p cart_full_nodepth,c45_unpruned serial-epyc-$d serial-dell-$d
-  # --gpu-only (one CPU thread) on hopper and ampere
+  # --gpu-only on hopper and ampere (every CPU, as the CUDA runs)
   bench/cluster/submit.sh -m 3 -d $d -p cart_full_nodepth,c45_unpruned gpuonly-hopper-$d gpuonly-ampere-$d
 done
 d=bench/results/cluster-chess

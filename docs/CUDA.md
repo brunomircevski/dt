@@ -170,13 +170,14 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
   covertype (54 features, 7 classes) around 4096.
 * `--gpu-only`: no node goes to the CPU; the GPU grows every level down to
   the leaves, and the host arena for the hand-offs (8 bytes per value) is not
-  allocated. With `--threads 1` the CPU side is a single thread, except for
-  the staged copies: they use at least 8 threads on the GPU's node,
-  which only run during copies (1G rows of chess uploaded in 0.26 s instead
-  of 0.67 s with one thread on the H100 node, 0.49 instead of 0.69 s on the
-  A100 node). Never more than the CPUs the process may run on: under
-  `taskset -c N`, as in the benchmarks' one-thread runs, the copies are one
-  thread too. For comparing the GPU alone with the GPU + CPU split
+  allocated. Everything else stays as without it: the CPU threads
+  (`--threads`, by default every CPU the process may run on) count the
+  classes, stage the uploads and run C4.5's pruning. With `--threads 1` the
+  CPU side is a single thread, except for the staged copies: they use at
+  least 8 threads on the GPU's node, which only run during copies (1G rows
+  of chess uploaded in 0.26 s instead of 0.67 s with one thread on the H100
+  node, 0.49 instead of 0.69 s on the A100 node). Never more than the CPUs
+  the process may run on. For comparing the GPU alone with the GPU + CPU split
   ([cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md)).
 * `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
   profile and the setup phases (allocation, upload).
