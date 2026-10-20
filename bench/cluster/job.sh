@@ -62,7 +62,7 @@ echo "runs per case: $RUNS"
 
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
-  --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" --train-accuracy-only \
+  --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} --drop-cache --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" --train-accuracy-only \
   ${RUN_EXTRA:-}
 
 step "3/3 tables and CSV files"

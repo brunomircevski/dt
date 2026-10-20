@@ -183,6 +183,12 @@ differences:
 - **Data over NFS.** /home is mordor3's RAID, NFS-mounted on every node; SLURM
   copies nothing. Reading the CSV is not timed, so this only lengthens the
   wall time.
+- **The datasets leave the page cache before every run** (`run.py
+  --drop-cache`, from `job.sh`). The cached CSVs of earlier jobs pile up on
+  one NUMA node: on 2026-10-20 they held 236 of the 252 GiB of epyc1's node 1,
+  so a 48-thread run's pages went to node 0 and half the threads read across
+  the sockets (ECBDL presort 1.6 → 2.3 s). Each run records its free memory
+  per node in `results.jsonl` (`mem_free_node*_kb`).
 - **RAM in the chart** is the kernel's MemTotal with the module type and
   speed. udev's DMI list, the usual source, is cut short on these boards
   (11–15 of 16 modules).

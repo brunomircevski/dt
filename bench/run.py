@@ -400,7 +400,7 @@ def machine_info(args):
         "gpu_index": gpu_index(),
         "settings": {"alpha": args.alpha, "warmup_rows": args.warmup_rows,
                      "java_heap": args.java_heap, "cpus": args.cpus, "membind": args.membind,
-                     "reps": args.reps,
+                     "drop_cache": args.drop_cache, "reps": args.reps,
                      "timeout": args.timeout, "cooldown": args.cooldown},
     }
 
@@ -425,6 +425,23 @@ def numa_mem_free_kb():
         if match:
             free[node.name] = int(match.group(1))
     return free
+
+
+def drop_page_cache(root):
+    """Drop root's files (the datasets) from the page cache: posix_fadvise
+    DONTNEED, which needs no privileges. Cached CSVs of earlier runs pile up
+    on one NUMA node (236 GiB of epyc1's node 1 on 2026-10-20) and send a
+    whole-node run's pages to the other socket."""
+    for path in Path(root).resolve().rglob("*"):
+        try:
+            if path.is_file():
+                fd = os.open(path, os.O_RDONLY)
+                try:
+                    os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+                finally:
+                    os.close(fd)
+        except OSError:
+            pass
 
 
 def plan_cases(args):
@@ -472,6 +489,9 @@ def main():
     parser.add_argument("--membind", type=int, metavar="NODE",
                         help="run every process under numactl --membind=NODE: its memory only "
                         "from that NUMA node (pair it with --cpus of that node)")
+    parser.add_argument("--drop-cache", action="store_true",
+                        help="drop the datasets from the page cache before every process "
+                             "(every run records its free memory per NUMA node, mem_free_node*_kb)")
     parser.add_argument("--reps", type=int, default=1, help="runs (fresh processes) per case")
     parser.add_argument("--warmup-rows", default=str(B.WARMUP_ROWS),
                         help="rows of the untimed warm-up fit of the managed runtimes "
@@ -570,6 +590,9 @@ def main():
               f"{'run ' + str(rep + 1) + '/' + str(args.reps) if kind == 'run' else 'footprint'}"
               f": {describe(case)} ...", flush=True)
         argv, extra_env, parse = build_command(case, kind, args, scratch, rep)
+        if args.drop_cache:
+            drop_page_cache(B.DATA)
+        mem_free = numa_mem_free_kb()
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
         if args.membind is not None:
             pin = ["numactl", f"--membind={args.membind}"] + pin
@@ -604,6 +627,7 @@ def main():
         if args.profile and kind == "run" and impl in ("tree", "tree_cuda", "tree_gpu_only"):
             row["profile"] = profile_name(case, rep)
         row["command"] = shlex.join(pin + argv)
+        row.update({f"mem_free_{node}_kb": kb for node, kb in mem_free.items()})
         results.write(json.dumps(row) + "\n")
         results.flush()
         walls[case].append(run["wall_seconds"])
