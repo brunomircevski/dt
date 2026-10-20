@@ -1739,6 +1739,11 @@ struct Staging {
   static constexpr int kBuffers = 4;
   static constexpr std::size_t kBytes = std::size_t{32} << 20;
   static constexpr std::size_t kCopyThreads = 32;
+  // At least this many copy, even with fewer --threads: the copiers only run
+  // during copies. With --gpu-only --threads 1, 1G rows of chess uploaded
+  // in 0.67 s on the H100 node and 0.69 s on the A100 node, with 8 in 0.26
+  // and 0.49 s (all threads: 0.19 and 0.48 s).
+  static constexpr std::size_t kMinCopyThreads = 8;
   char *buffers[kBuffers] = {};
   // The hand-offs' own (GpuGrower::handOff), one per copy stream, each a
   // part of the device's hand-off ring.
@@ -1749,8 +1754,8 @@ struct Staging {
   std::unique_ptr<ThreadPool> copiers; // on the GPU's node, if it is known
   std::once_flag once;
 
-  // `threads`: at most this many threads copy (the caller included); the
-  // first call decides.
+  // `threads` (--threads): at most this many threads copy (the caller
+  // included), but at least kMinCopyThreads; the first call decides.
   void prepare(unsigned threads = kCopyThreads) {
     std::call_once(once, [this, threads]() {
       const std::vector<int> cpus = gpuNodeCpus();
@@ -1780,10 +1785,15 @@ struct Staging {
           buffer = static_cast<char *>(memory);
         }
       }).join();
-      const std::size_t copyThreads =
-          std::min({cpus.size(), kCopyThreads, static_cast<std::size_t>(threads)});
-      if (copyThreads > 1) {
-        copiers = std::make_unique<ThreadPool>(static_cast<unsigned>(copyThreads - 1), pin);
+      // Without the GPU's node, the caller's pool copies when it has enough
+      // threads, else unpinned copiers.
+      const std::size_t wanted = std::max(kMinCopyThreads, static_cast<std::size_t>(threads));
+      const std::size_t available =
+          cpus.empty() ? std::max(1u, std::thread::hardware_concurrency()) : cpus.size();
+      const std::size_t copyThreads = std::min({available, kCopyThreads, wanted});
+      if (copyThreads > 1 && (!cpus.empty() || threads < copyThreads)) {
+        copiers = std::make_unique<ThreadPool>(static_cast<unsigned>(copyThreads - 1),
+                                               cpus.empty() ? std::function<void()>{} : pin);
       }
     });
   }
