@@ -9,6 +9,9 @@
 #   bench/cluster/profile.sh                  # ECBDL'14 15M sample, three protocols
 #   bench/cluster/profile.sh -m 3 -d higgs    # HIGGS, each case 3 times
 #   bench/cluster/profile.sh cpu-epyc-ecbdl_15m   # only the named runs
+#   bench/cluster/profile.sh -o cluster-ecbdl-profile/gpu-only \
+#       gpuonly-hopper-ecbdl_15m gpuonly-ampere-ecbdl_15m  # --gpu-only, one CPU thread
+#                                                          # (only when named)
 #
 # -p: run.py's protocols (default cart_alpha_nodepth,cart_full_nodepth,c45);
 # -o: the directory under bench/results/ (default cluster-<dataset>-profile, ecbdl_15m: cluster-ecbdl-profile).
@@ -24,7 +27,7 @@ while getopts "m:d:p:o:h" option; do
     d) DATASET="$OPTARG" ;;
     p) PROTOCOLS="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
-    *) sed -n '2,16p' "$0"; exit 2 ;;
+    *) sed -n '2,17p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -36,13 +39,15 @@ for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$D
   [ -e "$f" ] || { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 
-# name, partition, node, implementation
-JOBS=("cuda-hopper-$DATASET hopper hopper tree_cuda"
-      "cuda-ampere-$DATASET ampere ampere tree_cuda"
-      "cpu-epyc-$DATASET    epyc   epyc1  tree")
+# name, partition, node, implementation, threads
+JOBS=("cuda-hopper-$DATASET hopper hopper tree_cuda all"
+      "cuda-ampere-$DATASET ampere ampere tree_cuda all"
+      "cpu-epyc-$DATASET    epyc   epyc1  tree      all")
+OPTIONAL=("gpuonly-hopper-$DATASET hopper hopper tree_gpu_only 1"
+          "gpuonly-ampere-$DATASET ampere ampere tree_gpu_only 1")
 if [ $# -gt 0 ]; then
   selected=()
-  for job in "${JOBS[@]}"; do
+  for job in "${JOBS[@]}" "${OPTIONAL[@]}"; do
     read -r name _ _ _ <<<"$job"
     for wanted in "$@"; do [ "$wanted" = "$name" ] && selected+=("$job"); done
   done
@@ -66,14 +71,14 @@ echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs
 
 ids=()
 for job in "${JOBS[@]}"; do
-  read -r name partition node impl <<<"$job"
+  read -r name partition node impl threads <<<"$job"
   mkdir -p "bench/results/$DIR/$name" "bench/results/$DIR/plain/$name"
   profiled=$(sbatch --parsable --hold -J "dt-prof-$name" -p "$partition" -w "$node" --exclusive \
     -t 04:00:00 --export=ALL,RUN_EXTRA=--profile -o "bench/results/$DIR/$name/run.log" \
-    bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impl" "$RUNS" "$PROTOCOLS" all 3600)
+    bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impl" "$RUNS" "$PROTOCOLS" "$threads" 3600)
   plain=$(sbatch --parsable -J "dt-plain-$name" -p "$partition" -w "$node" --exclusive \
     -t 04:00:00 --dependency=afterany:"$profiled" -o "bench/results/$DIR/plain/$name/run.log" \
-    bench/cluster/job.sh "$DIR/plain" "$name" "$DATASET" "$impl" "$RUNS" "$PROTOCOLS" all 3600)
+    bench/cluster/job.sh "$DIR/plain" "$name" "$DATASET" "$impl" "$RUNS" "$PROTOCOLS" "$threads" 3600)
   ids+=("$profiled")
   echo "$name: jobs $profiled (profiled), then $plain (plain) on $node"
 done
