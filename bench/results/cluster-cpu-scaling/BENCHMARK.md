@@ -33,6 +33,21 @@ All four charts in one image (HIGGS above airline, epyc left, dell right). Threa
 
 ![Thread scaling on epyc1 and dell1, HIGGS and airline](chart.png)
 
+### One socket
+
+The diamonds at 24 threads are the one-socket runs of [cluster-higgs](../cluster-higgs/BENCHMARK.md) and [cluster-airlines](../cluster-airlines/BENCHMARK.md) (`socket-*`, 2026-10-20 at 10d125d, `--socket` in `scaling_chart.py`): 24 threads on every CPU of one socket, the memory bound to its NUMA nodes (epyc1's socket 0, dell1's socket 1). Medians of 3:
+
+| | epyc: 24 threads / one socket | dell: 24 threads / one socket |
+|---|--:|--:|
+| HIGGS CART | 1.43 / 1.44 s | 1.82 / 1.79 s |
+| HIGGS C4.5 | 2.49 / 2.49 s | 3.50 / 3.59 s |
+| airline CART | 8.02 / 7.96 s | 11.62 / **8.59 s** |
+| airline C4.5 | 14.66 / 14.74 s | 21.72 / **17.46 s** |
+
+- **epyc:** the same within 1%. Its first 24 CPUs are socket 0, so the 24-thread point already ran on one socket; binding the memory changes nothing.
+- **dell:** on HIGGS the same within 3%, but on airline one socket is 1.24–1.35× faster than 24 threads spread over both. dell's CPUs alternate between the sockets, so the 24-thread point uses 12 cores of each and their memory on four NUMA nodes; airline's 115M rows probably move far more data between them than HIGGS's 10.5M (not profiled).
+- **Against all 48 threads:** one socket takes 1.1–1.7× as long ([cluster-higgs](../cluster-higgs/BENCHMARK.md), [cluster-airlines](../cluster-airlines/BENCHMARK.md)).
+
 ### Against the previous runs
 
 **Against 051949b** (2026-10-19): the same trees and memory at every point, every time within −5.5% to +2.4% (most within ±2%; the largest changes are faster: epyc HIGGS C4.5 at 8 threads 5.91 → 5.58 s and at 32 threads 2.31 → 2.19 s, dell HIGGS C4.5 at 4 threads 17.73 → 16.90 s).

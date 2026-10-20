@@ -2,6 +2,8 @@
 
 **Status:** run on 2026-10-16 on mordor3's epyc1 and dell1 (every tool, 3 runs per case, commit 3cbdb6f) and on the desktop (./tree only, 3 runs per case; the other tools' rows are the desktop's runs of 2026-10-09, one run each; ./tree's rows: see the rerun below). Results at the end; files in `pc/`, `epyc/`, `dell/`.
 
+**./tree on one socket, 2026-10-20** (`run.sh <machine> -s -m 3`, commit 10d125d, the same ./tree as 8b1ecd1; epyc 19:19, dell 19:21, each job alone on its node): the parallel backend on every CPU of one socket (24 threads), the memory bound to that socket's NUMA nodes (the socket with the most free memory: epyc1's socket 0, dell1's socket 1). Files in `epyc-socket/` and `dell-socket/`; the chart draws them as "1 socket" beside each machine's run on both sockets.
+
 **./tree rerun a third time on 2026-10-20 on epyc1 and dell1** (`run.sh <machine> -t -m 3`, commit 8b1ecd1: 051949b plus each thread counting the classes in its own histogram (6521330) and the GPU hand-off changes; epyc 15:13, dell 16:13, each job alone on its node). The epyc and dell ./tree rows are from this rerun. 051949b → 8b1ecd1, median of 3: CART one thread 4.93 → 4.89 s (epyc), 6.84 → 6.75 s (dell); C4.5 6.39 → 6.42 s, 9.04 → 8.94 s; CART on every CPU 0.49 → 0.49 s, 0.49 → 0.50 s; C4.5 0.57 → 0.65 s (+14%), 0.70 → 0.75 s (+8%). The same trees and peak RSS (within 0.01 GiB). The C4.5 all-thread runs vary most from run to run (epyc 0.54–0.66 s now, 0.54–0.67 s at 051949b; dell 0.70–0.81 s), so the two medians are within each other's range. Unlike the cluster jobs (`job.sh`), `run.sh` does not drop the datasets from the page cache (1a2d9a9).
 
 **./tree rerun again on 2026-10-19 on epyc1 and dell1** (`run.sh <machine> -t -m 3`, commit 051949b: cd18717 plus `./tree --profile` and the count tables filled without a zero-fill on one thread; epyc 17:02, dell 17:23). The desktop's ./tree rows stay from 2026-10-17 (cd18717). cd18717 → 051949b, median of 3: CART one thread 5.01 → 4.93 s (epyc), 6.80 → 6.84 s (dell); C4.5 6.38 → 6.39 s, 8.93 → 9.04 s; CART on every CPU 0.47 → 0.49 s, 0.48 → 0.49 s; C4.5 0.63 → 0.57 s, 0.70 → 0.70 s. The same trees and peak RSS (within 0.02 GiB).
@@ -17,6 +19,7 @@ bench/results/cluster-susy-vs-others-cpu/run.sh pc -m 3      # on the desktop
 bench/results/cluster-susy-vs-others-cpu/run.sh epyc -m 3    # on mordor3's login node: submits a whole-node SLURM job
 bench/results/cluster-susy-vs-others-cpu/run.sh dell -m 3
 bench/results/cluster-susy-vs-others-cpu/run.sh pc -t -m 3   # ./tree only, keeping the other tools' rows
+bench/results/cluster-susy-vs-others-cpu/run.sh epyc -s -m 3 # ./tree on one socket -> epyc-socket/ (dell: dell-socket/)
 bench/.venv/bin/python bench/vs_others_chart.py bench/results/cluster-susy-vs-others-cpu   # chart.png, summary.csv
 ```
 
@@ -186,6 +189,13 @@ Run on 2026-10-16, ./tree's rows rerun on 2026-10-17 (desktop, cd18717) and 2026
 | **./tree** | 1.18 s · 1.85 GiB | 654 ms · 1.86 GiB | 753 ms · 1.86 GiB |
 | YaDT | 33.5 s (28×) · 4.68 GiB | 31.8 s (49×) · 5.52 GiB | 30.9 s (41×) · 5.59 GiB |
 
+**./tree on one socket (24 threads) against both sockets (48):** training time (min–max) · peak RSS, median of 3
+
+| | epyc, one socket | epyc, both | dell, one socket | dell, both |
+|---|--:|--:|--:|--:|
+| CART | 507 ms (504–518) · 1.58 GiB | 486 ms (485–502) · 1.59 GiB | 505 ms (505–508) · 1.58 GiB | 502 ms (500–662) · 1.59 GiB |
+| C4.5 | 577 ms (569–586) · 1.83 GiB | 654 ms (542–664) · 1.86 GiB | 662 ms (660–667) · 1.83 GiB | 753 ms (700–806) · 1.86 GiB |
+
 **The trees** are the same on every machine and thread count:
 
 | Algorithm | Implementation | Nodes | Depth | Train acc. | Test acc. |
@@ -201,6 +211,7 @@ Run on 2026-10-16, ./tree's rows rerun on 2026-10-17 (desktop, cd18717) and 2026
 
 - **Speed, one thread:** ./tree is 81–102× faster than scikit-learn, 81–172× faster than rpart, 133–150× faster than J48 and 22–28× faster than YaDT.
 - **Speed, every CPU:** ./tree builds the CART tree in 0.49–0.50 s (epyc and dell) and 0.79 s (pc), the C4.5 tree in 0.65, 0.75 and 1.18 s; YaDT needs 31–34 s, 28–49× longer.
+- **One socket is as fast as two on SUSY:** CART 1.01–1.04× the both-socket time, C4.5 0.88× (1.13–1.14× faster), with a much smaller spread (C4.5 on epyc 569–586 against 542–664 ms). With SUSY's 4.5M training rows one socket's memory bandwidth is enough; the second socket's threads add little but traffic between the sockets (not profiled). The larger cluster datasets do gain from the second socket (HIGGS 1.3–1.7×, airline 1.1–1.3×, ECBDL 1.7–1.8×: [cluster-higgs](../cluster-higgs/BENCHMARK.md)).
 - **Speedup over one thread:** ./tree 9.8–10.1× on epyc, 11.9–13.4× on dell, 5.0–5.6× on the desktop; YaDT 5.6×, 7.0× and 3.8×. Dell's larger speedups come from its slower single thread (./tree 1.4× slower than on epyc), not from a fast parallel run: epyc is the fastest machine in parallel.
 - **Machines, one thread:** the desktop is the fastest for ./tree (4.4–5.8 s), epyc 1.1× slower (4.9–6.4 s); dell is 1.4× slower than epyc for ./tree, 1.1–1.6× for the other tools.
 - **rpart is 2.3–2.5× slower on the servers** (840 and 900 s against 362 s), much more than the other tools (scikit-learn 1.2–1.3×). Not because of its build: the servers' conda-forge R, with rpart built the same way, timed on the desktop's CPU 2 on 2026-10-17 (a check outside the benchmark, one run each, governor `powersave`), took 410 s against 368 s for Arch's R: 12% slower, the same tree. So the servers' single core is about 2× slower for rpart, while it is within 1.1× of the desktop for ./tree (epyc) — probably because rpart is bound by memory latency, which is higher on the two-socket servers, and ./tree by bandwidth.
