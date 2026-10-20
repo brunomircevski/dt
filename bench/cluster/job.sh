@@ -10,8 +10,9 @@
 # 4 up to the node's CPU count (scaling.sh). timeout: seconds per ./tree process
 # (default 3600). RUN_EXTRA (environment): more run.py arguments, e.g.
 # --profile (profile.sh). NUMA_NODE (environment, submit.sh -n): the threads,
-# the memory (numactl --membind) and the GPU all on that NUMA node: its CPUs in
-# their order, and the first GPU attached to it instead of GPU 0.
+# the memory (numactl --membind) and the GPU all on that NUMA node (one
+# socket): its CPUs in their order, and the first GPU attached to it instead of
+# GPU 0. CUDA runs always get one (below); CPU runs only when it is given.
 
 set -euo pipefail
 DIR="$1" NAME="$2" DATASET="$3" IMPLS="$4" RUNS="$5" PROTOCOLS="${6:-cart_alpha_nodepth,c45}" THREADS="${7:-all}" TIMEOUT="${8:-3600}"
@@ -30,6 +31,21 @@ echo "log: $OUT/run.log, job $SLURM_JOB_ID on $(hostname), started $(date '+%F %
 # through --exclusive, and ./tree uses GPU 0 in nvidia-smi's (PCI) order (with
 # NUMA_NODE the first on that node), the GPU whose memory run.py samples.
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0
+# CUDA runs stay on one socket, the GPU's: without NUMA_NODE they take the NUMA
+# node of a GPU with the most free memory (hopper: node 1, node 0's memory was
+# taken in 2026-10). Only the parallel CPU backend uses both sockets.
+if [ -z "${NUMA_NODE:-}" ] && [[ "$IMPLS" == *tree_cuda* || "$IMPLS" == *tree_gpu_only* ]]; then
+  NUMA_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
+    while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
+    while read -r node; do
+      numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4, n }'
+    done | sort -rn | head -1 | cut -d' ' -f2)"
+  [ -n "$NUMA_NODE" ] || { echo "no NUMA node with a GPU found" >&2; exit 1; }
+fi
+if [ -n "${NUMA_NODE:-}" ] &&
+   [ "$(lscpu -p=NODE,SOCKET | grep -v '^#' | awk -F, -v n="$NUMA_NODE" '$1 == n { print $2 }' | sort -u | wc -l)" != 1 ]; then
+  echo "NUMA node $NUMA_NODE spans more than one socket" >&2; exit 1
+fi
 MEMBIND=()
 if [ -n "${NUMA_NODE:-}" ]; then
   MEMBIND=(--membind "$NUMA_NODE")

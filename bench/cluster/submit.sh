@@ -39,8 +39,10 @@
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
-# NUMA node (job.sh NUMA_NODE), e.g. -n 1 when
-# node 0's memory is taken (hopper: another user's /dev/shm, 2026-10).
+# NUMA node (job.sh NUMA_NODE). The CUDA runs (cuda-*, gpuonly-*) stay on one
+# socket, their GPU's, without it too: job.sh takes the NUMA node of a GPU
+# with the most free memory (hopper: node 1, as another user's /dev/shm filled
+# node 0 in 2026-10). Only the parallel CPU runs use both sockets.
 
 set -euo pipefail
 RUNS=1
@@ -57,7 +59,7 @@ while getopts "m:d:p:o:a:n:h" option; do
     o) OUTDIR="$OPTARG" ;;
     a) AFTER="$OPTARG" ;;
     n) NUMA="$OPTARG" ;;
-    *) sed -n '2,45p' "$0"; exit 2 ;;
+    *) sed -n '2,46p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))

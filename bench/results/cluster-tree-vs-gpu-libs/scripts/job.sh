@@ -5,9 +5,10 @@
 #   (default: tree cuml xgboost, on higgs and airline; ECBDL: DATASETS=ecbdl_15m;
 #   chess: DATASETS=chess_1b; tree_gpu: ./tree --gpu-only)
 #   NUMA_NODE=1 sbatch ...   the first GPU on NUMA node 1, and every case bound
-#   to that node's CPUs and memory (numactl): hopper's node 0 had 40 GB free in
-#   2026-10. Every library and ./tree runs on its default threads, all the CPUs
-#   it may use: the same CPUs for everyone.
+#   to that node's CPUs and memory (numactl): one socket, the GPU's. Without it
+#   the job takes the NUMA node of a GPU with the most free memory (hopper's
+#   node 0 had 40 GB free in 2026-10). Every library and ./tree runs on its
+#   default threads, all the CPUs it may use: the same CPUs for everyone.
 #   REPLACE=1 sbatch ...   first moves the IMPLS' earlier rows out of each
 #   dataset's results.jsonl (to results.jsonl.before-<job id>)
 # machine.json is written once per <dataset>/<node>; a later job that adds
@@ -27,6 +28,13 @@ export TMPDIR=$SCRATCH  # every temp file of the job, removed with it
 trap 'rm -rf "$SCRATCH"; find -L "${DATA_ROOT:-$HOME/dt/bench/data}" -type f -exec dd if={} iflag=nocache count=0 status=none \; 2>/dev/null' EXIT
 trap 'exit 143' TERM INT
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1
+if [ -z "${NUMA_NODE:-}" ]; then  # GPU runs stay on one socket, their GPU's
+  NUMA_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
+    while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
+    while read -r node; do
+      numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4, n }'
+    done | sort -rn | head -1 | cut -d' ' -f2)"
+fi
 BIND=()
 if [ -n "${NUMA_NODE:-}" ]; then
   BIND=(numactl --cpunodebind="$NUMA_NODE" --membind="$NUMA_NODE")

@@ -15,7 +15,8 @@
 #
 # -p: run.py's protocols (default cart_alpha_nodepth,cart_full_nodepth,c45);
 # -o: the directory under bench/results/ (default cluster-<dataset>-profile, ecbdl_15m: cluster-ecbdl-profile);
-# -n: threads, memory and GPU on that NUMA node (submit.sh -n).
+# -n: threads, memory and GPU on that NUMA node (submit.sh -n); the CUDA runs
+# take their GPU's NUMA node (one socket) without it too.
 
 set -euo pipefail
 RUNS=1
@@ -30,7 +31,7 @@ while getopts "m:d:p:o:n:h" option; do
     p) PROTOCOLS="$OPTARG" ;;
     o) OUTDIR="$OPTARG" ;;
     n) NUMA="$OPTARG" ;;
-    *) sed -n '2,18p' "$0"; exit 2 ;;
+    *) sed -n '2,19p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
