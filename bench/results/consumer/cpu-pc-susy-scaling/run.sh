@@ -3,11 +3,11 @@
 # (c45), neither with a depth limit, with 1, 2, 4, 8, 12, 16, 20, 24 and 28 threads. Everything it writes goes into
 # this directory; BENCHMARK.md explains every choice.
 #
-#   bench/results/cpu-pc-susy-scaling/run.sh          # each case once
-#   bench/results/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
+#   bench/results/consumer/cpu-pc-susy-scaling/run.sh          # each case once
+#   bench/results/consumer/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
 #
 # A quick check of the script on a small dataset, results elsewhere:
-#   bench/results/cpu-pc-susy-scaling/run.sh -d susy_50k -o /tmp/scaling-check
+#   bench/results/consumer/cpu-pc-susy-scaling/run.sh -d susy_50k -o /tmp/scaling-check
 
 set -euo pipefail
 RUNS=1
@@ -25,7 +25,7 @@ done
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 
 RUN="$(basename "$OUT")"
-cd "$HERE/../../.."  # repository root
+cd "$HERE/../../../.."  # repository root
 PY=bench/.venv/bin/python
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 

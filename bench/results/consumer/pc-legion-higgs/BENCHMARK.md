@@ -12,9 +12,9 @@ Each subdirectory holds its machine's `run.sh` and results; the chart and this f
 ## Run it
 
 ```bash
-bench/results/pc-legion-higgs/cpu-pc-higgs/run.sh            # on the desktop, each case once
-bench/results/pc-legion-higgs/cuda-legion-higgs/run.sh       # on the laptop
-bench/results/pc-legion-higgs/cuda-legion-higgs/run.sh -m 5  # each case 5 times
+bench/results/consumer/pc-legion-higgs/cpu-pc-higgs/run.sh            # on the desktop, each case once
+bench/results/consumer/pc-legion-higgs/cuda-legion-higgs/run.sh       # on the laptop
+bench/results/consumer/pc-legion-higgs/cuda-legion-higgs/run.sh -m 5  # each case 5 times
 ```
 
 - **Time:** a few minutes each, plus preparing HIGGS once (the 7.8 GB CSV into `bench/data/higgs/`).
@@ -28,13 +28,13 @@ bench/results/pc-legion-higgs/cuda-legion-higgs/run.sh -m 5  # each case 5 times
   4. Writes `report.md`, `summary.csv`, `runs.csv` next to `results.jsonl`, `machine.json`, `plan.json` and `run.log`, and redraws `chart.png` here once both runs exist.
 - **Chart** (`chart.png`): both machines, the hardware of each in its header, RAM and VRAM as separate bars. It refuses to draw if the data files or trees differ. Alone:
   ```bash
-  bench/.venv/bin/python bench/machines_chart.py bench/results/pc-legion-higgs/cpu-pc-higgs \
-      bench/results/pc-legion-higgs/cuda-legion-higgs --out bench/results/pc-legion-higgs/chart.png
+  bench/.venv/bin/python bench/machines_chart.py bench/results/consumer/pc-legion-higgs/cpu-pc-higgs \
+      bench/results/consumer/pc-legion-higgs/cuda-legion-higgs --out bench/results/consumer/pc-legion-higgs/chart.png
   ```
 
 ## Method
 
-The protocols and measurements of [`cluster-susy-vs-others-cpu`](../cluster-susy-vs-others-cpu/BENCHMARK.md), ./tree only, on HIGGS:
+The protocols and measurements of [`cluster-susy-vs-others-cpu`](../../cluster-susy-vs-others-cpu/BENCHMARK.md), ./tree only, on HIGGS:
 
 | Backend | Machine | Command | Threads |
 |---|---|---|---|

@@ -4,15 +4,15 @@ One directory per benchmark: `<backend>-<machine>-<dataset>/`.
 
 - **backend:** `cpu` or `cuda`.
 - **machine:** a short name for the computer. `pc` is the i7-14700KF desktop (8 performance + 12 efficiency cores, 28 threads); `legion` is the laptop with an i7-13650HX (6 + 8 cores, 20 threads) and an RTX 5070 Laptop GPU (8 GB).
-  The desktop's and laptop's HIGGS runs are grouped in `pc-legion-higgs/`. The mordor3 cluster's runs are grouped in `cluster-*/` directories, named after its nodes. Two GPU servers run CUDA only: `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402). Two CPU servers run parallel only: `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y). Their scripts are in [bench/cluster/](../cluster/README.md), not in a `run.sh`.
+  The desktop's and laptop's HIGGS runs are grouped in `consumer/pc-legion-higgs/`; every desktop and laptop benchmark is under `consumer/`. The mordor3 cluster's runs are grouped in `cluster-*/` directories, named after its nodes. Two GPU servers run CUDA only: `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402). Two CPU servers run parallel only: `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y). Their scripts are in [bench/cluster/](../cluster/README.md), not in a `run.sh`.
 - **dataset:** the `bench/datasets.toml` entry, e.g. `susy` for the full SUSY dataset, `higgs`.
 - **`-vs-others`:** the directory also runs other implementations (sklearn, rpart, Weka J48, YaDT) next to ./tree: `cluster-susy-vs-others-cpu`, which has no machine in its name because it holds three, one subdirectory each (`pc`, `epyc`, `dell`). Every other directory is ./tree only.
 
 Each directory holds a `run.sh` that runs that benchmark and writes all of its results into the same directory:
 
 ```bash
-bench/results/cpu-pc-susy-scaling/run.sh          # each case once
-bench/results/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
+bench/results/consumer/cpu-pc-susy-scaling/run.sh          # each case once
+bench/results/consumer/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
 bench/results/cluster-susy-vs-others-cpu/run.sh pc -m 3   # its run.sh takes the machine: pc, epyc or dell
 ```
 
@@ -34,10 +34,10 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 
 | Directory | What | Main result |
 |---|---|---|
-| [`cpu-pc-susy-scaling`](cpu-pc-susy-scaling/BENCHMARK.md) | full SUSY, 1–28 threads on the desktop | 2026-10-10: CART 7.06 → 0.96 s (7.4×), C4.5 6.17 → 1.17 s (5.3×). Flat beyond 12–20 threads: memory bandwidth. The serial points were rerun on 2026-10-17 (4.67 and 5.88 s), the others not. |
-| `cpu-legion-susy-scaling` | full SUSY, 1–20 threads on the laptop (`scaling.csv`, `chart.png`) | CART 8.05 → 1.03 s (7.8×), C4.5 6.88 → 1.04 s (6.6×). Serial points from before the serial backend's change. |
-| [`cuda-legion-susy`](cuda-legion-susy/BENCHMARK.md) | full SUSY: serial, parallel and CUDA on the laptop | CUDA 0.37 s (CART) and 0.46 s (C4.5): 2.4–2.6× the desktop's 28 threads. |
-| [`pc-legion-higgs`](pc-legion-higgs/BENCHMARK.md) | full HIGGS (10.5M rows): `cuda-legion-higgs` (laptop parallel and CUDA) and `cpu-pc-higgs` (desktop parallel) | CUDA 1.37 s (CART) and 2.00 s (C4.5), 2.3–2.6× the CPUs. The laptop's 20 threads match the desktop's 28: its DDR5 is faster. |
+| [`consumer/cpu-pc-susy-scaling`](consumer/cpu-pc-susy-scaling/BENCHMARK.md) | full SUSY, 1–28 threads on the desktop | 2026-10-10: CART 7.06 → 0.96 s (7.4×), C4.5 6.17 → 1.17 s (5.3×). Flat beyond 12–20 threads: memory bandwidth. The serial points were rerun on 2026-10-17 (4.67 and 5.88 s), the others not. |
+| `consumer/cpu-legion-susy-scaling` | full SUSY, 1–20 threads on the laptop (`scaling.csv`, `chart.png`) | CART 8.05 → 1.03 s (7.8×), C4.5 6.88 → 1.04 s (6.6×). Serial points from before the serial backend's change. |
+| [`consumer/cuda-legion-susy`](consumer/cuda-legion-susy/BENCHMARK.md) | full SUSY: serial, parallel and CUDA on the laptop | CUDA 0.37 s (CART) and 0.46 s (C4.5): 2.4–2.6× the desktop's 28 threads. |
+| [`consumer/pc-legion-higgs`](consumer/pc-legion-higgs/BENCHMARK.md) | full HIGGS (10.5M rows): `cuda-legion-higgs` (laptop parallel and CUDA) and `cpu-pc-higgs` (desktop parallel) | CUDA 1.37 s (CART) and 2.00 s (C4.5), 2.3–2.6× the CPUs. The laptop's 20 threads match the desktop's 28: its DDR5 is faster. |
 
 **./tree alone on the mordor3 cluster** (2026-10-19, 3 runs per case, commit 051949b: cd18717's one copy of the presorted columns on every backend, plus `--profile` and the count tables filled without a zero-fill on one thread; the same trees as on cd18717, the times within ±5%. The CUDA rows were rerun the same evening at 6f6cecb: hand-offs through page-locked buffers instead of a page-locked arena, plus d9da007's block partition; the same trees). Every machine runs with ./tree's defaults, which were the fastest settings found on each. CART has no depth limit, like C4.5. Accuracy is ./tree's training accuracy (`run.py --train-accuracy-only`).
 
@@ -60,7 +60,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 
 | Directory | What | Main result |
 |---|---|---|
-| [`visualization`](visualization/BENCHMARK.md) | 14 SVGs (`svg/`), the exported trees (`results/`), a log-scale timing chart and `summary.csv` | ./tree, scikit-learn, rpart, J48 and YaDT all find the same 17-node, depth-4 tree with 100% test accuracy. The binned cuML and XGBoost trees fill all 10 levels (389 and 479 nodes) at 98.78% and 99.51%. cuML is fastest at 16 ms; ./tree takes 44–59 ms on CPU and 45 ms on CUDA, scikit-learn 0.69 s, rpart 0.82 s, YaDT 0.18–0.19 s, J48 1.48 s, XGBoost 0.11 s. |
+| [`visualization`](../../visualization/BENCHMARK.md) (at the repository root) | 14 SVGs (`svg/`), the exported trees (`results/`), a log-scale timing chart and `summary.csv` | ./tree, scikit-learn, rpart, J48 and YaDT all find the same 17-node, depth-4 tree with 100% test accuracy. The binned cuML and XGBoost trees fill all 10 levels (389 and 479 nodes) at 98.78% and 99.51%. cuML is fastest at 16 ms; ./tree takes 44–59 ms on CPU and 45 ms on CUDA, scikit-learn 0.69 s, rpart 0.82 s, YaDT 0.18–0.19 s, J48 1.48 s, XGBoost 0.11 s. |
 
 ## A new machine
 

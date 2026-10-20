@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Thread scaling of ./tree on the two CPU nodes of mordor3, as the scaling
-# benchmarks of the desktop and laptop (cpu-pc-susy-scaling): pruned CART
+# benchmarks of the desktop and laptop (consumer/cpu-pc-susy-scaling): pruned CART
 # without a depth limit (cart_alpha_nodepth) and C4.5 (c45), --parallel with
 # 1, 2, 4, then every 4 threads up to the node's 48 CPUs (1 thread: --serial).
 # One whole node per job (job.sh), both released together. Results:

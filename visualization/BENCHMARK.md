@@ -50,7 +50,7 @@ Trees with up to 64 leaves are drawn with full node boxes, including the thresho
 - **Exact trees.** Every implementation that tests every distinct value finds the same 17-node tree: 8 splits at x, y ≈ 1 and 2, and 9 pure leaves. This holds for ./tree, scikit-learn, rpart, J48 and YaDT. The thresholds differ only in where between the two neighboring values they fall.
 - **Binned trees.** cuML and XGBoost first bin each feature into quantiles, and no bin edge falls exactly on 1 or 2. They therefore fill all 10 levels with slivers along the board's lines and still misclassify 0.5–1.2% of the test rows.
 - **cuML's two cases.** cuML grows the same tree for Gini and entropy.
-- **Speed.** cuML is the fastest at 16 ms, about 3× ./tree. At 1M rows ./tree's times are mostly fixed costs: the CUDA setup on hopper, and thread start-up and presort on the CPU. The 1000M-row comparison in [cluster-tree-vs-gpu-libs](../cluster-tree-vs-gpu-libs/BENCHMARK.md) shows the opposite ordering. Against the CPU libraries ./tree is 13–19× faster than scikit-learn and rpart, 3–4× faster than YaDT and 25–31× faster than J48.
+- **Speed.** cuML is the fastest at 16 ms, about 3× ./tree. At 1M rows ./tree's times are mostly fixed costs: the CUDA setup on hopper, and thread start-up and presort on the CPU. The 1000M-row comparison in [cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md) shows the opposite ordering. Against the CPU libraries ./tree is 13–19× faster than scikit-learn and rpart, 3–4× faster than YaDT and 25–31× faster than J48.
 
 ## Method
 
@@ -96,7 +96,7 @@ Accuracy, depth and node count are then computed by walking that tree. Each libr
 From the repository root on mordor3's login node:
 
 ```bash
-bench/results/visualization/run.sh
+visualization/run.sh
 ```
 
 This submits 5 SLURM jobs:
@@ -105,7 +105,7 @@ This submits 5 SLURM jobs:
 2. `dell1`, `dell2` and `hopper` start after it, at the same time.
 3. `render` on dell1 starts when all three have finished. It writes `svg/`, `chart.png`, `chart.svg` and `summary.csv`.
 
-Logs go to `logs/<role>.log`. `REPS=5 bench/results/visualization/run.sh` changes the number of timed runs.
+Logs go to `logs/<role>.log`. `REPS=5 visualization/run.sh` changes the number of timed runs.
 
 **Requirements:**
 

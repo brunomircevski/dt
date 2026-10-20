@@ -5,8 +5,8 @@
 ## Run it
 
 ```bash
-bench/results/cuda-legion-susy/run.sh          # each case once
-bench/results/cuda-legion-susy/run.sh -m 5     # each case 5 times
+bench/results/consumer/cuda-legion-susy/run.sh          # each case once
+bench/results/consumer/cuda-legion-susy/run.sh -m 5     # each case 5 times
 ```
 
 - **Time:** a few minutes. 6 cases (2 protocols × serial, parallel, CUDA); ./tree trains in seconds, checking the 2 GB of data at the start and evaluating each tree in Python take longer.
@@ -29,14 +29,14 @@ bench/results/cuda-legion-susy/run.sh -m 5     # each case 5 times
 - **Outputs:** `report.md`, `summary.csv`, `runs.csv`, `results.jsonl`, `machine.json` (now with the GPU, nvcc and the RAM modules), `plan.json`, `run.log`, as in `cluster-susy-vs-others-cpu`, and `chart.png`: this run with the desktop's `cluster-susy-vs-others-cpu` as hatched reference, the hardware of both machines in its header, RAM and VRAM as separate bars.
 - **The chart alone** (`run.sh` draws it; it refuses to draw if the data files or trees differ from the reference):
   ```bash
-  bench/.venv/bin/python bench/machines_chart.py bench/results/cuda-legion-susy \
+  bench/.venv/bin/python bench/machines_chart.py bench/results/consumer/cuda-legion-susy \
       --reference bench/results/cluster-susy-vs-others-cpu/pc
   ```
 - `cluster-susy-vs-others-cpu`'s `machine.json` got its `ram_modules` on 2026-10-10 after its run (read from udev on the same PC); `run.py` records them since.
 
 ## Method
 
-The same protocols, data and measurements as [`cluster-susy-vs-others-cpu`](../cluster-susy-vs-others-cpu/BENCHMARK.md), for ./tree only, so its ./tree times compare with the desktop's directly.
+The same protocols, data and measurements as [`cluster-susy-vs-others-cpu`](../../cluster-susy-vs-others-cpu/BENCHMARK.md), for ./tree only, so its ./tree times compare with the desktop's directly.
 
 | Backend | Command | Threads |
 |---|---|---|

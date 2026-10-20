@@ -3,9 +3,9 @@
 # <= 10, drawn as SVG with the run's facts, plus a timing chart. BENCHMARK.md
 # explains the choices.
 #
-#   bench/results/visualization/run.sh            on mordor3's login node, from the repository root:
+#   visualization/run.sh            on mordor3's login node, from the repository root:
 #                                                 submits every job below
-#   bench/results/visualization/run.sh <role>     what one SLURM job runs
+#   visualization/run.sh <role>     what one SLURM job runs
 #
 # Roles (each its own job, the whole node held with --exclusive):
 #   prepare  dell1   the 80/20 split of datasets/chess_1m.csv into bench/data/chess_1m_8020
@@ -19,7 +19,7 @@
 set -uo pipefail
 ROLE="${1:-submit}"
 if [ -n "${SLURM_JOB_ID:-}" ]; then REPO="$SLURM_SUBMIT_DIR"; else REPO="$(git rev-parse --show-toplevel)"; fi
-V="$REPO/bench/results/visualization"
+V="$REPO/visualization"
 DATA="$REPO/bench/data/chess_1m_8020"
 RES="$V/results"
 CPU_PY="$REPO/bench/.venv/bin/python"

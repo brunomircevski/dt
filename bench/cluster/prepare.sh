@@ -34,6 +34,6 @@ step "2/3 prepare $PREPARE for bench/run.py"
 # shellcheck disable=SC2086  # PREPARE: one or more names
 "$PY" bench/prepare.py $PREPARE
 
-step "3/3 SHA-256 of the prepared files (for higgs: compare with plan.json of pc-legion-higgs/cuda-legion-higgs)"
+step "3/3 SHA-256 of the prepared files (for higgs: compare with plan.json of consumer/pc-legion-higgs/cuda-legion-higgs)"
 for name in $PREPARE; do sha256sum "bench/data/$name"/*; done
 echo "done $(date '+%F %T')"

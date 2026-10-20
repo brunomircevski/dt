@@ -5,8 +5,8 @@
 # with the desktop's. Everything it writes goes into this directory;
 # BENCHMARK.md explains every choice.
 #
-#   bench/results/cuda-legion-susy/run.sh          # each case once
-#   bench/results/cuda-legion-susy/run.sh -m 5     # each case 5 times
+#   bench/results/consumer/cuda-legion-susy/run.sh          # each case once
+#   bench/results/consumer/cuda-legion-susy/run.sh -m 5     # each case 5 times
 
 set -euo pipefail
 RUNS=1
@@ -20,7 +20,7 @@ done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RUN="$(basename "$HERE")"
-cd "$HERE/../../.."  # repository root
+cd "$HERE/../../../.."  # repository root
 PY=bench/.venv/bin/python
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 
@@ -77,7 +77,7 @@ step "3/5 prepare the data if it is missing"
 step "4/5 benchmark: SUSY, pruned CART and C4.5, serial, parallel and CUDA, $RUNS run(s) per case"
 # ./tree_cpu --serial on CPU 4; ./tree_cpu --parallel and ./tree --cuda with 20 threads.
 "$PY" bench/run.py susy --protocols cart_alpha,c45 --impls tree,tree_cuda --threads 1,all \
-  --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$RUN"
+  --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$HERE"
 
 step "5/5 tables, CSV files and the chart (with the desktop's cluster-susy-vs-others-cpu as reference)"
 "$PY" bench/report.py "$HERE" --md "$HERE/report.md" --csv "$HERE/summary.csv" \

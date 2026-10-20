@@ -4,8 +4,8 @@
 # parallel and CUDA runs in cuda-legion-higgs. Everything it writes goes into
 # this directory; ../BENCHMARK.md explains every choice.
 #
-#   bench/results/pc-legion-higgs/cpu-pc-higgs/run.sh          # each case once
-#   bench/results/pc-legion-higgs/cpu-pc-higgs/run.sh -m 5     # each case 5 times
+#   bench/results/consumer/pc-legion-higgs/cpu-pc-higgs/run.sh          # each case once
+#   bench/results/consumer/pc-legion-higgs/cpu-pc-higgs/run.sh -m 5     # each case 5 times
 
 set -euo pipefail
 RUNS=1
@@ -20,7 +20,7 @@ done
 HERE="$(cd "$(dirname "$0")" && pwd)"
 RUN="$(basename "$HERE")"
 OTHER=cuda-legion-higgs  # the other machine's half
-cd "$HERE/../../../.."  # repository root
+cd "$HERE/../../../../.."  # repository root
 PY=bench/.venv/bin/python
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 
@@ -60,7 +60,7 @@ make cpu
 
 step "3/4 benchmark: HIGGS, pruned CART and C4.5, parallel (28 threads), $RUNS run(s) per case"
 "$PY" bench/run.py higgs --protocols cart_alpha,c45 --impls tree --threads all \
-  --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$RUN"
+  --cpus "$CPUS" --reps "$RUNS" --timeout 3600 --run-id "$HERE"
 
 step "4/4 tables, CSV files and the chart of both machines"
 "$PY" bench/report.py "$HERE" --md "$HERE/report.md" --csv "$HERE/summary.csv" \

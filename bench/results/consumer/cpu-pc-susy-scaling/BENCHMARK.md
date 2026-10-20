@@ -2,13 +2,13 @@
 
 **Status:** run on 2026-10-10 at 19:11, one run per point, commit 49b7f47 (replacing the 2026-10-09 run on commit 93f2c03), `performance` governor. The load average at the start (8.5 / 2.9 / 1.6) is the benchmarks run just before it on this PC, which had ended; nothing else was running. `machine.json` says `-dirty` only because other benchmarks' result files were being replaced at the time; the code was committed.
 
-**1 thread rerun on 2026-10-17** (`bench/serial_rerun.py`, commit 3bd3a46, one run per case): `--serial` now runs the parallel backend's algorithm, big nodes partitioned out of place ([docs/CPU.md](../../../docs/CPU.md)). Serial CART 7.06 → 4.67 s, C4.5 6.17 → 5.88 s, peak RSS 1.2 → 1.6 GiB (CART). **The 2–28-thread points are still the 2026-10-10 run (commit 49b7f47)**, so the speedups below compare today's serial code with older parallel code; most of the serial gain (CART) comes from changes between the two commits, not from the out-of-place partition, which leaves SUSY's serial time unchanged ([cluster-susy-vs-others-cpu](../cluster-susy-vs-others-cpu/BENCHMARK.md): 4.63 → 4.53 s on this PC). Rerun every point to read the speedups.
+**1 thread rerun on 2026-10-17** (`bench/serial_rerun.py`, commit 3bd3a46, one run per case): `--serial` now runs the parallel backend's algorithm, big nodes partitioned out of place ([docs/CPU.md](../../../../docs/CPU.md)). Serial CART 7.06 → 4.67 s, C4.5 6.17 → 5.88 s, peak RSS 1.2 → 1.6 GiB (CART). **The 2–28-thread points are still the 2026-10-10 run (commit 49b7f47)**, so the speedups below compare today's serial code with older parallel code; most of the serial gain (CART) comes from changes between the two commits, not from the out-of-place partition, which leaves SUSY's serial time unchanged ([cluster-susy-vs-others-cpu](../../cluster-susy-vs-others-cpu/BENCHMARK.md): 4.63 → 4.53 s on this PC). Rerun every point to read the speedups.
 
 ## Run it
 
 ```bash
-bench/results/cpu-pc-susy-scaling/run.sh          # each case once
-bench/results/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
+bench/results/consumer/cpu-pc-susy-scaling/run.sh          # each case once
+bench/results/consumer/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
 ```
 
 - **Time:** a few minutes. 18 cases (2 protocols × 9 thread counts); on full SUSY ./tree trains in seconds, and checking the 2 GB of data at the start plus evaluating each tree in Python take longer than training.

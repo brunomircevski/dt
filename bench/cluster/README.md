@@ -256,5 +256,5 @@ files from 100M on. CSVs: 20 bytes per row, 20.0 GB for 1000M; preparing all fou
 took 5 minutes (`prepare-chess.log`).
 
 HIGGS's prepared files (`bench/data/higgs/`) have the SHA-256 recorded in
-`plan.json` of `pc-legion-higgs/cpu-pc-higgs` and `pc-legion-higgs/cuda-legion-higgs` (desktop and laptop).
+`plan.json` of `consumer/pc-legion-higgs/cpu-pc-higgs` and `consumer/pc-legion-higgs/cuda-legion-higgs` (desktop and laptop).
 Logs: `prepare-higgs.log`, `prepare-airline.log`.

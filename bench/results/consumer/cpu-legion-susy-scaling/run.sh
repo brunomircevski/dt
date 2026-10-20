@@ -4,11 +4,11 @@
 # and 20 threads. The PC run (cpu-pc-susy-scaling) goes up to 28; this one stops at 20, the
 # laptop's logical CPU count. Everything it writes goes into this directory.
 #
-#   bench/results/cpu-legion-susy-scaling/run.sh          # each case once
-#   bench/results/cpu-legion-susy-scaling/run.sh -m 5     # each case 5 times
+#   bench/results/consumer/cpu-legion-susy-scaling/run.sh          # each case once
+#   bench/results/consumer/cpu-legion-susy-scaling/run.sh -m 5     # each case 5 times
 #
 # A quick check of the script on a small dataset, results elsewhere:
-#   bench/results/cpu-legion-susy-scaling/run.sh -d susy_50k -o /tmp/scaling-check
+#   bench/results/consumer/cpu-legion-susy-scaling/run.sh -d susy_50k -o /tmp/scaling-check
 
 set -euo pipefail
 RUNS=1
@@ -26,7 +26,7 @@ done
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 
 RUN="$(basename "$OUT")"
-cd "$HERE/../../.."  # repository root
+cd "$HERE/../../../.."  # repository root
 PY=bench/.venv/bin/python
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 
