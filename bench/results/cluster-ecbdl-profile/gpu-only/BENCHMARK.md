@@ -60,7 +60,7 @@ No hand-off kernels or copies; device→host is 0.1 GB for C4.5 (44.7 GB with ha
 | VRAM, hopper | 73.3–74.3 GiB | 73.3–73.4 GiB |
 
 - **Without the host arena,** unpruned CART needs 36.5 GiB of RAM instead of 106.7 GiB. C4.5's pruning needs about 104 GiB in both.
-- **ampere's VRAM was not recorded:** the nvidia-smi sampler reported a flat 425 MiB in every gpu-only case on ampere (also in `plain/`), while on hopper it saw 73–74 GiB. The chess gpu-only runs on ampere, just before these, were recorded correctly (25.4 GiB at 1000M rows); the cause was not looked into.
+- **ampere's VRAM was not recorded:** the nvidia-smi sampler reported a flat 425 MiB in every gpu-only case on ampere (also in `plain/`), while on hopper it saw 73–74 GiB. run.py read the samples from a pipe only at the end, and the full pipe (64 KiB, about 170 s of 10 ms samples) blocked nvidia-smi during ampere's 210–216 s one-thread CSV read, before training (hopper's took 141–146 s). Fixed in ba22356; the rerun without `--profile` in [cluster-ecbdl](../../cluster-ecbdl/BENCHMARK.md) measured 73.3 / 74.3 / 73.6 GiB (CART α / unpruned / C4.5).
 
 ## What profiling costs
 
