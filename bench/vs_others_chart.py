@@ -236,10 +236,10 @@ def trees(fig, spec, machines):
             rows.append((y, "section", SHORT[protocol]))
             y += 1
             previous = protocol
-        label = B.IMPLS[impl]["label"]
+        text = B.IMPLS[impl]["label"]
         if per_impl[(protocol, impl)] > 1:  # not the same tree everywhere: say where
-            label += f" ({', '.join(where)})"
-        rows.append((y, "row", (impl, tree, label)))
+            text += f" ({', '.join(where)})"
+        rows.append((y, "row", (impl, tree, text)))
         y += 1
     height = y - 0.5
     same = all(n == 1 for n in per_impl.values())
@@ -278,9 +278,9 @@ def trees(fig, spec, machines):
             ax_nodes.text(X_SECTION, y, payload, transform=trans, ha="left", va="center",
                           fontsize=9.5, color=INK, fontweight="bold", style="italic")
             continue
-        impl, (n, depth, test, train), label = payload
+        impl, (n, depth, test, train), text = payload
         color = COLORS[impl]
-        ax_nodes.text(X_IMPL, y, label, transform=trans, ha="left", va="center", fontsize=9,
+        ax_nodes.text(X_IMPL, y, text, transform=trans, ha="left", va="center", fontsize=9,
                       color=INK, fontweight="bold" if impl == "tree" else "normal")
         low = ax_nodes.get_xlim()[0]
         ax_nodes.barh(y, n - low, left=low, height=0.62, color=color, zorder=2)

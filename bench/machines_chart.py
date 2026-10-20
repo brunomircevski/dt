@@ -132,11 +132,13 @@ def bars(run, reference):
     info = B.hardware(json.load(open(run / "machine.json")))
     out = []
     for protocol in PROTOCOLS:
+        # single: one thread only (serial), or every thread count but 1; None: any
+        # (--gpu-only ran on one thread until 3ccf4ba, on all the GPU's CPUs since).
         for impl, single in (("tree", True), ("tree", False), ("tree_cuda", False),
-                             ("tree_gpu_only", True)):
+                             ("tree_gpu_only", None)):
             ok = [r for r in rows if r["kind"] == "run" and r["status"] == "ok"
                   and r["protocol"] == protocol and r["impl"] == impl
-                  and (r["threads"] == 1) == single]
+                  and (single is None or (r["threads"] == 1) == single)]
             if not ok:
                 continue
             threads = ok[0]["threads"]
@@ -342,8 +344,9 @@ def main():
                              else f"min {low:.2f} · max {high:.2f} s")
             ax_time.text(after(end, max_time), y, duration(t) if LOG else f"{t:.2f} s", va="center", fontsize=9,
                          color=INK, fontweight="bold")
-            ax_time.annotate(" · ".join(notes), (end, y), xytext=(52, 0),
-                             textcoords="offset points", va="center", fontsize=8, color=MUTED)
+            NOTES.append((ax_time, ax_time.annotate(" · ".join(notes), (end, y), xytext=(52, 0),
+                                                    textcoords="offset points", va="center",
+                                                    fontsize=8, color=MUTED)))
             name = f"{BACKENDS[backend]} · {where(run)}" + (" (reference)" if e["reference"]
                                                             else "")
             ax_time.text(-0.015, y - 0.14, name, transform=ax_time.get_yaxis_transform(),
@@ -444,8 +447,38 @@ def main():
              fontsize=8, color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=LEFT, right=0.97, top=1 - (header + 1.05) / inches,
                         bottom=(((1.26 if LOG else 1.08) if split else 0.9) + (0.18 if SPREAD else 0)) / inches)
+    fit_notes(fig)
     fig.savefig(out, dpi=150, facecolor="white")
     print(out)
+
+
+# (time axes, note) of every bar: fit_notes widens an axis whose notes run past its right edge.
+NOTES = []
+
+
+def fit_notes(fig):
+    """Make the notes next to the bars end inside their time axis: a note too
+    long goes on two lines, and if one still does not fit, every time axis
+    stretches alike (the panels keep one scale)."""
+    def overflowing():
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        return [note for ax, note in NOTES
+                if note.get_window_extent(renderer).x1 > ax.get_window_extent(renderer).x1]
+    for note in overflowing():
+        parts = note.get_text().split(" · ")
+        if len(parts) > 1:
+            cut = min(range(1, len(parts)), key=lambda k: abs(len(" · ".join(parts[:k]))
+                                                              - len(" · ".join(parts[k:]))))
+            note.set_text(" · ".join(parts[:cut]) + "\n" + " · ".join(parts[cut:]))
+    axes = {ax for ax, _ in NOTES}
+    for _ in range(40):  # in steps of 5%: the bars move as the axes stretch
+        if not overflowing():
+            return
+        for ax in axes:
+            low, high = ax.get_xlim()
+            ax.set_xlim(low, low * (high / low) ** 1.05 if ax.get_xscale() == "log"
+                        else low + (high - low) * 1.05)
 
 
 if __name__ == "__main__":
