@@ -3,6 +3,7 @@
 **Status:** one run per case, all on 2026-10-19, commit 051949b: cd18717 (one copy of the presorted columns on every backend, [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)) plus `./tree --profile` and the count tables filled without a zero-fill on one thread. The same trees as on cd18717, the times within −2% to +5%. `machine.json` says `-dirty` only because the previous result files had been removed from the cluster's checkout for the rerun; the code was committed.
 - **15M sample** (`*-ecbdl_15m`, pruned and `unpruned/`): dell2 15:10–15:22, epyc1 15:14–15:25, dell1 15:15–15:25.
 - **CUDA rows rerun at 6f6cecb** (hopper and ampere, 2026-10-19 20:25–20:40): the GPU's hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)), and the host threads partition big nodes in blocks (d9da007). The same trees. 051949b's CUDA times are given as "was" below.
+- **GPU only rows** (`gpuonly-*-ecbdl_15m`, `--cuda --gpu-only --threads 1`, all three protocols in one directory): the runs without `--profile` of [cluster-ecbdl-profile/gpu-only](../cluster-ecbdl-profile/gpu-only/BENCHMARK.md) (`plain/`, copied here), 2026-10-20, commit 6da527e (6f6cecb plus `--gpu-only`): hopper 09:16–09:36, ampere 09:20–09:40. The same trees.
 - **Full set** (`*-ecbdl`, pruned and `unpruned/`): dell2 15:23–15:51, epyc1 15:25–15:51, dell1 15:25–15:50.
 - **Each node ran alone** and was used whole. The jobs ran one after another on each node, after the other cluster benchmarks of the same commit.
 - **Same trees:** every case built the same tree on every node and backend, and the full set's trees are the same as before the rerun.
@@ -21,10 +22,13 @@ bench/cluster/submit.sh -d ecbdl_15m cpu-dell512-ecbdl_15m     # dell2, by name
 bench/cluster/submit.sh -d ecbdl cpu-dell512-ecbdl
 bench/cluster/submit.sh -d ecbdl_15m $P cpu-dell512-ecbdl_15m
 bench/cluster/submit.sh -d ecbdl $P cpu-dell512-ecbdl
+bench/cluster/profile.sh -o cluster-ecbdl-profile/gpu-only gpuonly-hopper-ecbdl_15m gpuonly-ampere-ecbdl_15m
+cp -r bench/results/cluster-ecbdl-profile/gpu-only/plain/gpuonly-* bench/results/cluster-ecbdl/   # GPU only rows
 d=bench/results/cluster-ecbdl                            # the charts
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,cart_full_nodepth,c45 \
     --more $d/unpruned $d/cuda-hopper-ecbdl_15m $d/cuda-ampere-ecbdl_15m $d/cpu-epyc-ecbdl_15m \
-    $d/cpu-dell-ecbdl_15m $d/cpu-dell512-ecbdl_15m --out $d/chart.png
+    $d/cpu-dell-ecbdl_15m $d/cpu-dell512-ecbdl_15m $d/gpuonly-hopper-ecbdl_15m $d/gpuonly-ampere-ecbdl_15m \
+    --no-vram gpuonly-ampere-ecbdl_15m --out $d/chart.png
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,cart_full_nodepth,c45 \
     --more $d/unpruned $d/cpu-epyc-ecbdl $d/cpu-dell-ecbdl $d/cpu-dell512-ecbdl --out $d/chart-full.png
 ```
@@ -35,6 +39,8 @@ The dataset is ECBDL'14 (protein contact-map prediction, the GECCO 2014 big data
 |---|---|---|---|---|---|
 | `cuda-hopper-ecbdl_15m` | hopper | 2× Xeon Gold 6444Y, 32 cores | 1 TB DDR5-4800 | H100 PCIe 80 GB | CUDA (+ 32 CPU threads) |
 | `cuda-ampere-ecbdl_15m` | ampere | 2× EPYC 7402, 48 cores | 1 TB DDR4-3200 | A100 80 GB PCIe | CUDA (+ 48 CPU threads) |
+| `gpuonly-hopper-ecbdl_15m` | hopper | the same | | the same | CUDA, every node on the GPU (1 CPU thread) |
+| `gpuonly-ampere-ecbdl_15m` | ampere | the same | | the same | CUDA, every node on the GPU (1 CPU thread) |
 | `cpu-epyc-*` | epyc1 | 2× EPYC 9255 (Zen 5), 48 cores | 512 GB DDR5-6400 | – | parallel (48 threads) |
 | `cpu-dell-*` | dell1 | 2× Xeon Gold 6542Y, 48 cores | 1 TB DDR5-5200 (16 × 64 GB) | – | parallel (48 threads) |
 | `cpu-dell512-*` | dell2 | the same as dell1 | 512 GB DDR5-5200 (8 × 64 GB) | – | parallel (48 threads) |
@@ -48,7 +54,7 @@ Each bar is ./tree's training time (`train total`: GPU setup, presort, build and
 
 ## 15M-row sample
 
-![ECBDL'14 15M sample on five mordor3 nodes](chart.png)
+![ECBDL'14 15M sample on five mordor3 nodes, CUDA with and without the CPU](chart.png)
 
 | | CART | CART unpruned | C4.5 (of which pruning) | RAM CART / unpruned / C4.5 | VRAM CART / unpruned / C4.5 |
 |---|--:|--:|--:|--:|--:|
@@ -57,7 +63,11 @@ Each bar is ./tree's training time (`train total`: GPU setup, presort, build and
 | Parallel · epyc (EPYC 9255, 48 threads) | 16.69 s | 35.78 s | 77.95 s (10.86 s) | 111.4 / 111.5 / 112.8 GiB | – |
 | Parallel · dell (Xeon 6542Y, 48 threads) | 24.85 s | 51.74 s | 113.52 s (14.53 s) | 111.4 / 111.5 / 112.8 GiB | – |
 | Parallel · dell512 (the same, half the memory channels) | 38.50 s | 80.08 s | 163.59 s (31.88 s) | 111.4 / 111.5 / 112.8 GiB | – |
+| GPU only · hopper (H100, 1 CPU thread) | 10.29 s | 41.91 s | 377.60 s (334.65 s) | 36.0 / 36.5 / 104.2 GiB | 73.4 / 74.2 / 73.4 GiB |
+| GPU only · ampere (A100, 1 CPU thread) | 12.06 s | 34.91 s | 225.95 s (176.58 s) | 36.0 / 36.5 / 104.2 GiB | not recorded |
 
+- **GPU only** (every node on the GPU, one CPU thread) is slower than CUDA with the CPU's threads in every case: pruned CART 1.29× (H100) and 1.03× (A100), unpruned CART 2.4× and 1.5×, C4.5 7.4× and 3.4×. C4.5's pruning on one thread is 89% (H100) and 78% (A100) of the run; ampere's EPYC 7402 core prunes it 1.9× faster than hopper's Xeon. Unpruned CART on the GPU alone is still faster than dell512, and on the A100 about as fast as epyc. Without the host arena, unpruned CART needs 36.5 GiB of RAM instead of 106.6. Profiled in [cluster-ecbdl-profile/gpu-only](../cluster-ecbdl-profile/gpu-only/BENCHMARK.md).
+- **ampere's GPU only VRAM was not recorded:** nvidia-smi reported a flat 425 MiB in all three cases (also in the profiled runs), so the chart leaves it out (`--no-vram`); it should be about hopper's 73–74 GiB.
 - **The H100 is 2.1× (CART), 2.1× (unpruned CART) and 1.5× (C4.5) faster than epyc**, a little more than on the 6M sample (1.8×, 1.7× and 1.6×) except C4.5, still less than on airline (6.2× for pruned CART). Profiled in [cluster-ecbdl-profile](../cluster-ecbdl-profile/gpu-plus-cpu/BENCHMARK.md): the H100 grows 2.0–2.5× faster than epyc, but C4.5's pruning runs on the slower host CPUs.
 - **6f6cecb against 051949b on the GPUs:** the page-locking of the 75 GB hand-off arena is gone (it held up the GPU loop 1.2–1.9 s): unpruned CART 18.28 → 17.35 s (H100) and 25.93 → 23.69 s (A100), A100 C4.5 66.95 → 65.53 s; pruned CART, which hands over little, is unchanged. The H100's C4.5 went 46.56 → 50.70 s, all in the pruning on the host CPUs (18.7 → 24.0 s; growing 27.9 → 26.7 s). Pruning does not touch the changed code: in a same-job comparison that evening both builds pruned equally slowly (52.7 s against 51.3 s in total), with hopper's NUMA node 0 nearly full (11–28 GB free of 516).
 - **C4.5's pruning is 44–47% of a CUDA run** (27–31% on the 6M sample) and slower than on the CPU servers (24.0 and 28.7 s against epyc's 10.9 s). It runs on the GPU nodes' slower host CPUs, and its first step (the rows sorted by leaf) runs on the host too: a copy of the raw values for doing it on the GPU (4 bytes per value, 35 GiB) no longer fits beside the columns, and ./tree keeps it only when it fits.

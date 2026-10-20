@@ -22,7 +22,7 @@ done
 The CPU rerun named only `cpu-epyc-$d cpu-dell-$d cpu-dell512-$d`, without `-a`. The serial runs were submitted with `serial-epyc-$d serial-dell-$d`, after a rebuild job (`-a <build job>`), and the GPU-only runs with `gpuonly-hopper-$d gpuonly-ampere-$d`.
 
 The charts are drawn as shown in the README:
-- `chart-1m.png`, `chart-10m.png`, `chart-100m.png`, `chart-1b.png`: one `machines_chart.py --spread` chart per size. The bars are medians, the whiskers run from the fastest to the slowest run, and the dots are the single runs.
+- `chart-1m.png`, `chart-10m.png`, `chart-100m.png`, `chart-1b.png`: one `machines_chart.py --spread` chart per size. The bars are medians, the whiskers run from the fastest to the slowest run, and the dots are the single runs. Both axes are log scale (`--log`), and each bar's label gives ./tree's recorded pruning time: 0 ms everywhere, since both protocols here are unpruned (prune_seconds 0–0.3 ms), so there is no pruning segment to draw.
 - `chart-rows.png`: drawn by `rows_chart.py`.
 
 Both use the 10-run results for dell and dell512 at 1000M.

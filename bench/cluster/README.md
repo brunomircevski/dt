@@ -89,7 +89,7 @@ v=$d/dell-variance  # dell and dell512 at 1000M: the 10-run check (BENCHMARK.md)
 for s in 1m 10m 100m 1b; do
   dell="$d/cpu-dell-chess_$s $d/cpu-dell512-chess_$s"
   [ $s = 1b ] && dell="$v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b"
-  bench/.venv/bin/python bench/machines_chart.py --spread --protocols cart_full_nodepth,c45_unpruned \
+  bench/.venv/bin/python bench/machines_chart.py --spread --log --protocols cart_full_nodepth,c45_unpruned \
       $d/cuda-hopper-chess_$s $d/cuda-ampere-chess_$s $d/cpu-epyc-chess_$s $dell \
       $d/serial-epyc-chess_$s $d/serial-dell-chess_$s $d/gpuonly-hopper-chess_$s $d/gpuonly-ampere-chess_$s \
       --out $d/chart-$s.png

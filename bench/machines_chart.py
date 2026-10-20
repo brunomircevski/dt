@@ -16,6 +16,11 @@ prepared files in plan.json) or did not build the same trees.
 --spread draws on every time bar a whisker from the fastest to the slowest
 run and a dot per run, and writes their min and max.
 
+--log draws the time and memory axes on a log scale (sizes that differ by
+orders of magnitude, e.g. serial against CUDA) and writes every case's recorded
+pruning time next to its bar, also for the unpruned protocols (where it is only
+C4.5's collapse of useless splits) and below 1%.
+
 --more adds the cases of later runs kept in another directory under the same
 run names (e.g. cluster-ecbdl/unpruned/cpu-epyc-ecbdl next to
 cluster-ecbdl/cpu-epyc-ecbdl), so that one chart shows both.
@@ -23,6 +28,7 @@ cluster-ecbdl/cpu-epyc-ecbdl), so that one chart shows both.
 
 import argparse
 import json
+import math
 import statistics
 from pathlib import Path
 
@@ -31,7 +37,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
-from matplotlib.ticker import FuncFormatter  # noqa: E402
+from matplotlib.ticker import FuncFormatter, MaxNLocator  # noqa: E402
 
 import benchlib as B  # noqa: E402
 from chart import GRID, INK, MUTED, NAMES  # noqa: E402
@@ -55,7 +61,20 @@ LEFT = 0.215  # figure fraction left of the panels, for the row labels
 # Result directories are <backend>-<machine>-<dataset>; what to call each machine.
 MACHINES = {"pc": "desktop", "legion": "laptop"}
 MORE = []  # --more: directories with later runs of the same names
+NO_VRAM = set()  # --no-vram: run names whose recorded VRAM is not to be trusted
 SPREAD = False  # --spread: a min-max whisker and a dot per run on every time bar
+LOG = False  # --log: log-scale axes, and every case's pruning time in its notes
+
+
+def after(value, largest):
+    """Where a label goes just right of a bar ending at `value`."""
+    return value * 1.06 if LOG else value + largest * 0.012
+
+
+def duration(seconds):
+    if seconds < 0.00005:
+        return "0 ms"
+    return f"{seconds * 1000:.1f} ms" if seconds < 0.1 else f"{seconds:.2f} s"
 
 
 def sources(run):
@@ -108,10 +127,12 @@ def bars(run, reference):
                         "time": statistics.median(r["train_seconds"] for r in ok),
                         "times": [r["train_seconds"] for r in ok],
                         "ram": statistics.median(r["peak_rss_train_bytes"] for r in ok) / 2**30,
-                        "vram": statistics.median(gpu) / 2**30 if gpu else None,
+                        "vram": (statistics.median(gpu) / 2**30
+                                 if gpu and run.name not in NO_VRAM else None),
                         # Median pruning time, if every run recorded it.
                         "prune": (statistics.median(prune)
                                   if len(prune) == len(ok) and protocol not in UNPRUNED else None),
+                        "pruned": statistics.median(prune) if len(prune) == len(ok) else None,
                         # Test accuracy, or training accuracy where only that was
                         # recorded (run.py --train-accuracy-only).
                         "tree": (ok[0]["nodes"], ok[0]["depth"],
@@ -150,13 +171,19 @@ def main():
                         help=f"the protocols to draw, one panel each, of: {', '.join(TITLES)}")
     parser.add_argument("--spread", action="store_true",
                         help="draw each time bar's min-max whisker and every run as a dot")
+    parser.add_argument("--no-vram", action="append", default=[], metavar="RUN",
+                        help="a run name whose VRAM sample is wrong: drawn without VRAM (repeatable)")
+    parser.add_argument("--log", action="store_true",
+                        help="log-scale axes, and every case's recorded pruning time")
     parser.add_argument("--more", action="append", type=Path, default=[],
                         help="a directory with later runs of the same names, e.g. other "
                         "protocols (repeatable)")
     args = parser.parse_args()
     MORE.extend(args.more)
-    global SPREAD
+    NO_VRAM.update(args.no_vram)
+    global SPREAD, LOG
     SPREAD = args.spread
+    LOG = args.log
     PROTOCOLS.clear()
     PROTOCOLS.update((p, TITLES[p]) for p in args.protocols.split(","))
     runs = list(args.reference) + list(args.runs)
@@ -192,6 +219,8 @@ def main():
                                           "hspace": gap / ((panels - (count - 1) * gap) / count)})
     max_time = max(max(e["times"]) if SPREAD else e["time"] for e in entries)
     max_gib = max(max(e["ram"], e["vram"] or 0) for e in entries)
+    min_time = min(min(e["times"]) if SPREAD else e["time"] for e in entries)
+    min_gib = min(min(e["ram"], e["vram"] or e["ram"]) for e in entries)
     for row, protocol in enumerate(PROTOCOLS):
         ax_time, ax_mem = axes[row]
         mine = sorted((e for e in entries if e["protocol"] == protocol),
@@ -234,8 +263,11 @@ def main():
             # Pruning's share; speedup over the same machine's serial run; CUDA
             # also over the same machine's parallel run and the fastest other
             # machine's.
-            notes = ([f"prune {prune:.2f} s ({100 * prune / t:.0f}%)"]
-                     if prune is not None and prune >= 0.01 * t else [])
+            if LOG and e["pruned"] is not None:
+                notes = [f"prune {duration(e['pruned'])}"]
+            else:
+                notes = ([f"prune {prune:.2f} s ({100 * prune / t:.0f}%)"]
+                         if prune is not None and prune >= 0.01 * t else [])
             if backend != "serial" and (run, "serial") in times:
                 notes.append(f"{times[(run, 'serial')] / t:.1f}× {where(run)} serial")
             if backend in GPU:
@@ -254,8 +286,9 @@ def main():
                 ax_time.scatter(e["times"], [y - 0.18 + 0.36 * k / (n - 1) for k in range(n)],
                                 s=11, color="white", edgecolor=INK, linewidth=0.7, zorder=4)
                 end = max(t, high)
-                notes.insert(0, f"min {low:.2f} · max {high:.2f} s")
-            ax_time.text(end + max_time * 0.012, y, f"{t:.2f} s", va="center", fontsize=9,
+                notes.insert(0, f"min {duration(low)} · max {duration(high)}" if LOG
+                             else f"min {low:.2f} · max {high:.2f} s")
+            ax_time.text(after(end, max_time), y, duration(t) if LOG else f"{t:.2f} s", va="center", fontsize=9,
                          color=INK, fontweight="bold")
             ax_time.annotate(" · ".join(notes), (end, y), xytext=(52, 0),
                              textcoords="offset points", va="center", fontsize=8, color=MUTED)
@@ -269,18 +302,28 @@ def main():
                 ax_mem.barh(y - 0.16, e["ram"], height=0.3, zorder=2, **style(e))
                 ax_mem.barh(y + 0.16, e["vram"], height=0.3, zorder=2, facecolor="white",
                             edgecolor=COLORS[backend], linewidth=1.4)
-                ax_mem.text(e["ram"] + max_gib * 0.015, y - 0.16, f"{e['ram']:.2f} GiB RAM",
+                ax_mem.text(after(e["ram"], max_gib), y - 0.16, f"{e['ram']:.2f} GiB RAM",
                             va="center", fontsize=8.5, color=INK)
-                ax_mem.text(e["vram"] + max_gib * 0.015, y + 0.16, f"{e['vram']:.2f} GiB VRAM",
+                ax_mem.text(after(e["vram"], max_gib), y + 0.16, f"{e['vram']:.2f} GiB VRAM",
                             va="center", fontsize=8.5, color=INK)
             else:
                 ax_mem.barh(y, e["ram"], height=0.62, zorder=2, **style(e))
-                ax_mem.text(e["ram"] + max_gib * 0.015, y, f"{e['ram']:.2f} GiB RAM",
+                ax_mem.text(after(e["ram"], max_gib), y, f"{e['ram']:.2f} GiB RAM",
                             va="center", fontsize=8.5, color=INK)
-        ax_time.set_xlim(0, max_time * 1.75)
-        ax_time.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
-        ax_mem.set_xlim(0, max_gib * 1.45)
-        ax_mem.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GiB"))
+        if LOG:
+            # Decades from below the shortest bar; room on the right for the notes.
+            ax_time.set_xscale("log")
+            ax_time.set_xlim(10 ** math.floor(math.log10(min_time)), max_time * 60)
+            ax_time.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
+            ax_mem.set_xscale("log")
+            ax_mem.set_xlim(10 ** math.floor(math.log10(min_gib)), max_gib * 6)
+            ax_mem.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GiB"))
+        else:
+            ax_time.set_xlim(0, max_time * 2.0)
+            ax_time.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
+            ax_mem.set_xlim(0, max_gib * 1.45)
+            ax_mem.xaxis.set_major_locator(MaxNLocator(nbins=6))
+            ax_mem.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GiB"))
 
     top = 1 - 0.09 / inches
     fig.suptitle(f"./tree on {NAMES.get(dataset, dataset)} ({meta['n_train']:,} training rows, "
@@ -305,8 +348,8 @@ def main():
         fig.text(0.012, line_y, f"{name.capitalize()}", fontsize=9.2, color=INK,
                  fontweight="bold", va="top")
         line = f"{B.hardware_line(machine, used_gpu)}   ({role})"
-        # About 170 characters fit at 9.2 pt; a longer line is set smaller.
-        fig.text(0.075, line_y, line, fontsize=min(9.2, 9.2 * 170 / len(line)), color=INK,
+        # About 165 characters fit at 9.2 pt; a longer line is set smaller.
+        fig.text(0.075, line_y, line, fontsize=min(9.2, 9.2 * 165 / len(line)), color=INK,
                  va="top")
     handles = [Patch(color=COLORS[b], label=BACKENDS[b]) for b in BACKENDS
                if any(e["backend"] == b for e in entries)]
@@ -331,11 +374,13 @@ def main():
     fig.text(LEFT, 0.1 / inches,
              f"Bars: {runs_text}{'' if runs_text.endswith(chr(10)) else '. '}Time: ./tree's 'train total' (presort, build, prune; CUDA also "
              "upload and device sort), not reading the CSV."
+             + (" Log-scale axes; 'prune': ./tree's prune timer." if LOG else "")
              + ("\nDarker: growing the tree (setup, presort, build); lighter: pruning it "
                 "(shown when it takes 1% or more)." if split else "")
              + "\nSame data files (SHA-256) on every "
              "machine. RAM: peak RSS of the process up to the end of training.\nVRAM: peak GPU "
-             "memory during the process above idle, CUDA context included (nvidia-smi, every 10 ms).",
+             "memory during the process above idle, CUDA context included (nvidia-smi, every 10 ms)."
+             + (f" Not recorded correctly: {', '.join(sorted(NO_VRAM))}." if NO_VRAM else ""),
              fontsize=8, color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=LEFT, right=0.97, top=1 - (header + 1.05) / inches,
                         bottom=((1.08 if split else 0.9) + (0.18 if SPREAD else 0)) / inches)
