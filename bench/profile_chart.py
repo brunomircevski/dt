@@ -3,9 +3,9 @@
 `run.py --profile` (bench/cluster/profile.sh): every run directory holds
 results.jsonl and profiles/*.json (./tree --profile, src/core/trace.h).
 
-  bench/.venv/bin/python bench/profile_chart.py bench/results/cluster-ecbdl-profile/cuda-hopper-ecbdl_15m \\
-      .../cuda-ampere-ecbdl_15m .../cpu-epyc-ecbdl_15m --plain bench/results/cluster-ecbdl-profile/plain \\
-      --out-dir bench/results/cluster-ecbdl-profile
+  d=bench/results/cluster-ecbdl-profile/gpu-plus-cpu
+  bench/.venv/bin/python bench/profile_chart.py $d/cuda-hopper-ecbdl_15m $d/cuda-ampere-ecbdl_15m \\
+      $d/cpu-epyc-ecbdl_15m --out-dir $d
 
 writes into --out-dir:
   chart-phases.png     the training thread's phases, in seconds (the critical path)
@@ -13,8 +13,8 @@ writes into --out-dir:
   chart-gpu.png        CUDA runs: what the GPU ran (kernels by step, copies by kind), idle included
   timeline-<protocol>.png  per run, over the training time: the phases, the CPU threads
                        at work by kind (every 5 ms) and how busy the GPU's kernels and copies were
-  profile.md           the numbers behind the charts, and what profiling cost (--plain:
-                       the same cases run without --profile)
+  profile.md           the numbers behind the charts, and what profiling cost (--plain, or each run's
+                       sibling plain/: the same cases run without --profile)
 
 One run per case is drawn (the first profiled run of each case).
 """
@@ -40,7 +40,8 @@ from machines_chart import TITLES, short_cpu, short_gpu  # noqa: E402
 # segments carry labels and profile.md has the numbers. Idle is a neutral gray.
 SLOTS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
 IDLE = "#dcdbd6"
-BACKENDS = {"tree_cuda": "CUDA", "tree": "Parallel"}
+BACKENDS = {"tree_cuda": "CUDA", "tree_gpu_only": "GPU only", "tree": "Parallel"}
+GPU = {"tree_cuda", "tree_gpu_only"}  # the runs that use the GPU
 
 # The training thread's phases (trace phase names -> group), in stacking order.
 PHASES = [
@@ -129,8 +130,9 @@ def load_run(run):
             continue
         trace = json.load(open(run / row["profile"]))
         node = run.name.split("-")[1]
-        hardware = (f"{short_gpu(info)} + {row['threads']} CPU threads" if row["impl"] == "tree_cuda"
-                    else f"{short_cpu(info)}, {row['threads']} threads")
+        plural = "s" if row["threads"] > 1 else ""
+        hardware = (f"{short_gpu(info)} + {row['threads']} CPU thread{plural}" if row["impl"] in GPU
+                    else f"{short_cpu(info)}, {row['threads']} thread{plural}")
         cases[row["protocol"]] = {"run": run, "row": row, "trace": trace, "node": node,
                                   "impl": row["impl"], "hardware": hardware,
                                   "machine": machine, "threads": row["threads"]}
@@ -348,7 +350,7 @@ def chart_threads(cases, protocols, meta, out):
 
 
 def chart_gpu(cases, protocols, meta, out):
-    gpu = {p: [c for c in cases[p] if c["impl"] == "tree_cuda"] for p in protocols}
+    gpu = {p: [c for c in cases[p] if c["impl"] in GPU] for p in protocols}
     protocols = [p for p in protocols if gpu[p]]
     if not protocols:
         return
@@ -426,10 +428,10 @@ def busy_fraction(spans, edges):
 def chart_timeline(cases, protocol, meta, out):
     import numpy as np
     mine = cases[protocol]
-    gpu_rows = sum(c["impl"] == "tree_cuda" for c in mine)
+    gpu_rows = sum(c["impl"] in GPU for c in mine)
     heights = []
     for case in mine:
-        heights += [0.32, 1.9] + ([0.28, 0.28] if case["impl"] == "tree_cuda" else []) + [0.5]
+        heights += [0.32, 1.9] + ([0.28, 0.28] if case["impl"] in GPU else []) + [0.5]
     lines = ["Phases: the training thread's (top band; see chart-phases.png). Threads at work: "
              "how many CPU threads did each kind of work, sampled every 5 ms",
              "(colours as in chart-threads.png; the dashed line is the thread count). GPU: share "
@@ -500,7 +502,7 @@ def chart_timeline(cases, protocol, meta, out):
         ax.tick_params(axis="y", colors=MUTED, labelsize=7.5, length=0)
         ax.grid(axis="y", color=GRID, linewidth=0.6)
         # GPU.
-        if case["impl"] == "tree_cuda":
+        if case["impl"] in GPU:
             bins = 100
             edges = np.linspace(0, trace["seconds"], bins + 1)
             for lane, label in (("compute", "GPU\nkernels"), ("copy", "GPU\ncopies")):
@@ -576,7 +578,7 @@ def report(cases, protocols, plain, out):
             lines.append(f"| {protocol} | {case['run'].name} | {case['threads']} | "
                          + " | ".join(f"{parts.get(k, 0):.1f}" for k, _ in WORKS + [("idle", "")])
                          + " |")
-    gpu_cases = [(p, c) for p in protocols for c in cases[p] if c["impl"] == "tree_cuda"]
+    gpu_cases = [(p, c) for p in protocols for c in cases[p] if c["impl"] in GPU]
     if gpu_cases:
         lines += ["", "## GPU (s busy)", "",
                   "| Case | Run | " + " | ".join(f"kernel {k}" for k, _ in KERNELS) + " | "
@@ -601,7 +603,8 @@ def report(cases, protocols, plain, out):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("runs", nargs="+", type=Path)
-    parser.add_argument("--plain", type=Path, help="directory with the same runs without --profile")
+    parser.add_argument("--plain", type=Path, help="directory with the same runs without --profile "
+                        "(default: each run's sibling plain/, if there is one)")
     parser.add_argument("--out-dir", type=Path, required=True)
     args = parser.parse_args()
     loaded = [load_run(run) for run in args.runs]
@@ -615,7 +618,7 @@ def main():
     plan = json.load(open(first["run"] / "plan.json"))
     dataset = first["row"]["dataset"]
     meta = (dataset, plan["datasets"][dataset]["n_train"], len(plan["datasets"][dataset]["features"]))
-    plain = {run.name: plain_times(args.plain, run) for run in args.runs}
+    plain = {run.name: plain_times(args.plain or run.parent / "plain", run) for run in args.runs}
     ratios = [c["row"]["train_seconds"] / plain[c["run"].name][p][0] - 1
               for p in protocols for c in cases[p] if p in plain.get(c["run"].name, {})]
     overhead = (f"the profiled runs took {100 * min(ratios):+.0f}% to {100 * max(ratios):+.0f}% "

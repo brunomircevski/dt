@@ -87,7 +87,7 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
 | `-m N` | 1 | Duplicate the rows N times in memory (slightly rescaled) to stress-test with bigger data. |
 | `--print` | off | Print the tree. |
 | `--dump FILE` | off | Write the tree as text. |
-| `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--cuda`). Its cost was within −1.5% to +2.0% of the run time ([bench/results/cluster-ecbdl-profile](bench/results/cluster-ecbdl-profile/BENCHMARK.md)); `bench/profile_chart.py` draws it. |
+| `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--cuda`). Its cost was within −1.5% to +2.0% of the run time ([bench/results/cluster-ecbdl-profile](bench/results/cluster-ecbdl-profile/gpu-plus-cpu/BENCHMARK.md)); `bench/profile_chart.py` draws it. |
 
 **CART post-pruning** (splits always use the Gini index, as in Breiman et al.)
 

@@ -6,7 +6,7 @@
 # into bench/results/<dir>/plain/<run>/, to see what profiling costs. Run it
 # on the login node (it only calls sbatch); build first (README.md).
 #
-#   bench/cluster/profile.sh                  # ECBDL'14 15M sample, three protocols
+#   bench/cluster/profile.sh -o cluster-ecbdl-profile/gpu-plus-cpu   # ECBDL'14 15M sample, three protocols
 #   bench/cluster/profile.sh -m 3 -d higgs    # HIGGS, each case 3 times
 #   bench/cluster/profile.sh cpu-epyc-ecbdl_15m   # only the named runs
 #   bench/cluster/profile.sh -o cluster-ecbdl-profile/gpu-only \
