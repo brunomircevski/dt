@@ -189,6 +189,12 @@ differences:
   so a 48-thread run's pages went to node 0 and half the threads read across
   the sockets (ECBDL presort 1.6 → 2.3 s). Each run records its free memory
   per node in `results.jsonl` (`mem_free_node*_kb`).
+- **Jobs leave nothing on the node.** The datasets live only in
+  `bench/data` on the login node (the other checkouts symlink it). `job.sh`
+  and `build.sh` point `TMPDIR` at a folder of the job (`/tmp/dt-<job>.*`;
+  /tmp is tmpfs, so leftovers hold RAM) and at exit, also a failed or
+  timed-out one, `cleanup.sh` removes it and drops the datasets from the
+  node's page cache.
 - **RAM in the chart** is the kernel's MemTotal with the module type and
   speed. udev's DMI list, the usual source, is cut short on these boards
   (11–15 of 16 modules).

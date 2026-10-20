@@ -13,6 +13,10 @@
 
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
+# nvcc's temp files in a folder of the job, removed at the end (cleanup.sh)
+export TMPDIR="$(mktemp -d "/tmp/dt-$SLURM_JOB_ID.XXXXXX")"
+trap 'bench/cluster/cleanup.sh "$TMPDIR"' EXIT
+trap 'exit 143' TERM INT
 # hopper has no git: the commit comes from the login node, if given
 #   sbatch --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)" bench/cluster/build.sh
 echo "job $SLURM_JOB_ID on $(hostname), $SLURM_CPUS_PER_TASK CPUs, $(date '+%F %T'), commit ${TREE_GIT_DESCRIBE:-unknown}"

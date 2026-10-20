@@ -676,6 +676,8 @@ def main():
                     execute((B.BASELINE, BASELINE_PROTOCOL[impl], impl, 1), "baseline", rep, [])
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
+        if args.drop_cache:  # leave the node's memory as we found it
+            drop_page_cache(B.DATA)
     print(f"results: {out_dir / 'results.jsonl'}")
 
 

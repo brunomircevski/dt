@@ -19,6 +19,11 @@ cd "$SLURM_SUBMIT_DIR"  # repository root
 PY=bench/.venv/bin/python
 OUT="bench/results/$DIR/$NAME"
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
+# Every temp file in one folder of the job, removed at the end with the
+# datasets' page cache, also when the job fails or SLURM ends it (cleanup.sh).
+export TMPDIR="$(mktemp -d "/tmp/dt-$SLURM_JOB_ID.XXXXXX")"
+trap 'bench/cluster/cleanup.sh "$TMPDIR" bench/data' EXIT
+trap 'exit 143' TERM INT
 echo "log: $OUT/run.log, job $SLURM_JOB_ID on $(hostname), started $(date '+%F %T')"
 
 # SLURM on mordor3 hands out cores, not GPUs (no GRES): the job owns the node
