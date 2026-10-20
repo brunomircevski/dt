@@ -54,6 +54,10 @@ public:
 std::unique_ptr<Grower> makeCpuGrower(const Dataset &train, const Options &options,
                                       ThreadPool *pool, bool reusable);
 
+// Simple backend: the textbook algorithm on one thread, no optimizations
+// (simple_grower.cpp). The reference the others are compared against.
+std::unique_ptr<Grower> makeSimpleGrower(const Dataset &train);
+
 // Cuda backend; small nodes are finished by CPU tasks on `pool`. Allocation
 // and upload time goes to `setupSeconds`.
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &options,

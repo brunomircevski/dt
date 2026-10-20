@@ -14,6 +14,7 @@ namespace dt {
 
 const char *backendName(Backend backend) {
   switch (backend) {
+  case Backend::Simple: return "simple";
   case Backend::Serial: return "serial";
   case Backend::Parallel: return "parallel";
   case Backend::Cuda: return "cuda";
@@ -47,7 +48,7 @@ void printUsage(const char *program) {
   std::cout
       << "Usage: " << program << " [options] [dataset.csv]\n"
       << "\n"
-      << "Backend:   --serial | --parallel | --cuda\n"
+      << "Backend:   --simple | --serial | --parallel | --cuda\n"
       << "Algorithm: --cart | --c45\n"
       << "\n"
       << "Common:\n"
@@ -168,7 +169,7 @@ std::vector<std::string> givenOf(const std::set<std::string> &given,
 // contradict each other, is an error rather than silently dropped. Checked
 // once every flag is read, so their order does not matter.
 void checkFlagCombination(const Options &options, const std::set<std::string> &given) {
-  for (const auto &group : {givenOf(given, {"--serial", "--parallel", "--cuda"}),
+  for (const auto &group : {givenOf(given, {"--simple", "--serial", "--parallel", "--cuda"}),
                             givenOf(given, {"--cart", "--c45"}),
                             givenOf(given, {"--no-prune", "--cv", "--alpha"}),
                             givenOf(given, {"--no-prune", "--cf"})}) {
@@ -190,8 +191,9 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
   } else {
     refuse({"--cf"}, "is for C4.5; CART prunes with --alpha or --cv");
   }
-  if (options.backend == Backend::Serial) {
-    refuse({"--task-rows", "--feature-parallel-rows"}, "is for --parallel and --cuda, not --serial");
+  if (options.backend == Backend::Serial || options.backend == Backend::Simple) {
+    refuse({"--task-rows", "--feature-parallel-rows"},
+           std::string("is for --parallel and --cuda, not --") + backendName(options.backend));
   }
   if (options.backend != Backend::Cuda) {
     refuse({"--gpu-min-rows", "--gpu-only", "--gpu-sweep", "--gpu-profile"},
@@ -218,6 +220,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
 
     if (arg == "-h" || arg == "--help") {
       return false;
+    } else if (arg == "--simple") {
+      options.backend = Backend::Simple;
     } else if (arg == "--serial") {
       options.backend = Backend::Serial;
     } else if (arg == "--parallel") {

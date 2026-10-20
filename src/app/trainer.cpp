@@ -158,7 +158,9 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   if (train.classCount() == 0 || train.rowCount == 0) {
     throw std::runtime_error("Cannot train on an empty dataset.");
   }
-  ThreadPool *buildPool = options.backend == Backend::Serial ? nullptr : pool;
+  ThreadPool *buildPool = options.backend == Backend::Serial || options.backend == Backend::Simple
+                               ? nullptr
+                               : pool;
   const bool isCart = options.algorithm == Algorithm::Cart;
   const bool crossValidate = isCart && options.cart.pruning == CartPruning::CrossValidation;
 
@@ -175,6 +177,8 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
     trace::Phase phase("gpu setup");
     trace::Doing doing(trace::Work::GpuHost);
     grower = makeGpuGrower(train, options, *pool, crossValidate, timings.gpuSetupSeconds);
+  } else if (options.backend == Backend::Simple) {
+    grower = makeSimpleGrower(train);
   } else {
     grower = makeCpuGrower(train, options, buildPool, crossValidate);
   }

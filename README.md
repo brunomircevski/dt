@@ -1,11 +1,12 @@
 # Decision trees: CART and C4.5 on CPU and GPU
 
-Grows **CART** and **C4.5** decision trees on numeric data with three
+Grows **CART** and **C4.5** decision trees on numeric data with four
 interchangeable backends that produce the *same* tree (byte for byte):
 
 | Backend | Flag | How |
 |---------|------|-----|
-| Serial | `--serial` | One thread. The reference. |
+| Simple | `--simple` | One thread, the textbook algorithm with no optimizations: the reference to compare the others against. |
+| Serial | `--serial` | One thread, the optimized algorithm. |
 | Parallel | `--parallel` | Thread pool: features of a big node in parallel, subtrees as tasks. |
 | Cuda | `--cuda` | GPU grows the large nodes level by level; small subtrees go to the CPU pool. |
 
@@ -61,7 +62,7 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--serial` / `--parallel` / `--cuda` | `--parallel` | Where the tree is grown. All three grow the same tree. |
+| `--simple` / `--serial` / `--parallel` / `--cuda` | `--parallel` | Where the tree is grown. All four grow the same tree. |
 | `--cart` / `--c45` | `--cart` | Algorithm. |
 | `--threads N` | 0 = every CPU it may run on (all cores, or those `taskset`/`numactl` allow) | CPU threads for `--parallel`, the CPU part of `--cuda`, loading and evaluation. |
 
@@ -227,6 +228,7 @@ detected" and an incomplete `.tree` file).
 | `src/algo/c45_pruning.*` | C4.5 collapse, training-value thresholds, error-based pruning. |
 | `src/build/grower.h` | Backend interface: grow a tree on (a subset of) the training rows. |
 | `src/build/cpu_builder.*`, `cpu_grower.cpp` | Presort + CPU tree growing (serial and parallel). |
+| `src/build/simple_grower.cpp` | Textbook tree growing without optimizations (`--simple`). |
 | `src/build/gpu_grower.cu` | GPU tree growing. |
 | `src/build/node_store.*` | Thread-safe node storage used while growing. |
 | `tests/`, `bench/`, `tools/` | Golden-tree tests, CPU benchmark and reference comparison. |

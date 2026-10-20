@@ -15,7 +15,8 @@ enum class Algorithm {
 
 // Where the tree is grown.
 enum class Backend {
-  Serial,   // one thread; the reference implementation
+  Simple,   // one thread, textbook algorithm without optimizations (reference)
+  Serial,   // one thread; the optimized algorithm
   Parallel, // CPU thread pool (feature- and node-level parallelism)
   Cuda      // GPU for large nodes (breadth-first), CPU pool for small subtrees
 };
