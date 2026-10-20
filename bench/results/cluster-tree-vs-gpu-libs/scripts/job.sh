@@ -17,7 +17,12 @@ NODE="$1" REPS="${REPS:-3}" IMPLS="${IMPLS:-tree cuml xgboost}" DATASETS="${DATA
 B=$HOME/gpu-dt-bench
 TREE_COMMIT=$(cut -c1-7 $B/dt/.git/HEAD)  # detached at the measured commit; no git on the nodes
 SCRATCH=$(mktemp -d /tmp/gdb.XXXXXX)  # node-local tmpfs, for the tree dumps
-trap 'rm -rf "$SCRATCH"' EXIT
+export TMPDIR=$SCRATCH  # every temp file of the job, removed with it
+# Leave the node as we found it, also when the job fails or SLURM ends it:
+# no temp files, and the datasets (only on the login node's disk, over NFS)
+# out of the page cache (dd iflag=nocache count=0 = posix_fadvise DONTNEED).
+trap 'rm -rf "$SCRATCH"; find -L "${DATA_ROOT:-$HOME/dt/bench/data}" -type f -exec dd if={} iflag=nocache count=0 status=none \; 2>/dev/null' EXIT
+trap 'exit 143' TERM INT
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1
 BIND=()
 if [ -n "${NUMA_NODE:-}" ]; then
