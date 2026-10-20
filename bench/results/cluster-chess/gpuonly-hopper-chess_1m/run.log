@@ -1,48 +1,48 @@
-log: bench/results/cluster-chess/gpuonly-hopper-chess_1m/run.log, job 1318 on hopper, started 2026-10-20 15:14:45
+log: bench/results/cluster-chess/gpuonly-hopper-chess_1m/run.log, job 1451 on hopper, started 2026-10-20 18:32:19
 
-=== 15:14:45  1/3 machine check
-CPUs allocated: 32 (16-31), SLURM_JOB_CPUS_PER_NODE=32
+=== 18:32:19  1/3 machine check
+CPUs allocated: 32 (0-15), SLURM_JOB_CPUS_PER_NODE=32
 CPU governor: schedutil 
-load average: 1.01 1.71 2.66
-free memory per NUMA node: node 0 47 GiB, node 1 236 GiB
-NUMA node 1: CPUs 16-31, memory bound to it, GPU 2
+load average: 10.21 7.87 4.16
+free memory per NUMA node: node 0 281 GiB, node 1 273 GiB
+NUMA node 0: CPUs 0-15, memory bound to it, GPU 0
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:1/1/16 17:1/1/17 18:1/1/18 19:1/1/19 20:1/1/20 21:1/1/21 22:1/1/22 23:1/1/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31
 GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
-code: 7868bf4cb66d (from submit.sh: hopper has no git)
+code: 235c43175b46-dirty (from submit.sh: hopper has no git)
 runs per case: 3
 
-=== 15:14:45  2/3 benchmark: chess_1m, cart_full_nodepth,c45_unpruned, tree_gpu_only, threads 1 (of 32), 3 run(s) per case
+=== 18:32:19  2/3 benchmark: chess_1m, cart_full_nodepth,c45_unpruned, tree_gpu_only, threads all (of 32), 3 run(s) per case
 2 cases, 9 processes:
-  chess_1m | cart_full_nodepth | tree_gpu_only | 1
-  chess_1m | c45_unpruned | tree_gpu_only | 1
+  chess_1m | cart_full_nodepth | tree_gpu_only | 16
+  chess_1m | c45_unpruned | tree_gpu_only | 16
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
   chess_1m: identical in every format (0 s)
 2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
-[1/9] 15:14:47 run 1/3: CART ./tree CUDA, GPU only, 1 thread, chess_1m ...
-    ok: train 0.0398 s, peak 658 MiB, GPU 507 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m01s
-[2/9] 15:14:49 run 1/3: C4.5 ./tree CUDA, GPU only, 1 thread, chess_1m ...
-    ok: train 0.0392 s, peak 659 MiB, GPU 539 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m02s, about 0m04s left
-[3/9] 15:14:50 run 2/3: CART ./tree CUDA, GPU only, 1 thread, chess_1m ...
-    ok: train 0.0389 s, peak 658 MiB, GPU 507 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m03s, about 0m03s left
-[4/9] 15:14:51 run 2/3: C4.5 ./tree CUDA, GPU only, 1 thread, chess_1m ...
-    ok: train 0.0394 s, peak 659 MiB, GPU 507 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m04s, about 0m02s left
-[5/9] 15:14:52 run 3/3: C4.5 ./tree CUDA, GPU only, 1 thread, chess_1m ...
-    ok: train 0.0405 s, peak 659 MiB, GPU 507 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m06s, about 0m01s left
-[6/9] 15:14:53 run 3/3: CART ./tree CUDA, GPU only, 1 thread, chess_1m ...
-    ok: train 0.0388 s, peak 658 MiB, GPU 539 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m07s, about 0m00s left
+[1/9] 18:32:21 run 1/3: CART ./tree CUDA, GPU only, 16 threads, chess_1m ...
+    ok: train 0.0432 s, peak 659 MiB, GPU 539 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m01s
+[2/9] 18:32:22 run 1/3: C4.5 ./tree CUDA, GPU only, 16 threads, chess_1m ...
+    ok: train 0.0605 s, peak 660 MiB, GPU 507 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m02s, about 0m04s left
+[3/9] 18:32:23 run 2/3: CART ./tree CUDA, GPU only, 16 threads, chess_1m ...
+    ok: train 0.0639 s, peak 659 MiB, GPU 507 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m03s, about 0m03s left
+[4/9] 18:32:25 run 2/3: C4.5 ./tree CUDA, GPU only, 16 threads, chess_1m ...
+    ok: train 0.0545 s, peak 660 MiB, GPU 541 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m05s, about 0m02s left
+[5/9] 18:32:26 run 3/3: C4.5 ./tree CUDA, GPU only, 16 threads, chess_1m ...
+    ok: train 0.0599 s, peak 660 MiB, GPU 507 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m06s, about 0m01s left
+[6/9] 18:32:27 run 3/3: CART ./tree CUDA, GPU only, 16 threads, chess_1m ...
+    ok: train 0.0732 s, peak 659 MiB, GPU 541 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m07s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/9] 15:14:54 footprint: CART ./tree CUDA, GPU only, 1 thread, _baseline ...
-    ok: train 0.0365 s, peak 648 MiB, GPU 497 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m08s, about 0m00s left
-[8/9] 15:14:56 footprint: CART ./tree CUDA, GPU only, 1 thread, _baseline ...
-    ok: train 0.0366 s, peak 648 MiB, GPU 509 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m09s, about 0m00s left
-[9/9] 15:14:57 footprint: CART ./tree CUDA, GPU only, 1 thread, _baseline ...
-    ok: train 0.0368 s, peak 648 MiB, GPU 497 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m10s, about 0m00s left
+[7/9] 18:32:28 footprint: CART ./tree CUDA, GPU only, 1 thread, _baseline ...
+    ok: train 0.0397 s, peak 648 MiB, GPU 497 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m08s, about 0m00s left
+[8/9] 18:32:29 footprint: CART ./tree CUDA, GPU only, 1 thread, _baseline ...
+    ok: train 0.0391 s, peak 648 MiB, GPU 497 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m09s, about 0m00s left
+[9/9] 18:32:31 footprint: CART ./tree CUDA, GPU only, 1 thread, _baseline ...
+    ok: train 0.0397 s, peak 648 MiB, GPU 497 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m11s, about 0m00s left
 results: /home/bmircevski/dt-bench/bench/results/cluster-chess/gpuonly-hopper-chess_1m/results.jsonl
 
-=== 15:14:58  3/3 tables and CSV files
-done 2026-10-20 15:14:58
+=== 18:32:32  3/3 tables and CSV files
+done 2026-10-20 18:32:32

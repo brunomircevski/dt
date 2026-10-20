@@ -1,47 +1,48 @@
-log: bench/results/cluster-airlines/noprunning/cuda-ampere-airline/run.log, job 1283 on ampere, started 2026-10-20 13:59:59
+log: bench/results/cluster-airlines/noprunning/cuda-ampere-airline/run.log, job 1448 on ampere, started 2026-10-20 18:29:37
 
-=== 13:59:59  1/3 machine check
-CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
+=== 18:29:37  1/3 machine check
+CPUs allocated: 48 (0-23), SLURM_JOB_CPUS_PER_NODE=48
 CPU governor: ondemand 
-load average: 11.02 3.97 2.71
-free memory per NUMA node: node 0 270 GiB, node 1 124 GiB
+load average: 17.29 9.69 4.55
+free memory per NUMA node: node 0 370 GiB, node 1 267 GiB
+NUMA node 0: CPUs 0-23, memory bound to it, GPU 0
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
 GPU 0, NVIDIA A100 80GB PCIe, 0 MiB, 81920 MiB, 0 %, 300.00 W, P0
 GPU 1, NVIDIA A100 80GB PCIe, 0 MiB, 81920 MiB, 0 %, 300.00 W, P0
 GPU 2, NVIDIA A100-PCIE-40GB, 0 MiB, 40960 MiB, 0 %, 250.00 W, P0
 GPU 3, NVIDIA A100-PCIE-40GB, 0 MiB, 40960 MiB, 0 %, 250.00 W, P0
-code: 8b1ecd151dd2 (from submit.sh: hopper has no git)
+code: 235c43175b46-dirty (from submit.sh: hopper has no git)
 runs per case: 3
 
-=== 13:59:59  2/3 benchmark: airline, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 48), 3 run(s) per case
+=== 18:29:37  2/3 benchmark: airline, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 48), 3 run(s) per case
 2 cases, 9 processes:
-  airline | cart_full_nodepth | tree_cuda | 48
-  airline | c45_unpruned | tree_cuda | 48
+  airline | cart_full_nodepth | tree_cuda | 24
+  airline | c45_unpruned | tree_cuda | 24
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  airline: identical in every format (24 s)
+  airline: identical in every format (33 s)
 2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
-[1/9] 14:00:24 run 1/3: CART ./tree CUDA, 48 threads, airline ...
-    ok: train 3.796 s, peak 21,647 MiB, GPU 13,595 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m09s, elapsed 0m09s
-[2/9] 14:00:34 run 1/3: C4.5 ./tree CUDA, 48 threads, airline ...
-    ok: train 3.511 s, peak 20,235 MiB, GPU 13,565 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m08s, elapsed 0m18s, about 0m37s left
-[3/9] 14:00:43 run 2/3: CART ./tree CUDA, 48 threads, airline ...
-    ok: train 3.743 s, peak 21,655 MiB, GPU 13,595 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m10s, elapsed 0m28s, about 0m27s left
-[4/9] 14:00:53 run 2/3: C4.5 ./tree CUDA, 48 threads, airline ...
-    ok: train 3.517 s, peak 20,240 MiB, GPU 13,565 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m08s, elapsed 0m37s, about 0m18s left
-[5/9] 14:01:02 run 3/3: C4.5 ./tree CUDA, 48 threads, airline ...
-    ok: train 3.475 s, peak 20,238 MiB, GPU 13,565 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m09s, elapsed 0m47s, about 0m09s left
-[6/9] 14:01:11 run 3/3: CART ./tree CUDA, 48 threads, airline ...
-    ok: train 3.572 s, peak 21,681 MiB, GPU 13,595 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m09s, elapsed 0m56s, about 0m00s left
+[1/9] 18:30:11 run 1/3: CART ./tree CUDA, 24 threads, airline ...
+    ok: train 5.074 s, peak 21,647 MiB, GPU 13,595 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m16s, elapsed 0m17s
+[2/9] 18:30:28 run 1/3: C4.5 ./tree CUDA, 24 threads, airline ...
+    ok: train 4.979 s, peak 20,233 MiB, GPU 13,565 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m16s, elapsed 0m33s, about 1m05s left
+[3/9] 18:30:45 run 2/3: CART ./tree CUDA, 24 threads, airline ...
+    ok: train 5.062 s, peak 21,638 MiB, GPU 13,595 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m16s, elapsed 0m50s, about 0m48s left
+[4/9] 18:31:02 run 2/3: C4.5 ./tree CUDA, 24 threads, airline ...
+    ok: train 4.974 s, peak 20,234 MiB, GPU 13,565 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m15s, elapsed 1m06s, about 0m32s left
+[5/9] 18:31:18 run 3/3: C4.5 ./tree CUDA, 24 threads, airline ...
+    ok: train 4.976 s, peak 20,234 MiB, GPU 13,565 MiB, 19,579,127 nodes, depth 74, train acc 90.60% | process 0m16s, elapsed 1m22s, about 0m16s left
+[6/9] 18:31:34 run 3/3: CART ./tree CUDA, 24 threads, airline ...
+    ok: train 5.068 s, peak 21,639 MiB, GPU 13,595 MiB, 47,146,877 nodes, depth 65, train acc 100.00% | process 0m17s, elapsed 1m39s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/9] 14:01:21 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0313 s, peak 641 MiB, GPU 459 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m57s, about 0m00s left
-[8/9] 14:01:22 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0307 s, peak 641 MiB, GPU 471 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m57s, about 0m00s left
-[9/9] 14:01:22 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0307 s, peak 641 MiB, GPU 459 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m58s, about 0m00s left
+[7/9] 18:31:51 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0333 s, peak 641 MiB, GPU 459 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m40s, about 0m00s left
+[8/9] 18:31:52 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0323 s, peak 641 MiB, GPU 471 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m40s, about 0m00s left
+[9/9] 18:31:52 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0321 s, peak 641 MiB, GPU 471 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 1m41s, about 0m00s left
 results: /home/bmircevski/dt-bench/bench/results/cluster-airlines/noprunning/cuda-ampere-airline/results.jsonl
 
-=== 14:01:23  3/3 tables and CSV files
-done 2026-10-20 14:01:23
+=== 18:31:53  3/3 tables and CSV files
+done 2026-10-20 18:31:53

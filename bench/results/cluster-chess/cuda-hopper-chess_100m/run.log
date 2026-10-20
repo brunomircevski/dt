@@ -1,47 +1,48 @@
-log: bench/results/cluster-chess/cuda-hopper-chess_100m/run.log, job 1239 on hopper, started 2026-10-20 13:03:23
+log: bench/results/cluster-chess/cuda-hopper-chess_100m/run.log, job 1457 on hopper, started 2026-10-20 18:33:06
 
-=== 13:03:23  1/3 machine check
-CPUs allocated: 32 (0-31), SLURM_JOB_CPUS_PER_NODE=32
+=== 18:33:06  1/3 machine check
+CPUs allocated: 32 (0-15), SLURM_JOB_CPUS_PER_NODE=32
 CPU governor: schedutil 
-load average: 2.24 1.52 1.34
-free memory per NUMA node: node 0 38 GiB, node 1 239 GiB
+load average: 7.62 7.46 4.19
+free memory per NUMA node: node 0 280 GiB, node 1 273 GiB
+NUMA node 0: CPUs 0-15, memory bound to it, GPU 0
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:1/1/16 17:1/1/17 18:1/1/18 19:1/1/19 20:1/1/20 21:1/1/21 22:1/1/22 23:1/1/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31
 GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
-code: 8b1ecd151dd2 (from submit.sh: hopper has no git)
+code: 235c43175b46-dirty (from submit.sh: hopper has no git)
 runs per case: 3
 
-=== 13:03:23  2/3 benchmark: chess_100m, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 32), 3 run(s) per case
+=== 18:33:06  2/3 benchmark: chess_100m, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 32), 3 run(s) per case
 2 cases, 9 processes:
-  chess_100m | cart_full_nodepth | tree_cuda | 32
-  chess_100m | c45_unpruned | tree_cuda | 32
+  chess_100m | cart_full_nodepth | tree_cuda | 16
+  chess_100m | c45_unpruned | tree_cuda | 16
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  chess_100m: identical in every format (5 s)
+  chess_100m: identical in every format (9 s)
 2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
-[1/9] 13:03:29 run 1/3: CART ./tree CUDA, 32 threads, chess_100m ...
-    ok: train 0.1307 s, peak 3,133 MiB, GPU 3,523 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m01s
-[2/9] 13:03:31 run 1/3: C4.5 ./tree CUDA, 32 threads, chess_100m ...
-    ok: train 0.1341 s, peak 3,134 MiB, GPU 3,525 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m02s, about 0m05s left
-[3/9] 13:03:32 run 2/3: CART ./tree CUDA, 32 threads, chess_100m ...
-    ok: train 0.1318 s, peak 3,133 MiB, GPU 3,523 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m04s, about 0m03s left
-[4/9] 13:03:34 run 2/3: C4.5 ./tree CUDA, 32 threads, chess_100m ...
-    ok: train 0.1343 s, peak 3,134 MiB, GPU 3,525 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m05s, about 0m02s left
-[5/9] 13:03:35 run 3/3: C4.5 ./tree CUDA, 32 threads, chess_100m ...
-    ok: train 0.1332 s, peak 3,134 MiB, GPU 3,525 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m07s, about 0m01s left
-[6/9] 13:03:36 run 3/3: CART ./tree CUDA, 32 threads, chess_100m ...
-    ok: train 0.13 s, peak 3,133 MiB, GPU 3,523 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m01s, elapsed 0m08s, about 0m00s left
+[1/9] 18:33:17 run 1/3: CART ./tree CUDA, 16 threads, chess_100m ...
+    ok: train 0.1071 s, peak 3,132 MiB, GPU 3,523 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m03s, elapsed 0m03s
+[2/9] 18:33:21 run 1/3: C4.5 ./tree CUDA, 16 threads, chess_100m ...
+    ok: train 0.1047 s, peak 3,133 MiB, GPU 3,525 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m03s, elapsed 0m06s, about 0m13s left
+[3/9] 18:33:24 run 2/3: CART ./tree CUDA, 16 threads, chess_100m ...
+    ok: train 0.1064 s, peak 3,132 MiB, GPU 3,523 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m03s, elapsed 0m10s, about 0m09s left
+[4/9] 18:33:28 run 2/3: C4.5 ./tree CUDA, 16 threads, chess_100m ...
+    ok: train 0.1013 s, peak 3,133 MiB, GPU 3,525 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m03s, elapsed 0m14s, about 0m06s left
+[5/9] 18:33:32 run 3/3: C4.5 ./tree CUDA, 16 threads, chess_100m ...
+    ok: train 0.1176 s, peak 3,132 MiB, GPU 3,525 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m02s, elapsed 0m17s, about 0m03s left
+[6/9] 18:33:34 run 3/3: CART ./tree CUDA, 16 threads, chess_100m ...
+    ok: train 0.1059 s, peak 3,132 MiB, GPU 3,523 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m02s, elapsed 0m19s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/9] 13:03:38 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.039 s, peak 648 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m09s, about 0m00s left
-[8/9] 13:03:39 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0377 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m10s, about 0m00s left
-[9/9] 13:03:40 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0377 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m11s, about 0m00s left
+[7/9] 18:33:37 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0381 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m21s, about 0m00s left
+[8/9] 18:33:38 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0379 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m22s, about 0m00s left
+[9/9] 18:33:39 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0379 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m23s, about 0m00s left
 results: /home/bmircevski/dt-bench/bench/results/cluster-chess/cuda-hopper-chess_100m/results.jsonl
 
-=== 13:03:41  3/3 tables and CSV files
-done 2026-10-20 13:03:42
+=== 18:33:41  3/3 tables and CSV files
+done 2026-10-20 18:33:41

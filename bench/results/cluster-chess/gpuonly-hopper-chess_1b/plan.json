@@ -4,13 +4,13 @@
    "chess_1b",
    "cart_full_nodepth",
    "tree_gpu_only",
-   1
+   16
   ],
   [
    "chess_1b",
    "c45_unpruned",
    "tree_gpu_only",
-   1
+   16
   ]
  ],
  "protocols": {
@@ -212,7 +212,7 @@
   },
   "tree_gpu_only": {
    "label": "./tree CUDA, GPU only",
-   "threads": "single",
+   "threads": "all",
    "warmup": false
   },
   "sklearn": {

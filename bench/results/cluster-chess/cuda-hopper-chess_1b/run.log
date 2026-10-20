@@ -1,47 +1,48 @@
-log: bench/results/cluster-chess/cuda-hopper-chess_1b/run.log, job 1243 on hopper, started 2026-10-20 13:04:43
+log: bench/results/cluster-chess/cuda-hopper-chess_1b/run.log, job 1461 on hopper, started 2026-10-20 18:34:22
 
-=== 13:04:43  1/3 machine check
-CPUs allocated: 32 (0-31), SLURM_JOB_CPUS_PER_NODE=32
+=== 18:34:22  1/3 machine check
+CPUs allocated: 32 (0-15), SLURM_JOB_CPUS_PER_NODE=32
 CPU governor: schedutil 
-load average: 2.59 2.06 1.56
-free memory per NUMA node: node 0 39 GiB, node 1 239 GiB
+load average: 9.86 8.11 4.68
+free memory per NUMA node: node 0 280 GiB, node 1 273 GiB
+NUMA node 0: CPUs 0-15, memory bound to it, GPU 0
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:1/1/16 17:1/1/17 18:1/1/18 19:1/1/19 20:1/1/20 21:1/1/21 22:1/1/22 23:1/1/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31
 GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
-code: 8b1ecd151dd2 (from submit.sh: hopper has no git)
+code: 235c43175b46-dirty (from submit.sh: hopper has no git)
 runs per case: 3
 
-=== 13:04:43  2/3 benchmark: chess_1b, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 32), 3 run(s) per case
+=== 18:34:22  2/3 benchmark: chess_1b, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 32), 3 run(s) per case
 2 cases, 9 processes:
-  chess_1b | cart_full_nodepth | tree_cuda | 32
-  chess_1b | c45_unpruned | tree_cuda | 32
+  chess_1b | cart_full_nodepth | tree_cuda | 16
+  chess_1b | c45_unpruned | tree_cuda | 16
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  chess_1b: identical in every format (44 s)
+  chess_1b: identical in every format (89 s)
 2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
-[1/9] 13:05:28 run 1/3: CART ./tree CUDA, 32 threads, chess_1b ...
-    ok: train 0.8832 s, peak 25,465 MiB, GPU 26,037 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m04s, elapsed 0m04s
-[2/9] 13:05:33 run 1/3: C4.5 ./tree CUDA, 32 threads, chess_1b ...
-    ok: train 0.8599 s, peak 25,464 MiB, GPU 26,039 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m04s, elapsed 0m09s, about 0m18s left
-[3/9] 13:05:38 run 2/3: CART ./tree CUDA, 32 threads, chess_1b ...
-    ok: train 0.8699 s, peak 25,464 MiB, GPU 26,037 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m04s, elapsed 0m14s, about 0m14s left
-[4/9] 13:05:43 run 2/3: C4.5 ./tree CUDA, 32 threads, chess_1b ...
-    ok: train 0.8619 s, peak 25,464 MiB, GPU 26,039 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m04s, elapsed 0m19s, about 0m09s left
-[5/9] 13:05:48 run 3/3: C4.5 ./tree CUDA, 32 threads, chess_1b ...
-    ok: train 0.8848 s, peak 25,464 MiB, GPU 26,039 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m04s, elapsed 0m24s, about 0m04s left
-[6/9] 13:05:53 run 3/3: CART ./tree CUDA, 32 threads, chess_1b ...
-    ok: train 0.8954 s, peak 25,465 MiB, GPU 26,037 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m05s, elapsed 0m29s, about 0m00s left
+[1/9] 18:35:53 run 1/3: CART ./tree CUDA, 16 threads, chess_1b ...
+    ok: train 0.9963 s, peak 25,464 MiB, GPU 26,037 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m39s, elapsed 0m39s
+[2/9] 18:36:33 run 1/3: C4.5 ./tree CUDA, 16 threads, chess_1b ...
+    ok: train 0.9636 s, peak 25,464 MiB, GPU 26,039 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m39s, elapsed 1m19s, about 2m37s left
+[3/9] 18:37:12 run 2/3: CART ./tree CUDA, 16 threads, chess_1b ...
+    ok: train 0.9643 s, peak 25,462 MiB, GPU 26,037 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m39s, elapsed 1m59s, about 1m58s left
+[4/9] 18:37:53 run 2/3: C4.5 ./tree CUDA, 16 threads, chess_1b ...
+    ok: train 0.9638 s, peak 25,463 MiB, GPU 26,039 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m39s, elapsed 2m39s, about 1m19s left
+[5/9] 18:38:33 run 3/3: C4.5 ./tree CUDA, 16 threads, chess_1b ...
+    ok: train 0.9655 s, peak 25,463 MiB, GPU 26,039 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m28s, elapsed 3m08s, about 0m39s left
+[6/9] 18:39:02 run 3/3: CART ./tree CUDA, 16 threads, chess_1b ...
+    ok: train 0.9686 s, peak 25,463 MiB, GPU 26,037 MiB, 17 nodes, depth 4, train acc 100.00% | process 0m32s, elapsed 3m41s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/9] 13:05:58 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0386 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m30s, about 0m00s left
-[8/9] 13:05:59 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0377 s, peak 648 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m32s, about 0m00s left
-[9/9] 13:06:00 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0376 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 0m33s, about 0m00s left
+[7/9] 18:39:35 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0404 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 3m43s, about 0m00s left
+[8/9] 18:39:36 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0378 s, peak 647 MiB, GPU 507 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 3m44s, about 0m00s left
+[9/9] 18:39:37 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0381 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 3m45s, about 0m00s left
 results: /home/bmircevski/dt-bench/bench/results/cluster-chess/cuda-hopper-chess_1b/results.jsonl
 
-=== 13:06:02  3/3 tables and CSV files
-done 2026-10-20 13:06:02
+=== 18:39:39  3/3 tables and CSV files
+done 2026-10-20 18:39:39

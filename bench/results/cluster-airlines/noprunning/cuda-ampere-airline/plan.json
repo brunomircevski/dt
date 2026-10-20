@@ -4,13 +4,13 @@
    "airline",
    "cart_full_nodepth",
    "tree_cuda",
-   48
+   24
   ],
   [
    "airline",
    "c45_unpruned",
    "tree_cuda",
-   48
+   24
   ]
  ],
  "protocols": {
@@ -212,7 +212,7 @@
   },
   "tree_gpu_only": {
    "label": "./tree CUDA, GPU only",
-   "threads": "single",
+   "threads": "all",
    "warmup": false
   },
   "sklearn": {

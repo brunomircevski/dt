@@ -39,6 +39,9 @@ bench/cluster/submit.sh -m 3               # HIGGS: four jobs, one per node, rel
 bench/cluster/submit.sh -m 3 -d airline    # airline (or name single runs, e.g. cuda-hopper-airline)
 bench/cluster/scaling.sh -m 3              # HIGGS with 1, 2, 4, 8, 12, ... 48 threads on epyc1 and dell1
 bench/cluster/scaling.sh -m 3 -d airline   # the same on airline
+# one socket of epyc1 and dell1: all its CPUs, the memory of its NUMA nodes
+bench/cluster/submit.sh -m 3 socket-epyc-higgs socket-dell-higgs
+bench/cluster/submit.sh -m 3 -d airline socket-epyc-airline socket-dell-airline
 ```
 
 ECBDL'14, each case once. Preparing it needs about 350 GB of RAM, so it runs
@@ -51,6 +54,7 @@ prep=$(sbatch --parsable -p ampere -w ampere --exclusive -c 48 -t 08:00:00 \
     bench/cluster/prepare.sh ecbdl)
 bench/cluster/submit.sh -d ecbdl_15m -a "$prep"  # all four nodes
 bench/cluster/submit.sh -d ecbdl -a "$prep"      # full: epyc1 and dell1 only
+bench/cluster/submit.sh -d ecbdl_15m socket-epyc-ecbdl_15m socket-dell-ecbdl_15m  # one socket
 ```
 
 Then copy `bench/results/cluster-*/` back and draw the charts:
@@ -59,12 +63,14 @@ Then copy `bench/results/cluster-*/` back and draw the charts:
 dir=bench/results/cluster-higgs  # airline has its own, pruned and unpruned in one image, below
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
     $dir/cuda-hopper-higgs $dir/cuda-ampere-higgs $dir/cpu-epyc-higgs $dir/cpu-dell-higgs \
-    --out $dir/chart.png
+    $dir/socket-epyc-higgs $dir/socket-dell-higgs --out $dir/chart.png
 s=bench/results/cluster-cpu-scaling
 t=$(mktemp -d)  # one chart per node and dataset, only to build the grid
 for node in epyc dell; do
-  bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-higgs --out $t/$node.png
-  bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-airline --out $t/$node-airline.png
+  bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-higgs \
+      --socket bench/results/cluster-higgs/socket-$node-higgs --out $t/$node.png
+  bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-airline \
+      --socket bench/results/cluster-airlines/socket-$node-airline --out $t/$node-airline.png
 done
 bench/.venv/bin/python bench/grid_chart.py $t/epyc.png $t/dell.png \
     $t/epyc-airline.png $t/dell-airline.png --out $s/chart.png  # 2x2: HIGGS above airline
@@ -83,20 +89,22 @@ for d in chess_1m chess_10m chess_100m chess_1b; do
   bench/cluster/submit.sh -m 3 -d $d -p cart_full_nodepth,c45_unpruned serial-epyc-$d serial-dell-$d
   # --gpu-only on hopper and ampere (every CPU, as the CUDA runs)
   bench/cluster/submit.sh -m 3 -d $d -p cart_full_nodepth,c45_unpruned gpuonly-hopper-$d gpuonly-ampere-$d
+  # parallel on one socket of epyc1 and dell1
+  bench/cluster/submit.sh -m 3 -d $d -p cart_full_nodepth,c45_unpruned socket-epyc-$d socket-dell-$d
 done
 d=bench/results/cluster-chess
 v=$d/dell-variance  # dell and dell512 at 1000M: the 10-run check (BENCHMARK.md)
 for s in 1m 10m 100m 1b; do
   dell="$d/cpu-dell-chess_$s $d/cpu-dell512-chess_$s"
   [ $s = 1b ] && dell="$v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b"
-  bench/.venv/bin/python bench/machines_chart.py --spread --log --protocols cart_full_nodepth,c45_unpruned \
+  bench/.venv/bin/python bench/machines_chart.py --spread --protocols cart_full_nodepth,c45_unpruned \
       $d/cuda-hopper-chess_$s $d/cuda-ampere-chess_$s $d/cpu-epyc-chess_$s $dell \
-      $d/serial-epyc-chess_$s $d/serial-dell-chess_$s $d/gpuonly-hopper-chess_$s $d/gpuonly-ampere-chess_$s \
-      --out $d/chart-$s.png
+      $d/socket-epyc-chess_$s $d/socket-dell-chess_$s $d/serial-epyc-chess_$s $d/serial-dell-chess_$s \
+      $d/gpuonly-hopper-chess_$s $d/gpuonly-ampere-chess_$s --out $d/chart-$s.png
 done
 bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unpruned \
     $d/{cuda-hopper,cuda-ampere,cpu-epyc}-chess_* $d/{cpu-dell,cpu-dell512}-chess_{1m,10m,100m} \
-    $v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b $d/{serial-epyc,serial-dell,gpuonly-hopper,gpuonly-ampere}-chess_* \
+    $v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b $d/{socket-epyc,socket-dell,serial-epyc,serial-dell,gpuonly-hopper,gpuonly-ampere}-chess_* \
     --out $d/chart-rows.png
 ```
 
@@ -104,14 +112,17 @@ The unpruned airline run and its chart (pruned and unpruned side by side in one 
 
 ```bash
 bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines/noprunning
+bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines/noprunning \
+    socket-epyc-airline socket-dell-airline
 d=bench/results/cluster-airlines
 t=$(mktemp -d)  # one chart per run, only to build the grid
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
     $d/cuda-hopper-airline $d/cuda-ampere-airline $d/cpu-epyc-airline $d/cpu-dell-airline \
-    --out $t/pruned.png
+    $d/socket-epyc-airline $d/socket-dell-airline --out $t/pruned.png
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45_unpruned \
     $d/noprunning/cuda-hopper-airline $d/noprunning/cuda-ampere-airline \
-    $d/noprunning/cpu-epyc-airline $d/noprunning/cpu-dell-airline --out $t/noprunning.png
+    $d/noprunning/cpu-epyc-airline $d/noprunning/cpu-dell-airline \
+    $d/noprunning/socket-epyc-airline $d/noprunning/socket-dell-airline --out $t/noprunning.png
 bench/.venv/bin/python bench/grid_chart.py $t/pruned.png $t/noprunning.png --out $d/chart.png
 rm -r $t
 ```

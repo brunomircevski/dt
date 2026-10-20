@@ -1,3 +1,3 @@
 run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cuda-ampere-chess_100m,chess_100m,cart_full_nodepth,tree_cuda,48,ok,True,0.1313,0.1279,0.13140000000000002,0.1302,0.0019924858845171245,3,,0.8911250948440284,3276464128,3275431936,3276886016,2604683264,17,9,4,1.0,,,3662675968,0.0
-cuda-ampere-chess_100m,chess_100m,c45_unpruned,tree_cuda,48,ok,True,0.1358,0.1318,0.1368,0.1348,0.002645751311064593,3,,0.8863614900037646,3277369344,3276840960,3278417920,2605588480,17,9,4,1.0,,,3664773120,0.0001
+cuda-ampere-chess_100m,chess_100m,cart_full_nodepth,tree_cuda,24,ok,True,0.1409,0.1397,0.1436,0.1414,0.0019974984355438253,3,,2.668327959952876,3275264000,3274981376,3275591680,2603454464,17,9,4,1.0,,,3662675968,0.0
+cuda-ampere-chess_100m,chess_100m,c45_unpruned,tree_cuda,24,ok,True,0.1409,0.1407,0.144,0.14186666666666667,0.0018502252115170526,3,,2.7883986381348222,3276189696,3276136448,3276435456,2604380160,17,9,4,1.0,,,3664773120,0.0001
