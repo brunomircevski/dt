@@ -6,7 +6,7 @@
 
 Every case built the same tree with and without `--profile`, on every node, and the same tree as [cluster-ecbdl](../../cluster-ecbdl/BENCHMARK.md). The earlier profiles (2026-10-18 f77d39d, 2026-10-19 051949b, and the CUDA runs at 6f6cecb, the evening of 2026-10-19) are in the git history. Since 6f6cecb the hand-offs go through page-locked buffers instead of a page-locked arena ([docs/PERFORMANCE.md](../../../../docs/PERFORMANCE.md)), and since 6521330 each thread counts the classes in its own histogram.
 
-The same CUDA cases with `--gpu-only` and one CPU thread: [gpu-only](../gpu-only/BENCHMARK.md).
+The same CUDA cases with `--gpu-only` (every node on the GPU): [gpu-only](../gpu-only/BENCHMARK.md).
 
 `./tree --profile FILE` writes where the training time went as JSON ([src/core/trace.h](../../../../src/core/trace.h), and *What is measured* below). `bench/profile_chart.py` draws the charts and `profile.md` (every number behind them) from the `profiles/*.json` files.
 
