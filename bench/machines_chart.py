@@ -47,9 +47,12 @@ from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 
 # Categorical slots 1-3 of the reference palette (validated all-pairs, CVD dE
 # >= 9.2); slot 3 is below 3:1 on white, so every bar carries a value label.
-# Slot 4 for ./tree --cuda --gpu-only (every node on the GPU, the CPU threads feed it and prune).
-COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "cuda": "#1baf7a", "gpu_only": "#eda100"}
-BACKENDS = {"serial": "Serial", "parallel": "Parallel", "cuda": "CUDA", "gpu_only": "GPU only"}
+# Slot 4 for ./tree --cuda --gpu-only (every node on the GPU, the CPU threads feed it and prune),
+# purple for the parallel backend on one socket of a two-socket node (socket-* runs).
+COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "socket": "#8e5bd0", "cuda": "#1baf7a",
+          "gpu_only": "#eda100"}
+BACKENDS = {"serial": "Serial", "parallel": "Parallel", "socket": "Parallel, one socket",
+            "cuda": "CUDA", "gpu_only": "GPU only"}
 GPU = {"cuda", "gpu_only"}
 TITLES = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25",
           "cart_full": "CART, no pruning, depth ≤ 30", "c45_unpruned": "C4.5, no pruning",
@@ -138,9 +141,12 @@ def bars(run, reference):
                 continue
             threads = ok[0]["threads"]
             backend = {"tree_cuda": "cuda", "tree_gpu_only": "gpu_only"}.get(
-                impl, "serial" if single else "parallel")
+                impl, "serial" if single else "socket" if run.name.startswith("socket-")
+                else "parallel")
             hardware = (f"{short_gpu(info)} + {threads} CPU thread{'s' if threads > 1 else ''}"
                         if backend in GPU
+                        else f"{short_cpu(info).split('× ', 1)[-1]}, one socket, {threads} threads"
+                        if backend == "socket"
                         else f"{short_cpu(info)}, {threads} thread{'s' if threads > 1 else ''}")
             gpu = [r["gpu_peak_bytes"] for r in ok if r.get("gpu_peak_bytes") is not None]
             prune = [r["prune_seconds"] for r in ok if r.get("prune_seconds") is not None]
@@ -313,6 +319,9 @@ def main():
                              f"({100 * prune / t:.0f}%)")
             if backend != "serial" and (run, "serial") in times:
                 notes.append(f"{times[(run, 'serial')] / t:.1f}× {where(run)} serial")
+            if backend == "socket":  # against both sockets of the same machine
+                notes += [f"{times[(o, 'parallel')] / t:.2f}× {where(o)} both sockets"
+                          for o in runs if where(o) == where(run) and (o, "parallel") in times]
             if backend in GPU:
                 others = [o for o in runs if o != run and (o, "parallel") in times]
                 fastest = min(others, key=lambda o: times[(o, "parallel")], default=None)

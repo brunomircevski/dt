@@ -9,6 +9,8 @@
 #   cpu-dell-<data>     dell1: 2x Xeon Gold 6542Y                     parallel
 #   cpu-dell512-<data>  dell2: the same CPUs, 512 GB instead of 1 TB  parallel
 #                       (only when named, e.g. for the memory pressure of full ECBDL)
+#   socket-epyc-<data>  epyc1, one socket: its 24 CPUs and memory     parallel
+#   socket-dell-<data>  dell1, the same (job.sh SOCKET=auto)          (only when named)
 #   serial-epyc-<data>  epyc1, one thread                             serial
 #   serial-dell-<data>  dell1, one thread                             serial
 #                       (only when named; the job still owns the whole node)
@@ -36,13 +38,15 @@
 #       serial-epyc-chess_1b serial-dell-chess_1b    # one thread (--serial)
 #   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
 #       gpuonly-hopper-chess_1b gpuonly-ampere-chess_1b  # every node on the GPU
+#   bench/cluster/submit.sh -m 3 socket-epyc-higgs socket-dell-higgs  # one socket
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
 # NUMA node (job.sh NUMA_NODE). The CUDA runs (cuda-*, gpuonly-*) stay on one
 # socket, their GPU's, without it too: job.sh takes the NUMA node of a GPU
 # with the most free memory (hopper: node 1, as another user's /dev/shm filled
-# node 0 in 2026-10). Only the parallel CPU runs use both sockets.
+# node 0 in 2026-10). Only the parallel CPU runs use both sockets, and the
+# socket-* runs measure the parallel backend on one of them.
 
 set -euo pipefail
 RUNS=1
@@ -59,7 +63,7 @@ while getopts "m:d:p:o:a:n:h" option; do
     o) OUTDIR="$OPTARG" ;;
     a) AFTER="$OPTARG" ;;
     n) NUMA="$OPTARG" ;;
-    *) sed -n '2,46p' "$0"; exit 2 ;;
+    *) sed -n '2,50p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -94,6 +98,8 @@ if [ "$DATASET" = ecbdl ]; then
   JOBS=("${JOBS[@]:2}")
 fi
 OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
+          "socket-epyc-$DATASET  epyc       epyc1   tree       all"
+          "socket-dell-$DATASET  dell       dell1   tree       all"
           "serial-epyc-$DATASET  epyc       epyc1   tree       1"
           "serial-dell-$DATASET  dell       dell1   tree       1"
           "gpuonly-hopper-$DATASET  hopper  hopper  tree_gpu_only  all"
@@ -129,8 +135,9 @@ ids=()
 for job in "${JOBS[@]}"; do
   read -r name partition node impls threads <<<"$job"
   mkdir -p "bench/results/$DIR/$name"
+  socket=; [[ "$name" != socket-* ]] || socket=,SOCKET=auto
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "$LIMIT" \
-    --export=ALL${NUMA:+,NUMA_NODE=$NUMA} \
+    --export=ALL${NUMA:+,NUMA_NODE=$NUMA}$socket \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
     bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "$PROTOCOLS" "$threads" "$TIMEOUT")")
   echo "$name: job ${ids[-1]} on $node"

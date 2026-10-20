@@ -4,11 +4,13 @@ memory (dashed lines, right axis) against the number of threads, one colour per
 protocol (CART, C4.5); dot = median over the runs, bar = min-max of the time.
 Threads and time on log axes, so that ideal scaling (dotted: the 1-thread time
 divided by the threads) is a straight line; memory on a linear axis.
+--socket: a run of the same data on one socket of the same machine (submit.sh's
+socket-* runs: its CPUs and its memory only), drawn as a hollow diamond.
 
 Also writes scaling.csv: one row per (protocol, threads) with the median time,
 speedup over 1 thread (serial backend), parallel efficiency and peak RSS.
 
-  bench/.venv/bin/python bench/scaling_chart.py bench/results/<run> [--out chart.png]
+  bench/.venv/bin/python bench/scaling_chart.py bench/results/<run> [--socket <run>] [--out chart.png]
 """
 
 import argparse
@@ -78,7 +80,7 @@ def summarise(cases):
     return [p for p in B.PROTOCOLS if p in out], out
 
 
-def figure(run, dataset, protocols, series, machine, out):
+def figure(run, dataset, protocols, series, machine, out, socket=None):
     settings = machine["settings"]
     meta = json.load(open(run / "plan.json"))["datasets"][dataset]
     threads = sorted({p["threads"] for points in series.values() for p in points})
@@ -119,7 +121,18 @@ def figure(run, dataset, protocols, series, machine, out):
         mem.plot(xs, [p["peak_rss_median"] / 1e9 for p in points], color=color, linewidth=1.6,
                  linestyle=(0, (4, 2.5)), marker="s", markersize=5, markerfacecolor="white",
                  markeredgecolor=color, markeredgewidth=1.4, zorder=3)
-    every = [p[k] for points in series.values() for p in points for k in ("time_min", "time_max")]
+    for protocol in protocols if socket else []:
+        color = COLORS.get(protocol, INK)
+        for p in socket.get(protocol, []):
+            ax.vlines(p["threads"], p["time_min"], p["time_max"], color=color, linewidth=1.5, zorder=4)
+            ax.plot(p["threads"], p["time_median"], marker="D", markersize=8, color=color,
+                    markerfacecolor="white", markeredgewidth=1.8, linestyle="none", zorder=5)
+            ax.annotate(f"1 socket: {p['time_median']:.3g} s", (p["threads"], p["time_median"]),
+                        xytext=(-8, 0), textcoords="offset points", ha="right", va="center",
+                        fontsize=8.5, color=INK,
+                        bbox=dict(facecolor="white", edgecolor="none", pad=1, alpha=0.85))
+    every = [p[k] for points in [*series.values(), *(socket or {}).values()] for p in points
+             for k in ("time_min", "time_max")]
     ax.set_yscale("log")
     ax.set_ylim(min(every) / 1.6, max(every) * 1.4)
     ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
@@ -176,9 +189,11 @@ def figure(run, dataset, protocols, series, machine, out):
              f"Dot: {runs}. 1 thread = the serial backend, more = the parallel backend;\n"
              "every thread count builds the same tree. Training time excludes reading the data;\n"
              "peak memory is the peak RSS up to the end of training, the loaded data included.\n"
-             "Log axes for time and threads; dotted: ideal scaling (the 1-thread time divided by the threads).",
+             "Log axes for time and threads; dotted: ideal scaling (the 1-thread time divided by the threads)."
+             + ("\nHollow diamond: one socket, all its CPUs, memory bound to its NUMA nodes "
+                "(the line's CPUs come from both sockets' CPU list in order)." if socket else ""),
              fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.08, right=0.84, top=1 - 1.25 / 5.4, bottom=0.235)
+    fig.subplots_adjust(left=0.08, right=0.84, top=1 - 1.25 / 5.4, bottom=0.27 if socket else 0.235)
     fig.savefig(out, dpi=150, facecolor="white")
     return out
 
@@ -186,6 +201,7 @@ def figure(run, dataset, protocols, series, machine, out):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("run")
+    parser.add_argument("--socket", help="a run of the same data on one socket of the machine")
     parser.add_argument("--out", help="output file (default: <run>/chart.png)")
     args = parser.parse_args()
     run = Path(args.run)
@@ -200,8 +216,14 @@ def main():
         for protocol in protocols:
             writer.writerows(series[protocol])
     print(run / "scaling.csv")
+    socket = None
+    if args.socket:
+        socket_cases, socket_dataset = collect(Path(args.socket))
+        if socket_dataset != dataset:
+            raise SystemExit(f"--socket ran {socket_dataset}, not {dataset}")
+        socket = summarise({k: v for k, v in socket_cases.items() if k[0] in protocols})[1]
     print(figure(run, dataset, protocols, series, machine,
-                 Path(args.out) if args.out else run / "chart.png"))
+                 Path(args.out) if args.out else run / "chart.png", socket))
 
 
 if __name__ == "__main__":

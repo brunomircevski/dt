@@ -486,9 +486,9 @@ def main():
                         f"(default {B.CART_ALPHA})")
     parser.add_argument("--cpus", help="logical CPUs to pin to, in order of use, e.g. 0,2,4,6 "
                         "or 0-11; N threads use the first N (default: no pinning)")
-    parser.add_argument("--membind", type=int, metavar="NODE",
-                        help="run every process under numactl --membind=NODE: its memory only "
-                        "from that NUMA node (pair it with --cpus of that node)")
+    parser.add_argument("--membind", metavar="NODES",
+                        help="run every process under numactl --membind=NODES: its memory only "
+                        "from those NUMA nodes, e.g. 0 or 0,1 (pair it with --cpus of those nodes)")
     parser.add_argument("--drop-cache", action="store_true",
                         help="drop the datasets from the page cache before every process "
                              "(every run records its free memory per NUMA node, mem_free_node*_kb)")

@@ -69,6 +69,11 @@ def prunes(run):
     return {k: statistics.median(v) for k, v in seconds.items() if len(v) == runs[k]}
 
 
+def label(name):
+    """A machine's name; <machine>-socket is ./tree's run on one socket of it (run.sh -s)."""
+    return name.removesuffix("-socket") + (", one socket" if name.endswith("-socket") else "")
+
+
 def all_threads(data):
     return max(k[3] for k in list(data["times"]) + list(data["status"]))
 
@@ -146,10 +151,12 @@ def bars(fig, spec, machines, protocol, limits):
             continue
         if kind == "machine":
             name, threads, count = payload
-            ax_time.text(X_MACHINE, y - (0.2 if threads > 1 else 0), name, transform=trans,
+            ax_time.text(X_MACHINE, y - (0.2 if threads > 1 else 0), name.removesuffix("-socket"),
+                         transform=trans,
                          ha="left", va="center", fontsize=9.5, color=INK, fontweight="bold")
             if threads > 1:
-                ax_time.text(X_MACHINE, y + 0.2, f"{threads} threads", transform=trans,
+                ax_time.text(X_MACHINE, y + 0.2, f"{threads} threads" + (", 1 socket" if name.endswith(
+                    "-socket") else ""), transform=trans,
                              ha="left", va="top", fontsize=7.8, color=MUTED)
             if count > 1:
                 ax_time.plot([X_BRACKET, X_BRACKET], [y - (count - 1) / 2 - 0.3, y + (count - 1) / 2 + 0.3],
@@ -214,7 +221,7 @@ def trees(fig, spec, machines):
                 continue
             tree = (row["nodes"], row["depth"], row["test_accuracy"], row["train_accuracy"])
             groups.setdefault((key[1], key[2], tree), []).append(
-                f"{name} {key[3]} thread" + ("s" if key[3] > 1 else ""))
+                f"{label(name)} {key[3]} thread" + ("s" if key[3] > 1 else ""))
     order = list(B.IMPLS)
     entries = sorted(groups.items(), key=lambda e: (list(PROTOCOLS).index(e[0][0]),
                                                     order.index(e[0][1])))
@@ -337,7 +344,7 @@ def write_summary(top, machines, out):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("top", help="directory with one subdirectory per machine")
-    parser.add_argument("--machines", default="pc,epyc,dell")
+    parser.add_argument("--machines", default="pc,epyc,epyc-socket,dell,dell-socket")
     parser.add_argument("--out", help="default: <top>/chart.png")
     args = parser.parse_args()
     top = Path(args.top)
