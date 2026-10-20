@@ -1786,10 +1786,17 @@ struct Staging {
         }
       }).join();
       // Without the GPU's node, the caller's pool copies when it has enough
-      // threads, else unpinned copiers.
+      // threads, else unpinned copiers. Never more than the CPUs this process
+      // may run on: under `taskset -c 0` (the benchmarks' one-thread runs),
+      // 7 extra copiers on the one CPU doubled the upload time.
       const std::size_t wanted = std::max(kMinCopyThreads, static_cast<std::size_t>(threads));
-      const std::size_t available =
-          cpus.empty() ? std::max(1u, std::thread::hardware_concurrency()) : cpus.size();
+      cpu_set_t allowed;
+      CPU_ZERO(&allowed);
+      const std::size_t allowedCount =
+          sched_getaffinity(0, sizeof allowed, &allowed) == 0
+              ? static_cast<std::size_t>(CPU_COUNT(&allowed))
+              : std::max(1u, std::thread::hardware_concurrency());
+      const std::size_t available = cpus.empty() ? std::max<std::size_t>(1, allowedCount) : cpus.size();
       const std::size_t copyThreads = std::min({available, kCopyThreads, wanted});
       if (copyThreads > 1 && (!cpus.empty() || threads < copyThreads)) {
         copiers = std::make_unique<ThreadPool>(static_cast<unsigned>(copyThreads - 1),

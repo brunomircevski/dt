@@ -111,7 +111,7 @@ Subtree raising is always on, as in the original program.
 | `--task-rows N` | 4096 | `--parallel` / `--cuda` CPU side: nodes with at least N rows grow a child as a separate pool task. |
 | `--feature-parallel-rows N` | 32768 | Nodes with at least N rows scan and partition their features in parallel. |
 | `--gpu-min-rows N` | CART: rows / 8192, between 1024 and 2048; C4.5: rows / 4096, between 1024 and 4096 | `--cuda`: nodes with fewer rows are finished by the CPU pool while the GPU grows the big ones. |
-| `--gpu-only` | off | `--cuda`: grow every node on the GPU, with no hand-offs to the CPU (and no host arena for them). With `--threads 1` the CPU side is one thread, except for the staged copies to and from the GPU, which always use at least 8 threads on the GPU's NUMA node. |
+| `--gpu-only` | off | `--cuda`: grow every node on the GPU, with no hand-offs to the CPU (and no host arena for them). With `--threads 1` the CPU side is one thread, except for the staged copies to and from the GPU, which use at least 8 threads on the GPU's NUMA node (but no more than the CPUs the process may run on, e.g. one under `taskset -c N`). |
 | `--gpu-sweep auto\|one-pass\|two-pass` | `auto` | `--cuda`: score every cut in double precision (`one-pass`), or filter in single precision first and use double precision only for the candidates (`two-pass`). `auto` picks one-pass on GPUs with fast double precision (A100, H100, B200…). |
 | `--gpu-profile` | off | Print per-level and per-kernel GPU times. Synchronises after every kernel, so it slows the build; do not use it for timing. |
 
