@@ -200,6 +200,10 @@ def bars(fig, spec, machines, protocol, limits):
         if threads > 1 and single in data["times"]:
             note.append(f"speedup {statistics.median(data['times'][single]) / mid:.1f}× "
                         "over 1 thread")
+        if name.endswith("-socket"):  # against the same machine's run on both sockets
+            whole = machines.get(name.removesuffix("-socket"), {}).get("times", {})
+            note += [f"{statistics.median(v) / mid:.2f}× both sockets ({k[3]} threads)"
+                     for k, v in whole.items() if k[:3] == key[:3] and k[3] > 1]
         x = max(values) * 1.12
         label = ax_time.text(x, y, seconds_label(mid), va="center", fontsize=8.8, color=INK)
         if note:
@@ -369,16 +373,18 @@ def main():
         bars(fig, grid[i], machines, protocol, limits)
     trees(fig, grid[2], machines)
 
+    # The header names each machine once: <machine>-socket is a run on one of its sockets.
+    hosts = {n: d for n, d in machines.items() if not n.endswith("-socket")}
     first = next(iter(machines.values()))
     meta = first["plan"]["datasets"]["susy"]
     x0 = 0.015
     fig.text(x0, 1 - 0.15 / inches, f"{NAMES['susy']}: ./tree against other CART and C4.5 "
-             f"implementations on {len(machines)} machines", fontsize=15, color=INK,
+             f"implementations on {len(hosts)} machines", fontsize=15, color=INK,
              fontweight="bold", va="top")
     fig.text(x0, 1 - 0.47 / inches, f"{meta['n_train']:,} training rows, {meta['n_test']:,} test "
              f"rows, {len(meta['features'])} features.  {PROTOCOLS['cart_alpha']}.  "
              f"{PROTOCOLS['c45']}.", fontsize=9.5, color=MUTED, va="top")
-    for i, (name, data) in enumerate(machines.items()):
+    for i, (name, data) in enumerate(hosts.items()):
         y = 1 - (0.78 + 0.22 * i) / inches
         fig.text(x0, y, name, fontsize=9.5, color=INK, fontweight="bold", va="top")
         fig.text(x0 + 0.04, y, B.hardware_line(data["machine"], False).replace(
@@ -391,7 +397,7 @@ def main():
                       label="every CPU (parallel)"),
                 Patch(facecolor=lighter("#9b9a96"), label="lighter: ./tree's pruning")]
     fig.legend(handles=handles, loc="upper left", ncol=len(handles), frameon=False,
-               fontsize=9.5, bbox_to_anchor=(x0 - 0.004, 1 - (0.82 + 0.22 * len(machines)) / inches),
+               fontsize=9.5, bbox_to_anchor=(x0 - 0.004, 1 - (0.82 + 0.22 * len(hosts)) / inches),
                handlelength=1.6, handleheight=1.1, columnspacing=1.6)
     runs = run_counts(machines)
     fig.text(x0, 0.75 / inches, f"Bars: {runs}. ./tree's bars: growing the tree (darker), then pruning it "
@@ -401,7 +407,9 @@ def main():
              "end of training (runtime, data, warm-up, training).\nscikit-learn, rpart and "
              "Weka J48 build a tree on one thread only, so they have no parallel case. One "
              "thread is pinned to one core; the parallel case uses every logical CPU of the "
-             "machine. Same data files (SHA-256) everywhere.", fontsize=8.2, color=MUTED,
+             "machine" + ("; \"1 socket\": ./tree on every CPU of one socket, its memory on that "
+                          "socket's NUMA nodes" if len(hosts) < len(machines) else "")
+             + ". Same data files (SHA-256) everywhere.", fontsize=8.2, color=MUTED,
              va="top", linespacing=1.55)
     out = Path(args.out) if args.out else top / "chart.png"
     fig.savefig(out, dpi=150, facecolor="white")

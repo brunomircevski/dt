@@ -1,32 +1,33 @@
-log: bench/results/cluster-ecbdl/unpruned/cuda-hopper-ecbdl_15m/run.log, job 1292 on hopper, started 2026-10-20 14:02:33
+log: bench/results/cluster-ecbdl/unpruned/cuda-hopper-ecbdl_15m/run.log, job 1467 on hopper, started 2026-10-20 18:54:34
 
-=== 14:02:33  1/3 machine check
-CPUs allocated: 32 (0-31), SLURM_JOB_CPUS_PER_NODE=32
+=== 18:54:34  1/3 machine check
+CPUs allocated: 32 (0-15), SLURM_JOB_CPUS_PER_NODE=32
 CPU governor: schedutil 
-load average: 16.27 12.20 8.04
-free memory per NUMA node: node 0 45 GiB, node 1 240 GiB
+load average: 12.84 12.19 9.92
+free memory per NUMA node: node 0 281 GiB, node 1 273 GiB
+NUMA node 0: CPUs 0-15, memory bound to it, GPU 0
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:1/1/16 17:1/1/17 18:1/1/18 19:1/1/19 20:1/1/20 21:1/1/21 22:1/1/22 23:1/1/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31
 GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
 GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
-code: 8b1ecd151dd2 (from submit.sh: hopper has no git)
+code: 235c43175b46-dirty (from submit.sh: hopper has no git)
 runs per case: 1
 
-=== 14:02:33  2/3 benchmark: ecbdl_15m, cart_full_nodepth, tree_cuda, threads all (of 32), 1 run(s) per case
+=== 18:54:34  2/3 benchmark: ecbdl_15m, cart_full_nodepth, tree_cuda, threads all (of 32), 1 run(s) per case
 1 cases, 2 processes:
-  ecbdl_15m | cart_full_nodepth | tree_cuda | 32
+  ecbdl_15m | cart_full_nodepth | tree_cuda | 16
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  ecbdl_15m: identical in every format (354 s)
+  ecbdl_15m: identical in every format (518 s)
 1 cases x 1 run(s), then 1 footprint run(s) x 1: 2 processes. Time left is shown once every case has run once.
-[1/2] 14:08:28 run 1/1: CART ./tree CUDA, 32 threads, ecbdl_15m ...
-    ok: train 18.94 s, peak 109,233 MiB, GPU 75,221 MiB, 604,225 nodes, depth 94, train acc 100.00% | process 0m25s, elapsed 0m25s, about 0m00s left
+[1/2] 19:03:14 run 1/1: CART ./tree CUDA, 16 threads, ecbdl_15m ...
+    ok: train 17.42 s, peak 109,291 MiB, GPU 75,221 MiB, 604,225 nodes, depth 94, train acc 100.00% | process 1m01s, elapsed 1m01s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[2/2] 14:08:54 footprint: CART ./tree CUDA, 1 thread, _baseline ...
-    ok: train 0.0405 s, peak 648 MiB, GPU 507 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m27s, about 0m00s left
+[2/2] 19:04:16 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0406 s, peak 647 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 1m03s, about 0m00s left
 results: /home/bmircevski/dt-bench/bench/results/cluster-ecbdl/unpruned/cuda-hopper-ecbdl_15m/results.jsonl
 
-=== 14:08:56  3/3 tables and CSV files
-done 2026-10-20 14:08:56
+=== 19:04:18  3/3 tables and CSV files
+done 2026-10-20 19:04:18

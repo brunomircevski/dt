@@ -1,0 +1,44 @@
+log: /home/bmircevski/dt-bench/bench/results/cluster-susy-vs-others-cpu/dell-socket/run.log, dell1, job 1497, started 2026-10-20 19:21:38
+
+=== 19:21:38  1/4 machine check
+warning: CPU governor is 'powersave ', not performance
+load average: 21.91 14.93 13.10
+CPUs: 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47 (48 available), 1 thread on CPU 1
+socket 1: CPUs 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47, memory bound to its NUMA nodes 2,3
+runs per case: 3
+
+=== 19:21:38  2/4 tools (built on the login node)
+code: 10d125de3aee-dirty
+
+=== 19:21:38  3/4 benchmark: full SUSY, pruned CART and C4.5, the threads of one socket-s, 3 run(s) per case, ./tree only
+2 cases, 9 processes:
+  susy | cart_alpha | tree | 24
+  susy | c45 | tree | 24
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  susy: identical in every format (5 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
+[1/9] 19:21:44 run 1/3: CART ./tree, 24 threads, susy ...
+    ok: train 0.5077 s, peak 1,621 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m02s
+[2/9] 19:21:46 run 1/3: C4.5 ./tree, 24 threads, susy ...
+    ok: train 0.6666 s, peak 1,894 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m05s, about 0m03s left
+[3/9] 19:21:50 run 2/3: CART ./tree, 24 threads, susy ...
+    ok: train 0.5047 s, peak 1,622 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m07s, about 0m02s left
+[4/9] 19:21:52 run 2/3: C4.5 ./tree, 24 threads, susy ...
+    ok: train 0.6598 s, peak 1,873 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m11s, about 0m01s left
+[5/9] 19:21:55 run 3/3: C4.5 ./tree, 24 threads, susy ...
+    ok: train 0.6616 s, peak 1,866 MiB, 15,113 nodes, depth 38, test acc 79.74% | process 0m00s, elapsed 0m14s, about 0m00s left
+[6/9] 19:21:59 run 3/3: CART ./tree, 24 threads, susy ...
+    ok: train 0.5053 s, peak 1,622 MiB, 723 nodes, depth 19, test acc 79.65% | process 0m00s, elapsed 0m16s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[7/9] 19:22:01 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0007 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m16s, about 0m00s left
+[8/9] 19:22:01 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m16s, about 0m00s left
+[9/9] 19:22:01 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m16s, about 0m00s left
+results: /home/bmircevski/dt-bench/bench/results/cluster-susy-vs-others-cpu/dell-socket/results.jsonl
+
+=== 19:22:01  4/4 tables and CSV files
+done 2026-10-20 19:22:01: /home/bmircevski/dt-bench/bench/results/cluster-susy-vs-others-cpu/dell-socket
+when all machines are done: bench/.venv/bin/python bench/vs_others_chart.py /home/bmircevski/dt-bench/bench/results/cluster-susy-vs-others-cpu

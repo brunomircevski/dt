@@ -105,6 +105,11 @@ def main():
     order = list(dict.fromkeys(M.where(run) for run in args.runs))
     keys = sorted({(b, m) for b, m, _ in lines},
                   key=lambda k: (list(M.BACKENDS).index(k[0]), order.index(k[1])))
+    # The end-of-line labels: the machine, and its backend when the chart has more than one.
+    short = {"serial": "serial", "parallel": "parallel", "socket": "1 socket",
+             "cuda": "CUDA", "gpu_only": "GPU only"}
+    end_name = ((lambda key: f"{key[1]} {short[key[0]]}")
+                if len({b for b, _ in keys}) > 1 else (lambda key: key[1]))
     marker = {}
     for backend in M.BACKENDS:
         for index, key in enumerate(k for k in keys if k[0] == backend):
@@ -164,18 +169,29 @@ def main():
                 middle = math.sqrt(low * high)
                 low, high = middle / 2, middle * 2
                 ax.set_ylim(low, high)
-            # Lines ending on the same value share one label, when there are too many
-            # labels to spread (a merged label is wider: few labels stay apart).
+            # Lines ending on the same value share one label. A backend whose every line
+            # here is in it is named alone ("serial"), the others with their machines.
             merged = {}
-            for key, x, value in (ends if len(ends) > 4 else []):
-                text = value_text(field, value)
-                if (x, text) in merged:
-                    merged[(x, text)][0].append(key[1])
-                else:
-                    merged[(x, text)] = ([key[1]], value)
-            ends = ([((", ".join(dict.fromkeys(names)),), x, value)
-                     for (x, _), (names, value) in merged.items()] if merged
-                    else [((key[1],), x, value) for key, x, value in ends])
+            for key, x, value in ends:
+                merged.setdefault((x, value_text(field, value)), ([], value))[0].append(key)
+            here = defaultdict(set)
+            for key, _, _ in ends:
+                here[key[0]].add(key[1])
+
+            def group_name(group):
+                if len(group) == 1:
+                    return end_name(group[0])
+                parts = []
+                for backend in dict.fromkeys(b for b, _ in group):
+                    names = [m for b, m in group if b == backend]
+                    if set(names) == here[backend] and len(here) > 1:
+                        parts.append(short[backend])
+                    else:
+                        parts.append(", ".join(names) + (f" {short[backend]}" if len(here) > 1
+                                                         else ""))
+                return " · ".join(parts)
+            ends = [((group_name(group),), x, value)
+                    for (x, _), (group, value) in merged.items()]
             # Direct labels right of the last points, spread so they do not overlap.
             span = math.log10(high) - math.log10(low)
             ys = spread([math.log10(v) for _, _, v in ends], gap=span * 0.075)
@@ -224,7 +240,7 @@ def main():
     handles.append(Line2D([], [], color=MUTED, linestyle=":", linewidth=1,
                           label="time ∝ rows"))
     header = 0.36 + 0.2 * len(machines) + 0.1
-    fig.legend(handles=handles, loc="upper left", ncol=len(handles), frameon=False,
+    fig.legend(handles=handles, loc="upper left", ncol=math.ceil(len(handles) / 2), frameon=False,
                fontsize=8.8, bbox_to_anchor=(0.035, 0.985 - header / inches),
                handletextpad=0.4, columnspacing=1.4)
     reps = {json.load(open(run / "machine.json"))["settings"]["reps"] for run in args.runs}
@@ -236,7 +252,7 @@ def main():
              "up to the end of training. VRAM: peak GPU memory during the process above idle, "
              "CUDA context included (nvidia-smi, every 10 ms).",
              fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.06, right=0.95, top=0.985 - (header + 1.25) / inches,
+    fig.subplots_adjust(left=0.06, right=0.92, top=0.985 - (header + 1.45) / inches,
                         bottom=1.0 / inches)
     for row, (title, trees) in enumerate(headers):
         box = axes[row][0].get_position()

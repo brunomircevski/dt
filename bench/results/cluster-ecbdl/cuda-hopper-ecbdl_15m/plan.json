@@ -4,13 +4,13 @@
    "ecbdl_15m",
    "cart_alpha_nodepth",
    "tree_cuda",
-   32
+   16
   ],
   [
    "ecbdl_15m",
    "c45",
    "tree_cuda",
-   32
+   16
   ]
  ],
  "protocols": {
@@ -212,7 +212,7 @@
   },
   "tree_gpu_only": {
    "label": "./tree CUDA, GPU only",
-   "threads": "single",
+   "threads": "all",
    "warmup": false
   },
   "sklearn": {

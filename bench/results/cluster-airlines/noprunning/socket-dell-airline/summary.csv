@@ -1,0 +1,3 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+socket-dell-airline,airline,cart_full_nodepth,tree,24,ok,True,11.6082,11.488299999999999,12.5154,11.870633333333332,0.5615933077711428,3,1.0,26.034738353919238,33026445312,33025196032,33026633728,33020305408,47146877,23573439,65,1.0,,,,0.0
+socket-dell-airline,airline,c45_unpruned,tree,24,ok,True,14.257700000000002,14.1721,14.34,14.2566,0.08395540482899215,3,1.0,27.96104655507952,31858065408,31833182208,31894007808,31851925504,19579127,9789564,74,0.9059969999999999,,,,0.2048
