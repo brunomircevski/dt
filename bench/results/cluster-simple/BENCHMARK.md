@@ -54,7 +54,7 @@ How the other tools' trees compare:
 CART pruning at a fixed α takes under 1 ms in every backend.
 
 - **--simple against --serial:** --serial is 7.8–16× faster. On covertype it is 7.8–11× faster: --simple sorts every node's rows by all 54 features, while --serial sorts once (the presort) and partitions the sorted orders. On chess it is 8.8–16× faster, where the per-node sort of a million rows dominates.
-- **Pruning:** --simple's C4.5 pruning is 3.7–14× slower than --serial's. It routes the rows through the tree itself and allocates its own memory, while --serial reuses the grower's leaf of each row and lends its workspace.
+- **Pruning:** --simple's C4.5 pruning is 3.7–14× slower than --serial's. Part of the gap is accounting: --simple's grower leaves the distinct values to the trainer, which sorts every feature's column for C4.5's training-value thresholds inside the prune timer (trainer.cpp), while --serial gets them from its presort, timed as growing. The rest is that --simple's pruning routes the rows through the tree itself and allocates its own memory, while --serial reuses the grower's leaf of each row and lends its workspace. The two parts were not measured apart.
 - **Against the libraries:**
   - --simple is about as fast as scikit-learn on chess, and 1.8–3.6× slower on covertype.
   - It is 11–13× faster than Weka J48 on covertype C4.5 and 4.2–4.3× faster on chess.
