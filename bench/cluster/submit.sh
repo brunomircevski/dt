@@ -19,6 +19,11 @@
 #   simple-epyc-<data>  epyc1, one socket: ./tree --simple, --serial, parallel,
 #                       scikit-learn and Weka J48, every tree hashed
 #                       (only when named; -o cluster-simple, the "simple" benchmark)
+#   simple-epyc-<data>-<tool>-<protocol>  the same, one tool and protocol per job
+#                       (tool: simple, serial, parallel, sklearn, j48; protocol:
+#                       cart, c45; J48 has no CART), each with its own time limit,
+#                       so a tool that fails or runs out of time stops only its own
+#                       job (HIGGS: hours of J48)
 # The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
 # on a GPU node would measure a CPU that is only there to feed the GPU.
 # The epyc and dell partitions have more nodes: the runs always take epyc1
@@ -43,6 +48,9 @@
 #       gpuonly-hopper-chess_1b gpuonly-ampere-chess_1b  # every node on the GPU
 #   bench/cluster/submit.sh -m 3 socket-epyc-higgs socket-dell-higgs  # one socket
 #   bench/cluster/submit.sh -d covertype -o cluster-simple simple-epyc-covertype
+#   bench/cluster/submit.sh -m 3 -d higgs -o cluster-simple $(for t in parallel serial \
+#       sklearn simple; do echo simple-epyc-higgs-$t-cart simple-epyc-higgs-$t-c45; done) \
+#       simple-epyc-higgs-j48-c45                # one job per tool and protocol
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
@@ -94,7 +102,7 @@ for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$D
     { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 
-#        name                    partition  node    impls      threads
+#        name                    partition  node    impls      threads  [protocols  time limit  timeout]
 JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda  all"
       "cuda-ampere-$DATASET  ampere     ampere  tree_cuda  all"
       "cpu-epyc-$DATASET     epyc       epyc1   tree       all"
@@ -112,6 +120,20 @@ OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
           "gpuonly-hopper-$DATASET  hopper  hopper  tree_gpu_only  all"
           "gpuonly-ampere-$DATASET  ampere  ampere  tree_gpu_only  all"
           "simple-epyc-$DATASET  epyc       epyc1   tree,tree_simple,sklearn,j48  1,all")
+# The simple benchmark, one job per tool and protocol: the time limit of the
+# job, and the timeout of each process, fit the tool (HIGGS, one thread:
+# ./tree --serial about 40 s, --simple about 10x that, J48 hours).
+#     tool      impls        threads  time limit   timeout (s)
+for tool in "parallel  tree         all  02:00:00    3600" \
+            "serial    tree         1    04:00:00    3600" \
+            "sklearn   sklearn      1    1-00:00:00  21600" \
+            "simple    tree_simple  1    1-00:00:00  21600" \
+            "j48       j48          1    3-00:00:00  86400"; do
+  read -r t impls threads limit timeout <<<"$tool"
+  OPTIONAL+=("simple-epyc-$DATASET-$t-c45  epyc  epyc1  $impls  $threads  c45  $limit  $timeout")
+  [ "$t" = j48 ] ||  # Weka has no CART
+    OPTIONAL+=("simple-epyc-$DATASET-$t-cart  epyc  epyc1  $impls  $threads  cart_alpha_nodepth  $limit  $timeout")
+done
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then
@@ -141,15 +163,16 @@ echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs
 
 ids=()
 for job in "${JOBS[@]}"; do
-  read -r name partition node impls threads <<<"$job"
+  read -r name partition node impls threads protocols limit timeout <<<"$job"
   mkdir -p "bench/results/$DIR/$name"
   socket=; [[ "$name" != socket-* && "$name" != simple-* ]] || socket=,SOCKET=auto
   # The simple runs check that every backend grew the same tree.
   extra=; [[ "$name" != simple-* ]] || extra=",RUN_EXTRA=--hash-trees"
-  ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "$LIMIT" \
+  ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "${limit:-$LIMIT}" \
     --export=ALL${NUMA:+,NUMA_NODE=$NUMA}$socket$extra \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
-    bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "$PROTOCOLS" "$threads" "$TIMEOUT")")
+    bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "${protocols:-$PROTOCOLS}" "$threads" \
+    "${timeout:-$TIMEOUT}")")
   echo "$name: job ${ids[-1]} on $node"
 done
 scontrol release "${ids[@]}"
