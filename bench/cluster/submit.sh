@@ -80,7 +80,9 @@ case "$DATASET" in
   ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
   chess_1m|chess_10m|chess_100m|chess_1b) DIR=cluster-chess; LIMIT=02:00:00 TIMEOUT=3600 ;;
   covertype) DIR=cluster-simple; LIMIT=02:00:00 TIMEOUT=3600 ;;
-  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, covertype or chess_1m, chess_10m, chess_100m, chess_1b" >&2
+  # SUSY (4.5M rows) for the simple benchmark: hours of --simple, scikit-learn and J48.
+  susy) DIR=cluster-simple; LIMIT=12:00:00 TIMEOUT=10800 ;;
+  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, covertype, susy or chess_1m, chess_10m, chess_100m, chess_1b" >&2
      exit 2 ;;
 esac
 DIR="${OUTDIR:-$DIR}"
