@@ -77,7 +77,21 @@ public class J48Fit {
     // The tree and the seconds growing it and pruning it (the latter 0 when not phased).
     interface Predictor { double classify(Instance row) throws Exception; }
 
-    record Built(Predictor model, J48 j48, ClassifierTree root, double build, double prune) {}
+    // A class, not a record: the nodes have Java 11.
+    static class Built {
+        final Predictor model;
+        final J48 j48;
+        final ClassifierTree root;
+        final double build, prune;
+
+        Built(Predictor model, J48 j48, ClassifierTree root, double build, double prune) {
+            this.model = model;
+            this.j48 = j48;
+            this.root = root;
+            this.build = build;
+            this.prune = prune;
+        }
+    }
 
     static Built build(Instances train) throws Exception {
         J48 j48 = options();
@@ -126,11 +140,11 @@ public class J48Fit {
         int warmup = Math.min(Integer.parseInt(args.get("warmup")), train.numInstances());
         if (warmup > 0) build(new Instances(train, 0, warmup));
         Built built = build(train);
-        Predictor model = built.model();
-        J48 plain = built.root() != null ? null : built.j48();
-        String text = plain == null ? built.root().toString() : plain.toString();
-        int nodes = plain == null ? built.root().numNodes() : (int) plain.measureTreeSize();
-        int leaves = plain == null ? built.root().numLeaves() : (int) plain.measureNumLeaves();
+        Predictor model = built.model;
+        J48 plain = built.root != null ? null : built.j48;
+        String text = plain == null ? built.root.toString() : plain.toString();
+        int nodes = plain == null ? built.root.numNodes() : (int) plain.measureTreeSize();
+        int leaves = plain == null ? built.root.numLeaves() : (int) plain.measureNumLeaves();
         long peakKiB = -1;
         for (String line : Files.readAllLines(Path.of("/proc/self/status"))) {
             if (line.startsWith("VmHWM:")) peakKiB = Long.parseLong(line.replaceAll("\\D+", ""));
@@ -147,11 +161,11 @@ public class J48Fit {
         StringBuilder out = new StringBuilder(String.format(Locale.ROOT,
                 "{\"train_seconds\": %.9f, %s\"nodes\": %d, \"leaves\": %d, \"depth\": %d, "
                         + "\"n_train_loaded\": %d, \"n_features_loaded\": %d, \"peak_rss_train_bytes\": %d",
-                built.build() + built.prune(), built.root() == null ? "" : String.format(Locale.ROOT,
-                        "\"build_seconds\": %.9f, \"prune_seconds\": %.9f, ", built.build(), built.prune()),
+                built.build + built.prune, built.root == null ? "" : String.format(Locale.ROOT,
+                        "\"build_seconds\": %.9f, \"prune_seconds\": %.9f, ", built.build, built.prune),
                 nodes, leaves, depth,
                 train.numInstances(), train.numAttributes() - 1, peakKiB * 1024));
-        if ("1".equals(args.get("check")) && built.root() != null) {
+        if ("1".equals(args.get("check")) && built.root != null) {
             J48 reference = options();
             reference.buildClassifier(train);
             if (!reference.toString().contains(text)) {
