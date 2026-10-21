@@ -104,8 +104,8 @@ def main():
     rows = -(-len(datasets) // columns)
     fig = plt.figure(figsize=(12 * columns, 9.2 * rows))
     # Per dataset a panel of bars, and under it its table of the trees.
-    grid = fig.add_gridspec(2 * rows, columns, height_ratios=[6, 1.35] * rows,
-                            left=0.2 / columns, right=0.985, top=1 - 0.8 / fig.get_figheight(),
+    grid = fig.add_gridspec(2 * rows, columns, height_ratios=[6, 1.6] * rows,
+                            left=0.2 / columns, right=0.985, top=1 - 1.25 / fig.get_figheight(),
                             bottom=0.01, hspace=0.3, wspace=0.32)
     for index, dataset in enumerate(datasets):
         row, column = divmod(index, columns)
@@ -149,7 +149,7 @@ def main():
                 + (f", train acc. {accuracy:.2%}" if accuracy is not None else "")
                 for name, (nodes, depth, accuracy) in trees.items()))
         ax.set_xscale("log")
-        ax.set_xlim(low, high * (high / low) ** 0.6)  # room for the end labels
+        ax.set_xlim(low, high * (high / low) ** 0.45)  # room for the end labels
         ax.set_xticks([10.0 ** e for e in range(-4, 5) if low <= 10.0 ** e <= high * 3])
         ax.xaxis.set_major_formatter(FuncFormatter(seconds_tick))
         ax.set_yticks([p for p, _ in labels], [t for _, t in labels], fontsize=9.5)
@@ -162,8 +162,8 @@ def main():
                      fontweight="bold")
         ax.set_xlabel("training time, median of 3 (log scale): dark = growing, light = pruning",
                       fontsize=9, color=MUTED)
-        # One tree line per protocol, wrapped after the second tool.
-        text = "\n".join(line.replace(";  scikit-learn", ";\n      scikit-learn") for line in lines)
+        # One tree line per protocol and tool.
+        text = "\n".join(line.replace(";  ", ";\n      ") for line in lines)
         box.text(0, 0.95, text, transform=box.transAxes, va="top", fontsize=9, color=INK,
                  linespacing=1.5,
                  bbox={"boxstyle": "round,pad=0.5", "facecolor": "#f6f5f2", "edgecolor": GRID})
