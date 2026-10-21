@@ -25,6 +25,15 @@ This is a quick general benchmark, so one run per case is enough for the big dat
   - Weka has no CART in its core. SimpleCart is a separate package that prunes by cross-validation, so CART has no Weka bar.
 - **α is not the same measure:** ./tree's cost-complexity measure is Breiman's, where R(T) is the misclassified fraction of the training rows ([cart_pruning.h](../../../src/algo/cart_pruning.h)). scikit-learn's R(T) is the impurity weighted by row share (gini or entropy). The same α = 1e-5 therefore prunes scikit-learn's trees less, so its trees are bigger (Covertype CART: 14,737 nodes against 9,851).
 - **One socket:** the job owned epyc1 (`--exclusive`). Every run was pinned to socket 0 (CPUs 0–23), with the memory bound to NUMA node 0 (job.sh `SOCKET=auto`). The one-thread runs use CPU 0.
+- **epyc1 and epyc2:** HIGGS's J48 job ran on epyc2, which has the same hardware as epyc1 (2× EPYC 9255, governor performance), to finish sooner. First, five short SUSY cases (one run each, `submit.sh -w epyc2`) were rerun on epyc2 to check this. They grew the same trees (same SHA-256), with the same times within 1%:
+
+  | SUSY, one run | epyc1 | epyc2 |
+  |---|--:|--:|
+  | CART --simple | 125.4 s | 125.6 s |
+  | CART --serial | 5.245 s | 5.245 s |
+  | C4.5 --serial | 6.379 s | 6.437 s |
+  | CART --parallel | 0.513 s | 0.515 s |
+  | C4.5 --parallel | 0.572 s | 0.590 s |
 - **Time:** the training time (not reading the data): the median of 3 runs (chess, Covertype) or a single run (SUSY, HIGGS). Each bar is split into growing (dark) and pruning (light):
   - ./tree: its `prune` phase is the pruning part. For C4.5 this also includes --simple's sort of each feature's distinct values; --serial gets those from its presort, timed as growing ([paper/simple-vs-serial.md](../../../paper/simple-vs-serial.md), risk F).
   - scikit-learn: [sklearn_fit.py](../../adapters/sklearn_fit.py) fits with `ccp_alpha=0` (growing), then calls `_prune_tree()` at α (pruning), which are the two steps `fit` takes.
