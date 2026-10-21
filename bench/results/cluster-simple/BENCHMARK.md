@@ -111,6 +111,23 @@ The other tools:
     - --serial: 93 ms, 78 ms, 381 ms and 2.1 s.
     - J48: 10–108 s.
 
+## Is scikit-learn's pruning time real?
+
+Yes. [sklearn_prune_check.py](../../sklearn_prune_check.py) ran on SUSY subsets, one thread on epyc1 (2026-10-21):
+
+| Rows | Full tree | Plain `fit(ccp_alpha)` | Grow + `_prune_tree` | Same tree? | One-pass bottom-up |
+|--:|--:|--:|--:|---|--:|
+| 250k | 66,871 nodes | 8.2 s | 6.9 + 1.2 = 8.2 s | yes | 10,540 leaves (sklearn 10,542), < 0.1 s |
+| 500k | 133,453 | 22.4 s | 15.1 + 7.4 = 22.5 s | yes | 1,736 leaves (1,738), < 0.1 s |
+| 1M | 266,545 | 66.1 s | 33.5 + 32.7 = 66.2 s | yes | 730 leaves (730), 0.1 s |
+| 2M | 531,917 | 206.5 s | 72.8 + 133.1 = 206.0 s | yes | 588 leaves (588), 0.2 s |
+
+- **The split is valid:** `fit` itself calls `_prune_tree()` last (sklearn/tree/_classes.py), and the split gives the same tree in the same total time as a plain `fit`.
+- **The pruning is quadratic:** each doubling of the full tree makes pruning 4–6× slower, while growing only doubles.
+  - Extending that to all 4.5M rows (a full tree of about 1.2M nodes) gives about 670 s, which matches the 650–666 s measured above.
+  - The cause is in `_cost_complexity_prune` (sklearn/tree/_tree.pyx). It removes the weakest branch one at a time, and before each removal it scans every node of the full tree for the smallest effective α.
+- **It need not be slow:** pruning the same full tree to the same α in one bottom-up pass, as ./tree does, is a Python loop of 0.2 s. It gives the same tree, apart from 2 leaves on the two smallest subsets, most likely ties.
+
 ## Reproduce
 
 ```bash
