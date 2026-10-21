@@ -5,7 +5,10 @@
 
 warmup=ROWS: one untimed fit on the first ROWS training rows first (0 = none).
 Timed: DecisionTreeClassifier.fit (one tree, on one thread: scikit-learn does
-not parallelise a single tree). Loading and prediction are not timed; with
+not parallelise a single tree). With ccp_alpha the two parts of fit are timed
+apart: growing (fit with ccp_alpha=0) and pruning (_prune_tree() at ccp_alpha,
+what fit does last), build_seconds and prune_seconds; train_seconds is their
+sum. Loading and prediction are not timed; with
 eval=1 the training and test accuracy are measured after the timed fit.
 The peak resident memory (VmHWM) is read right after the fit, before evaluation.
 """
@@ -33,21 +36,29 @@ def tree(**extra):
 
 
 def fit(X, y):
-    extra = {"ccp_alpha": float(args["ccp_alpha"])} if "ccp_alpha" in args else {}
-    return tree(**extra).fit(X, y)
+    """-> (model, seconds growing, seconds pruning or None)."""
+    start = time.perf_counter()
+    model = tree().fit(X, y)
+    grown = time.perf_counter()
+    if "ccp_alpha" not in args:
+        return model, grown - start, None
+    model.set_params(ccp_alpha=float(args["ccp_alpha"]))
+    model._prune_tree()
+    return model, grown - start, time.perf_counter() - grown
 
 
 X, y = read("train", int(args["n_train"]))
 warmup = int(args["warmup"])
 if warmup:
     fit(X[:warmup], y[:warmup])
-start = time.perf_counter()
-model = fit(X, y)
-seconds = time.perf_counter() - start
+model, build, prune = fit(X, y)
+seconds = build + (prune or 0.0)
 peak_kib = next(int(line.split()[1]) for line in open("/proc/self/status")
                 if line.startswith("VmHWM:"))
 
-result = {"train_seconds": seconds, "nodes": int(model.tree_.node_count),
+result = {"train_seconds": seconds, "build_seconds": build,
+          **({"prune_seconds": prune} if prune is not None else {}),
+          "nodes": int(model.tree_.node_count),
           "leaves": int(model.get_n_leaves()), "depth": int(model.get_depth()),
           "n_train_loaded": int(X.shape[0]), "n_features_loaded": int(X.shape[1]),
           "peak_rss_train_bytes": peak_kib * 1024}

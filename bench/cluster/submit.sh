@@ -17,7 +17,7 @@
 #   gpuonly-hopper-<data>  hopper, --cuda --gpu-only, every CPU       CUDA, GPU only
 #   gpuonly-ampere-<data>  ampere, the same                           (only when named)
 #   simple-epyc-<data>  epyc1, one socket: ./tree --simple, --serial, parallel,
-#   simple-dell-<data>  dell1  scikit-learn and Weka J48, every tree hashed
+#                       scikit-learn and Weka J48, every tree hashed
 #                       (only when named; -o cluster-simple, the "simple" benchmark)
 # The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
 # on a GPU node would measure a CPU that is only there to feed the GPU.
@@ -42,7 +42,7 @@
 #   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
 #       gpuonly-hopper-chess_1b gpuonly-ampere-chess_1b  # every node on the GPU
 #   bench/cluster/submit.sh -m 3 socket-epyc-higgs socket-dell-higgs  # one socket
-#   bench/cluster/submit.sh -d covertype -o cluster-simple simple-epyc-covertype simple-dell-covertype
+#   bench/cluster/submit.sh -d covertype -o cluster-simple simple-epyc-covertype
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
@@ -109,8 +109,7 @@ OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
           "serial-dell-$DATASET  dell       dell1   tree       1"
           "gpuonly-hopper-$DATASET  hopper  hopper  tree_gpu_only  all"
           "gpuonly-ampere-$DATASET  ampere  ampere  tree_gpu_only  all"
-          "simple-epyc-$DATASET  epyc       epyc1   tree,tree_simple,sklearn,j48  1,all"
-          "simple-dell-$DATASET  dell       dell1   tree,tree_simple,sklearn,j48  1,all")
+          "simple-epyc-$DATASET  epyc       epyc1   tree,tree_simple,sklearn,j48  1,all")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then

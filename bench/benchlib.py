@@ -81,8 +81,7 @@ PROTOCOLS = {
         "title": "CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit",
         "impls": {
             "tree": ["--cart", "--alpha", "{alpha}"],
-            # scikit-learn's defaults (gini): it prunes only when given ccp_alpha.
-            "sklearn": {"mode": "fit"},
+            "sklearn": {"mode": "fit", "ccp_alpha": "{alpha}"},
         },
     },
     "cart_full_nodepth": {
@@ -97,8 +96,9 @@ PROTOCOLS = {
             "tree": ["--c45"],
             "j48": {"options": "-C 0.25 -M 2"},
             "yadt": ["-ebpg", "-c", "0.25", "-m", "2"],
-            # Not C4.5: scikit-learn's defaults with entropy, unpruned.
-            "sklearn": {"mode": "fit", "criterion": "entropy"},
+            # Not C4.5: scikit-learn's nearest tree, entropy, pruned the only
+            # way it can, by cost-complexity at CART's alpha.
+            "sklearn": {"mode": "fit", "criterion": "entropy", "ccp_alpha": "{alpha}"},
         },
     },
     "c45_unpruned": {
