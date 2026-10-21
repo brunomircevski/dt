@@ -1,7 +1,7 @@
 """scikit-learn adapter: fit one tree on a prepared dataset, print one JSON line.
 
   python sklearn_fit.py data=DIR n_train=N n_test=M n_features=F threads=T \
-      warmup=ROWS eval=0|1 mode=fit [max_depth=D] [ccp_alpha=A]
+      warmup=ROWS eval=0|1 mode=fit [max_depth=D] [ccp_alpha=A] [criterion=gini|entropy]
 
 warmup=ROWS: one untimed fit on the first ROWS training rows first (0 = none).
 Timed: DecisionTreeClassifier.fit (one tree, on one thread: scikit-learn does
@@ -29,7 +29,7 @@ def read(part, rows):
 
 def tree(**extra):
     depth = int(args["max_depth"]) if "max_depth" in args else None
-    return DecisionTreeClassifier(criterion="gini", max_depth=depth, random_state=0, **extra)
+    return DecisionTreeClassifier(criterion=args.get("criterion", "gini"), max_depth=depth, random_state=0, **extra)
 
 
 def fit(X, y):

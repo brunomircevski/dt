@@ -35,6 +35,7 @@ OS, versions) and plan.json next to it; bench/report.py turns them into tables.
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import random
@@ -147,6 +148,10 @@ def measure(command, env, timeout, pin=(), gpu=False):
 
 # ------------------------------------------------------------------ commands
 
+# ./tree's backends: one binary's command line and output.
+TREE_IMPLS = ("tree", "tree_cuda", "tree_gpu_only", "tree_simple")
+
+
 def adapter_args(dataset, threads, warmup_rows, evaluate):
     m = B.meta(dataset)
     return [f"data={B.DATA / dataset}", f"n_train={m['n_train']}", f"n_test={m['n_test']}",
@@ -194,20 +199,24 @@ def build_command(case, kind, args, scratch, rep=0):
         warmup_rows = m["n_train"] if args.warmup_rows == "all" else int(args.warmup_rows)
     data = B.DATA / dataset
 
-    if impl in ("tree", "tree_cuda", "tree_gpu_only"):
+    if impl in TREE_IMPLS:
         flags = [fill(flag, args.alpha) for flag in spec]
         if impl == "tree_cuda":
             binary, backend = B.TREE_CUDA, ["--cuda", "--threads", str(threads)]
         elif impl == "tree_gpu_only":
             binary, backend = B.TREE_CUDA, ["--cuda", "--gpu-only", "--threads", str(threads)]
+        elif impl == "tree_simple":
+            binary, backend = B.TREE, ["--simple"]
         else:
             binary = B.TREE
             backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
         dump = scratch / "tree.dump"
+        dump.unlink(missing_ok=True)  # never read a previous run's tree
         predict = evaluate and not args.train_accuracy_only
         profile = (["--profile", str(args.out_dir / profile_name(case, rep))]
                    if args.profile and kind == "run" else [])
-        argv = [str(binary)] + backend + flags + (["--dump", str(dump)] if predict else []) \
+        argv = [str(binary)] + backend + flags \
+            + (["--dump", str(dump)] if predict or args.hash_trees else []) \
             + profile + [str(data / "train.csv")]
 
         def parse(stdout):
@@ -225,6 +234,9 @@ def build_command(case, kind, args, scratch, rep=0):
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features),
                       "peak_rss_train_bytes": peak * 1024}
+            if args.hash_trees:
+                # The same tree from every backend: the same dump, byte for byte.
+                result["tree_sha256"] = hashlib.sha256(dump.read_bytes()).hexdigest()
             if evaluate and not predict:
                 # --train-accuracy-only: ./tree's own training accuracy, no test rows.
                 result["train_accuracy"] = float(
@@ -469,6 +481,7 @@ def plan_cases(args):
 
 # Which protocol measures each tool's runtime footprint on the _baseline dataset.
 BASELINE_PROTOCOL = {"tree": "cart_full", "tree_cuda": "cart_full", "tree_gpu_only": "cart_full",
+                     "tree_simple": "cart_full",
                      "sklearn": "cart_full",
                      "rpart": "cart_full",
                      "j48": "c45", "yadt": "c45"}
@@ -507,6 +520,9 @@ def main():
     parser.add_argument("--train-accuracy-only", action="store_true",
                         help="./tree: record only its own training accuracy, skip predicting "
                              "the training and test rows from its dumped tree (minutes on big trees)")
+    parser.add_argument("--hash-trees", action="store_true",
+                        help="./tree: record the SHA-256 of every tree's --dump (tree_sha256), "
+                             "to check that the backends grow the same tree")
     parser.add_argument("--profile", action="store_true",
                         help="./tree: also write where its training time goes (--profile) to "
                              "<run dir>/profiles/<protocol>-<impl>-t<threads>-r<rep>.json")
@@ -624,7 +640,7 @@ def main():
             row["peak_rss_train_bytes"] = row["peak_rss_bytes"]  # YaDT: the process only trains
         if row["status"] != "ok" and kind != "baseline":
             failed.add(case)
-        if args.profile and kind == "run" and impl in ("tree", "tree_cuda", "tree_gpu_only"):
+        if args.profile and kind == "run" and impl in TREE_IMPLS:
             row["profile"] = profile_name(case, rep)
         row["command"] = shlex.join(pin + argv)
         row.update({f"mem_free_{node}_kb": kb for node, kb in mem_free.items()})

@@ -81,6 +81,8 @@ PROTOCOLS = {
         "title": "CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit",
         "impls": {
             "tree": ["--cart", "--alpha", "{alpha}"],
+            # scikit-learn's defaults (gini): it prunes only when given ccp_alpha.
+            "sklearn": {"mode": "fit"},
         },
     },
     "cart_full_nodepth": {
@@ -95,6 +97,8 @@ PROTOCOLS = {
             "tree": ["--c45"],
             "j48": {"options": "-C 0.25 -M 2"},
             "yadt": ["-ebpg", "-c", "0.25", "-m", "2"],
+            # Not C4.5: scikit-learn's defaults with entropy, unpruned.
+            "sklearn": {"mode": "fit", "criterion": "entropy"},
         },
     },
     "c45_unpruned": {
@@ -107,12 +111,13 @@ PROTOCOLS = {
     },
 }
 
-# ./tree on the GPU (--cuda, and --cuda --gpu-only) runs every protocol ./tree
-# runs, with the same flags.
+# ./tree on the GPU (--cuda, and --cuda --gpu-only) and ./tree --simple run
+# every protocol ./tree runs, with the same flags.
 for _protocol in PROTOCOLS.values():
     if "tree" in _protocol["impls"]:
         _protocol["impls"]["tree_cuda"] = _protocol["impls"]["tree"]
         _protocol["impls"]["tree_gpu_only"] = _protocol["impls"]["tree"]
+        _protocol["impls"]["tree_simple"] = _protocol["impls"]["tree"]
 
 # threads: "multi" = runs with every thread count asked for, "single" = only 1,
 #   "all" = only the largest thread count asked for (./tree --cuda: the CPU pool
@@ -126,6 +131,7 @@ IMPLS = {
     "tree": {"label": "./tree", "threads": "multi", "warmup": False},
     "tree_cuda": {"label": "./tree CUDA", "threads": "all", "warmup": False},
     "tree_gpu_only": {"label": "./tree CUDA, GPU only", "threads": "all", "warmup": False},
+    "tree_simple": {"label": "./tree simple", "threads": "single", "warmup": False},
     "sklearn": {"label": "scikit-learn", "threads": "single", "warmup": True},
     "rpart": {"label": "rpart", "threads": "single", "warmup": True},
     "j48": {"label": "Weka J48", "threads": "single", "warmup": True},

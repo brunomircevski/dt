@@ -16,6 +16,9 @@
 #                       (only when named; the job still owns the whole node)
 #   gpuonly-hopper-<data>  hopper, --cuda --gpu-only, every CPU       CUDA, GPU only
 #   gpuonly-ampere-<data>  ampere, the same                           (only when named)
+#   simple-epyc-<data>  epyc1, one socket: ./tree --simple, --serial, parallel,
+#   simple-dell-<data>  dell1  scikit-learn and Weka J48, every tree hashed
+#                       (only when named; -o cluster-simple, the "simple" benchmark)
 # The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
 # on a GPU node would measure a CPU that is only there to feed the GPU.
 # The epyc and dell partitions have more nodes: the runs always take epyc1
@@ -39,6 +42,7 @@
 #   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
 #       gpuonly-hopper-chess_1b gpuonly-ampere-chess_1b  # every node on the GPU
 #   bench/cluster/submit.sh -m 3 socket-epyc-higgs socket-dell-higgs  # one socket
+#   bench/cluster/submit.sh -d covertype -o cluster-simple simple-epyc-covertype simple-dell-covertype
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
@@ -75,7 +79,8 @@ case "$DATASET" in
   ecbdl_15m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
   ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
   chess_1m|chess_10m|chess_100m|chess_1b) DIR=cluster-chess; LIMIT=02:00:00 TIMEOUT=3600 ;;
-  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl or chess_1m, chess_10m, chess_100m, chess_1b" >&2
+  covertype) DIR=cluster-simple; LIMIT=02:00:00 TIMEOUT=3600 ;;
+  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, covertype or chess_1m, chess_10m, chess_100m, chess_1b" >&2
      exit 2 ;;
 esac
 DIR="${OUTDIR:-$DIR}"
@@ -103,7 +108,9 @@ OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
           "serial-epyc-$DATASET  epyc       epyc1   tree       1"
           "serial-dell-$DATASET  dell       dell1   tree       1"
           "gpuonly-hopper-$DATASET  hopper  hopper  tree_gpu_only  all"
-          "gpuonly-ampere-$DATASET  ampere  ampere  tree_gpu_only  all")
+          "gpuonly-ampere-$DATASET  ampere  ampere  tree_gpu_only  all"
+          "simple-epyc-$DATASET  epyc       epyc1   tree,tree_simple,sklearn,j48  1,all"
+          "simple-dell-$DATASET  dell       dell1   tree,tree_simple,sklearn,j48  1,all")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then
@@ -135,9 +142,11 @@ ids=()
 for job in "${JOBS[@]}"; do
   read -r name partition node impls threads <<<"$job"
   mkdir -p "bench/results/$DIR/$name"
-  socket=; [[ "$name" != socket-* ]] || socket=,SOCKET=auto
+  socket=; [[ "$name" != socket-* && "$name" != simple-* ]] || socket=,SOCKET=auto
+  # The simple runs check that every backend grew the same tree.
+  extra=; [[ "$name" != simple-* ]] || extra=",RUN_EXTRA=--hash-trees"
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "$LIMIT" \
-    --export=ALL${NUMA:+,NUMA_NODE=$NUMA}$socket \
+    --export=ALL${NUMA:+,NUMA_NODE=$NUMA}$socket$extra \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
     bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "$PROTOCOLS" "$threads" "$TIMEOUT")")
   echo "$name: job ${ids[-1]} on $node"
