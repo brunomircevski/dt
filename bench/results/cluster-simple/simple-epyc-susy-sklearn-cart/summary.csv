@@ -1,0 +1,2 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+simple-epyc-susy-sklearn-cart,susy,cart_alpha_nodepth,sklearn,1,ok,True,852.5074871443212,852.5074871443212,852.5074871443212,852.5074871443212,,1,,854.7246660720557,790503424,790503424,790503424,664588288,1059,530,17,0.7945506666666666,0.794782,0.0011194451161390645,,665.5623892722651

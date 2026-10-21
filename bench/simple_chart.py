@@ -5,7 +5,7 @@ scikit-learn and Weka J48, on epyc1.
 
 One panel per dataset (one column for two datasets, a 2×2 grid for three or
 four), CART and C4.5 in it, one under the other. Every bar is the median training time
-(log scale), split into growing (dark) and pruning (light) where the tool
+(log scale; 3 runs, or 1 for SUSY and HIGGS), split into growing (dark) and pruning (light) where the tool
 prunes; the end label gives both. The trees are in one table under each
 panel, not next to the bars: every ./tree backend must grow the same tree
 (the same --dump, byte for byte: run.py --hash-trees), and the script stops
@@ -29,7 +29,7 @@ from chart import GRID, INK, MUTED, NAMES, seconds_tick  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 MACHINE = "epyc"
-DATASETS = ("chess_10m", "covertype", "susy")
+DATASETS = ("chess_10m", "covertype", "susy", "higgs")
 PROTOCOLS = {"cart_alpha_nodepth": "CART: gini, pruned at α = 1e-5",
              "c45": "C4.5: CF 0.25, ≥ 2 rows per leaf"}
 # (impl, single thread?) -> bar label, colour; in this order, top to bottom.
@@ -160,7 +160,9 @@ def main():
             ax.spines[side].set_visible(False)
         ax.set_title(NAMES.get(dataset, dataset), fontsize=12, color=INK, loc="left",
                      fontweight="bold")
-        ax.set_xlabel("training time, median of 3 (log scale): dark = growing, light = pruning",
+        reps = {len(runs) for key, runs in cases.items() if key[:2] == (MACHINE, dataset)}
+        runs = "median of 3" if reps == {3} else "1 run" if reps == {1} else "median of the runs"
+        ax.set_xlabel(f"training time, {runs} (log scale): dark = growing, light = pruning",
                       fontsize=9, color=MUTED)
         # One tree line per protocol and tool.
         text = "\n".join(line.replace(";  ", ";\n      ") for line in lines)
