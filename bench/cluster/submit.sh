@@ -51,6 +51,7 @@
 #   bench/cluster/submit.sh -m 3 -d higgs -o cluster-simple $(for t in parallel serial \
 #       sklearn simple; do echo simple-epyc-higgs-$t-cart simple-epyc-higgs-$t-c45; done) \
 #       simple-epyc-higgs-j48-c45                # one job per tool and protocol
+# -w: every job on that node instead (e.g. epyc2, the same hardware as epyc1);
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
@@ -67,7 +68,8 @@ PROTOCOLS=cart_alpha_nodepth,c45
 OUTDIR=
 NUMA=
 AFTER=
-while getopts "m:d:p:o:a:n:h" option; do
+NODE=
+while getopts "m:d:p:o:a:n:w:h" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
     d) DATASET="$OPTARG" ;;
@@ -75,6 +77,7 @@ while getopts "m:d:p:o:a:n:h" option; do
     o) OUTDIR="$OPTARG" ;;
     a) AFTER="$OPTARG" ;;
     n) NUMA="$OPTARG" ;;
+    w) NODE="$OPTARG" ;;
     *) sed -n '2,50p' "$0"; exit 2 ;;
   esac
 done
@@ -164,6 +167,7 @@ echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs
 ids=()
 for job in "${JOBS[@]}"; do
   read -r name partition node impls threads protocols limit timeout <<<"$job"
+  node="${NODE:-$node}"
   mkdir -p "bench/results/$DIR/$name"
   socket=; [[ "$name" != socket-* && "$name" != simple-* ]] || socket=,SOCKET=auto
   # The simple runs check that every backend grew the same tree.
