@@ -20,7 +20,8 @@
 #                       scikit-learn and Weka J48, every tree hashed
 #                       (only when named; -o cluster-simple, the "simple" benchmark)
 #   simple-epyc-<data>-<tool>-<protocol>  the same, one tool and protocol per job
-#                       (tool: simple, serial, parallel, sklearn, j48; protocol:
+#                       (tool: simple, serial, parallel, dual (parallel on both
+#                       sockets, every CPU), sklearn, j48; protocol:
 #                       cart, c45; J48 has no CART), each with its own time limit,
 #                       so a tool that fails or runs out of time stops only its own
 #                       job (HIGGS: hours of J48)
@@ -128,6 +129,7 @@ OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
 # ./tree --serial about 40 s, --simple about 10x that, J48 hours).
 #     tool      impls        threads  time limit   timeout (s)
 for tool in "parallel  tree         all  02:00:00    3600" \
+            "dual      tree         all  02:00:00    3600" \
             "serial    tree         1    04:00:00    3600" \
             "sklearn   sklearn      1    1-00:00:00  21600" \
             "simple    tree_simple  1    1-00:00:00  21600" \
@@ -170,6 +172,7 @@ for job in "${JOBS[@]}"; do
   node="${NODE:-$node}"
   mkdir -p "bench/results/$DIR/$name"
   socket=; [[ "$name" != socket-* && "$name" != simple-* ]] || socket=,SOCKET=auto
+  [[ "$name" != simple-*-dual-* ]] || socket=  # both sockets
   # The simple runs check that every backend grew the same tree.
   extra=; [[ "$name" != simple-* ]] || extra=",RUN_EXTRA=--hash-trees"
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "${limit:-$LIMIT}" \

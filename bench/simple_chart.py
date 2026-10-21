@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Chart of the "simple" benchmark (bench/results/cluster-simple): ./tree's
---simple reference backend against --serial and --parallel (one socket), and
-scikit-learn and Weka J48, on epyc1.
+--simple reference backend against --serial, --parallel (on one socket and on
+both), scikit-learn and Weka J48, on epyc1 and epyc2 (the same hardware).
 
 One panel per dataset (one column for two datasets, a 2×2 grid for three or
 four), CART and C4.5 in it, one under the other. Every bar is the median training time
@@ -32,12 +32,13 @@ MACHINE = "epyc"
 DATASETS = ("chess_10m", "covertype", "susy", "higgs")
 PROTOCOLS = {"cart_alpha_nodepth": "CART: gini, pruned at α = 1e-5",
              "c45": "C4.5: CF 0.25, ≥ 2 rows per leaf"}
-# (impl, single thread?) -> bar label, colour; in this order, top to bottom.
-BARS = {("tree_simple", True): ("./tree --simple", "#8e5bd0"),
-        ("tree", True): ("./tree --serial", "#2a78d6"),
-        ("tree", False): ("./tree --parallel", "#eb6834"),
-        ("sklearn", True): ("scikit-learn", "#1baf7a"),
-        ("j48", True): ("Weka J48", "#eda100")}
+# (impl, threads) -> bar label, colour; in this order, top to bottom.
+BARS = {("tree_simple", 1): ("./tree --simple", "#8e5bd0"),
+        ("tree", 1): ("./tree --serial", "#2a78d6"),
+        ("tree", 24): ("./tree --parallel, 24 threads (one socket)", "#eb6834"),
+        ("tree", 48): ("./tree --parallel, 48 threads (both sockets)", "#b8401a"),
+        ("sklearn", 1): ("scikit-learn", "#1baf7a"),
+        ("j48", 1): ("Weka J48", "#eda100")}
 TREE = {"tree", "tree_simple"}
 SHORT = {"cart_alpha_nodepth": "CART", "c45": "C4.5"}
 SKLEARN = {"cart_alpha_nodepth": "gini", "c45": "entropy, as it has no C4.5"}
@@ -55,7 +56,7 @@ def duration(seconds):
 
 
 def load(root):
-    """-> {(machine, dataset, protocol, impl, single): [ok run records]}."""
+    """-> {(machine, dataset, protocol, impl, threads): [ok run records]}."""
     cases = defaultdict(list)
     for path in sorted(root.glob("simple-*/results.jsonl")):
         machine = path.parent.name.split("-")[1]
@@ -65,7 +66,7 @@ def load(root):
                 continue
             if r["status"] != "ok":
                 raise SystemExit(f"{path}: {r['impl']} {r['protocol']} {r['dataset']}: {r['status']}")
-            cases[(machine, r["dataset"], r["protocol"], r["impl"], r["threads"] == 1)].append(r)
+            cases[(machine, r["dataset"], r["protocol"], r["impl"], r["threads"])].append(r)
     return cases
 
 
@@ -121,8 +122,8 @@ def main():
                     ha="left", va="bottom", fontsize=10, fontweight="bold", color=INK)
             y += 0.55
             trees = {}
-            for (impl, single), (label, color) in BARS.items():
-                runs = cases.get((MACHINE, dataset, protocol, impl, single))
+            for (impl, threads), (label, color) in BARS.items():
+                runs = cases.get((MACHINE, dataset, protocol, impl, threads))
                 if not runs:
                     continue
                 grow, prune = parts(runs, impl)
@@ -135,8 +136,7 @@ def main():
                 text = duration(total) + (f"  (grow {duration(grow)} + prune {duration(prune)})"
                                           if prune is not None else "  (no pruning)")
                 ax.text(total * 1.08, y, text, va="center", fontsize=9, color=INK)
-                threads = "" if single else f", {runs[0]['threads']} threads"
-                labels.append((y, f"{label}{threads}"))
+                labels.append((y, label))
                 first = runs[0]
                 name = "./tree (every backend)" if impl in TREE else label
                 if impl == "sklearn":
@@ -169,8 +169,9 @@ def main():
         box.text(0, 0.95, text, transform=box.transAxes, va="top", fontsize=9, color=INK,
                  linespacing=1.5,
                  bbox={"boxstyle": "round,pad=0.5", "facecolor": "#f6f5f2", "edgecolor": GRID})
-    fig.suptitle("./tree --simple (the reference) against --serial, --parallel (24 threads), "
-                 "scikit-learn and Weka J48\non one socket of epyc1 (EPYC 9255), every tree pruned",
+    fig.suptitle("./tree --simple (the reference) against --serial, --parallel, scikit-learn and "
+                 "Weka J48, every tree pruned\non epyc1 and epyc2 (2× EPYC 9255 each); every run on "
+                 "one socket, except --parallel on both sockets",
                  fontsize=12.5, color=INK, x=0.02, y=1 - 0.2 / fig.get_figheight(), ha="left",
                  va="top")
     out = args.out or args.root / "chart.png"
