@@ -470,6 +470,23 @@ std::vector<std::uint32_t> countClasses(const Dataset &dataset,
   return total;
 }
 
+DistinctValues distinctValues(const Dataset &dataset) {
+  DistinctValues distinct;
+  distinct.offsets.assign(1, 0);
+  for (std::size_t feature = 0; feature < dataset.featureCount(); ++feature) {
+    const float *column = dataset.column(feature);
+    std::vector<float> sorted(column, column + dataset.rowCount);
+    for (float &value : sorted) {
+      value += 0.0f; // -0.0 becomes 0.0: one value, as in the presorts
+    }
+    std::sort(sorted.begin(), sorted.end());
+    sorted.erase(std::unique(sorted.begin(), sorted.end()), sorted.end());
+    distinct.values.insert(distinct.values.end(), sorted.begin(), sorted.end());
+    distinct.offsets.push_back(distinct.values.size());
+  }
+  return distinct;
+}
+
 std::mt19937_64 seededRandom(std::uint64_t seed, RandomStream stream) {
   std::seed_seq seeds{static_cast<std::uint32_t>(seed), static_cast<std::uint32_t>(seed >> 32),
                       static_cast<std::uint32_t>(stream)};

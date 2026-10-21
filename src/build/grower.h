@@ -31,6 +31,7 @@ public:
   // If `distinct` is not null it receives every feature's distinct values
   // among those rows. If `leafOfRow` is not null (only with all rows)
   // it receives, for every training row, the id of the leaf it ends in.
+  // A grower may leave either one empty (the Simple backend does).
   virtual Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
                     GrowTimings &timings, DistinctValues *distinct = nullptr,
                     RowLeaves *leafOfRow = nullptr) = 0;

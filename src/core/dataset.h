@@ -64,6 +64,10 @@ struct DistinctValues {
   std::vector<std::size_t> offsets;
 };
 
+// The distinct values of every feature over all rows (the backends that
+// presort get them from the presort instead).
+DistinctValues distinctValues(const Dataset &dataset);
+
 // Load a CSV with a header line. The last column is the class label; a first
 // column named "Id" (any case) is ignored; every other column must be numeric.
 // Parsing runs on the pool (or on the calling thread if `pool` is null).

@@ -204,6 +204,9 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
       trace::Doing doing(trace::Work::PruneOther);
       // Part of growing in c4.5 (done with or without pruning).
       c45CollapseUselessSplits(tree, buildPool, &leafOfRow);
+      if (distinct.offsets.empty()) {
+        distinct = distinctValues(train); // the grower did not provide them
+      }
       c45UseTrainingValueThresholds(tree, distinct, buildPool);
     }
     if (options.c45.prune) {
