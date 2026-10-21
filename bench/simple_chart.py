@@ -52,6 +52,8 @@ def lighter(color, amount=0.55):
 def duration(seconds):
     if seconds < 0.0001:
         return "< 0.1 ms"  # ./tree prints tenths of a millisecond
+    if seconds >= 1000:
+        return f"{seconds:,.0f} s"
     return f"{seconds * 1000:.3g} ms" if seconds < 1 else f"{seconds:.3g} s"
 
 
@@ -106,7 +108,7 @@ def main():
     fig = plt.figure(figsize=(12 * columns, 9.2 * rows))
     # Per dataset a panel of bars, and under it its table of the trees.
     grid = fig.add_gridspec(2 * rows, columns, height_ratios=[6, 1.6] * rows,
-                            left=0.2 / columns, right=0.985, top=1 - 1.25 / fig.get_figheight(),
+                            left=0.27 / columns, right=0.985, top=1 - 1.25 / fig.get_figheight(),
                             bottom=0.01, hspace=0.3, wspace=0.32)
     for index, dataset in enumerate(datasets):
         row, column = divmod(index, columns)
@@ -161,7 +163,7 @@ def main():
         ax.set_title(NAMES.get(dataset, dataset), fontsize=12, color=INK, loc="left",
                      fontweight="bold")
         reps = {len(runs) for key, runs in cases.items() if key[:2] == (MACHINE, dataset)}
-        runs = "median of 3" if reps == {3} else "1 run" if reps == {1} else "median of the runs"
+        runs = "median of 3" if reps == {3} else "1 run" if reps == {1} else "median of up to 3 runs"
         ax.set_xlabel(f"training time, {runs} (log scale): dark = growing, light = pruning",
                       fontsize=9, color=MUTED)
         # One tree line per protocol and tool.

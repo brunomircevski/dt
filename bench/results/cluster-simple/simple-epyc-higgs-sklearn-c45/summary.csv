@@ -1,0 +1,2 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+simple-epyc-higgs-sklearn-c45,higgs,c45,sklearn,1,ok,True,4703.861015873961,4703.861015873961,4703.861015873961,4703.861015873961,,1,,4707.706017009914,1985667072,1985667072,1985667072,1860448256,3009,1505,21,0.7146972380952381,0.713248,0.0012535584198348584,,4173.931964803021

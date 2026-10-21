@@ -1,0 +1,2 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+simple-epyc-higgs-serial-cart,higgs,cart_alpha_nodepth,tree,1,ok,True,18.525599999999997,18.525599999999997,18.525599999999997,18.525599999999997,,1,1.0,26.484906311146915,3837816832,3837816832,3837816832,3831640064,1611,806,19,0.717907,,,,0.0007
