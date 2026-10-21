@@ -42,6 +42,8 @@ bench/cluster/scaling.sh -m 3 -d airline   # the same on airline
 # one socket of epyc1 and dell1: all its CPUs, the memory of its NUMA nodes
 bench/cluster/submit.sh -m 3 socket-epyc-higgs socket-dell-higgs
 bench/cluster/submit.sh -m 3 -d airline socket-epyc-airline socket-dell-airline
+# the simple benchmark: --simple, --serial, one-socket parallel, scikit-learn, J48 (cluster-simple)
+bench/cluster/submit.sh -m 3 -d covertype -o cluster-simple simple-epyc-covertype simple-dell-covertype
 ```
 
 ECBDL'14, each case once. Preparing it needs about 350 GB of RAM, so it runs
