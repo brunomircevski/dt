@@ -175,7 +175,8 @@ def check_csv(path, X, y, header):
     for j in range(F):
         if not np.array_equal(table[f"f{j}"].to_numpy(), X[:, j]):
             raise AssertionError(f"{path}: column f{j} differs from the binary file")
-    classes = pa.array([f"c{k}" for k in range(int(y.max()) + 1)])
+    # 64-bit offsets: 2G rows of "c0" are more than 2^31 bytes (chess_2b).
+    classes = pa.array([f"c{k}" for k in range(int(y.max()) + 1)], pa.large_string())
     if not pc.all(pc.equal(table["class"], pc.take(classes, pa.array(y)))).as_py():
         raise AssertionError(f"{path}: class labels differ from the binary file")
     del table

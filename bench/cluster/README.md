@@ -248,25 +248,41 @@ value and the sample had 6M rows. `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
 `5bc39aec…` (first build). Logs: `prepare-ecbdl.log` (the full set; it also made the earlier 6M sample), `prepare-ecbdl_15m.log` (the 15M sample, `bench/prepare.py ecbdl_15m` alone in a job on dell3). The pre-converted `.bin` files under
 `/home/Datasets/IMM` lack the label and the nominal attributes.
 
-The **chess** sets are a 3×3 checkerboard: x and y uniform in [0, 3] with six
-decimals, the class (`A`, `B`) alternating over the nine unit squares (`B` on
-5 of them, 55.5% of the rows), no noise; a tree of 9 leaves and depth 4 is
-exact. They came as C4.5 files (`.names`, `.data`, `.test`) in mordor3's
-`~/chess`, not public: `chess3x3x001M`, `010M`, `100M` and `001MM` (1M, 10M,
-100M and 1000M rows). `make_datasets.py` turns them into `datasets/chess_*.csv`
-and `chess_*_test.csv` (a header `x,y,class`, the values as written, the class
-without C4.5's closing period). The sources were uneven: 10M and up had CRLF
-line ends, 100M ended with DOS's Ctrl-Z (byte 0x1a, which ./tree cannot parse),
-and their shared test file spaced its fields (`0.182, 0.025, B.`). The sizes
-nest: 1M is the first million rows of 10M, 10M the first 10M of 100M, and
+The **chess** sets are a 3×3 checkerboard: x and y uniform on a grid of 32,768
+values in [0, 3] (3k/32767 for k = 0..32767 to six decimals, a C `rand()` with
+`RAND_MAX` 32767; both 0 and 3 occur, no inner square boundary does), the class
+alternating over the nine unit squares (`B` on 5 of them, 55.5% of the rows), no
+noise; a tree of 9 leaves and depth 4 is exact. They came as C4.5 files
+(`.names`, `.data`, `.test`) in mordor3's `~/chess`, not public:
+`chess3x3x001M`, `010M`, `100M` and `001MM` (1M, 10M, 100M and 1000M rows).
+`make_datasets.py` turned them into `datasets/chess_*.csv` and `chess_*_test.csv`
+(the class without C4.5's closing period). The sources were uneven: 10M and up
+had CRLF line ends, 100M ended with DOS's Ctrl-Z (byte 0x1a, which ./tree cannot
+parse), and their shared test file spaced its fields (`0.182, 0.025, B.`). The
+sizes nest: 1M is the first million rows of 10M, 10M the first 10M of 100M, and
 **1000M is the 100M file ten times over** (with its Ctrl-Z after each copy), so
 it has only 100M distinct rows. 1M and 1000M share one test file (1,000 rows,
 the generator's), 10M and 100M another (4,500 rows on a grid of 3 decimals).
 The originals were deleted after the conversion (2026-10-19): the CSVs are the
 only copies, and `chess-originals.sha256` lists the originals' SHA-256.
-`datasets.toml` takes each set's own test file (`test_source`) and writes no YaDT
-files from 100M on. CSVs: 20 bytes per row, 20.0 GB for 1000M; preparing all four
-took 5 minutes (`prepare-chess.log`).
+
+Since 2026-10-22 the CSVs are in ./tree's format, the bytes `prepare.py` writes
+as `train.csv` (header `"f0","f1","class"`, classes `c0` = A and `c1` = B,
+values as float32's shortest text), so `prepare.py` links a set's `train.csv` to
+its CSV when the set takes all of the CSV's rows, instead of a second copy
+(`chess_tree_format.py` converted the first build and replaced the existing
+`train.csv` files with links; the sets prepared before keep `x`, `y`, `A`, `B` in
+`meta.json`). `make_datasets.py` also **generates chess_2b** (2,000,000,000
+rows; ./tree's limit for two classes is 2^31): the 100M rows of `chess_100m`,
+then 1.9G rows drawn the same way (k uniform on the grid, numpy's
+`default_rng([20261022, chunk])` per 10M rows), after checking that every row of
+`chess_100m` is on the grid and follows the squares' rule. `datasets.toml` adds
+`chess_50m` (the first 50M rows of `chess_100m`) and `chess_500m` (the first
+500M of `chess_2b`), with `chess_100m`'s test file, as `chess_2b` has. Each set
+takes its own test file (`test_source`), and none writes YaDT files from 50M on.
+CSVs: about 20.8 bytes per row, 20.8 GB for 1000M, 41.6 GB for 2b (generated in 164 s on dell1). Logs:
+`prepare-chess.log` (the first four, 5 minutes), `prepare-chess-2b.log` (the
+conversion, 3 minutes; chess_2b; preparing 50m, 500m and 2b, 5 minutes and 170 GB of RAM).
 
 HIGGS's prepared files (`bench/data/higgs/`) have the SHA-256 recorded in
 `plan.json` of `consumer/pc-legion-higgs/cpu-pc-higgs` and `consumer/pc-legion-higgs/cuda-legion-higgs` (desktop and laptop).

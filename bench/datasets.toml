@@ -95,12 +95,16 @@ test_rows = 100_000
 train_rows = 15_000_000
 yadt = false
 
-# A 3x3 checkerboard (x and y uniform in [0, 3], the class alternates between
+# A 3x3 checkerboard (x and y uniform on a grid of 32,768 values in [0, 3],
+# 3k/32767 to six decimals; the class alternates between
 # the nine unit squares: 5 squares B, 4 A), from C4.5-format files made by
-# bench/cluster/make_datasets.py; cluster-only. Each set comes with its own test
-# file. The sizes nest: 1m is the first 1M rows of 10m, 10m the first 10M of
-# 100m, and 1b is 100m ten times over (100M distinct rows, each 10 times).
-# No YaDT files from 100m on (no YaDT on the cluster).
+# bench/cluster/make_datasets.py; cluster-only. The CSVs are in train.csv's
+# format, so prepare.py links train.csv to them when a set takes all rows. Each
+# set comes with its own test file. The sizes nest: 1m is the first 1M rows of
+# 10m, 10m the first 10M of 50m, 50m the first 50M of 100m, 100m of 500m, 500m of 2b; 1b is
+# 100m ten times over (100M distinct rows, each 10 times). 2b is generated
+# (2026-10-22): 100m's rows, then 1.9G new ones.
+# No YaDT files from 50m on (no YaDT on the cluster).
 [chess_1m]
 source = "datasets/chess_1m.csv"
 test_source = "datasets/chess_1m_test.csv"
@@ -109,12 +113,29 @@ test_source = "datasets/chess_1m_test.csv"
 source = "datasets/chess_10m.csv"
 test_source = "datasets/chess_10m_test.csv"
 
+[chess_50m]
+source = "datasets/chess_100m.csv"
+test_source = "datasets/chess_100m_test.csv"
+train_rows = 50_000_000
+yadt = false
+
 [chess_100m]
 source = "datasets/chess_100m.csv"
 test_source = "datasets/chess_100m_test.csv"
 yadt = false
 
+[chess_500m]
+source = "datasets/chess_2b.csv"
+test_source = "datasets/chess_100m_test.csv"
+train_rows = 500_000_000
+yadt = false
+
 [chess_1b]
 source = "datasets/chess_1b.csv"
 test_source = "datasets/chess_1b_test.csv"
+yadt = false
+
+[chess_2b]
+source = "datasets/chess_2b.csv"
+test_source = "datasets/chess_100m_test.csv"
 yadt = false

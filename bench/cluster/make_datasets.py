@@ -34,7 +34,10 @@ Sources, in <downloads>:
                            .test): 1M, 10M, 100M and 1000M rows. Not public: it was
                            in mordor3's ~/chess and was deleted after the first build
                            (2026-10-19), so datasets/chess_*.csv are the only copies;
-                           the originals' SHA-256 are in bench/cluster/README.md
+                           the originals' SHA-256 are in bench/cluster/README.md.
+                           Written in ./tree's format (f0,f1 and c0/c1, as prepare.py's
+                           train.csv) since 2026-10-22 (chess_tree_format.py)
+  (none)                   chess_2b: chess_100m's rows, then 1.9G rows drawn from a fixed seed
 
 A file whose SHA-256 differs from the expected one is left as <name>.csv.mismatch
 and the script fails.
@@ -61,15 +64,17 @@ EXPECTED = {
     "supersymmetry": "85ecf105d7667d88006de9d8dfafabbc703647fe651a40df51f9a1202d31108e",
     "airline": "255426039068522c2a5fb780b6fe4b31179bdc8988013d15db22ba914a742bcb",
     "ecbdl": "5bc39aecbec956ccb06b77295e292e0166db5f87c8341678b1e0ca35fd67120c",
-    # chess: the first build (mordor3, 2026-10-19), from files that no longer exist.
-    "chess_1m": "eeff397d59634960841140a732139a2a0b351db6d538a8bccbda7b385cffdcb1",
-    "chess_1m_test": "764f54b147078c4aad8e5d5279aac81a32ef5d0997b55d1e38f80ad3767b653a",
-    "chess_10m": "fff4315173bcef7f9672d689b058b3996b57bb98ca6ab8ec7212a853501b0add",
-    "chess_10m_test": "758a2c10f767f77de92616d43b89719c75cacba91640cf75e710fe9560b87742",
-    "chess_100m": "e25758a82f61198ac562443084baac161661eefe571ca6c2fac6a0a097742555",
-    "chess_100m_test": "758a2c10f767f77de92616d43b89719c75cacba91640cf75e710fe9560b87742",
-    "chess_1b": "8ca94cd83e586c94ae270643bf52576132faff8504f34e3b4d9ac8aedec6393d",
-    "chess_1b_test": "764f54b147078c4aad8e5d5279aac81a32ef5d0997b55d1e38f80ad3767b653a",
+    # chess: ./tree's format (2026-10-22, chess_tree_format.py) of the first build
+    # (mordor3, 2026-10-19), from files that no longer exist; chess_2b: its first build.
+    "chess_1m": "e627a390685d94edf73cec0fe90ff3bfcdbda6e4fb0f20c9bfb33eb895cee18a",
+    "chess_1m_test": "4fcfc226655dec9b32b021f7936dfdeb61e8311413d7d58466cd47b8d060bfee",
+    "chess_10m": "68d6c5d4fc84f059955255f6197a26863f356161433774a43d1028e1f4d9443c",
+    "chess_10m_test": "1feb48d239d7534f47d3d7bdbbacfddbdc062c21794156a7a78f38578605704d",
+    "chess_100m": "944a3be648eb70de844473dc64abf164b84e56de67eec7b0c209b4caf0b630fe",
+    "chess_100m_test": "1feb48d239d7534f47d3d7bdbbacfddbdc062c21794156a7a78f38578605704d",
+    "chess_1b": "124073b81a26e28a693ce3ce4a5e3ccf8edc41d8dcdcd7a2431fb642fb42fca1",
+    "chess_1b_test": "4fcfc226655dec9b32b021f7936dfdeb61e8311413d7d58466cd47b8d060bfee",
+    "chess_2b": "9b4e47c7f391a0cfeec85b98e42f520461aba03b1afcbcbec783ceba9220add3",
 }
 
 COVERTYPE_HEADER = ",".join(
@@ -266,14 +271,48 @@ CHESS = {"chess_1m": ("chess3x3x001M", 1_000_000, 1_000),
          "chess_10m": ("chess3x3x010M", 10_000_000, 4_500),
          "chess_100m": ("chess3x3x100M", 100_000_000, 4_500),
          "chess_1b": ("chess3x3x001MM", 1_000_000_000, 1_000)}
+# The header as Arrow writes it: the chess CSVs are byte for byte the train.csv
+# that bench/prepare.py would write, so it links to them instead (2026-10-22).
+CHESS_HEADER = '"f0","f1","class"\n'
+
+
+def chess_rows(x, y, b):
+    """float32 x and y, True for class B -> ./tree's CSV rows, as bench/prepare.py
+    writes them: Arrow's shortest text that reads back as the same float32, the
+    class c0 (A) or c1 (B)."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    labels = pc.take(pa.array(["c0", "c1"]), pa.array(b.astype(np.int8)))
+    text = pa.BufferOutputStream()
+    pacsv.write_csv(pa.table({"f0": x, "f1": y, "class": labels}), text,
+                    pacsv.WriteOptions(include_header=False, quoting_style="none"))
+    return text.getvalue().to_pybytes().decode("ascii")
+
+
+def chess_text(text):
+    """Rows "x,y,A|B\n" (C4.5's values) -> ./tree's CSV rows. The values are read
+    as prepare.py reads them (double, then float32). They have at most six
+    decimals and lie in [0, 4), where float32 is closer than half a millionth,
+    so the original text follows from the float32 values (asserted)."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    table = pacsv.read_csv(io.BytesIO(text), read_options=pacsv.ReadOptions(
+        column_names=["x", "y", "class"]), convert_options=pacsv.ConvertOptions(
+        column_types={"x": pa.float64(), "y": pa.float64(), "class": pa.string()}))
+    x, y = table["x"].to_numpy(), table["y"].to_numpy()
+    for v in (x, y):
+        assert ((v >= 0) & (v < 4) & (np.rint(v * 1e6) / 1e6 == v)).all(), "not six decimals"
+    b = pc.equal(table["class"], "B").to_numpy(zero_copy_only=False)
+    return chess_rows(x.astype(np.float32), y.astype(np.float32), b)
 
 
 def chess_csv(path, rows, out):
-    """One C4.5 file as ./tree's CSV: a header, values as written, the class
-    without C4.5's closing period. The sources mix their line ends (CRLF from
-    10M on), end with DOS's Ctrl-Z (100M; 1000M after each of its ten copies)
-    and space the test rows of 10M and up ("0.182, 0.025, B.")."""
-    out.write("x,y,class\n")
+    """One C4.5 file as ./tree's CSV (chess_text). The sources mix their line
+    ends (CRLF from 10M on), end with DOS's Ctrl-Z (100M; 1000M after each of
+    its ten copies) and space the test rows of 10M and up ("0.182, 0.025, B.")."""
+    out.write(CHESS_HEADER)
     count, tail = 0, b""
     with open(path, "rb") as source:
         while True:
@@ -291,7 +330,8 @@ def chess_csv(path, rows, out):
             assert text.count(b",") == 2 * lines, f"{path}: not 3 fields per row"
             assert text.count(b"A\n") + text.count(b"B\n") == lines, f"{path}: class not A or B"
             assert b"\n\n" not in text and not text.startswith(b"\n"), f"{path}: empty line"
-            out.write(text.decode("ascii"))
+            if lines:
+                out.write(chess_text(text))
             count += lines
             if not block:
                 break
@@ -304,10 +344,83 @@ def chess(name, part, downloads, out):
     chess_csv(downloads / "chess" / source / (source + extension), rows, out)
 
 
+# Generated chess sets (2026-10-22): the rows of a smaller set first (so the sizes
+# nest), then new rows drawn as its rows were, CHESS_CHUNK per seed [CHESS_SEED, chunk].
+CHESS_GENERATED = {"chess_2b": ("chess_100m", 2_000_000_000)}
+CHESS_SEED = 20261022
+CHESS_CHUNK = 10_000_000
+
+
+def _chess_squares(micro):
+    """B where the unit squares' indices add up to an even number (5 of the 9
+    squares); 3.0 lies in the last square."""
+    return np.minimum(micro // 1_000_000, 2).sum(axis=0) % 2 == 0
+
+
+def chess_grid():
+    """The values the first build's generator drew, in millionths: 3 * k / 32767
+    for k = 0..32767 (a C rand() with RAND_MAX 32767) to six decimals. None lies
+    on an inner square boundary."""
+    return np.rint(np.arange(32768) * 3e6 / 32767).astype(np.int64)
+
+
+def _chess_chunk(job):
+    """x and y drawn uniformly from chess_grid(), as in the first build."""
+    chunk, rows = job
+    k = np.random.default_rng([CHESS_SEED, chunk]).integers(0, 32768, (2, rows))
+    micro = chess_grid()[k]
+    # A millionth count / 1e6 is the double nearest to the decimal, as parsing its text gives.
+    return chess_rows((micro[0] / 1e6).astype(np.float32), (micro[1] / 1e6).astype(np.float32),
+                      _chess_squares(micro))
+
+
+def chess_check(path):
+    """An existing set's rows must be drawn as _chess_chunk draws them."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.csv as pacsv
+    table = pacsv.read_csv(path, convert_options=pacsv.ConvertOptions(column_types={
+        "f0": pa.float32(), "f1": pa.float32(), "class": pa.string()}))
+    values = np.stack([table[f].to_numpy() for f in ("f0", "f1")])
+    micro = np.rint(values.astype(np.float64) * 1e6).astype(np.int64)
+    assert np.array_equal(values, (micro / 1e6).astype(np.float32)), "float32s _chess_chunk doesn't write"
+    b = pc.equal(table["class"], "c1").to_numpy(zero_copy_only=False)
+    print(f"  {path.name}: {table.num_rows:,} rows, {len(np.unique(micro[0])):,} and "
+          f"{len(np.unique(micro[1])):,} distinct values, B {b.mean():.4%}")
+    assert np.isin(micro, chess_grid()).all(), "values off the generator's grid"
+    assert np.array_equal(b, _chess_squares(micro)), "another rule"
+
+
+def chess_generated(name, downloads, out):
+    prefix, rows = CHESS_GENERATED[name]
+    path = OUT / f"{prefix}.csv"
+    chess_check(path)
+    out.write(CHESS_HEADER)
+    digest, copied = hashlib.sha256(), 0
+    with open(path, "rb") as source:
+        while block := source.read(1 << 26):
+            digest.update(block)
+            text = block.decode("ascii")
+            if not copied:
+                assert text.startswith(CHESS_HEADER), path
+                text = text[len(CHESS_HEADER):]
+            out.write(text)
+            copied += text.count("\n")
+    assert digest.hexdigest() == EXPECTED[prefix], f"{path}: not the expected SHA-256"
+    jobs = [(chunk, min(CHESS_CHUNK, rows - start))
+            for chunk, start in enumerate(range(copied, rows, CHESS_CHUNK))]
+    workers = len(os.sched_getaffinity(0))
+    with ProcessPoolExecutor(workers) as pool:
+        for first in range(0, len(jobs), 2 * workers):  # a bounded number of chunks in memory
+            for text in pool.map(_chess_chunk, jobs[first:first + 2 * workers]):
+                out.write(text)
+
+
 BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmetry,
             "airline": airline, "ecbdl": ecbdl,
             **{name: partial(chess, name, "train") for name in CHESS},
-            **{f"{name}_test": partial(chess, name, "test") for name in CHESS}}
+            **{f"{name}_test": partial(chess, name, "test") for name in CHESS},
+            **{name: partial(chess_generated, name) for name in CHESS_GENERATED}}
 
 
 def main():

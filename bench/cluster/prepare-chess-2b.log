@@ -1,0 +1,118 @@
+# Three jobs on dell1 (2026-10-22), the steps of ~/patches/chess-job.sh that succeeded:
+# job 152: step 1 (its step 2 stopped on a wrong generator, fixed); job 159: step 2 (its
+# step 3 prepared chess_50m, then stopped on Arrow 32-bit string offsets, fixed);
+# job 165: steps 3 and 4 (chess_2b and chess_500m).
+
+job 152 on dell1, 48 CPUs, 2026-10-22 16:24:01
+
+=== 16:24:01  1/4 datasets/chess_*.csv to ./tree's format (bench/cluster/chess_tree_format.py)
+chess_1m: 1,000,000 rows, sha256 eeff397d59634960841140a732139a2a0b351db6d538a8bccbda7b385cffdcb1 -> e627a390685d94edf73cec0fe90ff3bfcdbda6e4fb0f20c9bfb33eb895cee18a
+  datasets/chess_1m.csv is bench/data/chess_1m/train.csv's bytes; bench/data/chess_1m/train.csv links to it
+chess_1m_test: 1,000 rows, sha256 764f54b147078c4aad8e5d5279aac81a32ef5d0997b55d1e38f80ad3767b653a -> 4fcfc226655dec9b32b021f7936dfdeb61e8311413d7d58466cd47b8d060bfee
+chess_10m: 10,000,000 rows, sha256 fff4315173bcef7f9672d689b058b3996b57bb98ca6ab8ec7212a853501b0add -> 68d6c5d4fc84f059955255f6197a26863f356161433774a43d1028e1f4d9443c
+  datasets/chess_10m.csv is bench/data/chess_10m/train.csv's bytes; bench/data/chess_10m/train.csv links to it
+chess_10m_test: 4,500 rows, sha256 758a2c10f767f77de92616d43b89719c75cacba91640cf75e710fe9560b87742 -> 1feb48d239d7534f47d3d7bdbbacfddbdc062c21794156a7a78f38578605704d
+chess_100m: 100,000,000 rows, sha256 e25758a82f61198ac562443084baac161661eefe571ca6c2fac6a0a097742555 -> 944a3be648eb70de844473dc64abf164b84e56de67eec7b0c209b4caf0b630fe
+  datasets/chess_100m.csv is bench/data/chess_100m/train.csv's bytes; bench/data/chess_100m/train.csv links to it
+chess_100m_test: 4,500 rows, sha256 758a2c10f767f77de92616d43b89719c75cacba91640cf75e710fe9560b87742 -> 1feb48d239d7534f47d3d7bdbbacfddbdc062c21794156a7a78f38578605704d
+chess_1b: 1,000,000,000 rows, sha256 8ca94cd83e586c94ae270643bf52576132faff8504f34e3b4d9ac8aedec6393d -> 124073b81a26e28a693ce3ce4a5e3ccf8edc41d8dcdcd7a2431fb642fb42fca1
+  datasets/chess_1b.csv is bench/data/chess_1b/train.csv's bytes; bench/data/chess_1b/train.csv links to it
+chess_1b_test: 1,000 rows, sha256 764f54b147078c4aad8e5d5279aac81a32ef5d0997b55d1e38f80ad3767b653a -> 4fcfc226655dec9b32b021f7936dfdeb61e8311413d7d58466cd47b8d060bfee
+
+
+=== 16:35:43  2/4 chess_2b (bench/cluster/make_datasets.py), the others checked by SHA-256
+/home/bmircevski/dt/datasets/chess_1m.csv exists, checking it
+chess_1m: 20,776,385 bytes, sha256 e627a390685d94edf73cec0fe90ff3bfcdbda6e4fb0f20c9bfb33eb895cee18a = the expected
+/home/bmircevski/dt/datasets/chess_10m.csv exists, checking it
+chess_10m: 207,771,523 bytes, sha256 68d6c5d4fc84f059955255f6197a26863f356161433774a43d1028e1f4d9443c = the expected
+/home/bmircevski/dt/datasets/chess_100m.csv exists, checking it
+chess_100m: 2,077,709,388 bytes, sha256 944a3be648eb70de844473dc64abf164b84e56de67eec7b0c209b4caf0b630fe = the expected
+/home/bmircevski/dt/datasets/chess_1b.csv exists, checking it
+chess_1b: 20,777,093,718 bytes, sha256 124073b81a26e28a693ce3ce4a5e3ccf8edc41d8dcdcd7a2431fb642fb42fca1 = the expected
+  chess_100m.csv: 100,000,000 rows, 32,768 and 32,768 distinct values, B 55.5492%
+chess_2b: 41,554,460,387 bytes, sha256 9b4e47c7f391a0cfeec85b98e42f520461aba03b1afcbcbec783ceba9220add3 (nothing to compare with: record it in EXPECTED)
+164.45 s elapsed, 13487116 KB max RSS
+
+=== 16:38:27  3/4 prepare chess_50m chess_2b chess_500m for bench/run.py
+chess_50m: 50,000,000 train / 4,500 test rows, 2 features, 2 classes (14.9 s)
+
+job 165 on dell1, 48 CPUs, 2026-10-22 16:55:46
+
+=== 16:55:46  3/4 prepare chess_50m chess_2b chess_500m for bench/run.py
+chess_2b: 2,000,000,000 train / 4,500 test rows, 2 features, 2 classes (187.3 s)
+chess_500m: 500,000,000 train / 4,500 test rows, 2 features, 2 classes (99.4 s)
+287.06 s elapsed, 168679952 KB max RSS
+
+=== 17:00:33  4/4 the prepared files
+total 1600520
+-rw-rw-r-- 1 bmircevski bmircevski        351 Oct 22 16:40 meta.json
+-rw-rw-r-- 1 bmircevski bmircevski      36000 Oct 22 16:40 test.f32
+-rw-rw-r-- 1 bmircevski bmircevski      18000 Oct 22 16:40 test.y.i32
+-rw-rw-r-- 1 bmircevski bmircevski 1038855271 Oct 22 16:38 train.csv
+-rw-rw-r-- 1 bmircevski bmircevski  400000000 Oct 22 16:38 train.f32
+-rw-rw-r-- 1 bmircevski bmircevski  200000000 Oct 22 16:38 train.y.i32
+6780805917b43ba235e6d8c56b01aef90c277c5979ae3a758cd5f20abb14c20c  bench/data/chess_50m/meta.json
+aed1167f5ea60a9e792f5ecf6eb72a9cb2b02d2971676b8432eeb9adf8eb127d  bench/data/chess_50m/test.f32
+171ac8992a8813959d0e5eec94615929b8946d00f55f3166f19f8b837052cc64  bench/data/chess_50m/test.y.i32
+ba4da8d0837a8fc8fb6223528566c075aa4079f56da87c4c11f3ae74b812d04f  bench/data/chess_50m/train.csv
+38b7142f265ed402aab7b60b9eb9179ea95f52ea1c434e7d58927a88ff565146  bench/data/chess_50m/train.f32
+49b1387b66cc21ffbe8a7c45e20c074a60019f9e92de5078a90e8a978bebcf66  bench/data/chess_50m/train.y.i32
+total 16004580
+-rw-rw-r-- 1 bmircevski bmircevski         352 Oct 22 17:00 meta.json
+-rw-rw-r-- 1 bmircevski bmircevski       36000 Oct 22 17:00 test.f32
+-rw-rw-r-- 1 bmircevski bmircevski       18000 Oct 22 17:00 test.y.i32
+-rw-rw-r-- 1 bmircevski bmircevski 10388609256 Oct 22 17:00 train.csv
+-rw-rw-r-- 1 bmircevski bmircevski  4000000000 Oct 22 16:59 train.f32
+-rw-rw-r-- 1 bmircevski bmircevski  2000000000 Oct 22 16:59 train.y.i32
+7d88776d0e7170b0a298bae56bb1a1147fe7e63d731422c17d9e12e3db675aff  bench/data/chess_500m/meta.json
+aed1167f5ea60a9e792f5ecf6eb72a9cb2b02d2971676b8432eeb9adf8eb127d  bench/data/chess_500m/test.f32
+171ac8992a8813959d0e5eec94615929b8946d00f55f3166f19f8b837052cc64  bench/data/chess_500m/test.y.i32
+a42e88e922e9f4153ea8d6a2c402f92b3450504a40c3ab1578df21e206f09858  bench/data/chess_500m/train.csv
+364915d0475206c191b971da83d1487f45ed4dce8cf9a596d4b45bdfb4856be8  bench/data/chess_500m/train.f32
+f930c011bc096431a6cb7bcce7426e7a97e34046dbaa0c4d0ebcde86f23969c0  bench/data/chess_500m/train.y.i32
+total 23437568
+-rw-rw-r-- 1 bmircevski bmircevski         324 Oct 22 16:58 meta.json
+-rw-rw-r-- 1 bmircevski bmircevski       36000 Oct 22 16:58 test.f32
+-rw-rw-r-- 1 bmircevski bmircevski       18000 Oct 22 16:58 test.y.i32
+lrwxrwxrwx 1 bmircevski bmircevski          30 Oct 22 16:58 train.csv -> ../../../datasets/chess_2b.csv
+-rw-rw-r-- 1 bmircevski bmircevski 16000000000 Oct 22 16:57 train.f32
+-rw-rw-r-- 1 bmircevski bmircevski  8000000000 Oct 22 16:57 train.y.i32
+5b193f830d5b3fa2e48d2ca9c6c1ad1b6b66ee41a7d16a5435d8499023572b01  bench/data/chess_2b/meta.json
+aed1167f5ea60a9e792f5ecf6eb72a9cb2b02d2971676b8432eeb9adf8eb127d  bench/data/chess_2b/test.f32
+171ac8992a8813959d0e5eec94615929b8946d00f55f3166f19f8b837052cc64  bench/data/chess_2b/test.y.i32
+9b4e47c7f391a0cfeec85b98e42f520461aba03b1afcbcbec783ceba9220add3  bench/data/chess_2b/train.csv
+e5a289d66f64d3c265accb2ce4e57e7df3185f1f345837f06cdb23c422e3cd87  bench/data/chess_2b/train.f32
+311f71d6450e385cf8ff0648d8f336a4d7f6597f60c07998e9602230a537e798  bench/data/chess_2b/train.y.i32
+lrwxrwxrwx 1 bmircevski bmircevski          32 Oct 22 16:24 bench/data/chess_100m/train.csv -> ../../../datasets/chess_100m.csv
+lrwxrwxrwx 1 bmircevski bmircevski          31 Oct 22 16:24 bench/data/chess_10m/train.csv -> ../../../datasets/chess_10m.csv
+lrwxrwxrwx 1 bmircevski bmircevski          30 Oct 22 16:27 bench/data/chess_1b/train.csv -> ../../../datasets/chess_1b.csv
+lrwxrwxrwx 1 bmircevski bmircevski          30 Oct 22 16:24 bench/data/chess_1m/train.csv -> ../../../datasets/chess_1m.csv
+lrwxrwxrwx 1 bmircevski bmircevski          30 Oct 22 16:58 bench/data/chess_2b/train.csv -> ../../../datasets/chess_2b.csv
+-rw-rw-r-- 1 bmircevski bmircevski 10388609256 Oct 22 17:00 bench/data/chess_500m/train.csv
+-rw-rw-r-- 1 bmircevski bmircevski  1038855271 Oct 22 16:38 bench/data/chess_50m/train.csv
+-rw-rw-r-- 1 bmircevski bmircevski  2077709388 Oct 19 17:30 datasets/chess_100m.csv
+-rw-rw-r-- 1 bmircevski bmircevski       66548 Oct 22 16:24 datasets/chess_100m_test.csv
+-rw-rw-r-- 1 bmircevski bmircevski   207771523 Oct 19 17:30 datasets/chess_10m.csv
+-rw-rw-r-- 1 bmircevski bmircevski       66548 Oct 22 16:24 datasets/chess_10m_test.csv
+-rw-rw-r-- 1 bmircevski bmircevski 20777093718 Oct 19 17:34 datasets/chess_1b.csv
+-rw-rw-r-- 1 bmircevski bmircevski       20795 Oct 22 16:27 datasets/chess_1b_test.csv
+-rw-rw-r-- 1 bmircevski bmircevski    20776385 Oct 19 17:30 datasets/chess_1m.csv
+-rw-rw-r-- 1 bmircevski bmircevski       20795 Oct 22 16:24 datasets/chess_1m_test.csv
+-rw-rw-r-- 1 bmircevski bmircevski 41554460387 Oct 22 16:37 datasets/chess_2b.csv
+1.2G	bench/data/chess_100m
+313M	bench/data/chess_10m
+12G	bench/data/chess_1b
+32M	bench/data/chess_1m
+23G	bench/data/chess_2b
+16G	bench/data/chess_500m
+1.6G	bench/data/chess_50m
+2.0G	datasets/chess_100m.csv
+68K	datasets/chess_100m_test.csv
+199M	datasets/chess_10m.csv
+68K	datasets/chess_10m_test.csv
+20G	datasets/chess_1b.csv
+24K	datasets/chess_1b_test.csv
+20M	datasets/chess_1m.csv
+24K	datasets/chess_1m_test.csv
+39G	datasets/chess_2b.csv
+done 2026-10-22 17:01:24
