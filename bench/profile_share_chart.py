@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Where ./tree's training time goes, as shares of the training wall time: one
-3×3 grid (rows: Parallel, CUDA, CUDA --gpu-only; columns: CART, C4.5, C4.5
-unpruned), one stacked bar per dataset, from runs made with
-bench/cluster/profile.sh (results.jsonl + profiles/*.json, ./tree --profile,
-src/core/trace.h) in <root> and its subdirectories in SUBDIRS.
+3×2 grid (columns: Parallel, CUDA, CUDA --gpu-only; rows: CART and C4.5, both
+grown to depth 10, unpruned), one stacked bar per dataset (the median of each
+case's profiled runs), from runs made with bench/cluster/profile.sh
+(results.jsonl + profiles/*.json, ./tree --profile, src/core/trace.h) in <root>.
 
   d=bench/results/cluster-profiling
   bench/.venv/bin/python bench/profile_share_chart.py $d --out $d/chart.png
@@ -30,11 +30,13 @@ from matplotlib.patches import Patch, Rectangle  # noqa: E402
 import benchlib as B  # noqa: E402
 from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 
-DATASETS = ["chess_10m", "chess_100m", "chess_1b", "higgs", "ecbdl_15m"]
-LABELS = {"chess_10m": "chess 10M", "chess_100m": "chess 100M", "chess_1b": "chess 1000M",
-          "higgs": "HIGGS", "ecbdl_15m": "ECBDL'14 15M"}
-PROTOCOLS = [("cart_alpha_nodepth", "CART"), ("c45", "C4.5"), ("c45_unpruned", "C4.5 unpruned")]
-SUBDIRS = ["", "c45-unpruned"]  # under <root>: profile.sh -o directories, one per batch of runs
+DATASETS = ["chess_10m", "chess_50m", "chess_100m", "chess_500m", "chess_1b", "chess_2b",
+            "higgs", "airline", "ecbdl_15m"]
+CHESS = 6  # the first CHESS datasets are chess; a divider separates them from the others
+LABELS = {"chess_10m": "chess 10M", "chess_50m": "chess 50M", "chess_100m": "chess 100M",
+          "chess_500m": "chess 500M", "chess_1b": "chess 1000M", "chess_2b": "chess 2000M",
+          "higgs": "HIGGS", "airline": "Airline", "ecbdl_15m": "ECBDL'14 15M"}
+PROTOCOLS = [("cart_depth10", "CART"), ("c45_depth10_unpruned", "C4.5")]
 MODES = [("cpu-epyc", "Parallel (CPU only)"),
          ("cuda-hopper", "CUDA hybrid (default)"),
          ("gpuonly-hopper", "CUDA --gpu-only")]
@@ -46,7 +48,6 @@ STEPS = [
     ("search", "Split search", "#eb6834"),
     ("partition", "Partition", "#1baf7a"),
     ("transfer", "CPU↔GPU transfer", "#eda100"),
-    ("prune", "Pruning", "#e87ba4"),
     ("other", "Other", "#a3a29d"),
 ]
 COLOR = {key: color for key, _, color in STEPS}
@@ -65,31 +66,29 @@ EXPLAIN = {
     "transfer": "Moving data between RAM and the GPU: the upload of the dataset, the columns of "
                 "small nodes sent back to the CPU (hybrid), per-level lists and cuts, and the CPU "
                 "copies through page-locked buffers that feed them.",
-    "prune": "Cutting the grown tree back. CART: cost-complexity pruning (the weakest-link "
-             "sequence of subtrees, cut at the fixed α = 1e-5). C4.5: rows grouped by leaf, the "
-             "pessimistic error estimate of every subtree (CF 0.25) with subtree raising, "
-             "collapsing branches, final thresholds.",
     "other": "Everything else: GPU context and memory allocation, the host preparing and "
              "launching kernels or waiting while the GPU is idle, node bookkeeping, assembling "
-             "the final tree, and time no thread was tracked in.",
+             "the final tree, C4.5's tidy-up step after growing (collapsing splits that do not "
+             "reduce the training errors, cuts moved onto training values; CPU threads), and "
+             "time no thread was tracked in.",
 }
 
 KERNEL_STEP = {"presortGather": "presort", "presortSort": "presort", "presortDistinct": "presort",
                "markGoesLeft": "partition", "partition": "partition", "handOffGather": "partition",
-               "leafRows": "prune", "arrangeSort": "prune", "arrangeRows": "prune",
-               "copyValues": "prune"}  # everything else (tile*, segment*): search
+               "leafRows": "other", "arrangeSort": "other", "arrangeRows": "other",
+               "copyValues": "other"}  # everything else (tile*, segment*): search
 # What a CPU thread does (trace Work names) -> step.
 WORK_STEP = {"presort": "presort", "sweep": "search", "mark": "partition",
              "partition": "partition", "partition_sweep": "partition", "staging": "transfer",
-             "page_lock": "transfer", "prune_arrange": "prune", "prune": "prune",
-             "prune_other": "prune", "build": "other", "leaves": "other", "assemble": "other",
+             "page_lock": "transfer", "prune_arrange": "other", "prune": "other",
+             "prune_other": "other", "build": "other", "leaves": "other", "assemble": "other",
              "gpu_host": "other", "gpu_wait": "other", "other": "other"}
 # Phases in which the training thread drives the GPU: there the CPU's part is
 # staging copies (transfer) or driving (other), whatever the pool does meanwhile.
 DRIVING = {"gpu setup", "upload", "grow setup", "gpu levels"}
-PHASE_STEP = {"presort": "presort", "c45 collapse, thresholds": "prune", "prune setup": "prune",
-              "prune arrange rows": "prune", "prune subtrees": "prune", "prune compact": "prune",
-              "cart prune": "prune"}
+# No pruning runs here: what pruning code there is (C4.5's tidy-up, prune_other in
+# the phase "c45 collapse, thresholds") is other.
+PHASE_STEP = {"presort": "presort"}
 BIN = 0.001  # seconds
 
 
@@ -188,24 +187,23 @@ def median(rows):
 def load(root):
     """-> {(mode, dataset, protocol): case} of the median profiled run per case."""
     cases = {}
-    for sub in SUBDIRS:
-        for mode, _ in MODES:
-            for dataset in DATASETS:
-                run = root / sub / f"{mode}-{dataset}"
-                if not (run / "results.jsonl").exists():
+    for mode, _ in MODES:
+        for dataset in DATASETS:
+            run = root / f"{mode}-{dataset}"
+            if not (run / "results.jsonl").exists():
+                continue
+            machine = json.load(open(run / "machine.json"))
+            plain = runs(root / "plain" / run.name / "results.jsonl")
+            for protocol, rows in runs(run / "results.jsonl").items():
+                rows = [row for row in rows if "profile" in row]
+                if not rows:
                     continue
-                machine = json.load(open(run / "machine.json"))
-                plain = runs(root / sub / "plain" / run.name / "results.jsonl")
-                for protocol, rows in runs(run / "results.jsonl").items():
-                    key = (mode, dataset, protocol)
-                    rows = [row for row in rows if "profile" in row]
-                    if not rows or key in cases:
-                        continue
-                    row = median(rows)
-                    trace = json.load(open(run / row["profile"]))
-                    cases[key] = {"row": row, "trace": trace, "machine": machine, "runs": len(rows),
-                                  "parts": attribute(trace),
-                                  "plain": median(plain[protocol]) if protocol in plain else None}
+                row = median(rows)
+                trace = json.load(open(run / row["profile"]))
+                cases[(mode, dataset, protocol)] = {
+                    "row": row, "trace": trace, "machine": machine, "runs": len(rows),
+                    "parts": attribute(trace),
+                    "plain": median(plain[protocol]) if protocol in plain else None}
     return cases
 
 
@@ -241,8 +239,23 @@ def segment_label(key, share, seconds, short):
     return numbers if short else f"{name}\n{numbers}"
 
 
+def tree_facts(case):
+    """-> [(name, text)] of the grown tree: training accuracy, node count, depth."""
+    row = case["row"]
+    return [("accuracy", f"train acc {100 * row['train_accuracy']:.2f}%"),
+            ("nodes", f"{row['nodes']:,} nodes"), ("depth", f"depth {row['depth']}")]
+
+
+def shared_facts(cases, mode, protocol):
+    """-> {name: text} of the facts every bar of a panel has in common."""
+    facts = [dict(tree_facts(c)) for (m, _, p), c in cases.items() if (m, p) == (mode, protocol)]
+    if len(facts) < 2:
+        return {}
+    return {name: text for name, text in facts[0].items() if all(f[name] == text for f in facts)}
+
+
 def draw_panel(ax, cases, mode, protocol):
-    width = 0.46
+    width = 0.5
     outside = []  # (x, y, text) of segments too thin to hold their label
     ax.set_xlim(-0.5, len(DATASETS) - 0.02)
     ax.set_ylim(0, 108)
@@ -300,13 +313,23 @@ def draw_panel(ax, cases, mode, protocol):
                         bbox=dict(boxstyle="round,pad=0.18", facecolor=color, linewidth=0),
                         arrowprops=dict(arrowstyle="-", color=color, linewidth=1.2,
                                         shrinkA=0, shrinkB=0))
+    # A small divider between the chess sets and the others.
+    ax.axvline(CHESS - 0.5, ymin=0, ymax=0.97, color=MUTED, linewidth=1.2, linestyle=(0, (4, 3)),
+               zorder=1)
     ax.set_xticks(range(len(DATASETS)))
+    shared = shared_facts(cases, mode, protocol)
     ticks = []
     for dataset in DATASETS:
         trace = next((c["trace"] for (m, d, _), c in cases.items() if d == dataset), None)
-        shape = f"\n{trace['rows'] / 1e6:g}M rows × {trace['features']}" if trace else ""
-        ticks.append(LABELS[dataset] + shape)
-    ax.set_xticklabels(ticks, fontsize=10.5, color=INK)
+        lines = [LABELS[dataset]]
+        if trace:
+            lines.append(f"{trace['rows'] / 1e6:g}M rows × {trace['features']}")
+        case = cases.get((mode, dataset, protocol))
+        if case:  # the tree's facts that differ between bars, under each bar
+            own = [text for name, text in tree_facts(case) if name not in shared]
+            lines += [own[0]] + ([" · ".join(own[1:])] if own[1:] else []) if own else []
+        ticks.append("\n".join(lines))
+    ax.set_xticklabels(ticks, fontsize=10, color=INK, linespacing=1.25)
     ax.set_yticks(range(0, 101, 20))
     ax.set_yticklabels([f"{v}%" for v in range(0, 101, 20)], fontsize=10, color=MUTED)
     ax.set_ylabel("share of training time", fontsize=10.5, color=MUTED)
@@ -333,43 +356,53 @@ def hardware_text(cases, mode):
 
 
 def chart(cases, out):
-    fig = plt.figure(figsize=(32, 32))
-    grid = fig.add_gridspec(len(MODES), len(PROTOCOLS), left=0.032, right=0.993, top=0.93,
-                            bottom=0.19, hspace=0.3, wspace=0.1)
-    for r, (mode, mode_title) in enumerate(MODES):
-        for c, (protocol, algorithm) in enumerate(PROTOCOLS):
+    height = 27
+    unit = 32 / height  # the text block's spacing was set for a 32-inch-high figure
+    fig = plt.figure(figsize=(38, height))
+    grid = fig.add_gridspec(len(PROTOCOLS), len(MODES), left=0.028, right=0.995, top=0.905,
+                            bottom=0.3, hspace=0.42, wspace=0.08)
+    for r, (protocol, algorithm) in enumerate(PROTOCOLS):
+        for c, (mode, mode_title) in enumerate(MODES):
             ax = fig.add_subplot(grid[r, c])
             draw_panel(ax, cases, mode, protocol)
             ax.set_title(f"{mode_title} · {algorithm}", loc="left", fontsize=15,
                          fontweight="bold", color=INK, pad=30)
-            ax.text(0, 1.025, hardware_text(cases, mode), transform=ax.transAxes, fontsize=10.5,
-                    color=MUTED, va="bottom")
+            shared = shared_facts(cases, mode, protocol)
+            same = (" · every bar: " + ", ".join(shared[n] for n in ("accuracy", "nodes", "depth")
+                                                 if n in shared)) if shared else ""
+            ax.text(0, 1.025, hardware_text(cases, mode) + same, transform=ax.transAxes,
+                    fontsize=10.5, color=MUTED, va="bottom")
     commits = sorted({c["machine"]["versions"].get("tree_git", "?") for c in cases.values()})
-    fig.suptitle("Where ./tree's training time goes: share of each step, per dataset",
-                 x=0.012, y=0.992, ha="left", fontsize=20, fontweight="bold", color=INK)
-    fig.text(0.012, 0.981, f"The median of each case's profiled runs (one run for CART and C4.5, three for C4.5 unpruned; "
-             f"./tree --profile, commit {', '.join(commits)}). Bar "
+    counts = sorted({c["runs"] for c in cases.values()})
+    fig.suptitle("Where ./tree's training time goes: share of each step, per dataset "
+                 "(trees grown to depth 10, no pruning)",
+                 x=0.01, y=0.99, ha="left", fontsize=20, fontweight="bold", color=INK)
+    fig.text(0.01, 0.975, f"The median of each case's profiled runs ({'/'.join(map(str, counts))} "
+             f"runs per case; ./tree --profile, commit {', '.join(commits)}). Bar "
              "height = training wall time (100%), the total above each bar; reading the CSV is "
-             "not included.\nLabels: share and seconds, for segments of 1% or more (thin ones beside the bar, GPU/CPU = where it ran).",
+             "not included. Under each bar: the dataset, its training accuracy, node count and "
+             "depth (what every bar of a panel shares is in the panel's subtitle).\nLabels: share "
+             "and seconds, for segments of 1% or more (thin ones beside the bar, GPU/CPU = where it "
+             "ran). The dashed line separates the chess sets from the others.",
              fontsize=11.5, color=MUTED, va="top", linespacing=1.4)
     handles = [Patch(facecolor=color, label=name) for _, name, color in STEPS]
     handles.append(Patch(facecolor="#7d7c78", hatch="///", edgecolor="white", label="hatched: on the GPU"))
-    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.006, 0.966), ncol=7,
+    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.005, 0.955), ncol=7,
                frameon=False, fontsize=12.5, handlelength=2.2, handleheight=1.3,
                columnspacing=2.0)
 
     # The steps, explained, below the charts.
-    top = 0.158
-    fig.text(0.012, top + 0.006, "What each segment measures", fontsize=15, fontweight="bold",
-             color=INK)
-    y = top - 0.008
+    top = 0.2
+    fig.text(0.01, top + 0.006 * unit, "What each segment measures", fontsize=15,
+             fontweight="bold", color=INK)
+    y = top - 0.008 * unit
     for key, name, color in STEPS:
-        fig.patches.append(Rectangle((0.012, y - 0.0085), 0.0062, 0.0075, transform=fig.transFigure,
-                                     facecolor=color, edgecolor="none"))
-        lines = textwrap.wrap(EXPLAIN[key], 290)
-        fig.text(0.023, y, name, fontsize=12, fontweight="bold", color=INK, va="top")
-        fig.text(0.085, y, "\n".join(lines), fontsize=11.2, color=INK, va="top", linespacing=1.35)
-        y -= 0.0068 * len(lines) + 0.0075
+        fig.patches.append(Rectangle((0.01, y - 0.0085 * unit), 0.0052, 0.0075 * unit,
+                                     transform=fig.transFigure, facecolor=color, edgecolor="none"))
+        lines = textwrap.wrap(EXPLAIN[key], 330)
+        fig.text(0.019, y, name, fontsize=12, fontweight="bold", color=INK, va="top")
+        fig.text(0.072, y, "\n".join(lines), fontsize=11.2, color=INK, va="top", linespacing=1.35)
+        y -= (0.0068 * len(lines) + 0.0075) * unit
     notes = [
         "How time is assigned: every millisecond of training goes to the GPU kernels running then "
         "(by kernel), else to a host↔GPU copy, else to what the CPU threads were doing (sampled "
@@ -380,24 +413,24 @@ def chart(cases, out):
         "the big nodes level by level and hands small nodes (< --gpu-min-rows) to the CPU threads, "
         "which grow those subtrees meanwhile; that CPU work is hidden behind the GPU and only "
         "shows when the GPU has finished and waits for it. CUDA --gpu-only: the GPU grows every "
-        "node; the CPU only drives it and prunes.",
-        "CART = cart_alpha_nodepth (Gini, no depth limit, cost-complexity pruning at α = 1e-5); C4.5 = c45 "
-        "(gain ratio, CF 0.25 error-based pruning with subtree raising); C4.5 unpruned = c45_unpruned (the "
-        "same tree grown, only C4.5's collapse of useless splits, no pruning). Same trees in every mode.",
+        "node; the CPU only drives it.",
+        "CART = cart_depth10 (Gini, -d 10, --no-prune); C4.5 = c45_depth10_unpruned (gain ratio, "
+        "-d 10, --no-prune: only C4.5's tidy-up after growing, counted as other). Same trees in "
+        "every mode.",
     ]
-    y -= 0.004
+    y -= 0.004 * unit
     for note in notes:
-        lines = textwrap.wrap(note, 345)
-        fig.text(0.012, y, "\n".join(lines), fontsize=10.8, color=MUTED, va="top", linespacing=1.35)
-        y -= 0.0066 * len(lines) + 0.005
+        lines = textwrap.wrap(note, 400)
+        fig.text(0.01, y, "\n".join(lines), fontsize=10.8, color=MUTED, va="top", linespacing=1.35)
+        y -= (0.0066 * len(lines) + 0.005) * unit
     fig.savefig(out, dpi=150, facecolor="white")
     print(out)
 
 
 def table(cases):
-    print("| Mode | Algorithm | Dataset | runs | train s | without --profile s | "
+    print("| Mode | Algorithm | Dataset | runs | train s | without --profile s | train acc % | nodes | depth | "
           + " | ".join(f"{NAME[s]} %" for s, _, _ in STEPS) + " | GPU share % |")
-    print("|---|---|---|--:|--:|--:|" + "--:|" * len(STEPS) + "--:|")
+    print("|---|---|---|--:|--:|--:|--:|--:|--:|" + "--:|" * len(STEPS) + "--:|")
     for mode, mode_title in MODES:
         for protocol, algorithm in PROTOCOLS:
             for dataset in DATASETS:
@@ -409,8 +442,10 @@ def table(cases):
                 steps = [sum(v for (s, _), v in parts.items() if s == step) for step, _, _ in STEPS]
                 gpu = sum(v for (_, d), v in parts.items() if d == "GPU")
                 plain = case["plain"]["train_seconds"] if case["plain"] else float("nan")
+                row = case["row"]
                 print(f"| {mode_title} | {algorithm} | {LABELS[dataset]} | "
-                      f"{case['runs']} | {case['row']['train_seconds']:.2f} | {plain:.2f} | "
+                      f"{case['runs']} | {row['train_seconds']:.2f} | {plain:.2f} | "
+                      f"{100 * row['train_accuracy']:.2f} | {row['nodes']:,} | {row['depth']} | "
                       + " | ".join(f"{100 * v / total:.1f}" for v in steps)
                       + f" | {100 * gpu / total:.1f} |")
 

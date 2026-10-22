@@ -1,2 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cuda-hopper-ecbdl_15m,ecbdl_15m,c45_unpruned,tree_cuda,16,ok,True,26.9525,26.898799999999998,26.9577,26.936333333333334,0.032608638937149846,3,,61.54261706303805,114425327616,114418819072,114438426624,113746571264,409595,204798,273,0.996972,,,78740717568,0.0054

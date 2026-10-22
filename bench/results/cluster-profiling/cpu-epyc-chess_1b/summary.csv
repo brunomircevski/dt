@@ -1,3 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cpu-epyc-chess_1b,chess_1b,cart_alpha_nodepth,tree,48,ok,True,5.2235,5.2235,5.2235,5.2235,,1,1.0,28.143734104931355,50144428032,50144428032,50144428032,50138300416,17,9,4,1.0,,,,0.0
-cpu-epyc-chess_1b,chess_1b,c45,tree,48,ok,True,8.803600000000001,8.803600000000001,8.803600000000001,8.803600000000001,,1,1.0,31.428947024978697,68147093504,68147093504,68147093504,68140965888,17,9,4,1.0,,,,2.5054000000000003

@@ -90,6 +90,19 @@ PROTOCOLS = {
             "tree": ["--cart", "--no-prune"],
         },
     },
+    # Growing only, to depth 10 (the profiling benchmark, cluster-profiling).
+    "cart_depth10": {
+        "title": "CART, grown to depth 10, no pruning",
+        "impls": {
+            "tree": ["--cart", "--no-prune", "-d", "10"],
+        },
+    },
+    "c45_depth10_unpruned": {
+        "title": "C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)",
+        "impls": {
+            "tree": ["--c45", "--no-prune", "-d", "10"],
+        },
+    },
     "c45": {
         "title": "C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows",
         "impls": {

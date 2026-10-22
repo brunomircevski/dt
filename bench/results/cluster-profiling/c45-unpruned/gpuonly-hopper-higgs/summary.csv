@@ -1,2 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-gpuonly-hopper-higgs,higgs,c45_unpruned,tree_gpu_only,16,ok,True,2.6102,2.5476,2.7994,2.6524,0.13109706327755774,3,,6.214695899980143,2187046912,2184957952,2226319360,1507479552,1317065,658533,71,0.884647,,,4048551936,0.037

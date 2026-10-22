@@ -1,2 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-gpuonly-hopper-chess_10m,chess_10m,c45_unpruned,tree_gpu_only,16,ok,True,0.0889,0.0772,0.096,0.08736666666666666,0.009493330992509074,3,,1.17976576811634,784601088,784588800,784613376,105050112,17,9,4,1.0,,,951058432,0.0
