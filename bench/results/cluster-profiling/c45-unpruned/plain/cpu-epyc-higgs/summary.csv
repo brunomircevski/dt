@@ -1,0 +1,2 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+cpu-epyc-higgs,higgs,c45_unpruned,tree,48,ok,True,1.543,1.5287,1.5602,1.5439666666666667,0.015772232985006743,3,1.0,4.9332560817711055,6270816256,6269984768,6273835008,6264639488,1317065,658533,71,0.884647,,,,0.0075
