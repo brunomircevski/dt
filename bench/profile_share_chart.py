@@ -242,7 +242,8 @@ def segment_label(key, share, seconds, short):
 def tree_facts(case):
     """-> [(name, text)] of the grown tree: training accuracy, node count, depth."""
     row = case["row"]
-    return [("accuracy", f"train acc {100 * row['train_accuracy']:.2f}%"),
+    acc = f"{100 * row['train_accuracy']:.2f}".removesuffix(".00")
+    return [("accuracy", f"train acc {acc}%"),
             ("nodes", f"{row['nodes']:,} nodes"), ("depth", f"depth {row['depth']}")]
 
 
@@ -291,9 +292,7 @@ def draw_panel(ax, cases, mode, protocol):
                             bbox=dict(boxstyle="round,pad=0.08", facecolor=color, alpha=0.8,
                                       linewidth=0))
                 else:
-                    device = f"{key[1]} " if key[1] else ""
-                    outside.append((x, middle, f"{device}{share:.1f}%\n{seconds_text(parts[key])}",
-                                    COLOR[key[0]]))
+                    outside.append((x, middle, f"{share:.1f}%", COLOR[key[0]]))
             bottom += share
         ax.text(x, 101.2, seconds_text(case["row"]["train_seconds"]), ha="center", va="bottom",
                 fontsize=11.5, color=INK, fontweight="bold")
@@ -305,9 +304,9 @@ def draw_panel(ax, cases, mode, protocol):
         items.sort(key=lambda item: item[1])
         placed = []
         for _, y, text, color in items:
-            y_text = max(y, placed[-1] + 5.4) if placed else max(y, 2.6)
+            y_text = max(y, placed[-1] + 3.2) if placed else max(y, 1.6)
             placed.append(y_text)
-            ax.annotate(text, xy=(x + width / 2, y), xytext=(x + width / 2 + 0.12, y_text),
+            ax.annotate(text, xy=(x + width / 2, y), xytext=(x + width / 2 + 0.06, y_text),
                         fontsize=7.4, linespacing=1.1, color=text_color(color), fontweight="bold", va="center",
                         ha="left", zorder=5,
                         bbox=dict(boxstyle="round,pad=0.18", facecolor=color, linewidth=0),
@@ -323,11 +322,11 @@ def draw_panel(ax, cases, mode, protocol):
         trace = next((c["trace"] for (m, d, _), c in cases.items() if d == dataset), None)
         lines = [LABELS[dataset]]
         if trace:
-            lines.append(f"{trace['rows'] / 1e6:g}M rows × {trace['features']}")
+            lines.append(f"{trace['rows'] / 1e6:.4g}M × {trace['features']}")
         case = cases.get((mode, dataset, protocol))
         if case:  # the tree's facts that differ between bars, under each bar
             own = [text for name, text in tree_facts(case) if name not in shared]
-            lines += [own[0]] + ([" · ".join(own[1:])] if own[1:] else []) if own else []
+            lines += own
         ticks.append("\n".join(lines))
     ax.set_xticklabels(ticks, fontsize=10, color=INK, linespacing=1.25)
     ax.set_yticks(range(0, 101, 20))
@@ -382,8 +381,8 @@ def chart(cases, out):
              "height = training wall time (100%), the total above each bar; reading the CSV is "
              "not included. Under each bar: the dataset, its training accuracy, node count and "
              "depth (what every bar of a panel shares is in the panel's subtitle).\nLabels: share "
-             "and seconds, for segments of 1% or more (thin ones beside the bar, GPU/CPU = where it "
-             "ran). The dashed line separates the chess sets from the others.",
+             "and seconds, for segments of 1% or more (GPU/CPU = where it ran; segments under 3.2% "
+             "beside the bar, share only, step by color). The dashed line separates the chess sets from the others.",
              fontsize=11.5, color=MUTED, va="top", linespacing=1.4)
     handles = [Patch(facecolor=color, label=name) for _, name, color in STEPS]
     handles.append(Patch(facecolor="#7d7c78", hatch="///", edgecolor="white", label="hatched: on the GPU"))
