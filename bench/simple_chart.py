@@ -58,18 +58,23 @@ def duration(seconds):
 
 
 def load(root):
-    """-> {(machine, dataset, protocol, impl, threads): [ok run records]}."""
-    cases = defaultdict(list)
+    """-> ({(machine, dataset, protocol, impl, threads): [ok run records]},
+    {same key: seconds a run timed out after})."""
+    cases, timeouts = defaultdict(list), {}
     for path in sorted(root.glob("simple-*/results.jsonl")):
         machine = path.parent.name.split("-")[1]
         for line in open(path):
             r = json.loads(line)
             if r["kind"] != "run":
                 continue
+            key = (machine, r["dataset"], r["protocol"], r["impl"], r["threads"])
+            if r["status"] == "timeout":
+                timeouts[key] = r["wall_seconds"]
+                continue
             if r["status"] != "ok":
                 raise SystemExit(f"{path}: {r['impl']} {r['protocol']} {r['dataset']}: {r['status']}")
-            cases[(machine, r["dataset"], r["protocol"], r["impl"], r["threads"])].append(r)
-    return cases
+            cases[key].append(r)
+    return cases, timeouts
 
 
 def check_same(cases):
@@ -99,7 +104,7 @@ def main():
     parser.add_argument("root", type=Path)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
-    cases = load(args.root)
+    cases, timeouts = load(args.root)
     check_same(cases)
 
     datasets = [d for d in DATASETS if any(key[:2] == (MACHINE, d) for key in cases)]
@@ -117,6 +122,7 @@ def main():
         box.axis("off")
         medians = [statistics.median(r["train_seconds"] for r in runs)
                    for key, runs in cases.items() if key[:2] == (MACHINE, dataset)]
+        medians += [s for key, s in timeouts.items() if key[:2] == (MACHINE, dataset)]
         low, high = min(medians) / 3, max(medians)
         labels, y, lines = [], 0, []
         for protocol, title in PROTOCOLS.items():
@@ -126,6 +132,15 @@ def main():
             trees = {}
             for (impl, threads), (label, color) in BARS.items():
                 runs = cases.get((MACHINE, dataset, protocol, impl, threads))
+                stopped = timeouts.get((MACHINE, dataset, protocol, impl, threads))
+                if not runs and stopped:
+                    ax.barh(y, stopped - low, left=low, color="none", edgecolor=color,
+                            hatch="///", height=0.72)
+                    ax.text(stopped * 1.08, y, f"timed out after {stopped / 3600:.0f} h, no tree",
+                            va="center", fontsize=9, color=INK)
+                    labels.append((y, label))
+                    y += 1
+                    continue
                 if not runs:
                     continue
                 grow, prune = parts(runs, impl)

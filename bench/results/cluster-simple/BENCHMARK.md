@@ -4,7 +4,7 @@
 - **chess 10M and Covertype:** run at commit e418f65, three runs per case.
 - **SUSY and HIGGS:** run at commit 85ea702, one run per case, one SLURM job per tool and protocol (`simple-epyc-<data>-<tool>-<protocol>`).
 - **--parallel on both sockets:** one run per case on all four datasets, at commit 8e9bac1.
-- **Pending:** HIGGS's Weka J48 (job 54 on epyc2) is still running; its bar joins the chart when it is done.
+- **HIGGS's Weka J48:** one run on epyc2 at commit 85ea702, like the rest of HIGGS (job 54), finished 2026-10-22 after 19.2 hours.
 
 This is a quick general benchmark, so one run per case is enough for the big datasets and the dual-socket bars. Every tree is pruned, with no depth limit. The first version of this benchmark (chess 1M, epyc1 and dell1, scikit-learn unpruned) is in the git history (d4d4c1d).
 
@@ -70,9 +70,9 @@ The other tools:
 | chess_10m | 17 nodes, 100% | 17 nodes, 100% | 17 nodes, 100% |
 | covertype | 14,737 nodes, 95.93% | 31,839 nodes, 98.91% | 26,219 nodes, 98.65% |
 | susy | 1,059 nodes, 79.46% | 2,067 nodes, 79.58% | 15,479 nodes, 80.68% |
-| higgs | 1,785 nodes, 71.21% | 3,009 nodes, 71.47% | running |
+| higgs | 1,785 nodes, 71.21% | 3,009 nodes, 71.47% | 1,152,747 nodes, 87.83% |
 
-- **Weka J48** grows nearly the same trees as ./tree's C4.5 (Covertype: 26,219 nodes against 26,377, both of depth 59; SUSY: 15,479 against 15,113). ./tree follows C4.5 Release 8, which was verified node for node earlier (2026-10-13), and J48 differs from R8 in small details.
+- **Weka J48** grows nearly the same trees as ./tree's C4.5 (Covertype: 26,219 nodes against 26,377, both of depth 59; SUSY: 15,479 against 15,113; HIGGS: 1,152,747 against 1,159,295, both of depth 71). ./tree follows C4.5 Release 8, which was verified node for node earlier (2026-10-13), and J48 differs from R8 in small details.
 - **scikit-learn's entropy tree is not C4.5:** on HIGGS it keeps 3,009 nodes, while C4.5's pessimistic pruning keeps 1,159,295.
 
 ## Results (median training time; pruning part in brackets)
@@ -86,7 +86,7 @@ The other tools:
 | susy | CART | 125 s (0.4 ms) | 5.24 s (0.6 ms) | 513 ms (0.7 ms) | 452 ms (0.7 ms) | 853 s (666 s) | – |
 | susy | C4.5 | 148 s (6.52 s) | 6.38 s (381 ms) | 572 ms (60 ms) | 514 ms (80 ms) | 847 s (648 s) | 870 s (108 s) |
 | higgs | CART | 400 s (0.5 ms) | 18.5 s (0.7 ms) | 1.44 s (0.8 ms) | 1.10 s (0.9 ms) | 5,113 s (4,591 s) | – |
-| higgs | C4.5 | 644 s (18.2 s) | 36.4 s (2.12 s) | 2.52 s (212 ms) | 1.76 s (194 ms) | 4,704 s (4,174 s) | running |
+| higgs | C4.5 | 644 s (18.2 s) | 36.4 s (2.12 s) | 2.52 s (212 ms) | 1.76 s (194 ms) | 4,704 s (4,174 s) | 69,205 s (543 s) |
 
 - **--simple against --serial:** --serial is faster by:
   - 15–18× on chess 10M and 9–11× on Covertype;
@@ -101,15 +101,16 @@ The other tools:
 - **--simple against the libraries:**
   - About as fast as scikit-learn on chess, and 1.6–3.1× slower on Covertype.
   - 5.7–6.8× faster than scikit-learn on SUSY and 7.3–13× faster on HIGGS. scikit-learn's growing alone is in the same range as --simple's (SUSY 187–198 s against 125–141 s; HIGGS 521–530 s against 400–625 s). Its pruning makes the difference (below).
-  - Faster than J48 by 4.8× on chess, 11× on Covertype and 5.9× on SUSY.
-  - --serial is 13–18× faster than scikit-learn on chess, 3.6–5.5× on Covertype, about 130× on SUSY and 130–280× on HIGGS. It is 74–136× faster than J48.
+  - Faster than J48 by 4.8× on chess, 11× on Covertype, 5.9× on SUSY and 107× on HIGGS.
+  - J48 on HIGGS: 68,662 s growing and 543 s pruning, with a peak RSS of 45 GiB. Its growing time is 90× SUSY's, for 2.3× the rows and 76× the nodes. A likely cause (not profiled): after choosing a numeric split, J48's `C45ModelSelection` calls `setSplitPoint` on the whole training set, to move the threshold to a value that occurs in the data. That is one scan of all 10.5M rows for each of the 576k internal nodes.
+  - --serial is 13–18× faster than scikit-learn on chess, 3.6–5.5× on Covertype, about 130× on SUSY and 130–280× on HIGGS. It is 74–136× faster than J48 on the first three datasets and 1,900× on HIGGS.
 - **Pruning:**
   - CART at a fixed α takes ./tree under 1 ms on every dataset: one bottom-up pass over the tree.
   - scikit-learn's cost-complexity pruning repeats a scan of the whole fully grown tree for every branch it removes, so its time grows with the square of that tree's size. It takes 0.2 ms on chess, 0.3–0.5 s on Covertype, 11 minutes on SUSY and 70–77 minutes on HIGGS.
   - C4.5's pruning:
     - --simple: 1.40 s on chess, 438 ms on Covertype, 6.5 s on SUSY and 18 s on HIGGS. Part of that is the distinct-value sort counted there.
     - --serial: 93 ms, 78 ms, 381 ms and 2.1 s.
-    - J48: 10–108 s.
+    - J48: 10 s, 16 s, 108 s and 543 s.
 
 ## Is scikit-learn's pruning time real?
 
