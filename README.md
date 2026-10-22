@@ -113,6 +113,8 @@ Subtree raising is always on, as in the original program.
 | `--feature-parallel-rows N` | 32768 | Nodes with at least N rows scan and partition their features in parallel. |
 | `--gpu-min-rows N` | CART: rows / 8192, between 1024 and 2048; C4.5: rows / 4096, between 1024 and 4096 | `--cuda`: nodes with fewer rows are finished by the CPU pool while the GPU grows the big ones. |
 | `--gpu-only` | off | `--cuda`: grow every node on the GPU, with no hand-offs to the CPU (and no host arena for them). The CPU threads (`--threads`) still count the classes, stage the copies to and from the GPU and run C4.5's pruning. |
+| `--gpu-prune-rows N` | none | `--cuda`, C4.5: subtree raising routes and counts its slices of at least N rows on the GPU (the tree stays the same). Off by default: the CPU was faster on every dataset tried (docs/CUDA.md). |
+| `--gpu-prune` | off | `--cuda`, C4.5: every slice of subtree raising on the GPU (`--gpu-prune-rows 1`). |
 | `--gpu-sweep auto\|one-pass\|two-pass` | `auto` | `--cuda`: score every cut in double precision (`one-pass`), or filter in single precision first and use double precision only for the candidates (`two-pass`). `auto` picks one-pass on GPUs with fast double precision (A100, H100, B200…). |
 | `--gpu-profile` | off | Print per-level and per-kernel GPU times. Synchronises after every kernel, so it slows the build; do not use it for timing. |
 

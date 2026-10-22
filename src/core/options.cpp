@@ -90,6 +90,10 @@ void printUsage(const char *program) {
       << GpuOptions::kAutoMaxMinRowsCart << ")\n"
       << "  --gpu-only               grow every node on the GPU, no hand-offs to the CPU\n"
       << "                           (the CPU threads still feed the GPU and prune)\n"
+      << "  --gpu-prune-rows N       C4.5: subtree raising sends slices of >= N rows\n"
+      << "                           through the tree on the GPU (default: none,\n"
+      << "                           the CPU is faster)\n"
+      << "  --gpu-prune              C4.5: every slice of subtree raising on the GPU\n"
       << "  --gpu-sweep MODE         auto | one-pass | two-pass (default auto: one-pass\n"
       << "                           on GPUs with fast double precision)\n"
       << "  --gpu-profile            print per-level / per-kernel GPU times (slower)\n"
@@ -172,7 +176,10 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
   for (const auto &group : {givenOf(given, {"--simple", "--serial", "--parallel", "--cuda"}),
                             givenOf(given, {"--cart", "--c45"}),
                             givenOf(given, {"--no-prune", "--cv", "--alpha"}),
-                            givenOf(given, {"--no-prune", "--cf"})}) {
+                            givenOf(given, {"--no-prune", "--cf"}),
+                            givenOf(given, {"--gpu-prune", "--gpu-prune-rows"}),
+                            givenOf(given, {"--no-prune", "--gpu-prune"}),
+                            givenOf(given, {"--no-prune", "--gpu-prune-rows"})}) {
     if (group.size() > 1) {
       throw std::runtime_error("Options " + group[0] + " and " + group[1] +
                                " contradict each other; give only one");
@@ -190,13 +197,15 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
            "is for CART (it chooses CART's alpha); C4.5 prunes with --cf");
   } else {
     refuse({"--cf"}, "is for C4.5; CART prunes with --alpha or --cv");
+    refuse({"--gpu-prune", "--gpu-prune-rows"}, "is for C4.5's pruning");
   }
   if (options.backend == Backend::Serial || options.backend == Backend::Simple) {
     refuse({"--task-rows", "--feature-parallel-rows"},
            std::string("is for --parallel and --cuda, not --") + backendName(options.backend));
   }
   if (options.backend != Backend::Cuda) {
-    refuse({"--gpu-min-rows", "--gpu-only", "--gpu-sweep", "--gpu-profile"},
+    refuse({"--gpu-min-rows", "--gpu-only", "--gpu-sweep", "--gpu-profile", "--gpu-prune-rows",
+            "--gpu-prune"},
            "is for --cuda only");
   }
   if (options.gpu.only) {
@@ -274,6 +283,10 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.c45.confidence = parseReal(arg, args.value(arg));
     } else if (arg == "--gpu-min-rows") {
       options.gpu.minRows = parseCount(arg, args.value(arg));
+    } else if (arg == "--gpu-prune-rows") {
+      options.gpu.pruneRows = parseCount(arg, args.value(arg));
+    } else if (arg == "--gpu-prune") {
+      options.gpu.pruneRows = 1;
     } else if (arg == "--gpu-only") {
       options.gpu.only = true;
     } else if (arg == "--gpu-sweep") {
