@@ -1,0 +1,3 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+gpuonly-hopper-ecbdl_15m,ecbdl_15m,cart_alpha_nodepth,tree_gpu_only,16,ok,True,7.9728,7.9728,7.9728,7.9728,,1,,40.36433758097701,38649409536,38649409536,38649409536,37969833984,1,1,0,0.978518,,,78774272000,0.0003
+gpuonly-hopper-ecbdl_15m,ecbdl_15m,c45,tree_gpu_only,16,ok,True,59.7028,59.7028,59.7028,59.7028,,1,,92.26353648700751,112402444288,112402444288,112402444288,111722868736,209799,104900,266,0.990858,,,79069970432,22.8893

@@ -64,7 +64,7 @@ PHASE_OF = {"gpu setup": "setup", "grow setup": "setup", "upload": "upload", "pr
 WORKS = [
     ("sweep", "sweep: best cut of each column"),
     ("partition", "partition the columns"),
-    ("fused", "partition + sweeps of the children"),
+    ("fused", "partition fused with the children's sweeps (since b2aae2c the sweeps count as sweep)"),
     ("presort", "presort"),
     ("grow", "other growing: marking rows, leaves, nodes, assembly"),
     ("feed", "driving the GPU: launches, waits, staging, page-locking"),
