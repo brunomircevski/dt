@@ -1608,6 +1608,8 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
 #endif
   };
   const SweepSetup setup = sweepSetup();
+  // --profile: the sweeps count as Sweep, the rest as PartitionSweep.
+  const bool traced = trace::on();
   const bool kept[2] = {keep != Keep::Right, keep != Keep::Left};
   const std::uint32_t childBegin[2] = {0, leftCount};
   const std::uint32_t childCount[2] = {leftCount, count - leftCount};
@@ -1620,6 +1622,7 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
   }
 
   if (isWinner) { // in order where it is (no target)
+    trace::Doing sweeping(trace::Work::Sweep);
     for (int child = 0; child < 2; ++child) {
       if (kept[child] && sweeps[child]) {
         sweeps[child]->advance(source + childBegin[child], childCount[child]);
@@ -1651,7 +1654,12 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
         // The sweep reads entry i at window[i]: the stage, shifted by base.
         const Entry *window = reinterpret_cast<const Entry *>(
             reinterpret_cast<std::uintptr_t>(stage.data) - std::uintptr_t{stage.base} * sizeof(Entry));
+        std::optional<trace::Doing> sweeping;
+        if (traced) {
+          sweeping.emplace(trace::Work::Sweep);
+        }
         sweeps[child]->advance(window, end);
+        sweeping.reset();
         from = std::min(sweeps[child]->from(), end);
       }
       std::memmove(stage.data, stage.data + (from - stage.base), (end - from) * sizeof(Entry));

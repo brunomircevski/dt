@@ -28,7 +28,7 @@ enum class Work : std::uint8_t {
   Sweep,          // growing: scanning sorted columns for the best cut
   Mark,           // growing: marking the rows that go left
   Partition,      // growing: stable partition of the columns
-  PartitionSweep, // growing: partition fused with the children's sweeps
+  PartitionSweep, // growing: partition fused with the children's sweeps (the sweeps count as Sweep)
   Leaves,         // growing: recording the leaf of every row (C4.5)
   Assemble,       // the node store into the tree
   GpuHost,        // Cuda: preparing and launching GPU work
