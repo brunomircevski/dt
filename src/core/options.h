@@ -91,6 +91,13 @@ struct GpuOptions {
   // for them (C4.5's pruning allocates it when it needs it). With --threads 1
   // the CPU side is one thread (the staged copies too).
   bool only = false;
+  // C4.5's pruning: subtree raising routes and counts slices of at least
+  // pruneRows rows on the GPU (the CPU makes every decision); 0: none
+  // (--gpu-prune: 1, every slice). Off by default, with --gpu-only too: the
+  // CPU was faster on every dataset tried, at every threshold (see
+  // bench/results/cluster-gpu-prune), the GPU's per-call cost and the upload
+  // of the columns (ECBDL: 2.5 s) outweigh its speed.
+  std::size_t pruneRows = 0;
   GpuSweep sweep = GpuSweep::Auto;
   // Print per-level and per-kernel GPU times. Synchronises after every
   // kernel, so it slows the build down.

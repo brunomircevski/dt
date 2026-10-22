@@ -117,6 +117,16 @@ transposed to rows, their labels and the class counts of every leaf) runs on
 the GPU (`arrangeRows`): a stable radix sort by leaf and one gather kernel
 instead of two CPU passes over 115M rows.
 
+Subtree raising can also send its big row slices through the tree on the GPU
+(`--gpu-prune-rows N`, `--gpu-prune` for all of them): the CPU keeps every
+decision, the GPU only routes and counts (kernels `pruneCount`,
+`pruneGather`, `pruneArrange`, with the changed nodes sent before each call),
+so the tree is the same to the bit. It is off by default, with `--gpu-only`
+too: each call costs about 0.45 ms on the host side, the columns the tree uses
+have to be uploaded first unless the raw values were kept (ECBDL: 631
+columns, 2.5 s), and the CPU was faster on every dataset and threshold tried
+(see [cluster-gpu-prune](../bench/results/cluster-gpu-prune/BENCHMARK.md)).
+
 ### Inside the sweep (kernels 3a / 3c)
 
 Each warp handles 256 consecutive entries of the tile in 8 steps of 32. In a

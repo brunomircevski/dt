@@ -43,6 +43,7 @@
 //  * A grower used for cross-validation keeps the raw feature values on the
 //    device and builds each fold's sorted columns there.
 
+#include "algo/c45_pruning.h"
 #include "build/cpu_builder.h"
 #include "build/grower.h"
 #include "core/nvtx.h"
@@ -1528,9 +1529,9 @@ __global__ void leafSlotKernel(const std::uint32_t *ids, const std::uint32_t *sl
   }
 }
 
-// Then, in that order: the row-major features, the labels, and the class
-// counts of every slot. A thread per (position, feature): the writes are
-// contiguous.
+// Then, in that order: the row-major features (unless `rowMajor` is null:
+// then `features` is 1), the labels, and the class counts of every slot. A
+// thread per (position, feature): the writes are contiguous.
 __global__ void arrangeKernel(const float *values, std::size_t rows, std::uint32_t features,
                               const std::uint32_t *order, const std::uint32_t *slots,
                               const std::uint16_t *labels, int classCount, float *rowMajor,
@@ -1542,11 +1543,128 @@ __global__ void arrangeKernel(const float *values, std::size_t rows, std::uint32
   const std::size_t position = index / features;
   const std::uint32_t feature = static_cast<std::uint32_t>(index - position * features);
   const std::uint32_t row = order[position];
-  rowMajor[index] = values[feature * rows + row];
+  if (rowMajor) {
+    rowMajor[index] = values[feature * rows + row];
+  }
   if (feature == 0) {
     const std::uint16_t label = labels[row];
     sortedLabels[position] = label;
     atomicAdd(&slotCounts[static_cast<std::size_t>(slots[position]) * classCount + label], 1u);
+  }
+}
+
+// C4.5's subtree raising on the GPU (GpuGrower::PruneWorker): the leaf of
+// `root`'s subtree that training row `row` reaches. `values` holds the
+// columns the tree uses (hops[].feature indexes them); a leaf leads back to
+// itself, and a decision node never to itself.
+__device__ __forceinline__ std::uint32_t pruneLeaf(const float *values, std::size_t rows,
+                                                   const PruneHop *hops, std::uint32_t root,
+                                                   std::uint32_t row) {
+  std::uint32_t id = root;
+  for (;;) {
+    const PruneHop hop = hops[id];
+    if (hop.next[0] == id) {
+      return id;
+    }
+    id = hop.next[values[static_cast<std::size_t>(hop.feature) * rows + row] > hop.threshold];
+  }
+}
+
+// The class counts of the leaves that `count` rows reach (`leafCounts`, per
+// node and class) and the first of their rows (`first`, per node), and the
+// list of the leaves reached. Lanes of a warp that add to the same counter
+// add once (many rows reach the same few leaves); the lowest lane is the
+// first row of its group.
+__global__ void pruneCountKernel(const float *values, std::size_t rows, const PruneHop *hops,
+                                 std::uint32_t root, const std::uint32_t *rowOf,
+                                 std::uint32_t count, const std::uint16_t *labels,
+                                 int classCount, std::uint32_t *leafCounts, std::uint32_t *first,
+                                 std::uint32_t *reached, std::uint32_t *reachedCount) {
+  const std::uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+  const bool valid = index < count;
+  std::uint32_t leaf = 0xffffffffu;
+  std::uint32_t key = 0xffffffffu;
+  if (valid) {
+    const std::uint32_t row = rowOf[index];
+    leaf = pruneLeaf(values, rows, hops, root, row);
+    key = leaf * static_cast<std::uint32_t>(classCount) + labels[row];
+  }
+  const unsigned lane = threadIdx.x % 32;
+  const unsigned sameLeaf = __match_any_sync(0xffffffffu, leaf);
+  const unsigned sameKey = __match_any_sync(0xffffffffu, key);
+  if (!valid) {
+    return;
+  }
+  if (lane == static_cast<unsigned>(__ffs(sameKey) - 1)) {
+    atomicAdd(&leafCounts[key], static_cast<std::uint32_t>(__popc(sameKey)));
+  }
+  if (lane == static_cast<unsigned>(__ffs(sameLeaf) - 1) &&
+      atomicMin(&first[leaf], index) == 0xffffffffu) {
+    reached[atomicAdd(reachedCount, 1u)] = leaf;
+  }
+}
+
+// Then, for every leaf reached: [leaf, first row, class counts...] into
+// `out`, and its counters back to zero / none.
+__global__ void pruneGatherKernel(const std::uint32_t *reached, const std::uint32_t *reachedCount,
+                                  int classCount, std::uint32_t *leafCounts, std::uint32_t *first,
+                                  std::uint32_t *out) {
+  const std::uint32_t total = *reachedCount;
+  const std::size_t stride = 2 + static_cast<std::size_t>(classCount);
+  for (std::uint32_t entry = blockIdx.x * blockDim.x + threadIdx.x; entry < total;
+       entry += gridDim.x * blockDim.x) {
+    const std::uint32_t leaf = reached[entry];
+    std::uint32_t *to = out + entry * stride;
+    to[0] = leaf;
+    to[1] = first[leaf];
+    first[leaf] = 0xffffffffu;
+    std::uint32_t *counts = leafCounts + static_cast<std::size_t>(leaf) * classCount;
+    for (int k = 0; k < classCount; ++k) {
+      to[2 + k] = counts[k];
+      counts[k] = 0;
+    }
+  }
+}
+
+// Subtree raising's arrangement: the slot of every leaf (slotOf[leaves[s]] = s) ...
+__global__ void pruneSlotKernel(const std::uint32_t *leaves, std::uint32_t count,
+                                std::uint32_t *slotOf) {
+  const std::uint32_t slot = blockIdx.x * blockDim.x + threadIdx.x;
+  if (slot < count) {
+    slotOf[leaves[slot]] = slot;
+  }
+}
+
+// ... then the slot of the leaf every row reaches (the sort key, with the
+// row's index), and the class counts of every slot.
+__global__ void pruneArrangeKernel(const float *values, std::size_t rows, const PruneHop *hops,
+                                   std::uint32_t root, const std::uint32_t *rowOf,
+                                   std::uint32_t count, const std::uint16_t *labels,
+                                   int classCount, const std::uint32_t *slotOf,
+                                   std::uint32_t *keys, std::uint32_t *order,
+                                   std::uint32_t *slotCounts) {
+  const std::uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+  const bool valid = index < count;
+  std::uint32_t key = 0xffffffffu;
+  if (valid) {
+    const std::uint32_t row = rowOf[index];
+    const std::uint32_t slot = slotOf[pruneLeaf(values, rows, hops, root, row)];
+    keys[index] = slot;
+    order[index] = index;
+    key = slot * static_cast<std::uint32_t>(classCount) + labels[row];
+  }
+  const unsigned same = __match_any_sync(0xffffffffu, key);
+  if (valid && threadIdx.x % 32 == static_cast<unsigned>(__ffs(same) - 1)) {
+    atomicAdd(&slotCounts[key], static_cast<std::uint32_t>(__popc(same)));
+  }
+}
+
+// New hops of some nodes.
+__global__ void pruneHopKernel(const std::uint32_t *ids, const PruneHop *changed,
+                               std::uint32_t count, PruneHop *hops) {
+  const std::uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < count) {
+    hops[ids[index]] = changed[index];
   }
 }
 
@@ -1626,6 +1744,7 @@ public:
     cudaEventRecord(entry.start, stream);
     launch();
     cudaEventRecord(entry.stop, stream);
+    std::lock_guard lock(mutex_); // the pruning's threads (PruneWorker)
     pending_.push_back(entry);
   }
 
@@ -1670,6 +1789,7 @@ private:
   bool trace_;
   cudaEvent_t origin_ = nullptr;
   double hostOrigin_ = 0.0;
+  std::mutex mutex_;
   std::vector<Pending> pending_;
   std::vector<std::pair<std::string, float>> totals_;
 };
@@ -1959,12 +2079,12 @@ public:
   }
 
   bool arrangeRows(std::span<const std::uint32_t> slotOfId, std::size_t slots,
-                   std::span<const std::uint32_t> ids, float *rowMajor,
+                   std::span<const std::uint32_t> ids, float *rowMajor, std::uint32_t *rowOf,
                    std::uint16_t *labels, std::uint32_t *slotCounts) override {
     if (!rawValues_.get() || ids.size() != rows_ || slots == 0) {
       return false;
     }
-    // The result, then scratch, in the column buffer: the grow is done with it.
+    // The result in the column buffer: the grow is done with it.
     const std::size_t rows = rows_;
     const std::size_t classes = static_cast<std::size_t>(classCount_);
     unsigned keyBits = 1;
@@ -1972,51 +2092,78 @@ public:
       ++keyBits;
     }
     std::size_t tempBytes = 0;
-    std::uint32_t *none = nullptr; // only the size is asked for
-    CUDA_CHECK(cub::DeviceRadixSort::SortPairs(nullptr, tempBytes, none, none, none, none,
+    cub::DoubleBuffer<std::uint32_t> none; // only the size is asked for
+    CUDA_CHECK(cub::DeviceRadixSort::SortPairs(nullptr, tempBytes, none, none,
                                                static_cast<int>(rows), 0,
                                                static_cast<int>(keyBits), stream_));
-    char *scratch = reinterpret_cast<char *>(columns_.get());
-    std::size_t used = (rows * features_ * sizeof(float) + 255) / 256 * 256; // the result
-    auto take = [&](std::size_t bytes) {
-      char *at = scratch + used;
-      used += (bytes + 255) / 256 * 256;
-      return at;
+    // The scratch follows the result in the column buffer if it fits; with
+    // few features it does not (chess: 8 bytes per row left, 18 needed) and
+    // comes from the stream-ordered pool. The leaves become the sort keys.
+    std::uint32_t *nodeSlots, *keys, *keysAlt, *rowIds, *rowIdsAlt, *counts;
+    std::uint16_t *sortedLabels;
+    void *temp;
+    auto layout = [&](char *scratch) { // returns the bytes used
+      std::size_t used = 0;
+      auto take = [&](std::size_t bytes) {
+        void *at = scratch + used;
+        used += (bytes + 255) / 256 * 256;
+        return at;
+      };
+      nodeSlots = static_cast<std::uint32_t *>(take(slotOfId.size_bytes()));
+      keys = static_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+      keysAlt = static_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+      rowIds = static_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+      rowIdsAlt = static_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
+      sortedLabels = static_cast<std::uint16_t *>(take(rows * sizeof(std::uint16_t)));
+      counts = static_cast<std::uint32_t *>(take(slots * classes * sizeof(std::uint32_t)));
+      temp = take(tempBytes);
+      return used;
     };
-    auto *nodeSlots = reinterpret_cast<std::uint32_t *>(take(slotOfId.size_bytes()));
-    auto *leaves = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
-    auto *keys = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
-    auto *sortedKeys = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
-    auto *rowIds = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
-    auto *sortedOrder = reinterpret_cast<std::uint32_t *>(take(rows * sizeof(std::uint32_t)));
-    auto *sortedLabels = reinterpret_cast<std::uint16_t *>(take(rows * sizeof(std::uint16_t)));
-    auto *counts = reinterpret_cast<std::uint32_t *>(take(slots * classes * sizeof(std::uint32_t)));
-    void *temp = take(tempBytes);
-    if (used > slotCount_ * slotEntries_ * sizeof(Entry)) {
+    const std::size_t resultBytes = (rows * features_ * sizeof(float) + 255) / 256 * 256;
+    const std::size_t scratchBytes = layout(nullptr);
+    char *pooled = nullptr;
+    if (resultBytes + scratchBytes <= slotCount_ * slotEntries_ * sizeof(Entry)) {
+      layout(reinterpret_cast<char *>(columns_.get()) + resultBytes);
+    } else if (cudaMallocAsync(reinterpret_cast<void **>(&pooled), scratchBytes, stream_) ==
+               cudaSuccess) {
+      layout(pooled);
+    } else {
+      (void)cudaGetLastError(); // out of memory: the CPU arranges them
       return false;
     }
     float *arranged = reinterpret_cast<float *>(columns_.get());
     uploadStaged(nodeSlots, slotOfId.data(), slotOfId.size_bytes(), "uploadArrange");
-    uploadStaged(leaves, ids.data(), rows * sizeof(std::uint32_t), "uploadArrange");
+    uploadStaged(keys, ids.data(), rows * sizeof(std::uint32_t), "uploadArrange");
+    cub::DoubleBuffer<std::uint32_t> sortedKeys(keys, keysAlt);
+    cub::DoubleBuffer<std::uint32_t> sortedOrder(rowIds, rowIdsAlt);
     profile_.run("arrangeSort", stream_, [&]() {
       leafSlotKernel<<<static_cast<unsigned>((rows + 255) / 256), 256, 0, stream_>>>(
-          leaves, nodeSlots, rows, keys, rowIds);
+          keys, nodeSlots, rows, keys, rowIds);
       CUDA_CHECK(cudaGetLastError());
-      CUDA_CHECK(cub::DeviceRadixSort::SortPairs(temp, tempBytes, keys, sortedKeys, rowIds,
-                                                 sortedOrder, static_cast<int>(rows), 0,
+      CUDA_CHECK(cub::DeviceRadixSort::SortPairs(temp, tempBytes, sortedKeys, sortedOrder,
+                                                 static_cast<int>(rows), 0,
                                                  static_cast<int>(keyBits), stream_));
     });
     CUDA_CHECK(cudaMemsetAsync(counts, 0, slots * classes * sizeof(std::uint32_t), stream_));
+    const std::size_t width = rowMajor ? features_ : 1;
     profile_.run("arrangeRows", stream_, [&]() {
-      const std::size_t total = rows * features_;
-      arrangeKernel<<<static_cast<unsigned>((total + 255) / 256), 256, 0, stream_>>>(
-          rawValues_.get(), rows, static_cast<std::uint32_t>(features_), sortedOrder, sortedKeys,
-          labels_.get(), classCount_, arranged, sortedLabels, counts);
+      arrangeKernel<<<static_cast<unsigned>((rows * width + 255) / 256), 256, 0, stream_>>>(
+          rawValues_.get(), rows, static_cast<std::uint32_t>(width), sortedOrder.Current(),
+          sortedKeys.Current(), labels_.get(), classCount_, rowMajor ? arranged : nullptr,
+          sortedLabels, counts);
     });
     CUDA_CHECK(cudaGetLastError());
-    downloadStaged(rowMajor, arranged, rows * features_ * sizeof(float), "downloadArranged");
+    if (rowMajor) {
+      downloadStaged(rowMajor, arranged, rows * features_ * sizeof(float), "downloadArranged");
+    }
+    if (rowOf) {
+      downloadStaged(rowOf, sortedOrder.Current(), rows * sizeof(std::uint32_t), "downloadArranged");
+    }
     downloadStaged(labels, sortedLabels, rows * sizeof(std::uint16_t), "downloadArranged");
     downloadStaged(slotCounts, counts, slots * classes * sizeof(std::uint32_t), "downloadArranged");
+    if (pooled) {
+      CUDA_CHECK(cudaFreeAsync(pooled, stream_));
+    }
     {
       trace::Doing waiting(trace::Work::GpuWait);
       CUDA_CHECK(cudaStreamSynchronize(stream_));
@@ -2025,6 +2172,17 @@ public:
       profile_.report();
     }
     return true;
+  }
+
+  SliceWorker *sliceWorker() override {
+    if (options_.algorithm != Algorithm::C45 || !options_.c45.prune ||
+        options_.gpu.pruneRows == 0) {
+      return nullptr;
+    }
+    if (!pruneWorker_) {
+      pruneWorker_ = std::make_unique<PruneWorker>(*this);
+    }
+    return pruneWorker_.get();
   }
 
   // The host arena: it only holds the columns of nodes handed to the CPU.
@@ -3248,6 +3406,282 @@ private:
   bool recordLeaves_ = false;
   DeviceArray<double> logTable_;
   KernelProfile profile_;
+
+  // C4.5's subtree raising on big row slices (see SliceWorker): the rows are
+  // routed and counted here, every decision stays with the pruning. The
+  // columns the tree uses are in the column buffer (the grow and
+  // arrangeRows() are done with it), or rawValues_ if it was kept. Each call
+  // takes a lane (stream and per-node counters) of its own, so the pruning's
+  // threads use the GPU side by side; changed hops go through hopStream_,
+  // which every call waits for.
+  class PruneWorker final : public SliceWorker {
+  public:
+    explicit PruneWorker(GpuGrower &grower)
+        : g_(grower),
+          minRows_(grower.options_.gpu.pruneRows) {}
+
+    ~PruneWorker() override {
+      for (std::unique_ptr<Lane> &lane : lanes_) {
+        cudaStreamDestroy(lane->stream);
+      }
+      if (hopsReady_) {
+        cudaEventDestroy(hopsReady_);
+      }
+      if (hopStream_) {
+        cudaStreamDestroy(hopStream_);
+      }
+    }
+
+    std::size_t minRows() const override { return minRows_; }
+
+    bool start(std::span<const PruneHop> hops) override {
+      nodes_ = hops.size();
+      const std::size_t rows = g_.rows_;
+      // The features the tree uses, numbered by their column here.
+      column_.assign(g_.features_, kUnused);
+      std::vector<std::uint32_t> used;
+      for (std::size_t id = 0; id < nodes_; ++id) {
+        const PruneHop &hop = hops[id];
+        if (hop.next[0] != id && column_[hop.feature] == kUnused) {
+          column_[hop.feature] = 0;
+          used.push_back(hop.feature);
+        }
+      }
+      const bool upload = !g_.rawValues_.get();
+      if (!upload) {
+        std::iota(column_.begin(), column_.end(), 0u);
+        values_ = g_.rawValues_.get();
+      } else {
+        std::sort(used.begin(), used.end());
+        if (used.size() * rows * sizeof(float) > g_.slotCount_ * g_.slotEntries_ * sizeof(Entry)) {
+          return false;
+        }
+        float *columns = reinterpret_cast<float *>(g_.columns_.get());
+        for (std::size_t at = 0; at < used.size(); ++at) {
+          column_[used[at]] = static_cast<std::uint32_t>(at);
+          g_.uploadStaged(columns + at * rows, g_.train_.column(used[at]), rows * sizeof(float),
+                          "uploadPruneValues");
+        }
+        values_ = columns;
+      }
+      CUDA_CHECK(cudaStreamCreateWithFlags(&hopStream_, cudaStreamNonBlocking));
+      CUDA_CHECK(cudaEventCreateWithFlags(&hopsReady_, cudaEventDisableTiming));
+      hops_.reserve(nodes_);
+      const std::vector<PruneHop> translated = translate(hops);
+      g_.uploadStaged(hops_.get(), translated.data(), nodes_ * sizeof(PruneHop), "uploadPruneHops");
+      trace::add("prune_gpu_columns", static_cast<double>(upload ? used.size() : 0));
+      return true;
+    }
+
+    void updateHops(std::span<const std::uint32_t> ids, std::span<const PruneHop> hops) override {
+      std::vector<PruneHop> changed(ids.size());
+      for (std::size_t index = 0; index < ids.size(); ++index) {
+        changed[index] = translate(hops[ids[index]]);
+      }
+      const std::size_t idBytes = (ids.size_bytes() + 255) / 256 * 256;
+      char *scratch = nullptr;
+      CUDA_CHECK(cudaMallocAsync(reinterpret_cast<void **>(&scratch),
+                                 idBytes + changed.size() * sizeof(PruneHop), hopStream_));
+      auto *changedHops = reinterpret_cast<PruneHop *>(scratch + idBytes);
+      // From pageable memory: both are staged before the calls return.
+      CUDA_CHECK(cudaMemcpyAsync(scratch, ids.data(), ids.size_bytes(), cudaMemcpyHostToDevice,
+                                 hopStream_));
+      CUDA_CHECK(cudaMemcpyAsync(changedHops, changed.data(), changed.size() * sizeof(PruneHop),
+                                 cudaMemcpyHostToDevice, hopStream_));
+      const auto count = static_cast<std::uint32_t>(ids.size());
+      g_.profile_.run("pruneHops", hopStream_, [&]() {
+        pruneHopKernel<<<(count + 255) / 256, 256, 0, hopStream_>>>(
+            reinterpret_cast<const std::uint32_t *>(scratch), changedHops, count, hops_.get());
+      }, "prune");
+      CUDA_CHECK(cudaGetLastError());
+      CUDA_CHECK(cudaFreeAsync(scratch, hopStream_));
+      CUDA_CHECK(cudaEventRecord(hopsReady_, hopStream_));
+    }
+
+    void countReached(std::uint32_t root, std::span<const std::uint32_t> rows,
+                      std::vector<std::uint32_t> &reached) override {
+      Lane &lane = takeLane();
+      const cudaStream_t stream = lane.stream;
+      const auto count = static_cast<std::uint32_t>(rows.size());
+      const std::size_t stride = 2 + static_cast<std::size_t>(g_.classCount_);
+      std::uint32_t *rowOf = nullptr;
+      CUDA_CHECK(cudaMallocAsync(reinterpret_cast<void **>(&rowOf), rows.size_bytes(), stream));
+      CUDA_CHECK(cudaMemcpyAsync(rowOf, rows.data(), rows.size_bytes(), cudaMemcpyHostToDevice,
+                                 stream));
+      CUDA_CHECK(cudaMemsetAsync(lane.reachedCount.get(), 0, sizeof(std::uint32_t), stream));
+      CUDA_CHECK(cudaStreamWaitEvent(stream, hopsReady_));
+      g_.profile_.run("pruneCount", stream, [&]() {
+        pruneCountKernel<<<(count + 255) / 256, 256, 0, stream>>>(
+            values_, g_.rows_, hops_.get(), root, rowOf, count, g_.labels_.get(), g_.classCount_,
+            lane.leafCounts.get(), lane.first.get(), lane.reached.get(), lane.reachedCount.get());
+        pruneGatherKernel<<<std::max(1, g_.smCount_ * 2), 256, 0, stream>>>(
+            lane.reached.get(), lane.reachedCount.get(), g_.classCount_, lane.leafCounts.get(),
+            lane.first.get(), lane.out.get());
+      }, "prune");
+      CUDA_CHECK(cudaGetLastError());
+      CUDA_CHECK(cudaFreeAsync(rowOf, stream));
+      std::uint32_t leaves = 0;
+      {
+        trace::Doing waiting(trace::Work::GpuWait);
+        // To pageable memory: the calls return when the copies are done.
+        CUDA_CHECK(cudaMemcpyAsync(&leaves, lane.reachedCount.get(), sizeof leaves,
+                                   cudaMemcpyDeviceToHost, stream));
+        reached.resize(leaves * stride);
+        CUDA_CHECK(cudaMemcpyAsync(reached.data(), lane.out.get(),
+                                   reached.size() * sizeof(std::uint32_t),
+                                   cudaMemcpyDeviceToHost, stream));
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+      }
+      giveLane(lane);
+    }
+
+    void arrange(std::uint32_t root, std::span<const std::uint32_t> rows,
+                 std::span<const std::uint32_t> leaves, std::uint32_t *source,
+                 std::uint32_t *slotCounts) override {
+      Lane &lane = takeLane();
+      const cudaStream_t stream = lane.stream;
+      const auto count = static_cast<std::uint32_t>(rows.size());
+      const auto slots = static_cast<std::uint32_t>(leaves.size());
+      const std::size_t countBytes = std::size_t{slots} * g_.classCount_ * sizeof(std::uint32_t);
+      unsigned keyBits = 1;
+      while ((std::size_t{1} << keyBits) < slots) {
+        ++keyBits;
+      }
+      std::size_t tempBytes = 0;
+      cub::DoubleBuffer<std::uint32_t> none;
+      CUDA_CHECK(cub::DeviceRadixSort::SortPairs(nullptr, tempBytes, none, none,
+                                                 static_cast<int>(count), 0,
+                                                 static_cast<int>(keyBits), stream));
+      std::uint32_t *rowOf, *leafIds, *keys, *keysAlt, *order, *orderAlt, *counts;
+      void *temp;
+      auto layout = [&](char *scratch) {
+        std::size_t used = 0;
+        auto take = [&](std::size_t bytes) {
+          void *at = scratch + used;
+          used += (bytes + 255) / 256 * 256;
+          return at;
+        };
+        rowOf = static_cast<std::uint32_t *>(take(rows.size_bytes()));
+        leafIds = static_cast<std::uint32_t *>(take(leaves.size_bytes()));
+        keys = static_cast<std::uint32_t *>(take(rows.size_bytes()));
+        keysAlt = static_cast<std::uint32_t *>(take(rows.size_bytes()));
+        order = static_cast<std::uint32_t *>(take(rows.size_bytes()));
+        orderAlt = static_cast<std::uint32_t *>(take(rows.size_bytes()));
+        counts = static_cast<std::uint32_t *>(take(countBytes));
+        temp = take(tempBytes);
+        return used;
+      };
+      char *scratch = nullptr;
+      CUDA_CHECK(cudaMallocAsync(reinterpret_cast<void **>(&scratch), layout(nullptr), stream));
+      layout(scratch);
+      CUDA_CHECK(cudaMemcpyAsync(rowOf, rows.data(), rows.size_bytes(), cudaMemcpyHostToDevice,
+                                 stream));
+      CUDA_CHECK(cudaMemcpyAsync(leafIds, leaves.data(), leaves.size_bytes(),
+                                 cudaMemcpyHostToDevice, stream));
+      CUDA_CHECK(cudaMemsetAsync(counts, 0, countBytes, stream));
+      CUDA_CHECK(cudaStreamWaitEvent(stream, hopsReady_));
+      cub::DoubleBuffer<std::uint32_t> sortedKeys(keys, keysAlt);
+      cub::DoubleBuffer<std::uint32_t> sortedOrder(order, orderAlt);
+      g_.profile_.run("pruneArrange", stream, [&]() {
+        pruneSlotKernel<<<(slots + 255) / 256, 256, 0, stream>>>(leafIds, slots,
+                                                                 lane.slotOf.get());
+        pruneArrangeKernel<<<(count + 255) / 256, 256, 0, stream>>>(
+            values_, g_.rows_, hops_.get(), root, rowOf, count, g_.labels_.get(), g_.classCount_,
+            lane.slotOf.get(), keys, order, counts);
+        CUDA_CHECK(cub::DeviceRadixSort::SortPairs(temp, tempBytes, sortedKeys, sortedOrder,
+                                                   static_cast<int>(count), 0,
+                                                   static_cast<int>(keyBits), stream));
+      }, "prune");
+      CUDA_CHECK(cudaGetLastError());
+      {
+        trace::Doing waiting(trace::Work::GpuWait);
+        CUDA_CHECK(cudaMemcpyAsync(source, sortedOrder.Current(), rows.size_bytes(),
+                                   cudaMemcpyDeviceToHost, stream));
+        CUDA_CHECK(cudaMemcpyAsync(slotCounts, counts, countBytes, cudaMemcpyDeviceToHost,
+                                   stream));
+        CUDA_CHECK(cudaFreeAsync(scratch, stream));
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+      }
+      giveLane(lane);
+    }
+
+    void finish() override {
+      if (g_.profile_.enabled()) {
+        g_.profile_.report();
+      }
+    }
+
+  private:
+    static constexpr std::uint32_t kUnused = 0xffffffffu;
+
+    // Per-node counters (zero / none between calls) and buffers of a call.
+    struct Lane {
+      cudaStream_t stream = nullptr;
+      DeviceArray<std::uint32_t> leafCounts; // nodes x classes
+      DeviceArray<std::uint32_t> first;      // nodes
+      DeviceArray<std::uint32_t> reached;    // nodes, then their number
+      DeviceArray<std::uint32_t> reachedCount;
+      DeviceArray<std::uint32_t> out;        // nodes x (2 + classes)
+      DeviceArray<std::uint32_t> slotOf;     // nodes
+    };
+
+    Lane &takeLane() {
+      {
+        std::lock_guard lock(laneMutex_);
+        if (!freeLanes_.empty()) {
+          Lane *lane = freeLanes_.back();
+          freeLanes_.pop_back();
+          return *lane;
+        }
+      }
+      auto lane = std::make_unique<Lane>();
+      CUDA_CHECK(cudaStreamCreateWithFlags(&lane->stream, cudaStreamNonBlocking));
+      const std::size_t classes = static_cast<std::size_t>(g_.classCount_);
+      lane->leafCounts.reserve(nodes_ * classes);
+      lane->first.reserve(nodes_);
+      lane->reached.reserve(nodes_);
+      lane->reachedCount.reserve(1);
+      lane->out.reserve(nodes_ * (2 + classes));
+      lane->slotOf.reserve(nodes_);
+      CUDA_CHECK(cudaMemset(lane->leafCounts.get(), 0, nodes_ * classes * sizeof(std::uint32_t)));
+      CUDA_CHECK(cudaMemset(lane->first.get(), 0xff, nodes_ * sizeof(std::uint32_t)));
+      std::lock_guard lock(laneMutex_);
+      lanes_.push_back(std::move(lane));
+      return *lanes_.back();
+    }
+
+    void giveLane(Lane &lane) {
+      std::lock_guard lock(laneMutex_);
+      freeLanes_.push_back(&lane);
+    }
+
+    PruneHop translate(PruneHop hop) const {
+      if (hop.next[0] != hop.next[1] || column_[hop.feature] != kUnused) {
+        hop.feature = column_[hop.feature];
+      }
+      return hop;
+    }
+    std::vector<PruneHop> translate(std::span<const PruneHop> hops) const {
+      std::vector<PruneHop> out(hops.size());
+      for (std::size_t id = 0; id < hops.size(); ++id) {
+        out[id] = translate(hops[id]);
+      }
+      return out;
+    }
+
+    GpuGrower &g_;
+    std::size_t minRows_;
+    std::size_t nodes_ = 0;
+    std::vector<std::uint32_t> column_; // per feature: its column in values_, or kUnused
+    const float *values_ = nullptr;
+    DeviceArray<PruneHop> hops_;        // feature: the column in values_
+    cudaStream_t hopStream_ = nullptr;
+    cudaEvent_t hopsReady_ = nullptr;   // the last updateHops() is done
+    std::mutex laneMutex_;
+    std::vector<std::unique_ptr<Lane>> lanes_;
+    std::vector<Lane *> freeLanes_;
+  };
+  std::unique_ptr<PruneWorker> pruneWorker_;
 };
 
 } // namespace

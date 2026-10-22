@@ -242,10 +242,20 @@ whole tree. The rows are grouped by leaf in preorder (a parallel LSD radix
 sort by leaf, in passes of at most 11 bits, 12 from 4M rows on, balanced so
 the passes have equal digits) — every subtree then owns one contiguous slice
 of rows — and only rows of raised subtrees are routed again.
-(`DT_CHECK_LEAVES=1` routes every row anyway and compares.) The rows are kept in that order in a
+(`DT_CHECK_LEAVES=1` routes every row anyway and compares.) With fewer than 32
+features the rows are kept in that order in a
 row-major copy (one row's values share a cache line), written straight from
 the columns into leaf order and kept in the grower's memory that is free by
-then, so a subtree's rows are one contiguous block. Routing walks 16 rows
+then, so a subtree's rows are one contiguous block. Wider rows are not
+copied: the pruning keeps the training row of every position and reads the
+columns through it (a walk touches one cache line per node either way), and
+reordering moves 6 bytes per row (row and label) instead of the whole row. On ECBDL (631
+features) that took the pruning from 33 s to 3.4 s; on HIGGS (28) the
+row-major copy is still twice as fast. After a raise, only the smaller
+branch's rows are routed through the raised subtree: the larger one's are
+already grouped by its leaves, and the two are merged leaf by leaf in the
+order a stable sort of all of them gives (ECBDL: 2.9M rows routed instead of
+277M, prune 3.4 → 1.9 s). Routing walks 16 rows
 side by side over compact 16-byte nodes (float thresholds rounded down, exact
 for float data), without branches on the data. Pruning is idempotent on a
 subtree whose rows did not change, so after a subtree is raised only the nodes

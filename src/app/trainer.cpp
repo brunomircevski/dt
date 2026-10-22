@@ -214,8 +214,12 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
         std::cout << "  unpruned: " << tree.nodeCount() << " nodes\n";
       }
       const RowArranger arranger = [&](auto... args) { return grower->arrangeRows(args...); };
-      c45PessimisticPrune(tree, train, options.c45.confidence, buildPool, grower->workspace(),
-                          &leafOfRow, arranger);
+      // (--gpu-only allocates the workspace when asked for it)
+      const std::span<std::byte> workspace = c45PruneUsesRowMajor(train.featureCount())
+                                                 ? grower->workspace()
+                                                 : std::span<std::byte>{};
+      c45PessimisticPrune(tree, train, options.c45.confidence, buildPool, workspace, &leafOfRow,
+                          arranger, grower->sliceWorker());
     }
     return tree;
   }
