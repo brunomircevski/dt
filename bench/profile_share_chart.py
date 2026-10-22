@@ -2,11 +2,12 @@
 """Where ./tree's training time goes, as shares of the training wall time: one
 3×2 grid (columns: Parallel, CUDA, CUDA --gpu-only; rows: CART and C4.5, both
 grown to depth 10, unpruned), one stacked bar per dataset (the median of each
-case's profiled runs), from runs made with bench/cluster/profile.sh
+case's profiled runs, or with --mean their average), from runs made with bench/cluster/profile.sh
 (results.jsonl + profiles/*.json, ./tree --profile, src/core/trace.h) in <root>.
 
   d=bench/results/cluster-profiling
   bench/.venv/bin/python bench/profile_share_chart.py $d --out $d/chart.png
+  bench/.venv/bin/python bench/profile_share_chart.py $d/chess-50runs --chess --mean
 
 Every millisecond of the training time goes to one step (attribute()): first
 to the GPU kernels running then, then to copies between host and GPU, and the
@@ -184,11 +185,26 @@ def median(rows):
     return sorted(rows, key=lambda row: row["train_seconds"])[(len(rows) - 1) // 2]
 
 
-def load(root):
-    """-> {(mode, dataset, protocol): case} of the median profiled run per case."""
+def mean_row(rows):
+    """-> the first row, with the average training time of all of them."""
+    return dict(rows[0], train_seconds=sum(row["train_seconds"] for row in rows) / len(rows))
+
+
+def mean_parts(traces):
+    """-> the average of attribute() over the traces."""
+    total = {}
+    for trace in traces:
+        for key, value in attribute(trace).items():
+            total[key] = total.get(key, 0.0) + value
+    return {key: value / len(traces) for key, value in total.items()}
+
+
+def load(root, datasets, average):
+    """-> {(mode, dataset, protocol): case} of the median profiled run per case,
+    or (average) of the average of all of them."""
     cases = {}
     for mode, _ in MODES:
-        for dataset in DATASETS:
+        for dataset in datasets:
             run = root / f"{mode}-{dataset}"
             if not (run / "results.jsonl").exists():
                 continue
@@ -198,12 +214,16 @@ def load(root):
                 rows = [row for row in rows if "profile" in row]
                 if not rows:
                     continue
-                row = median(rows)
-                trace = json.load(open(run / row["profile"]))
+                pick = mean_row if average else median
+                if average:
+                    traces = [json.load(open(run / row["profile"])) for row in rows]
+                    trace, parts = traces[0], mean_parts(traces)
+                else:
+                    trace = json.load(open(run / pick(rows)["profile"]))
+                    parts = attribute(trace)
                 cases[(mode, dataset, protocol)] = {
-                    "row": row, "trace": trace, "machine": machine, "runs": len(rows),
-                    "parts": attribute(trace),
-                    "plain": median(plain[protocol]) if protocol in plain else None}
+                    "row": pick(rows), "trace": trace, "machine": machine, "runs": len(rows),
+                    "parts": parts, "plain": pick(plain[protocol]) if protocol in plain else None}
     return cases
 
 
@@ -255,12 +275,12 @@ def shared_facts(cases, mode, protocol):
     return {name: text for name, text in facts[0].items() if all(f[name] == text for f in facts)}
 
 
-def draw_panel(ax, cases, mode, protocol):
+def draw_panel(ax, cases, datasets, mode, protocol):
     width = 0.5
     outside = []  # (x, y, text) of segments too thin to hold their label
-    ax.set_xlim(-0.5, len(DATASETS) - 0.02)
+    ax.set_xlim(-0.5, len(datasets) - 0.02)
     ax.set_ylim(0, 108)
-    for x, dataset in enumerate(DATASETS):
+    for x, dataset in enumerate(datasets):
         case = cases.get((mode, dataset, protocol))
         if case is None:
             ax.text(x, 50, "no run", ha="center", va="center", color=MUTED, fontsize=11)
@@ -313,12 +333,13 @@ def draw_panel(ax, cases, mode, protocol):
                         arrowprops=dict(arrowstyle="-", color=color, linewidth=1.2,
                                         shrinkA=0, shrinkB=0))
     # A small divider between the chess sets and the others.
-    ax.axvline(CHESS - 0.5, ymin=0, ymax=0.97, color=MUTED, linewidth=1.2, linestyle=(0, (4, 3)),
-               zorder=1)
-    ax.set_xticks(range(len(DATASETS)))
+    if len(datasets) > CHESS:
+        ax.axvline(CHESS - 0.5, ymin=0, ymax=0.97, color=MUTED, linewidth=1.2,
+                   linestyle=(0, (4, 3)), zorder=1)
+    ax.set_xticks(range(len(datasets)))
     shared = shared_facts(cases, mode, protocol)
     ticks = []
-    for dataset in DATASETS:
+    for dataset in datasets:
         trace = next((c["trace"] for (m, d, _), c in cases.items() if d == dataset), None)
         lines = [LABELS[dataset]]
         if trace:
@@ -354,7 +375,7 @@ def hardware_text(cases, mode):
     return f"{node}: {gpu} + {threads} CPU threads ({info['cpu'].split(',')[0]})"
 
 
-def chart(cases, out):
+def chart(cases, datasets, average, out):
     height = 27
     unit = 32 / height  # the text block's spacing was set for a 32-inch-high figure
     fig = plt.figure(figsize=(38, height))
@@ -363,7 +384,7 @@ def chart(cases, out):
     for r, (protocol, algorithm) in enumerate(PROTOCOLS):
         for c, (mode, mode_title) in enumerate(MODES):
             ax = fig.add_subplot(grid[r, c])
-            draw_panel(ax, cases, mode, protocol)
+            draw_panel(ax, cases, datasets, mode, protocol)
             ax.set_title(f"{mode_title} · {algorithm}", loc="left", fontsize=15,
                          fontweight="bold", color=INK, pad=30)
             shared = shared_facts(cases, mode, protocol)
@@ -374,15 +395,18 @@ def chart(cases, out):
     commits = sorted({c["machine"]["versions"].get("tree_git", "?") for c in cases.values()})
     counts = sorted({c["runs"] for c in cases.values()})
     fig.suptitle("Where ./tree's training time goes: share of each step, per dataset "
-                 "(trees grown to depth 10, no pruning)",
+                 f"(trees grown to depth 10, no pruning{'; chess only' if len(datasets) <= CHESS else ''})",
                  x=0.01, y=0.99, ha="left", fontsize=20, fontweight="bold", color=INK)
-    fig.text(0.01, 0.975, f"The median of each case's profiled runs ({'/'.join(map(str, counts))} "
+    fig.text(0.01, 0.975, f"The {'average' if average else 'median'} of each case's profiled runs "
+             f"({'/'.join(map(str, counts))} "
              f"runs per case; ./tree --profile, commit {', '.join(commits)}). Bar "
              "height = training wall time (100%), the total above each bar; reading the CSV is "
              "not included. Under each bar: the dataset, its training accuracy, node count and "
              "depth (what every bar of a panel shares is in the panel's subtitle).\nLabels: share "
              "and seconds, for segments of 1% or more (GPU/CPU = where it ran; segments under 3.2% "
-             "beside the bar, share only, step by color). The dashed line separates the chess sets from the others.",
+             "beside the bar, share only, step by color)."
+             + (" The dashed line separates the chess sets from the others."
+                if len(datasets) > CHESS else ""),
              fontsize=11.5, color=MUTED, va="top", linespacing=1.4)
     handles = [Patch(facecolor=color, label=name) for _, name, color in STEPS]
     handles.append(Patch(facecolor="#7d7c78", hatch="///", edgecolor="white", label="hatched: on the GPU"))
@@ -426,13 +450,13 @@ def chart(cases, out):
     print(out)
 
 
-def table(cases):
+def table(cases, datasets):
     print("| Mode | Algorithm | Dataset | runs | train s | without --profile s | train acc % | nodes | depth | "
           + " | ".join(f"{NAME[s]} %" for s, _, _ in STEPS) + " | GPU share % |")
     print("|---|---|---|--:|--:|--:|--:|--:|--:|" + "--:|" * len(STEPS) + "--:|")
     for mode, mode_title in MODES:
         for protocol, algorithm in PROTOCOLS:
-            for dataset in DATASETS:
+            for dataset in datasets:
                 case = cases.get((mode, dataset, protocol))
                 if case is None:
                     continue
@@ -454,10 +478,14 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("root", type=Path, help="results directory (e.g. cluster-profiling)")
     parser.add_argument("--out", type=Path, help="PNG (default: <root>/chart.png)")
+    parser.add_argument("--chess", action="store_true", help="only the chess datasets")
+    parser.add_argument("--mean", action="store_true",
+                        help="average every case's runs (time and steps) instead of the median run")
     args = parser.parse_args()
-    cases = load(args.root)
-    chart(cases, args.out or args.root / "chart.png")
-    table(cases)
+    datasets = DATASETS[:CHESS] if args.chess else DATASETS
+    cases = load(args.root, datasets, args.mean)
+    chart(cases, datasets, args.mean, args.out or args.root / "chart.png")
+    table(cases, datasets)
 
 
 if __name__ == "__main__":
