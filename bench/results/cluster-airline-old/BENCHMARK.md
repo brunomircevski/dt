@@ -19,9 +19,9 @@ How the runs are made, and the dataset: [bench/cluster/README.md](../../cluster/
 ```bash
 bench/cluster/submit.sh -m 3 -d airline                       # pruned: cart_alpha_nodepth, c45
 bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned \
-    -o cluster-airlines/noprunning                            # unpruned
+    -o cluster-airline-old/noprunning                            # unpruned
 bench/cluster/submit.sh -m 3 -d airline socket-epyc-airline socket-dell-airline   # one socket
-bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines/noprunning \
+bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airline-old/noprunning \
     socket-epyc-airline socket-dell-airline
 ```
 

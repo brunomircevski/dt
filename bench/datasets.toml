@@ -68,33 +68,36 @@ max_test_rows = 100_000
 
 # US flights 1987-2008 (gbm-bench's airline, 115M rows, 13 integer features,
 # carrier and airports as codes; label: arrival delayed). Made from the public
-# download by bench/cluster/make_datasets.py. The rows are in date
-# order, so the test set is a random sample.
+# download by bench/cluster/make_datasets.py. It has no published test set;
+# the rows are in date order, so since 2026-10-23 the test set is the last
+# year, 2008 (every row from the first with Year >= 2008 on), and training
+# takes 1987-2007: the model predicts flights after the ones it learned from.
+# Until then 500,000 random rows were the test set (cluster-airline-old).
 [airline]
 source = "datasets/airline.csv"
-split = "random"
-test_rows = 500_000
+split = "tail"
+test_from = ["Year", 2008]
 
 # ECBDL'14 (protein contact maps, GECCO 2014 big data competition): 32M rows,
 # 631 features (92 nominal ones as integer codes), label 0/1 (~2% contacts).
-# Made from the ARFF by bench/cluster/make_datasets.py; cluster-only. The test
-# rows are only set aside (the cluster runs measure training alone), so no
-# YaDT files: they would copy the 70 GB training CSV. ecbdl_15m is a random
-# 15M of ecbdl's training rows (the first 15M of ecbdl's shuffled training
-# rows): about the most that fits on an 80 GB GPU, which needs 8 bytes per value
-# (one copy of the presorted columns) plus one spare column. The competition's
-# own labelled test set is datasets/ecbdl/ecbdl_test.csv (2.9M rows, made by
-# bench/cluster/ecbdl_test.py), not used here.
+# Made from the ARFF by bench/cluster/make_datasets.py; cluster-only. No YaDT
+# files: they would copy the 60 GB training CSV. ecbdl is the competition's
+# split (since 2026-10-23): every training row, train.csv a link to ecbdl.csv
+# (its own feature names and labels 0/1), and its labelled test set,
+# datasets/ecbdl/ecbdl_test.csv (2.9M rows, made by bench/cluster/ecbdl_test.py).
+# Until then it held out 100,000 random training rows as the test set (and
+# trained on the other 31,892,921). ecbdl_15m is the first 15M training rows
+# with the same test set (until 2026-10-23: 15M random training rows, 100,000
+# others its test set): about the most that fits on an 80 GB GPU, which needs
+# 8 bytes per value (one copy of the presorted columns) plus one spare column.
 [ecbdl]
 source = "datasets/ecbdl/ecbdl.csv"
-split = "random"
-test_rows = 100_000
+test_source = "datasets/ecbdl/ecbdl_test.csv"
 yadt = false
 
 [ecbdl_15m]
 source = "datasets/ecbdl/ecbdl.csv"
-split = "random"
-test_rows = 100_000
+test_source = "datasets/ecbdl/ecbdl_test.csv"
 train_rows = 15_000_000
 yadt = false
 

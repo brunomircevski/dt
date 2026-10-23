@@ -104,7 +104,7 @@ SHORT = {"gpu setup": "setup", "grow setup": "wait", "upload": "upload", "presor
          "build": "grow", "wait cpu subtrees": "CPU subtrees", "assemble tree": "",
          "c45 collapse, thresholds": "collapse", "prune setup": "", "prune arrange rows": "arrange",
          "prune subtrees": "prune", "prune compact": "", "cart prune": "prune"}
-# Protocol order of the panels (as in cluster-ecbdl's charts).
+# Protocol order of the panels (as in cluster-ecbdl-old's charts).
 ORDER = ["cart_alpha_nodepth", "cart_full_nodepth", "c45", "cart_alpha", "cart_full",
          "c45_unpruned"]
 

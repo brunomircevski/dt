@@ -3,10 +3,15 @@
 Scripts that build, prepare and benchmark ./tree on the faculty's mordor3
 cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
 
-- [`bench/results/cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md): HIGGS (10.5M rows)
-- [`bench/results/cluster-airlines/`](../results/cluster-airlines/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees
+- The test-set benchmarks ([below](#test-set-benchmarks)): ./tree trained on each
+  dataset's training rows and scored on its test rows, depth ≤ 10:
+  [`cluster-airline/`](../results/cluster-airline/BENCHMARK.md),
+  [`cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md),
+  [`cluster-susy/`](../results/cluster-susy/BENCHMARK.md),
+  [`cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md)
+- [`bench/results/cluster-airline-old/`](../results/cluster-airline-old/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees, a random 500,000-row test set
 - [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS and airline with 1 to 48 threads on the two CPU nodes
-- [`bench/results/cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md): ECBDL'14 (631 features): a 15M-row sample on all four nodes, the full 32M rows on the CPU nodes, both also on dell2 (512 GB); pruned and unpruned CART, C4.5
+- [`bench/results/cluster-ecbdl-old/`](../results/cluster-ecbdl-old/BENCHMARK.md): ECBDL'14 (631 features): a 15M-row sample on all four nodes, the full 32M rows on the CPU nodes, both also on dell2 (512 GB); pruned and unpruned CART, C4.5; a random 100,000-row test set
 - [`bench/results/cluster-chess/`](../results/cluster-chess/BENCHMARK.md): a 3×3 checkerboard (2 features) at 1M, 10M, 100M and 1000M rows on all four nodes and dell2, with one thread on epyc1 and dell1, and `--gpu-only` on hopper and ampere; unpruned CART and C4.5
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
@@ -72,7 +77,7 @@ for node in epyc dell; do
   bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-higgs \
       --socket bench/results/cluster-higgs/socket-$node-higgs --out $t/$node.png
   bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-airline \
-      --socket bench/results/cluster-airlines/socket-$node-airline --out $t/$node-airline.png
+      --socket bench/results/cluster-airline-old/socket-$node-airline --out $t/$node-airline.png
 done
 bench/.venv/bin/python bench/grid_chart.py $t/epyc.png $t/dell.png \
     $t/epyc-airline.png $t/dell-airline.png --out $s/chart.png  # 2x2: HIGGS above airline
@@ -113,10 +118,10 @@ bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unp
 The unpruned airline run and its chart (pruned and unpruned side by side in one image):
 
 ```bash
-bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines/noprunning
-bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airlines/noprunning \
+bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airline-old/noprunning
+bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airline-old/noprunning \
     socket-epyc-airline socket-dell-airline
-d=bench/results/cluster-airlines
+d=bench/results/cluster-airline-old
 t=$(mktemp -d)  # one chart per run, only to build the grid
 bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
     $d/cuda-hopper-airline $d/cuda-ampere-airline $d/cpu-epyc-airline $d/cpu-dell-airline \
@@ -150,6 +155,41 @@ rm -r $t
   and repeated, and prints ./tree's phase times with the CPU time, page faults
   and context switches of every run. The default settings were tuned
   with it ([docs/PERFORMANCE.md](../../docs/PERFORMANCE.md)).
+
+## Test-set benchmarks
+
+Since 2026-10-23 every dataset has a fixed training and test set, and these
+benchmarks train ./tree on the training rows and score the tree on the test
+rows (`submit.sh -e`: `run.py --test-accuracy`, the test rows predicted from
+each `--dump`; the training accuracy is ./tree's own):
+
+| Dataset | Training rows | Test rows |
+|---|---|---|
+| airline | 1987–2007 (109,258,555) | 2008, January to October (5,810,462; every row from the first with Year ≥ 2008; it has no published test set) |
+| HIGGS | the first 10.5M | the last 500,000 (UCI's test set) |
+| SUSY | the first 4.5M | the last 500,000 (UCI's test set) |
+| ECBDL'14 | all 31,992,921 (`ecbdl`, CPU nodes only); the first 15M (`ecbdl_15m`, every node: the most an 80 GB GPU holds) | the competition's 2,897,917 |
+
+Four protocols, depth ≤ 10, pruned at fixed values: `cart_depth10` (no
+pruning), `cart_depth10_alpha` (α = 1e-5), `c45_depth10_unpruned`,
+`c45_depth10` (CF 0.25). CUDA hybrid (`cuda-*`) and GPU only (`gpuonly-*`) on
+hopper and ampere, parallel on every CPU of both sockets on epyc1 and dell1
+(`cpu-*`); no serial runs. Three runs per case; `testset_chart.py` draws the
+means (training time, peak RAM and VRAM as numbers, the tree's accuracy, nodes
+and depth):
+
+```bash
+P=cart_depth10,cart_depth10_alpha,c45_depth10_unpruned,c45_depth10
+for d in higgs airline; do   # -a <prepare job> when the data is still being made
+  bench/cluster/submit.sh -m 3 -e -d $d -p $P {cuda,gpuonly}-{hopper,ampere}-$d cpu-{epyc,dell}-$d
+done
+bench/cluster/submit.sh -m 3 -e -d susy -p $P -o cluster-susy \
+  {cuda,gpuonly}-{hopper,ampere}-susy cpu-{epyc,dell}-susy
+bench/cluster/submit.sh -m 3 -e -d ecbdl_15m -p $P \
+  {cuda,gpuonly}-{hopper,ampere}-ecbdl_15m cpu-{epyc,dell}-ecbdl_15m
+bench/cluster/submit.sh -m 3 -e -d ecbdl -p $P cpu-epyc-ecbdl cpu-dell-ecbdl
+for d in airline higgs susy ecbdl; do bench/.venv/bin/python bench/testset_chart.py bench/results/cluster-$d; done
+```
 
 ## Settings specific to the cluster
 
@@ -263,8 +303,13 @@ data competition) from the ARFF in mordor3's `/home/Datasets/ECBDL` (60.8 GB):
 attributes become float32; the 92 nominal ones (predicted secondary structure
 H/E/C, solvent accessibility 0–4, X where the window runs past the chain) become
 integer codes in sorted order, as airline's airports. Its 20.2 G values are 65×
-HIGGS's (81 GB as float32). `datasets.toml` sets 100,000 random rows aside as
-the test set and writes no YaDT files. The CUDA backend needs 8 bytes per value
+HIGGS's (81 GB as float32). Since 2026-10-23 `datasets.toml`'s `ecbdl` is the
+competition's split: every training row (`train.csv` is a link to `ecbdl.csv`,
+which keeps its own feature names and labels 0/1; `prepare.py` records them in
+`meta.json` as `csv_features`/`csv_classes`) and `ecbdl_test.csv` as the test
+set. Before that it set 100,000 random rows aside as the test set and trained on
+the other 31,892,921 (the runs in `cluster-ecbdl-old` before that date); it writes
+no YaDT files. The CUDA backend needs 8 bytes per value
 (one copy of the presorted columns, plus one spare column), about 160 GB for the
 full set, so the GPUs get `ecbdl_15m`: a random 15M of the training rows (9.5 G
 values, about 72 GiB of GPU memory). Until 2026-10-17 the GPU needed 16 bytes per
@@ -283,8 +328,8 @@ training ARFF's first 1,000 rows into `ecbdl.csv`'s exact bytes). The result has
 5,423,008,790 bytes, SHA-256 `3d838532…`, and the same header as `ecbdl.csv`. To rebuild it:
 `xz -dk test_set.arff.xz`, then `bench/.venv/bin/python -I
 bench/cluster/ecbdl_test.py /home/Datasets/ECBDL/training_set.arff
-test_set.arff datasets/ecbdl/ecbdl_test.csv` on a compute node. The benchmarks do not use it yet: they
-measure training, on `datasets.toml`'s random split of the training rows.
+test_set.arff datasets/ecbdl/ecbdl_test.csv` on a compute node. It is `ecbdl`'s test set (see above);
+`ecbdl_15m` keeps its 100,000 random training rows.
 
 The **chess** sets are a 3×3 checkerboard: x and y uniform on a grid of 32,768
 values in [0, 3] (3k/32767 for k = 0..32767 to six decimals, a C `rand()` with

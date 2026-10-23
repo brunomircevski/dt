@@ -24,9 +24,11 @@ import pyarrow.csv as pacsv
 from benchlib import BASELINE, BENCH, DATA, ROOT, check_csv
 
 
-def split_rows(n, spec, n_source):
+def split_rows(n, spec, n_source, column=None):
     """Row indices of the training and the test set. With test_source the test
-    rows are those read from it, after the source's n_source rows."""
+    rows are those read from it, after the source's n_source rows. test_from
+    [name, value] (split "tail"): the test set is every row from the first whose
+    feature `name` (`column`, its values) is >= value, and no row before it is."""
     if "test_source" in spec:
         train, test = np.arange(n_source), np.arange(n_source, n)
         if spec.get("train_rows"):
@@ -34,7 +36,12 @@ def split_rows(n, spec, n_source):
         if spec.get("max_test_rows"):
             test = test[:spec["max_test_rows"]]
         return train, test
-    if "test_rows" in spec:
+    if "test_from" in spec:
+        later = column >= spec["test_from"][1]
+        n_test = n - int(np.argmax(later)) if later.any() else 0
+        if not later[n - n_test:].all():
+            raise ValueError(f"{spec['test_from'][0]} >= {spec['test_from'][1]} is not a tail of the rows")
+    elif "test_rows" in spec:
         n_test = int(spec["test_rows"])
     else:
         n_test = int(round(spec.get("test_fraction", 0.2) * n))
@@ -87,17 +94,24 @@ def read_source(spec):
     return features, [str(c) for c in names[order]], X, y, n_source
 
 
-def linkable(source, X, y, F):
-    """True if the CSV source is the train.csv write_dataset would write (the
-    chess sets): its header, and every row read back as the same float32
-    values and class index."""
+def linkable(source, X, y, features, classes):
+    """The names train.csv would use if it were a link to the CSV source, or None
+    if it cannot be: {} when the source is the train.csv write_dataset would
+    write (the chess sets: f<i> and c<k>); csv_features / csv_classes when it
+    has just the features and the label, last, under names of its own (ECBDL).
+    Every row must read back as the same float32 values and class index."""
+    F = X.shape[1]
     with open(source, "rb") as f:
         header = f.readline()
     names = [f"f{j}" for j in range(F)] + ["class"]
-    if header != ",".join(f'"{n}"' for n in names).encode() + b"\n":  # as Arrow writes it
-        return False
-    check_csv(source, X, y, header=True)
-    return True
+    if header == ",".join(f'"{n}"' for n in names).encode() + b"\n":  # as Arrow writes it
+        check_csv(source, X, y, header=True)
+        return {}
+    own = header.decode().rstrip("\r\n").split(",")
+    if len(own) == F + 1 and own[:F] == features and '"' not in header.decode():
+        check_csv(source, X, y, header=True, classes=classes)
+        return {"csv_features": features, "csv_classes": classes}
+    return None
 
 
 def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, source=None):
@@ -109,6 +123,7 @@ def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, s
     tmp.mkdir(parents=True)
     F = X.shape[1]
     parts = {"train": train, "test": test}
+    own_names = {}  # train.csv's own names, if it is a link to a source that has them
     # 64-bit offsets: 2G rows of "c0" are more than 2^31 bytes (chess_2b).
     labels = pa.array([f"c{k}" for k in range(len(classes))], pa.large_string())
     for part, rows in parts.items():
@@ -120,7 +135,10 @@ def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, s
         columns = [pa.array(Xp[:, j]) for j in range(F)]
         columns.append(pc.take(labels, pa.array(y[rows])))
         table = pa.table(columns, names=[f"f{j}" for j in range(F)] + ["class"])
-        if part == "train" and source and linkable(source, Xp, y[rows], F):
+        link = linkable(source, Xp, y[rows], features, classes) if part == "train" and source \
+            else None
+        if link is not None:
+            own_names = link
             (tmp / "train.csv").symlink_to(os.path.relpath(source.resolve(), out.resolve()))
         elif part == "train":
             pacsv.write_csv(table, tmp / "train.csv", pacsv.WriteOptions(quoting_style="none"))
@@ -137,7 +155,7 @@ def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, s
             names.write("class,string,class\n")
     meta = {"name": name, "features": [f"f{j}" for j in range(F)], "feature_names": features,
             "classes": [f"c{k}" for k in range(len(classes))], "class_names": classes,
-            "n_train": int(len(train)), "n_test": int(len(test)), **info}
+            "n_train": int(len(train)), "n_test": int(len(test)), **own_names, **info}
     json.dump(meta, open(tmp / "meta.json", "w"), indent=1)
     shutil.rmtree(out, ignore_errors=True)
     tmp.rename(out)
@@ -181,7 +199,8 @@ def main():
             sources = {}  # the previous source's arrays go first (chess_1b: tens of GB)
             sources = {key: read_source(spec)}
         features, classes, X, y, n_source = sources[key]
-        train, test = split_rows(len(y), spec, n_source)
+        column = X[:, features.index(spec["test_from"][0])] if "test_from" in spec else None
+        train, test = split_rows(len(y), spec, n_source, column)
         whole = "test_source" in spec and len(train) == n_source  # all its rows, in order
         write_dataset(name, features, classes, X, y, train, test, {"spec": spec},
                       yadt=spec.get("yadt", True), source=ROOT / spec["source"] if whole else None)

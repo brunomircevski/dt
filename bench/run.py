@@ -212,7 +212,7 @@ def build_command(case, kind, args, scratch, rep=0):
             backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
         dump = scratch / "tree.dump"
         dump.unlink(missing_ok=True)  # never read a previous run's tree
-        predict = evaluate and not args.train_accuracy_only
+        predict = evaluate and (args.test_accuracy or not args.train_accuracy_only)
         profile = (["--profile", str(args.out_dir / profile_name(case, rep))]
                    if args.profile and kind == "run" else [])
         argv = [str(binary)] + backend + flags \
@@ -245,12 +245,15 @@ def build_command(case, kind, args, scratch, rep=0):
                 # Both accuracies from the dumped tree, so ./tree is measured like the
                 # others: by predicting every row. ./tree's own training accuracy
                 # (printed to 4 decimals) must agree.
-                tree = B.parse_tree_dump(dump, len(m["features"]))
-                for part in ("train", "test"):
+                tree = B.parse_tree_dump(dump, *B.csv_names(m))
+                printed = float(re.search(r"train accuracy\s+([\d.]+)%", stdout).group(1))
+                for part in ("test",) if args.test_accuracy else ("train", "test"):
                     X, y = B.load(dataset, part)
                     result[f"{part}_accuracy"] = float(np.mean(B.predict_tree(tree, X) == y))
-                printed = float(re.search(r"train accuracy\s+([\d.]+)%", stdout).group(1))
-                if abs(printed - 100 * result["train_accuracy"]) > 1e-4:
+                if args.test_accuracy:
+                    # --test-accuracy: the training accuracy as ./tree printed it.
+                    result["train_accuracy"] = printed / 100
+                elif abs(printed - 100 * result["train_accuracy"]) > 1e-4:
                     raise ValueError(f"dump predicts {100 * result['train_accuracy']:.6f}% on "
                                      f"the training rows, ./tree printed {printed}%")
             return result
@@ -520,6 +523,10 @@ def main():
     parser.add_argument("--train-accuracy-only", action="store_true",
                         help="./tree: record only its own training accuracy, skip predicting "
                              "the training and test rows from its dumped tree (minutes on big trees)")
+    parser.add_argument("--test-accuracy", action="store_true",
+                        help="./tree: its own training accuracy, and the test accuracy by "
+                             "predicting only the test rows from its dumped tree (the full "
+                             "ECBDL's training rows are 80 GB); overrides --train-accuracy-only")
     parser.add_argument("--hash-trees", action="store_true",
                         help="./tree: record the SHA-256 of every tree's --dump (tree_sha256), "
                              "to check that the backends grow the same tree")

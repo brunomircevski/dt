@@ -25,8 +25,8 @@ case's recorded pruning time next to its bar (if any), also for the unpruned
 protocols (where it is only C4.5's collapse of useless splits) and below 1%.
 
 --more adds the cases of later runs kept in another directory under the same
-run names (e.g. cluster-ecbdl/unpruned/cpu-epyc-ecbdl next to
-cluster-ecbdl/cpu-epyc-ecbdl), so that one chart shows both.
+run names (e.g. cluster-ecbdl-old/unpruned/cpu-epyc-ecbdl next to
+cluster-ecbdl-old/cpu-epyc-ecbdl), so that one chart shows both.
 """
 
 import argparse

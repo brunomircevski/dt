@@ -181,7 +181,7 @@ Tried and dropped:
 
 The CPU builder's sweep and partition (most of epyc1's 10 s C4.5 build) are
 unchanged. The cluster benchmarks were rerun on this commit (`8da0c12`):
-[cluster-airlines](../bench/results/cluster-airlines/BENCHMARK.md),
+[cluster-airline-old](../bench/results/cluster-airline-old/BENCHMARK.md),
 [cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
 [cluster-cpu-scaling](../bench/results/cluster-cpu-scaling/BENCHMARK.md).
 
@@ -250,7 +250,7 @@ CART is `--cart --alpha 1e-5`. What changed:
 The parallel CPU build is unchanged (its code is the same; epyc1's C4.5 build
 is 1% slower in every binary built after the pruning changes, which we put
 down to code layout). The cluster benchmarks were rerun on this commit:
-[cluster-airlines](../bench/results/cluster-airlines/BENCHMARK.md),
+[cluster-airline-old](../bench/results/cluster-airline-old/BENCHMARK.md),
 [cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
 [cluster-cpu-scaling](../bench/results/cluster-cpu-scaling/BENCHMARK.md). The
 laptop and desktop benchmarks were not.
@@ -323,7 +323,7 @@ What changed:
 
 The benchmarks on the cluster nodes are in
 [cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
-[cluster-airlines](../bench/results/cluster-airlines/BENCHMARK.md). The
+[cluster-airline-old](../bench/results/cluster-airline-old/BENCHMARK.md). The
 laptop and desktop were not re-measured.
 
 ## October 2026: sweep, partition and pruning

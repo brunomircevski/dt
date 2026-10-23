@@ -2,7 +2,7 @@
 # The cluster benchmark on mordor3: one SLURM job per node, one whole node
 # each, held until all are queued and then released together (run it on the
 # login node; it only calls sbatch). Results go to
-# bench/results/cluster-<dataset>/ (cluster-higgs, -airlines, -ecbdl, -chess):
+# bench/results/cluster-<dataset>/ (cluster-higgs, -airline, -susy, -ecbdl, -chess):
 #   cuda-hopper-<data>  H100 PCIe (GPU 0 of 4), 2x Xeon Gold 6444Y   CUDA
 #   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          CUDA
 #   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
@@ -36,7 +36,10 @@
 #   bench/cluster/submit.sh -m 3 -d airline  # the airline dataset
 #   bench/cluster/submit.sh -m 3 cuda-hopper-higgs   # only the named runs
 #   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned \
-#       -o cluster-airlines/noprunning               # unpruned trees
+#       -o cluster-airline-old/noprunning            # unpruned trees
+#   bench/cluster/submit.sh -m 3 -e -d higgs -p cart_depth10,cart_depth10_alpha,c45_depth10_unpruned,c45_depth10 \
+#       cuda-hopper-higgs gpuonly-hopper-higgs cuda-ampere-higgs gpuonly-ampere-higgs \
+#       cpu-epyc-higgs cpu-dell-higgs            # the test-set benchmark (cluster-higgs/README.md)
 #   bench/cluster/submit.sh -d ecbdl_15m -a 1234 # ECBDL'14, 15M rows, after job 1234
 #   bench/cluster/submit.sh -d ecbdl             # full ECBDL'14: CPU nodes only (no GPU
 #                                                # has the 160 GB it needs)
@@ -55,7 +58,8 @@
 # -w: every job on that node instead (e.g. epyc2, the same hardware as epyc1);
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
-# that job (e.g. prepare.sh) ended well; -n: threads, memory and GPU on that
+# that job (e.g. prepare.sh) ended well; -e: test accuracy too (run.py
+# --test-accuracy: the test rows predicted from each dumped tree); -n: threads, memory and GPU on that
 # NUMA node (job.sh NUMA_NODE). The CUDA runs (cuda-*, gpuonly-*) stay on one
 # socket, their GPU's, without it too: job.sh takes the NUMA node of a GPU
 # with the most free memory (hopper: node 1, as another user's /dev/shm filled
@@ -70,7 +74,8 @@ OUTDIR=
 NUMA=
 AFTER=
 NODE=
-while getopts "m:d:p:o:a:n:w:h" option; do
+ACCURACY=
+while getopts "m:d:p:o:a:n:w:eh" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
     d) DATASET="$OPTARG" ;;
@@ -79,6 +84,7 @@ while getopts "m:d:p:o:a:n:w:h" option; do
     a) AFTER="$OPTARG" ;;
     n) NUMA="$OPTARG" ;;
     w) NODE="$OPTARG" ;;
+    e) ACCURACY=--test-accuracy ;;
     *) sed -n '2,50p' "$0"; exit 2 ;;
   esac
 done
@@ -86,7 +92,7 @@ shift $((OPTIND - 1))
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 case "$DATASET" in
   higgs) DIR=cluster-higgs; LIMIT=01:00:00 TIMEOUT=3600 ;;
-  airline) DIR=cluster-airlines; LIMIT=04:00:00 TIMEOUT=3600 ;;
+  airline) DIR=cluster-airline; LIMIT=04:00:00 TIMEOUT=3600 ;;
   # ECBDL: the dell partition allows at most 12 hours.
   ecbdl_15m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
   ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
@@ -164,7 +170,7 @@ done
 git diff --quiet HEAD -- src bench Makefile ||
   echo "warning: uncommitted changes in src/, bench/ or Makefile: machine.json will say -dirty"
 export TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)"
-echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs per case: $RUNS${NUMA:+, NUMA node $NUMA}"
+echo "code: $TREE_GIT_DESCRIBE, $DATASET, $PROTOCOLS -> bench/results/$DIR, runs per case: $RUNS${NUMA:+, NUMA node $NUMA}${ACCURACY:+, test accuracy}"
 
 ids=()
 for job in "${JOBS[@]}"; do
@@ -176,7 +182,7 @@ for job in "${JOBS[@]}"; do
   # The simple runs check that every backend grew the same tree.
   extra=; [[ "$name" != simple-* ]] || extra=",RUN_EXTRA=--hash-trees"
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "${limit:-$LIMIT}" \
-    --export=ALL${NUMA:+,NUMA_NODE=$NUMA}$socket$extra \
+    --export=ALL${NUMA:+,NUMA_NODE=$NUMA}${ACCURACY:+,ACCURACY=$ACCURACY}$socket$extra \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
     bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "${protocols:-$PROTOCOLS}" "$threads" \
     "${timeout:-$TIMEOUT}")")

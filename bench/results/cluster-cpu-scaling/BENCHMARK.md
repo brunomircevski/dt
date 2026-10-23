@@ -3,7 +3,7 @@
 **Status:** run on 2026-10-20, 3 runs per point: dell1 at commit 8b1ecd1 (051949b plus each thread counting the classes in its own histogram, 6521330, and the GPU changes), epyc1 at 1a2d9a9 (8b1ecd1 plus `run.py --drop-cache`: the datasets leave the page cache before every run, see below). In cd18717 the columns are kept once, in column slots, with min(features − 1, threads) spare slots (one for `--serial`) instead of a second copy of every column ([docs/CPU.md](../../../docs/CPU.md)); ./tree's defaults otherwise (the fastest settings found on these servers). epyc's `machine.json` says `-dirty` only because result files of the cluster's checkout had changed; the code was committed.
 - **HIGGS:** dell1 14:41–14:54 (job 1309), epyc1 16:25–16:35 (job 1343).
 - **Airline:** dell1 14:55–16:12 (job 1311), epyc1 16:36–17:31 (job 1344).
-- **Why epyc was rerun:** its first run at 8b1ecd1 found NUMA node 1 nearly full with our own cached dataset files (236 of 252 GiB), so the 48-thread runs' memory partly landed on the other socket ([cluster-ecbdl](../cluster-ecbdl/BENCHMARK.md)). With `--drop-cache` the page cache no longer holds the datasets between runs.
+- **Why epyc was rerun:** its first run at 8b1ecd1 found NUMA node 1 nearly full with our own cached dataset files (236 of 252 GiB), so the 48-thread runs' memory partly landed on the other socket ([cluster-ecbdl-old](../cluster-ecbdl-old/BENCHMARK.md)). With `--drop-cache` the page cache no longer holds the datasets between runs.
 - **Each node ran alone** and was used whole.
 - **Same trees:** every thread count built the same tree on both nodes, the same as in [cluster-higgs](../cluster-higgs/BENCHMARK.md).
 
@@ -35,7 +35,7 @@ All four charts in one image (HIGGS above airline, epyc left, dell right). Threa
 
 ### One socket
 
-The diamonds at 24 threads are the one-socket runs of [cluster-higgs](../cluster-higgs/BENCHMARK.md) and [cluster-airlines](../cluster-airlines/BENCHMARK.md) (`socket-*`, 2026-10-20 at 10d125d, `--socket` in `scaling_chart.py`): 24 threads on every CPU of one socket, the memory bound to its NUMA nodes (epyc1's socket 0, dell1's socket 1). Medians of 3:
+The diamonds at 24 threads are the one-socket runs of [cluster-higgs](../cluster-higgs/BENCHMARK.md) and [cluster-airline-old](../cluster-airline-old/BENCHMARK.md) (`socket-*`, 2026-10-20 at 10d125d, `--socket` in `scaling_chart.py`): 24 threads on every CPU of one socket, the memory bound to its NUMA nodes (epyc1's socket 0, dell1's socket 1). Medians of 3:
 
 | | epyc: 24 threads / one socket | dell: 24 threads / one socket |
 |---|--:|--:|
@@ -46,7 +46,7 @@ The diamonds at 24 threads are the one-socket runs of [cluster-higgs](../cluster
 
 - **epyc:** the same within 1%. Its first 24 CPUs are socket 0, so the 24-thread point already ran on one socket; binding the memory changes nothing.
 - **dell:** on HIGGS the same within 3%, but on airline one socket is 1.24–1.35× faster than 24 threads spread over both. dell's CPUs alternate between the sockets, so the 24-thread point uses 12 cores of each and their memory on four NUMA nodes; airline's 115M rows probably move far more data between them than HIGGS's 10.5M (not profiled).
-- **Against all 48 threads:** one socket takes 1.1–1.7× as long ([cluster-higgs](../cluster-higgs/BENCHMARK.md), [cluster-airlines](../cluster-airlines/BENCHMARK.md)).
+- **Against all 48 threads:** one socket takes 1.1–1.7× as long ([cluster-higgs](../cluster-higgs/BENCHMARK.md), [cluster-airline-old](../cluster-airline-old/BENCHMARK.md)).
 
 ### Against the previous runs
 
@@ -115,7 +115,7 @@ Training time, median of 3 runs, and speedup over 1 thread:
 | 44 | 7.41 s | 10.1× | 12.62 s | 13.5× | 7.78 s | 16.2× | 14.38 s | 18.2× |
 | 48 | **7.02 s** | 10.6× | **11.89 s** | 14.4× | 7.35 s | 17.2× | 13.71 s | 19.1× |
 
-The trees are CART 3,013 nodes (depth 25, training accuracy 71.54%) and C4.5 8,548,725 nodes (depth 72, 87.42%) at every point on both nodes, the same as in [cluster-airlines](../cluster-airlines/BENCHMARK.md), whose 48-thread times these match within 1% (dell's CART 7.35 against 7.39 s).
+The trees are CART 3,013 nodes (depth 25, training accuracy 71.54%) and C4.5 8,548,725 nodes (depth 72, 87.42%) at every point on both nodes, the same as in [cluster-airline-old](../cluster-airline-old/BENCHMARK.md), whose 48-thread times these match within 1% (dell's CART 7.35 against 7.39 s).
 
 ### Observations
 

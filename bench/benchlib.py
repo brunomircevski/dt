@@ -5,7 +5,9 @@ Data layout (bench/data/<dataset>/, made by prepare.py):
   meta.json                  features, classes, row counts, how the split was made
   train.f32, test.f32        features, row-major little-endian float32 (n x F)
   train.y.i32, test.y.i32    class index per row, little-endian int32
-  train.csv                  header f0..f{F-1},class; labels c0..c{K-1}  (./tree)
+  train.csv                  header f0..f{F-1},class; labels c0..c{K-1}  (./tree), or
+                             a link to a source CSV with names of its own (ECBDL):
+                             meta.json's csv_features / csv_classes
   yadt.names, train.yadt.csv, test.yadt.csv   headerless CSV + metadata  (YaDT)
 
 Every tool sees the same float32 values: the CSVs print them exactly (9
@@ -103,6 +105,20 @@ PROTOCOLS = {
             "tree": ["--c45", "--no-prune", "-d", "10"],
         },
     },
+    # Pruned at the same fixed values, to depth 10 (the test-set benchmarks:
+    # cluster-airline, -higgs, -susy, -ecbdl).
+    "cart_depth10_alpha": {
+        "title": "CART, grown to depth 10, pruned at a fixed alpha (cost-complexity)",
+        "impls": {
+            "tree": ["--cart", "-d", "10", "--alpha", "{alpha}"],
+        },
+    },
+    "c45_depth10": {
+        "title": "C4.5, grown to depth 10, error-based pruning (CF 0.25, subtree raising)",
+        "impls": {
+            "tree": ["--c45", "-d", "10"],
+        },
+    },
     "c45": {
         "title": "C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows",
         "impls": {
@@ -163,6 +179,12 @@ def meta(dataset):
     return json.load(open(DATA / dataset / "meta.json"))
 
 
+def csv_names(m):
+    """The feature and class names train.csv uses: f<i> and c<k>, or a linked
+    source's own (meta.json csv_features / csv_classes)."""
+    return (m.get("csv_features", m["features"]), m.get("csv_classes", m["classes"]))
+
+
 def load(dataset, part):
     m = meta(dataset)
     rows = m[f"n_{part}"]
@@ -171,9 +193,10 @@ def load(dataset, part):
     return X, y
 
 
-def check_csv(path, X, y, header):
+def check_csv(path, X, y, header, classes=None):
     """Every row of a prepared CSV must read back as exactly the binary files'
-    float32 values and class indices (labels c0..c{K-1}). Raises otherwise."""
+    float32 values and class indices (labels `classes`, by default c0..c{K-1}).
+    Raises otherwise."""
     import pyarrow as pa
     import pyarrow.compute as pc
     import pyarrow.csv as pacsv
@@ -189,7 +212,7 @@ def check_csv(path, X, y, header):
         if not np.array_equal(table[f"f{j}"].to_numpy(), X[:, j]):
             raise AssertionError(f"{path}: column f{j} differs from the binary file")
     # 64-bit offsets: 2G rows of "c0" are more than 2^31 bytes (chess_2b).
-    classes = pa.array([f"c{k}" for k in range(int(y.max()) + 1)], pa.large_string())
+    classes = pa.array(classes or [f"c{k}" for k in range(int(y.max()) + 1)], pa.large_string())
     if not pc.all(pc.equal(table["class"], pc.take(classes, pa.array(y)))).as_py():
         raise AssertionError(f"{path}: class labels differ from the binary file")
     del table
@@ -214,17 +237,19 @@ def verify_dataset(dataset):
         if (folder / f"{part}.yadt.csv").exists():  # not written for huge datasets
             check_csv(folder / f"{part}.yadt.csv", X, y, header=False)
         if part == "train":
-            check_csv(folder / "train.csv", X, y, header=True)
+            check_csv(folder / "train.csv", X, y, header=True, classes=csv_names(meta(dataset))[1])
     return hashes
 
 
 # ------------------------------------------------------------------ ./tree dumps
 
-def parse_tree_dump(path, n_features):
+def parse_tree_dump(path, features, classes):
     """./tree --dump -> flat preorder arrays (feature, threshold, value, left, right);
-    leaves have feature -1. Features are named f<i>, classes c<i>."""
+    leaves have feature -1. features, classes: the names train.csv uses (csv_names)."""
     import re
     node_re = re.compile(r"^\s*\w+ \[n=\d+\]: (.*)$")
+    feature_index = {name: j for j, name in enumerate(features)}
+    class_index = {name: k for k, name in enumerate(classes)}
     feature, threshold, value = [], [], []
     for line in open(path):
         match = node_re.match(line)
@@ -234,11 +259,11 @@ def parse_tree_dump(path, n_features):
         if body.startswith("Leaf -> "):
             feature.append(-1)
             threshold.append(0.0)
-            value.append(int(body[len("Leaf -> c"):]))
+            value.append(class_index[body[len("Leaf -> "):]])
         else:
-            name, cut = re.match(r"if \"?f(\d+)\"? <= (\S+)$", body).groups()
-            assert int(name) < n_features
-            feature.append(int(name))
+            # The names as ./tree read them from the header: Arrow quotes f<i>.
+            name, cut = re.match(r"if (\S+) <= (\S+)$", body).groups()
+            feature.append(feature_index[name.strip('"')])
             threshold.append(float(cut))
             value.append(-1)
     feature = np.array(feature)

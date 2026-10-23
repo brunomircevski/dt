@@ -9,7 +9,8 @@
 # threads: run.py's --threads (default all); "scaling" = 1, 2, 4, then every
 # 4 up to the node's CPU count (scaling.sh). timeout: seconds per ./tree process
 # (default 3600). RUN_EXTRA (environment): more run.py arguments, e.g.
-# --profile (profile.sh). NUMA_NODE (environment, submit.sh -n): the threads,
+# --profile (profile.sh). ACCURACY (environment, submit.sh -e): run.py's
+# --test-accuracy instead of the default --train-accuracy-only. NUMA_NODE (environment, submit.sh -n): the threads,
 # the memory (numactl --membind) and the GPU all on that NUMA node (one
 # socket): its CPUs in their order, and the first GPU attached to it instead of
 # GPU 0. CUDA runs always get one (below); CPU runs only when it is given.
@@ -18,6 +19,7 @@
 # only, for the parallel backend on one CPU of a two-socket node.
 
 set -euo pipefail
+ACCURACY="${ACCURACY:---train-accuracy-only}"
 DIR="$1" NAME="$2" DATASET="$3" IMPLS="$4" RUNS="$5" PROTOCOLS="${6:-cart_alpha_nodepth,c45}" THREADS="${7:-all}" TIMEOUT="${8:-3600}"
 cd "$SLURM_SUBMIT_DIR"  # repository root
 PY=bench/.venv/bin/python
@@ -102,7 +104,7 @@ echo "runs per case: $RUNS"
 
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
-  --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} --drop-cache --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" --train-accuracy-only \
+  --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} --drop-cache --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \
   ${RUN_EXTRA:-}
 
 step "3/3 tables and CSV files"
