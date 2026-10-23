@@ -12,4 +12,27 @@
 
 ## Results
 
-Queued on 2026-10-23; not yet run.
+Run on 2026-10-23 at 74a011f. Each case ran 3 times; the tables give means of ./tree's training time. Accuracies, nodes and depth are the same in every run.
+
+![chart](chart.png)
+
+- **Same tree everywhere:** every backend grew the same tree in every case.
+- **Speed:** the H100 is 4.8–5.3× faster than epyc on CART and 6.1–6.7× on unpruned C4.5. C4.5's pruning runs on the host CPU and doubles a GPU run (0.67 → 1.41 s on hopper), so the pruned C4.5 gap shrinks to 3.1–3.2×.
+- **Accuracy:** 66.2–66.6% on 2008 flights, about half a point below training accuracy. Pruning changes it by at most 0.03 points.
+- **Memory:** GPU only needs 13.0 GiB of RAM at most, against 18.0 GiB for hybrid. VRAM peaks at 12.7–18.4 GiB. The CPU nodes need 26–28 GiB.
+
+| Protocol | test acc | train acc | nodes | depth |
+|---|---|---|---|---|
+| CART, no pruning | 66.55% | 67.10% | 2,047 | 10 |
+| CART, α 1e-5 | 66.52% | 67.04% | 509 | 10 |
+| C4.5, no pruning | 66.21% | 66.62% | 929 | 10 |
+| C4.5, CF 0.25 | 66.22% | 66.62% | 815 | 10 |
+
+| Run | CART, no pruning | CART, α 1e-5 | C4.5, no pruning | C4.5, CF 0.25 | RAM GiB (peak, range over protocols) | VRAM GiB (peak, range over protocols) |
+|---|---|---|---|---|---|---|
+| hopper, CUDA hybrid | 0.647 s | 0.593 s | 0.666 s | 1.41 s | 6.1–18.0 | 12.7–18.4 |
+| hopper, GPU only | 0.59 s | 0.588 s | 0.61 s | 1.46 s | 6.1–13.0 | 12.7–18.4 |
+| ampere, CUDA hybrid | 0.992 s | 0.899 s | 0.995 s | 1.85 s | 6.1–18.0 | 12.7–18.4 |
+| ampere, GPU only | 0.904 s | 0.901 s | 0.922 s | 1.79 s | 6.1–13.0 | 12.7–18.4 |
+| epyc, parallel | 3.13 s | 3.04 s | 4.09 s | 4.55 s | 26.5–28.4 | – |
+| dell, parallel | 4.47 s | 4.42 s | 6.09 s | 6.91 s | 26.0–27.8 | – |

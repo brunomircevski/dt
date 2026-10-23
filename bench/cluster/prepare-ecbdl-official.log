@@ -1,0 +1,48 @@
+ecbdl: 31,992,921 train / 2,897,917 test rows, 631 features, 2 classes (1783.5 s)
+ecbdl_15m: 15,000,000 train / 2,897,917 test rows, 631 features, 2 classes (1170.5 s)
+	Command being timed: "bench/.venv/bin/python bench/prepare.py --force ecbdl ecbdl_15m"
+	User time (seconds): 7421.95
+	System time (seconds): 5996.57
+	Percent of CPU this job got: 453%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 49:18.02
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 400706312
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 2
+	Minor (reclaiming a frame) page faults: 85036737
+	Voluntary context switches: 124690120
+	Involuntary context switches: 3453252
+	Swaps: 0
+	File system inputs: 208
+	File system outputs: 315264152
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+bench/data/ecbdl:
+total 86136824
+drwxrwxr-x  2 bmircevski bmircevski        4096 Oct 23 15:44 .
+drwxrwxr-x 18 bmircevski bmircevski        4096 Oct 23 15:44 ..
+-rw-rw-r--  1 bmircevski bmircevski       30811 Oct 23 15:45 meta.json
+-rw-rw-r--  1 bmircevski bmircevski  7314342508 Oct 23 15:44 test.f32
+-rw-rw-r--  1 bmircevski bmircevski    11591668 Oct 23 15:45 test.y.i32
+lrwxrwxrwx  1 bmircevski bmircevski          36 Oct 23 15:44 train.csv -> ../../../../datasets/ecbdl/ecbdl.csv
+-rw-rw-r--  1 bmircevski bmircevski 80750132604 Oct 23 15:31 train.f32
+-rw-rw-r--  1 bmircevski bmircevski   127971684 Oct 23 15:32 train.y.i32
+
+bench/data/ecbdl_15m:
+total 71495076
+drwxrwxr-x  2 bmircevski bmircevski        4096 Oct 23 16:04 .
+drwxrwxr-x 18 bmircevski bmircevski        4096 Oct 23 15:44 ..
+-rw-rw-r--  1 bmircevski bmircevski       18653 Oct 23 16:04 meta.json
+-rw-rw-r--  1 bmircevski bmircevski  7314342508 Oct 23 16:03 test.f32
+-rw-rw-r--  1 bmircevski bmircevski    11591668 Oct 23 16:03 test.y.i32
+-rw-rw-r--  1 bmircevski bmircevski 27964971044 Oct 23 15:59 train.csv
+-rw-rw-r--  1 bmircevski bmircevski 37860000000 Oct 23 15:44 train.f32
+-rw-rw-r--  1 bmircevski bmircevski    60000000 Oct 23 15:45 train.y.i32
+83G	bench/data/ecbdl
+69G	bench/data/ecbdl_15m

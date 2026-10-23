@@ -40,14 +40,14 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 | [`consumer/cuda-legion-susy`](consumer/cuda-legion-susy/BENCHMARK.md) | full SUSY: serial, parallel and CUDA on the laptop | CUDA 0.37 s (CART) and 0.46 s (C4.5): 2.4–2.6× the desktop's 28 threads. |
 | [`consumer/pc-legion-higgs`](consumer/pc-legion-higgs/BENCHMARK.md) | full HIGGS (10.5M rows): `cuda-legion-higgs` (laptop parallel and CUDA) and `cpu-pc-higgs` (desktop parallel) | CUDA 1.37 s (CART) and 2.00 s (C4.5), 2.3–2.6× the CPUs. The laptop's 20 threads match the desktop's 28: its DDR5 is faster. |
 
-**Trained on the training set, scored on the test set** (queued 2026-10-23): ./tree alone, depth ≤ 10, CART and C4.5 each unpruned and pruned at fixed values, CUDA hybrid and GPU only on hopper and ampere, parallel on both sockets of epyc1 and dell1, 3 runs per case averaged ([bench/cluster/README.md](../cluster/README.md#test-set-benchmarks)).
+**Trained on the training set, scored on the test set** (2026-10-23, 74a011f): ./tree alone, depth ≤ 10, CART and C4.5 each unpruned and pruned at fixed values, CUDA hybrid and GPU only on hopper and ampere, parallel on both sockets of epyc1 and dell1, 3 runs per case averaged ([bench/cluster/README.md](../cluster/README.md#test-set-benchmarks)).
 
-| Directory | Training / test rows |
-|---|---|
-| [`cluster-airline`](cluster-airline/BENCHMARK.md) | 1987–2007 (109.3M) / 2008 (5.8M) |
-| [`cluster-higgs`](cluster-higgs/BENCHMARK.md) | 10.5M / UCI's 500,000 |
-| [`cluster-susy`](cluster-susy/BENCHMARK.md) | 4.5M / UCI's 500,000 |
-| [`cluster-ecbdl`](cluster-ecbdl/BENCHMARK.md) | 32.0M (CPU nodes) and the first 15M (every node) / the competition's 2.9M |
+| Directory | Training / test rows | Main result |
+|---|---|---|
+| [`cluster-airline`](cluster-airline/BENCHMARK.md) | 1987–2007 (109.3M) / 2008 (5.8M) | H100 0.59–1.46 s, 3.1–6.7× epyc (3.04–4.55 s). Test acc 66.2–66.6%. VRAM ≤ 18.4 GiB. |
+| [`cluster-higgs`](cluster-higgs/BENCHMARK.md) | 10.5M / UCI's 500,000 | H100 0.17–0.34 s, 2.0–3.6× epyc. Test acc CART 70.5%, C4.5 63.7%. VRAM ≤ 4.5 GiB. |
+| [`cluster-susy`](cluster-susy/BENCHMARK.md) | 4.5M / UCI's 500,000 | Both GPUs 0.09–0.20 s, 1.5–3× epyc. Test acc CART 79.0%, C4.5 78.6%. |
+| [`cluster-ecbdl`](cluster-ecbdl/BENCHMARK.md) | 32.0M (CPU nodes) and the first 15M (every node) / the competition's 2.9M | 15M: H100 3.7–4.0 s, 1.8–2.1× epyc, VRAM 73.3 GiB. Full: epyc 14.3–18.5 s, 238 GiB RAM. Test acc 98.3% is the majority class's (pruned CART: one leaf). |
 
 **./tree alone on the mordor3 cluster** (2026-10-20, 3 runs per case, one on ECBDL'14; the CPU rows at 8b1ecd1, with the class counts in per-thread histograms (6521330), epyc's rerun at 1a2d9a9 with the datasets out of the page cache; the CUDA and GPU-only rows at 235c431 on the GPU's socket only: GPU 0, its NUMA node's 16 (hopper) or 24 (ampere) CPUs and memory; the one-socket CPU rows (`socket-*`) at 10d125d: every CPU of one socket, the memory on its NUMA nodes). Every machine runs with ./tree's defaults, which were the fastest settings found on each. CART has no depth limit, like C4.5. Accuracy is ./tree's training accuracy (`run.py --train-accuracy-only`).
 
