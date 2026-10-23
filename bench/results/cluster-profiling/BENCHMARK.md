@@ -6,6 +6,7 @@
   - CUDA: hopper, on the GPU's socket: H100 PCIe, 16 CPU threads, NUMA-bound.
   - Parallel: epyc1, 48 threads (2× EPYC 9255).
 - **Repetition:** every case ran 10 times profiled (`./tree --profile FILE`) and 10 times without `--profile` (`plain/`). The chart and table use the median profiled run; `without --profile s` is the median plain run.
+- **Chess, 50 runs:** the chess sets were rerun with 50 runs per case, averaged: [chess-50runs/](chess-50runs/BENCHMARK.md) (jobs 226–261, chart `chess-50runs/chart.png`). This page and its chart are unchanged.
 - **Earlier runs:** the previous version of this benchmark (CART with α = 1e-5, C4.5 with CF 0.25 pruning, C4.5 unpruned, no depth limit) is in commit 08c4235.
 
 ![chart](chart.png)
