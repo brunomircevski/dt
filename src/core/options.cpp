@@ -57,6 +57,7 @@ void printUsage(const char *program) {
       << "                           CART, 2 for C4.5)\n"
       << "  --no-prune               keep the unpruned tree (pruning is on by default)\n"
       << "  --holdout F              hold out fraction F of rows as test set\n"
+      << "  --test-last N            the last N rows of the file are the test set\n"
       << "  --seed N                 random seed for the holdout split and CART's CV\n"
       << "                           folds (default 1)\n"
       << "  -m N                     duplicate rows N times in memory (stress tests)\n"
@@ -254,6 +255,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.multiplier = parseCount(arg, args.value(arg));
     } else if (arg == "--holdout") {
       options.holdout = parseReal(arg, args.value(arg));
+    } else if (arg == "--test-last") {
+      options.testLast = parseCount(arg, args.value(arg));
     } else if (arg == "--seed") {
       options.seed = static_cast<std::uint64_t>(parseCount(arg, args.value(arg)));
     } else if (arg == "--threads") {
@@ -316,6 +319,9 @@ void validateOptions(const Options &options) {
   }
   if (options.holdout < 0.0 || options.holdout >= 1.0) {
     throw std::runtime_error("--holdout must be in [0, 1)");
+  }
+  if (options.testLast > 0 && options.holdout > 0.0) {
+    throw std::runtime_error("--test-last and --holdout exclude each other");
   }
   if (options.algorithm == Algorithm::Cart) {
     const CartOptions &cart = options.cart;

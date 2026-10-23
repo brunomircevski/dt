@@ -91,4 +91,9 @@ void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t see
                   RandomStream stream, Dataset &train, Dataset &test,
                   ThreadPool *pool = nullptr);
 
+// The last `testRows` rows are the test set, the others the training set (both
+// in file order): a published split such as HIGGS's and SUSY's.
+void splitTail(const Dataset &dataset, std::size_t testRows, Dataset &train, Dataset &test,
+               ThreadPool *pool = nullptr);
+
 } // namespace dt

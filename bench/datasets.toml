@@ -9,7 +9,8 @@
 #                  source's rows are the training set and split is not used
 #   split          "random": shuffle with `seed`, then take the test rows
 #                  "tail":   the last rows are the test set (the published split
-#                            of SUSY and HIGGS: their rows are already random)
+#                            of SUSY and HIGGS: their rows are already random;
+#                            ./tree --test-last 500000 on the CSV is the same)
 #   test_fraction  share of rows in the test set (default 0.2), or
 #   test_rows      an exact number of test rows (wins over test_fraction)
 #   train_rows     use only the first N training rows (0 = all; default 0)
@@ -81,15 +82,17 @@ test_rows = 500_000
 # YaDT files: they would copy the 70 GB training CSV. ecbdl_15m is a random
 # 15M of ecbdl's training rows (the first 15M of ecbdl's shuffled training
 # rows): about the most that fits on an 80 GB GPU, which needs 8 bytes per value
-# (one copy of the presorted columns) plus one spare column.
+# (one copy of the presorted columns) plus one spare column. The competition's
+# own labelled test set is datasets/ecbdl/ecbdl_test.csv (2.9M rows, made by
+# bench/cluster/ecbdl_test.py), not used here.
 [ecbdl]
-source = "datasets/ecbdl.csv"
+source = "datasets/ecbdl/ecbdl.csv"
 split = "random"
 test_rows = 100_000
 yadt = false
 
 [ecbdl_15m]
-source = "datasets/ecbdl.csv"
+source = "datasets/ecbdl/ecbdl.csv"
 split = "random"
 test_rows = 100_000
 train_rows = 15_000_000
@@ -106,36 +109,36 @@ yadt = false
 # (2026-10-22): 100m's rows, then 1.9G new ones.
 # No YaDT files from 50m on (no YaDT on the cluster).
 [chess_1m]
-source = "datasets/chess_1m.csv"
-test_source = "datasets/chess_1m_test.csv"
+source = "datasets/chess/chess_1m.csv"
+test_source = "datasets/chess/chess_1m_test.csv"
 
 [chess_10m]
-source = "datasets/chess_10m.csv"
-test_source = "datasets/chess_10m_test.csv"
+source = "datasets/chess/chess_10m.csv"
+test_source = "datasets/chess/chess_10m_test.csv"
 
 [chess_50m]
-source = "datasets/chess_100m.csv"
-test_source = "datasets/chess_100m_test.csv"
+source = "datasets/chess/chess_100m.csv"
+test_source = "datasets/chess/chess_100m_test.csv"
 train_rows = 50_000_000
 yadt = false
 
 [chess_100m]
-source = "datasets/chess_100m.csv"
-test_source = "datasets/chess_100m_test.csv"
+source = "datasets/chess/chess_100m.csv"
+test_source = "datasets/chess/chess_100m_test.csv"
 yadt = false
 
 [chess_500m]
-source = "datasets/chess_2b.csv"
-test_source = "datasets/chess_100m_test.csv"
+source = "datasets/chess/chess_2b.csv"
+test_source = "datasets/chess/chess_100m_test.csv"
 train_rows = 500_000_000
 yadt = false
 
 [chess_1b]
-source = "datasets/chess_1b.csv"
-test_source = "datasets/chess_1b_test.csv"
+source = "datasets/chess/chess_1b.csv"
+test_source = "datasets/chess/chess_1b_test.csv"
 yadt = false
 
 [chess_2b]
-source = "datasets/chess_2b.csv"
-test_source = "datasets/chess_100m_test.csv"
+source = "datasets/chess/chess_2b.csv"
+test_source = "datasets/chess/chess_100m_test.csv"
 yadt = false

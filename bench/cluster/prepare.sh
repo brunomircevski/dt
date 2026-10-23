@@ -22,7 +22,7 @@
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 PY=bench/.venv/bin/python
-DOWNLOADS="${DOWNLOADS:-$HOME/downloads}"
+DOWNLOADS="${DOWNLOADS:-$HOME/datasets/sources}"
 PREPARE="${PREPARE:-higgs}"
 step() { echo; echo "=== $(date +%H:%M:%S)  $*"; }
 echo "job $SLURM_JOB_ID on $(hostname), $SLURM_CPUS_PER_TASK CPUs, $(date '+%F %T')"

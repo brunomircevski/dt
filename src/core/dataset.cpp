@@ -519,4 +519,19 @@ void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t see
   test = selectRows(dataset, testIndex, pool);
 }
 
+void splitTail(const Dataset &dataset, std::size_t testRows, Dataset &train, Dataset &test,
+               ThreadPool *pool) {
+  if (testRows >= dataset.rowCount) {
+    throw std::runtime_error("--test-last " + std::to_string(testRows) + ": the file has only " +
+                             std::to_string(dataset.rowCount) + " rows");
+  }
+  const std::size_t trainRows = dataset.rowCount - testRows;
+  std::vector<std::uint32_t> trainIndex(trainRows);
+  std::vector<std::uint32_t> testIndex(testRows);
+  std::iota(trainIndex.begin(), trainIndex.end(), 0u);
+  std::iota(testIndex.begin(), testIndex.end(), static_cast<std::uint32_t>(trainRows));
+  train = selectRows(dataset, trainIndex, pool);
+  test = selectRows(dataset, testIndex, pool);
+}
+
 } // namespace dt

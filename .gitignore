@@ -37,9 +37,9 @@ __pycache__
 /build/
 /tree
 /tree_cpu
-/datasets/
+/datasets
 /bench/.venv/
 /bench/.tools/
-/bench/data/
+/bench/data
 /bench/profiles/
 *.nsys-rep

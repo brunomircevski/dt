@@ -112,6 +112,9 @@ struct Options {
   // Fraction of rows held out as a test set (0 = train and evaluate on all
   // rows). The split is a deterministic shuffle so runs are comparable.
   double holdout = 0.0;
+  // The last N rows of the file are the test set (0 = off), e.g. HIGGS's and
+  // SUSY's published split (their last 500,000 rows). Not with holdout.
+  std::size_t testLast = 0;
   // Seeds the random choices: the holdout split and CART's CV folds. Same seed = same choices on every machine and backend.
   std::uint64_t seed = 1;
   // Stress tests: duplicate the loaded rows in memory (slightly rescaled) to

@@ -84,6 +84,7 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--holdout F` | 0 | Put a random fraction F of the rows aside, train on the rest and report the accuracy on the put-aside rows (`test accuracy`). Tested once, on one split. |
+| `--test-last N` | 0 | The last N rows of the file are the test set, the others the training set (both in file order): the published split of HIGGS and SUSY is `--test-last 500000` on `datasets/higgs.csv` and `datasets/supersymmetry.csv`. Taken before `-m`, which then multiplies only the training rows. Not with `--holdout`. |
 | `--seed N` | 1 | Random seed for the holdout split and for CART's CV folds. The same seed gives the same split and folds on every machine and backend; change it to see how much the result depends on the split. |
 | `-m N` | 1 | Duplicate the rows N times in memory (slightly rescaled) to stress-test with bigger data. |
 | `--print` | off | Print the tree. |

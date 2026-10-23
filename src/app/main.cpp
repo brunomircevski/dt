@@ -78,15 +78,20 @@ int main(int argc, char *argv[]) {
 
     double loadSeconds = 0.0;
     Dataset data;
+    Dataset train;
+    Dataset test;
     {
       ScopedTimer timer(loadSeconds);
       NvtxRange range("load");
       data = loadDataset(options.datasetPath, &pool);
+      if (options.testLast > 0) {
+        // The file's own last rows, before -m multiplies the training rows.
+        splitTail(data, options.testLast, train, test, &pool);
+        data = std::move(train);
+      }
       multiplyDataset(data, options.multiplier);
     }
 
-    Dataset train;
-    Dataset test;
     if (options.holdout > 0.0) {
       splitHoldout(data, options.holdout, options.seed, RandomStream::Holdout, train, test,
                    &pool);
@@ -95,7 +100,9 @@ int main(int argc, char *argv[]) {
       train = std::move(data);
     }
     std::cout << "  rows " << train.rowCount << " train";
-    if (test.rowCount > 0) {
+    if (options.testLast > 0) {
+      std::cout << " / " << test.rowCount << " test (the last rows)";
+    } else if (test.rowCount > 0) {
       std::cout << " / " << test.rowCount << " test (seed " << options.seed << ")";
     }
     std::cout << ", " << train.featureCount() << " features, " << train.classCount()

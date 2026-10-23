@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Rebuild datasets/{covertype,higgs,supersymmetry}.csv from public downloads,
-byte for byte as the copies on the desktop, make datasets/airline.csv,
-datasets/ecbdl.csv and datasets/chess_*.csv, and check them all by SHA-256.
+"""Rebuild datasets/{covertype,higgs}.csv from public downloads, byte for byte
+as the copies on the desktop, make datasets/supersymmetry.csv (UCI's order),
+datasets/supersymmetry_20k.csv (the desktop's first 20,000 rows, for
+tests/check.sh), datasets/airline.csv, datasets/ecbdl/ecbdl.csv and
+datasets/chess/chess_*.csv, and check them all by SHA-256. On mordor3
+datasets/ is a link to ~/datasets and the downloads are in ~/datasets/sources.
 
-  bench/.venv/bin/python -I bench/cluster/make_datasets.py ~/downloads [names...]
+  bench/.venv/bin/python -I bench/cluster/make_datasets.py ~/datasets/sources [names...]
 
 Sources, in <downloads>:
   covertype.zip            UCI 31 (covtype.data.gz): same rows and order
@@ -11,12 +14,15 @@ Sources, in <downloads>:
                            doubles are the float32 values of UCI's text, parsed
                            slightly off, so they are rounded back to float32 and
                            printed as UCI does (%.18e)
-  susy.zip                 UCI 279 (SUSY.csv.gz): the same float32 values and
-                           labels, but the desktop's rows are shuffled (no
-                           common seed reproduces it) and its doubles are UCI's
-                           text parsed by an unknown reader, a few ulps off the
-                           float32 values, written with repr. Neither is public,
-                           so two files made from the desktop copy carry them:
+  susy.zip                 UCI 279 (SUSY.csv.gz): supersymmetry.csv is its text in
+                           its order (since 2026-10-23), so the last 500,000 rows
+                           are the published test set. The desktop's copy had the
+                           same float32 values and labels, but its rows shuffled
+                           (no common seed reproduces it) and its doubles were
+                           UCI's text parsed by an unknown reader, a few ulps off
+                           the float32 values, written with repr. Neither is
+                           public, so two files made from the desktop copy carry
+                           them (supersymmetry_20k, the golden trees' sample):
   susy_order.u64           row order: blake2b-64 of each desktop row's float32
                            features and label byte (1 = signal), in file order
   susy_delta.i8            every value's double minus its float32, in float64
@@ -33,7 +39,7 @@ Sources, in <downloads>:
   chess/chess3x3x*/        a 3x3 checkerboard in Quinlan's C4.5 format (.names, .data,
                            .test): 1M, 10M, 100M and 1000M rows. Not public: it was
                            in mordor3's ~/chess and was deleted after the first build
-                           (2026-10-19), so datasets/chess_*.csv are the only copies;
+                           (2026-10-19), so datasets/chess/chess_*.csv are the only copies;
                            the originals' SHA-256 are in bench/cluster/README.md.
                            Written in ./tree's format (f0,f1 and c0/c1, as prepare.py's
                            train.csv) since 2026-10-22 (chess_tree_format.py)
@@ -61,7 +67,10 @@ OUT = ROOT / "datasets"
 EXPECTED = {
     "covertype": "fd7a387defeab82ea260a5be0c42b84e3426b963bb7feb490ffbafdaf89dac77",
     "higgs": "71f566a24e8a03ff51aa6961addc652d44ff8878b28f4198a7f8921f3c6af31c",
-    "supersymmetry": "85ecf105d7667d88006de9d8dfafabbc703647fe651a40df51f9a1202d31108e",
+    # UCI's order (2026-10-23, first build); the desktop's whole file was 85ecf105...,
+    # its first 20,000 rows (head -n 20001) are supersymmetry_20k.
+    "supersymmetry": "d152c7592b4bec4b025931eccdf45b3900f1788903bedbea1332b1ca05b04a24",
+    "supersymmetry_20k": "4563a7385202d9e65dca12b36f5c5c0f66967751df2acf73fe100353f297376b",
     "airline": "255426039068522c2a5fb780b6fe4b31179bdc8988013d15db22ba914a742bcb",
     "ecbdl": "5bc39aecbec956ccb06b77295e292e0166db5f87c8341678b1e0ca35fd67120c",
     # chess: ./tree's format (2026-10-22, chess_tree_format.py) of the first build
@@ -154,6 +163,23 @@ def _susy_chunk(job):
 
 
 def supersymmetry(downloads, out):
+    """UCI's rows in UCI's order and text, label (first there) last as
+    signal/background, an Id column first."""
+    names = {"1.000000000000000000e+00": "signal", "0.000000000000000000e+00": "background"}
+    out.write(SUSY_HEADER + "\n")
+    rows = 0
+    with zipfile.ZipFile(downloads / "susy.zip") as archive, \
+            gzip.open(archive.open("SUSY.csv.gz"), "rt") as lines:
+        for rows, line in enumerate(lines, 1):
+            label, features = line.rstrip("\n").split(",", 1)
+            assert features.count(",") == 17, rows
+            out.write(f"{rows},{features},{names[label]}\n")
+    assert rows == 5_000_000, rows
+
+
+def supersymmetry_20k(downloads, out, rows=20_000):
+    """The desktop's first `rows` rows, byte for byte: the sample of
+    tests/check.sh's golden trees."""
     import pyarrow.csv as pacsv
     with zipfile.ZipFile(downloads / "susy.zip") as archive, \
             gzip.open(archive.open("SUSY.csv.gz")) as f:
@@ -166,8 +192,9 @@ def supersymmetry(downloads, out):
     where = {h: i for i, h in enumerate(susy_rows(features, labels).tolist())}
     order = np.array([where[h] for h in np.fromfile(downloads / "susy_order.u64", "<u8").tolist()])
     assert np.array_equal(np.sort(order), np.arange(len(order))), "not a permutation"
-    features, labels = features[order], labels[order]
+    features, labels = features[order[:rows]], labels[order[:rows]]
     delta = np.fromfile(downloads / "susy_delta.i8", np.int8).astype(np.int64).reshape(-1, 18)
+    delta = delta[:rows]
     names = np.where(labels == 1, "signal", "background")
     jobs = ((start + 1, features[start:start + CHUNK], delta[start:start + CHUNK],
              names[start:start + CHUNK]) for start in range(0, len(features), CHUNK))
@@ -393,7 +420,7 @@ def chess_check(path):
 
 def chess_generated(name, downloads, out):
     prefix, rows = CHESS_GENERATED[name]
-    path = OUT / f"{prefix}.csv"
+    path = csv_path(prefix)
     chess_check(path)
     out.write(CHESS_HEADER)
     digest, copied = hashlib.sha256(), 0
@@ -417,10 +444,17 @@ def chess_generated(name, downloads, out):
 
 
 BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmetry,
+            "supersymmetry_20k": supersymmetry_20k,
             "airline": airline, "ecbdl": ecbdl,
             **{name: partial(chess, name, "train") for name in CHESS},
             **{f"{name}_test": partial(chess, name, "test") for name in CHESS},
             **{name: partial(chess_generated, name) for name in CHESS_GENERATED}}
+
+
+def csv_path(name):
+    """chess_* in datasets/chess/, ecbdl in datasets/ecbdl/, the others in datasets/."""
+    folder = "chess" if name.startswith("chess_") else "ecbdl" if name == "ecbdl" else ""
+    return OUT / folder / f"{name}.csv"
 
 
 def main():
@@ -429,7 +463,8 @@ def main():
     OUT.mkdir(exist_ok=True)
     failed = False
     for name in names:
-        path = OUT / f"{name}.csv"
+        path = csv_path(name)
+        path.parent.mkdir(exist_ok=True)
         if path.exists():
             print(f"{path} exists, checking it")
         else:
