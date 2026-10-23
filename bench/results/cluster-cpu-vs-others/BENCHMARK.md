@@ -134,18 +134,18 @@ Yes. [sklearn_prune_check.py](../../sklearn_prune_check.py) ran on SUSY subsets,
 ```bash
 # on mordor3, after build.sh and prepare.sh covertype (bench/cluster/README.md)
 for d in chess_10m covertype; do
-  bench/cluster/submit.sh -m 3 -d $d -o cluster-simple simple-epyc-$d
+  bench/cluster/submit.sh -m 3 -d $d -o cluster-cpu-vs-others simple-epyc-$d
 done
 # SUSY and HIGGS: one run, one job per tool and protocol (J48 has no CART)
 for d in susy higgs; do
-  bench/cluster/submit.sh -m 1 -d $d -o cluster-simple $(for t in parallel serial sklearn simple; do
+  bench/cluster/submit.sh -m 1 -d $d -o cluster-cpu-vs-others $(for t in parallel serial sklearn simple; do
     echo simple-epyc-$d-$t-cart simple-epyc-$d-$t-c45; done) simple-epyc-$d-j48-c45
 done
 # --parallel on both sockets, every dataset
 for d in chess_10m covertype susy higgs; do
-  bench/cluster/submit.sh -m 1 -d $d -o cluster-simple simple-epyc-$d-dual-cart simple-epyc-$d-dual-c45
+  bench/cluster/submit.sh -m 1 -d $d -o cluster-cpu-vs-others simple-epyc-$d-dual-cart simple-epyc-$d-dual-c45
 done
-bench/.venv/bin/python bench/simple_chart.py bench/results/cluster-simple
+bench/.venv/bin/python bench/simple_chart.py bench/results/cluster-cpu-vs-others
 ```
 
 - `simple-epyc-<data>` runs use impls `tree,tree_simple,sklearn,j48` with threads `1,all`.

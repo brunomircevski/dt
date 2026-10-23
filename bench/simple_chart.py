@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chart of the "simple" benchmark (bench/results/cluster-simple): ./tree's
+"""Chart of the "simple" benchmark (bench/results/cluster-cpu-vs-others): ./tree's
 --simple reference backend against --serial, --parallel (on one socket and on
 both), scikit-learn and Weka J48, on epyc1 and epyc2 (the same hardware).
 
@@ -11,7 +11,7 @@ panel, not next to the bars: every ./tree backend must grow the same tree
 (the same --dump, byte for byte: run.py --hash-trees), and the script stops
 if they do not.
 
-  bench/.venv/bin/python bench/simple_chart.py bench/results/cluster-simple [--out chart.png]
+  bench/.venv/bin/python bench/simple_chart.py bench/results/cluster-cpu-vs-others [--out chart.png]
 """
 
 import argparse

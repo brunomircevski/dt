@@ -446,7 +446,7 @@ count. Convexity forces `g(i) − g(i−1) ≤ g(i+1) − g(i) ≤ ε = 1e-12`, 
 three consecutive near-equal gains within 1e-12 and `B` in a window of width
 below 1e-12. Rounding that breaks convexity by ~1e-16 opens a smaller window of
 the same kind. No case is known: `tests/check.sh` and the golden trees agree,
-and the bench runs record `tree_sha256` (`bench/results/cluster-simple/`).
+and the bench runs record `tree_sha256` (`bench/results/cluster-cpu-vs-others/`).
 **Uncertain; worth a sentence in the paper or an extra check that a skipped cut
 is never within `kTieEps` above the best.**
 

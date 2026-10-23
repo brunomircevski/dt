@@ -188,7 +188,7 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
   of chess uploaded in 0.26 s instead of 0.67 s with one thread on the H100
   node, 0.49 instead of 0.69 s on the A100 node). Never more than the CPUs
   the process may run on. For comparing the GPU alone with the GPU + CPU split
-  ([cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md)).
+  ([cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)).
 * `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
   profile and the setup phases (allocation, upload).
 

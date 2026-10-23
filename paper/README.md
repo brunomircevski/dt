@@ -3,7 +3,7 @@
 Notes for a future paper on `./tree --cuda` (`src/build/gpu_grower.cu`), collected
 2026-10-18 from the code, [docs/CUDA.md](../docs/CUDA.md),
 [docs/PERFORMANCE.md](../docs/PERFORMANCE.md) and
-[bench/results/cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md).
+[bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md).
 
 | File | Content |
 |---|---|

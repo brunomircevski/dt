@@ -18,7 +18,7 @@
 #   gpuonly-ampere-<data>  ampere, the same                           (only when named)
 #   simple-epyc-<data>  epyc1, one socket: ./tree --simple, --serial, parallel,
 #                       scikit-learn and Weka J48, every tree hashed
-#                       (only when named; -o cluster-simple, the "simple" benchmark)
+#                       (only when named; -o cluster-cpu-vs-others, the "simple" benchmark)
 #   simple-epyc-<data>-<tool>-<protocol>  the same, one tool and protocol per job
 #                       (tool: simple, serial, parallel, dual (parallel on both
 #                       sockets, every CPU), sklearn, j48; protocol:
@@ -48,8 +48,8 @@
 #   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
 #       gpuonly-hopper-chess_1b gpuonly-ampere-chess_1b  # every node on the GPU
 #   bench/cluster/submit.sh -m 3 socket-epyc-higgs socket-dell-higgs  # one socket
-#   bench/cluster/submit.sh -d covertype -o cluster-simple simple-epyc-covertype
-#   bench/cluster/submit.sh -m 3 -d higgs -o cluster-simple $(for t in parallel serial \
+#   bench/cluster/submit.sh -d covertype -o cluster-cpu-vs-others simple-epyc-covertype
+#   bench/cluster/submit.sh -m 3 -d higgs -o cluster-cpu-vs-others $(for t in parallel serial \
 #       sklearn simple; do echo simple-epyc-higgs-$t-cart simple-epyc-higgs-$t-c45; done) \
 #       simple-epyc-higgs-j48-c45                # one job per tool and protocol
 # -w: every job on that node instead (e.g. epyc2, the same hardware as epyc1);
@@ -91,9 +91,9 @@ case "$DATASET" in
   ecbdl_15m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
   ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
   chess_1m|chess_10m|chess_100m|chess_1b) DIR=cluster-chess; LIMIT=02:00:00 TIMEOUT=3600 ;;
-  covertype) DIR=cluster-simple; LIMIT=02:00:00 TIMEOUT=3600 ;;
+  covertype) DIR=cluster-cpu-vs-others; LIMIT=02:00:00 TIMEOUT=3600 ;;
   # SUSY (4.5M rows) for the simple benchmark: hours of --simple, scikit-learn and J48.
-  susy) DIR=cluster-simple; LIMIT=12:00:00 TIMEOUT=10800 ;;
+  susy) DIR=cluster-cpu-vs-others; LIMIT=12:00:00 TIMEOUT=10800 ;;
   *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, covertype, susy or chess_1m, chess_10m, chess_100m, chess_1b" >&2
      exit 2 ;;
 esac

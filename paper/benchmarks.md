@@ -1,6 +1,6 @@
 # Benchmarks against GPU libraries: results, what is timed, fairness
 
-Source: [bench/results/cluster-tree-vs-gpu-libs](../bench/results/cluster-tree-vs-gpu-libs/BENCHMARK.md)
+Source: [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
 (run 2026-10-17; ./tree rows rerun on 6f6cecb on 2026-10-19; scripts in its `scripts/`).
 
 ## Setup
