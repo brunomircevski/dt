@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Rebuild datasets/{covertype,higgs}.csv from public downloads, byte for byte
 as the copies on the desktop, make datasets/supersymmetry.csv (UCI's order),
-datasets/supersymmetry_20k.csv (the desktop's first 20,000 rows, for
-tests/check.sh), datasets/airline.csv, datasets/ecbdl/ecbdl.csv and
-datasets/chess/chess_*.csv, and check them all by SHA-256. On mordor3
-datasets/ is a link to ~/datasets and the downloads are in ~/datasets/sources.
+datasets/airline.csv, datasets/ecbdl/ecbdl.csv, datasets/chess/chess_*.csv and
+bench/data/supersymmetry_20k.csv (the desktop's first 20,000 rows, for
+tests/check.sh), and check them all by SHA-256. On mordor3 datasets/ is a link
+to ~/datasets (only the CSVs) and the downloads are in bench/data/downloads.
 
-  bench/.venv/bin/python -I bench/cluster/make_datasets.py ~/datasets/sources [names...]
+  bench/.venv/bin/python -I bench/cluster/make_datasets.py bench/data/downloads [names...]
 
 Sources, in <downloads>:
   covertype.zip            UCI 31 (covtype.data.gz): same rows and order
@@ -452,7 +452,10 @@ BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmet
 
 
 def csv_path(name):
-    """chess_* in datasets/chess/, ecbdl in datasets/ecbdl/, the others in datasets/."""
+    """chess_* in datasets/chess/, ecbdl in datasets/ecbdl/, the others in datasets/;
+    supersymmetry_20k (a test sample, not a dataset) in bench/data/."""
+    if name == "supersymmetry_20k":
+        return ROOT / "bench" / "data" / f"{name}.csv"
     folder = "chess" if name.startswith("chess_") else "ecbdl" if name == "ecbdl" else ""
     return OUT / folder / f"{name}.csv"
 

@@ -29,7 +29,7 @@ login node: every step is a SLURM job.
 ```bash
 # once: the Python venv (python3-venv is missing there; virtualenv is installed)
 virtualenv -p python3 bench/.venv && bench/.venv/bin/pip install -r bench/requirements.txt
-# once: the downloads, see "Data" below, into ~/datasets/sources
+# once: the downloads, see "Data" below, into bench/data/downloads
 sbatch --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)" \
     bench/cluster/build.sh       # on hopper: ./tree for sm_75 + sm_80 + sm_90, ./tree_cpu, rusage
 sbatch bench/cluster/prepare.sh  # on a dell node: the datasets (checked by SHA-256), HIGGS prepared
@@ -50,7 +50,7 @@ ECBDL'14, each case once. Preparing it needs about 350 GB of RAM, so it runs
 on ampere (1 TB); the benchmarks wait for it (`-a`):
 
 ```bash
-ln -s /home/Datasets/ECBDL ~/datasets/sources/ecbdl
+ln -s /home/Datasets/ECBDL bench/data/downloads/ecbdl
 prep=$(sbatch --parsable -p ampere -w ampere --exclusive -c 48 -t 08:00:00 \
     --export=ALL,PREPARE="ecbdl ecbdl_15m" -o bench/cluster/prepare-ecbdl.log \
     bench/cluster/prepare.sh ecbdl)
@@ -214,21 +214,23 @@ differences:
 
 ## Data
 
-On mordor3 every dataset lives once, in `~/datasets`, outside the clones:
-`~/dt/datasets` is a link to it and `~/dt/bench/data` a link to
-`~/datasets/prepared` (other clones link to those):
+On mordor3 every dataset lives once, in `~/datasets`, outside the clones, and
+that folder holds only the CSVs (`~/dt/datasets` is a link to it). Everything
+derived or downloaded is in `~/dt/bench/data` (other clones link to it):
 
 ```
 ~/datasets/
-  covertype.csv  higgs.csv  supersymmetry.csv  supersymmetry_20k.csv  airline.csv
-  ecbdl/      ecbdl.csv (training set), ecbdl_test.csv (the competition's test set)
-  chess/      chess_{1m,10m,100m,1b,2b}.csv, chess_{1m,10m,100m,1b}_test.csv
-  sources/    the downloads make_datasets.py reads (ecbdl: a link to /home/Datasets/ECBDL)
-  prepared/   bench/prepare.py's output, one folder per datasets.toml entry
+  higgs.csv  supersymmetry.csv  airline.csv  covertype.csv
+  ecbdl/   ecbdl.csv (training set), ecbdl_test.csv (the competition's test set)
+  chess/   chess_{1m,10m,100m,1b,2b}.csv, chess_{1m,10m,100m,1b}_test.csv
+~/dt/bench/data/
+  <name>/                 bench/prepare.py's output, one folder per datasets.toml entry
+  downloads/              the downloads make_datasets.py reads (ecbdl: a link to /home/Datasets/ECBDL)
+  supersymmetry_20k.csv   the golden tests' sample (tests/check.sh)
 ```
 
-`prepared/` holds derived files: the split in each tool's format. A chess
-set's `train.csv` is a link to its CSV in `chess/`; `chess_50m` and
+A prepared folder holds the split in each tool's format. A chess set's
+`train.csv` is a link to its CSV in `~/datasets/chess/`; `chess_50m` and
 `chess_500m` take only the first rows of a bigger set, so theirs are files.
 
 HIGGS and SUSY are in UCI's row order, so their last 500,000 rows are the
@@ -245,7 +247,7 @@ others, and stops on any SHA-256 difference:
 | `covertype.csv` | UCI 31 `covertype.zip` (same rows and order; `Id`, header and class names added) | `fd7a387d…` |
 | `higgs.csv` | OpenML 45570 parquet: UCI HIGGS, same rows and order. UCI's own zip downloads at 0.5 MB/s, OpenML's at 19 MB/s. The parquet's doubles are slightly off the float32 values, so they are rounded back to float32 and printed as UCI does (`%.18e`, CRLF line ends, `Id`, label last as signal/background) | `71f566a2…` |
 | `supersymmetry.csv` | UCI 279 `susy.zip`: UCI's rows, order and text (since 2026-10-23; `Id` first, the label last as signal/background), so the last 500,000 rows are the published test set. Until then it was the desktop copy: the same float32 values and labels, but its rows shuffled (no common seed reproduces the order) and its doubles UCI's text read by an unknown parser, 0–6 ulps off (whole file `85ecf105…`). The benchmarks on SUSY before 2026-10-23 used that order | `d152c759…` |
-| `supersymmetry_20k.csv` | The desktop copy's first 20,000 rows, the sample of the golden trees in `tests/golden/` (`tests/check.sh`). Two files made from the desktop copy carry what is not public: `susy_order.u64` (40 MB, a hash of every row in the desktop's order) and `susy_delta.i8` (90 MB, every value's offset in float64 ulps; 21 MB zstd) | `4563a738…` |
+| `supersymmetry_20k.csv` (in `bench/data/`) | The desktop copy's first 20,000 rows, the sample of the golden trees in `tests/golden/` (`tests/check.sh`). Two files made from the desktop copy carry what is not public: `susy_order.u64` (40 MB, a hash of every row in the desktop's order) and `susy_delta.i8` (90 MB, every value's offset in float64 ulps; 21 MB zstd) | `4563a738…` |
 | `airline.csv` | gbm-bench's airline dataset (also in the XGBoost GPU paper): US flights from October 1987 to April 2008, `airline_14col.data.bz2` from kt.ijs.si (1.09 GB, SHA-256 `1f13460f…`). 115,069,017 rows, 13 integer features; the carrier and the airports become codes in sorted order, as in gbm-bench, and the label is `ArrDelay > 0` (`delayed` 47.5%, `on_time` 52.5%). Rows in file (date) order, so `datasets.toml` takes a random 500,000-row test set. There is no desktop copy: the hash is that of its first build. It takes about 3 minutes, and `prepare.py` 5 more | `25542603…` |
 
 Airline has 10.5× HIGGS's rows and 4.9× its values (1.49 G against 0.31 G;
@@ -272,16 +274,16 @@ value and the sample had 6M rows. `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
 
 `ecbdl/ecbdl_test.csv` is the competition's own test set, with the labels
 published after it closed (2014-07-07): `test_set.arff.xz` from
-<http://cruncher.ico2s.org/bdcomp/> (121 MB, SHA-256 `ac26c4cf…`; kept in
-`ecbdl/raw/` with the competition report and page). It has 2,897,917 rows
+<http://cruncher.ico2s.org/bdcomp/> (121 MB, SHA-256 `ac26c4cf…`; not kept,
+download it again to rebuild). It has 2,897,917 rows
 (label 1: 48,637, 1.68%) and the same ARFF header as the training set.
 `bench/cluster/ecbdl_test.py` converts it with `make_datasets.py`'s encoding,
 taking the nominal codes from the training ARFF's header (checked: it turns the
 training ARFF's first 1,000 rows into `ecbdl.csv`'s exact bytes). The result has
 5,423,008,790 bytes, SHA-256 `3d838532…`, and the same header as `ecbdl.csv`. To rebuild it:
-`xz -dk raw/test_set.arff.xz`, then `bench/.venv/bin/python -I
+`xz -dk test_set.arff.xz`, then `bench/.venv/bin/python -I
 bench/cluster/ecbdl_test.py /home/Datasets/ECBDL/training_set.arff
-raw/test_set.arff ecbdl_test.csv` on a compute node. The benchmarks do not use it yet: they
+test_set.arff datasets/ecbdl/ecbdl_test.csv` on a compute node. The benchmarks do not use it yet: they
 measure training, on `datasets.toml`'s random split of the training rows.
 
 The **chess** sets are a 3×3 checkerboard: x and y uniform on a grid of 32,768
