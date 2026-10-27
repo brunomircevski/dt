@@ -8,7 +8,7 @@
 - **Protocols:** depth ≤ 10; CART without pruning and pruned at α = 1e-5, C4.5 without pruning and pruned at CF 0.25.
 - **Runs:** CUDA hybrid and GPU only on hopper (H100) and ampere (A100 80 GB), parallel on every CPU of both sockets on epyc1 and dell1; no serial runs. Three runs per case, averaged.
 - **Measured:** ./tree's training time, peak RAM while training, peak VRAM; the tree's test and training accuracy, nodes and depth.
-- **Chart:** `chart-ecbdl.png` (full) and `chart-ecbdl_15m.png`, `bench/testset_chart.py`.
+- **Chart:** `chart-ecbdl.png` (full) and `chart-ecbdl_15m.png`, `bench/testset_chart.py`. No pruning only: `chart-ecbdl-noprunning.png` and `chart-ecbdl_15m-noprunning.png`, `bench/testset_chart.py --no-pruning`.
 
 ## Results
 
@@ -17,6 +17,12 @@ Run on 2026-10-23 at 74a011f. Each case ran 3 times; the tables give means of ./
 ![ECBDL'14, all training rows](chart-ecbdl.png)
 
 ![ECBDL'14, first 15M training rows](chart-ecbdl_15m.png)
+
+Without pruning only (CART and C4.5 unpruned, one bar per run; the same runs as above):
+
+![ECBDL'14, all training rows, no pruning](chart-ecbdl-noprunning.png)
+
+![ECBDL'14, first 15M training rows, no pruning](chart-ecbdl_15m-noprunning.png)
 
 - **Same tree everywhere:** on each training set, every backend grew the same tree in every case.
 - **Accuracy is not informative:** only about 1.7% of the test rows are contacts, so the majority class alone scores 98.32%. Pruned CART (α = 1e-5) is a single leaf, and the other trees match or barely miss that score. A class-weighted or AUC measure would be needed to compare them.

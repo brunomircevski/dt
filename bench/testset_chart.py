@@ -14,6 +14,8 @@ the runs grew different trees, each bar says its own).
 
 Writes <dir>/chart.png, or <dir>/chart-<dataset>.png when the runs hold more
 than one dataset (ECBDL: the full set on the CPU nodes, the 15M sample on all).
+--no-pruning draws only the unpruned bars, one per run, into chart-noprunning.png
+(chart-<dataset>-noprunning.png).
 """
 
 import argparse
@@ -99,17 +101,19 @@ def bar_note(rows, same, text):
     return f"{duration(statistics.mean(times))}   {memory}" + ("" if same else f"   {text}")
 
 
-def chart(dataset, runs, out):
+def chart(dataset, runs, out, panels=PANELS):
     names = sorted(runs, key=lambda n: (ORDER.index("-".join(n.split("-")[:2]))
                                         if "-".join(n.split("-")[:2]) in ORDER else 99, n))
     meta = next(iter(runs.values()))["meta"]
     reps = max(len(rows) for run in runs.values() for rows in run["cases"].values())
-    fig, axes = plt.subplots(len(PANELS), 1, figsize=(11, 1.4 + len(PANELS) * (0.95 * len(names) + 1.2)),
-                             sharex=True)
-    largest = max(r["train_seconds"] for run in runs.values() for rows in run["cases"].values()
-                  for r in rows)
+    pairs = max(len(variants) for variants in panels.values()) > 1
+    protocols = {protocol for variants in panels.values() for protocol, _ in variants}
+    fig, axes = plt.subplots(len(panels), 1, sharex=True,
+                             figsize=(11, 1.4 + len(panels) * ((0.95 if pairs else 0.6) * len(names) + 1.2)))
+    largest = max(r["train_seconds"] for run in runs.values() for protocol, rows in run["cases"].items()
+                  if protocol in protocols for r in rows)
     wide = False
-    for ax, (algorithm, variants) in zip(axes, PANELS.items()):
+    for ax, (algorithm, variants) in zip(axes, panels.items()):
         lines = [algorithm]
         for v, (protocol, title) in enumerate(variants):
             ok = {n: [r for r in runs[n]["cases"].get(protocol, []) if r["status"] == "ok"] for n in names}
@@ -121,14 +125,14 @@ def chart(dataset, runs, out):
                 backend, _ = label(name, runs[name]["machine"])
                 rows = ok[name]
                 # Unpruned on top, pruned right below it.
-                y = len(names) - 1 - i + (0.21 if v == 0 else -0.21)
+                y = len(names) - 1 - i + ((0.21 if v == 0 else -0.21) if pairs else 0)
                 if not rows:
                     failed = runs[name]["cases"].get(protocol, [])
                     ax.text(0, y, "  " + (failed[0]["status"] if failed else "not run"),
                             va="center", fontsize=8, color=MUTED)
                     continue
                 times = [r["train_seconds"] for r in rows]
-                ax.barh(y, statistics.mean(times), height=0.4, color=COLORS[BACKENDS[backend][0]],
+                ax.barh(y, statistics.mean(times), height=0.4 if pairs else 0.6, color=COLORS[BACKENDS[backend][0]],
                         **(PRUNED if v else {}))
                 if len(times) > 1:
                     ax.plot([min(times), max(times)], [y, y], color=INK, lw=1)
@@ -162,12 +166,13 @@ def chart(dataset, runs, out):
                  fontsize=12, color=INK,
                  fontweight="bold")
     fig.text(0.01, 1 - 0.45 / height,
-             "./tree, depth ≤ 10; trained on the training rows, accuracy on the test rows",
+             "./tree, depth ≤ 10" + ("" if pairs else ", no pruning") + "; trained on the training rows, accuracy on the test rows",
              fontsize=9, color=MUTED)
     used = sorted({BACKENDS[n.split("-")[0]][0] for n in names}, key=list(COLORS).index)
     handles = [Patch(color=COLORS[b], label=dict(BACKENDS.values())[b]) for b in used]
-    handles += [Patch(facecolor=MUTED, label="upper bar: no pruning"),
-                Patch(facecolor=MUTED, label="lower, striped: pruned", **PRUNED)]
+    if pairs:
+        handles += [Patch(facecolor=MUTED, label="upper bar: no pruning"),
+                    Patch(facecolor=MUTED, label="lower, striped: pruned", **PRUNED)]
     fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.005, 1 - 0.62 / height),
                ncol=len(handles), frameon=False, fontsize=9)
     fig.tight_layout(rect=(0, 0, 1, 1 - 0.95 / height))
@@ -179,12 +184,16 @@ def chart(dataset, runs, out):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("folder", type=Path)
+    parser.add_argument("--no-pruning", action="store_true", help="only the unpruned bars")
     args = parser.parse_args()
+    panels = {a: variants[:1] for a, variants in PANELS.items()} if args.no_pruning else PANELS
+    suffix = "-noprunning" if args.no_pruning else ""
     runs = load(args.folder)
     if not runs:
         raise SystemExit(f"no runs of {', '.join(PROTOCOLS)} in {args.folder}")
     for dataset, by_name in runs.items():
-        chart(dataset, by_name, args.folder / ("chart.png" if len(runs) == 1 else f"chart-{dataset}.png"))
+        name = "chart" if len(runs) == 1 else f"chart-{dataset}"
+        chart(dataset, by_name, args.folder / f"{name}{suffix}.png", panels)
 
 
 if __name__ == "__main__":
