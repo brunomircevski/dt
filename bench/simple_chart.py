@@ -38,7 +38,8 @@ BARS = {("tree_simple", 1): ("./tree --simple", "#8e5bd0"),
         ("j48", 1): ("Weka J48", "#eda100")}
 TREE = {"tree", "tree_simple"}
 SHORT = {"cart_depth10": "CART", "c45_depth10_unpruned": "C4.5"}
-SKLEARN = {"cart_depth10": "gini", "c45_depth10_unpruned": "entropy, as it has no C4.5"}
+# scikit-learn has no C4.5 (its entropy tree is another algorithm): CART only.
+SKIP = {("c45_depth10_unpruned", "sklearn")}
 
 
 def duration(seconds):
@@ -104,7 +105,8 @@ def main():
         ax = fig.add_subplot(grid[2 * row, column])
         box = fig.add_subplot(grid[2 * row + 1, column])
         box.axis("off")
-        times = [r["train_seconds"] for key, r in cases.items() if key[0] == dataset]
+        times = [r["train_seconds"] for key, r in cases.items()
+                 if key[0] == dataset and (key[1], key[2]) not in SKIP]
         low, high = min(times) / 3, max(times)
         labels, y, lines = [], 0, []
         for protocol, title in PROTOCOLS.items():
@@ -114,7 +116,7 @@ def main():
             trees = {}
             for (impl, threads), (label, color) in BARS.items():
                 r = cases.get((dataset, protocol, impl, threads))
-                if not r:
+                if not r or (protocol, impl) in SKIP:
                     continue
                 total = r["train_seconds"]
                 ax.barh(y, total - low, left=low, color=color, height=0.72)
@@ -123,7 +125,7 @@ def main():
                 labels.append((y, label))
                 name = "./tree (every backend)" if impl in TREE else label
                 if impl == "sklearn":
-                    name += f" ({SKLEARN[protocol]})"
+                    name += " (gini)"
                 trees.setdefault(name, (r["nodes"], r["depth"], r["test_accuracy"]))
                 y += 1
             y += 0.6

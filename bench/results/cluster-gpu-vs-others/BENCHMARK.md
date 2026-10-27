@@ -1,5 +1,7 @@
 # HIGGS, airline, ECBDL'14 and chess 1000M on the mordor3 GPUs: ./tree against other GPU decision-tree builders
 
+**New, 2026-10-27:** cuML and XGBoost growing **1 tree and a forest of 10 trees** at depth ≤ 10, no pruning, on HIGGS, SUSY, airline, ECBDL and chess 1000M: [below](#forest-1-tree-against-10-trees-depth--10) and in [`forest/`](forest/). The rest of this page is the depth-19 single-tree comparison of 2026-10-20.
+
 **Status:** rerun on 2026-10-20 with **every tool on its default threads, all bound to the GPU's NUMA node**, 3 runs per case.
 - **./tree and XGBoost** ran 16:27–16:46 (jobs 1357 on hopper, 1358 on ampere). ./tree is at b014290, built for sm_80 and sm_90 in a separate clone (`~/gpu-dt-bench/dt`).
 - **cuML** ran 14:25–15:23 the same day (jobs 1314 and 1315), with the same harness and binding; `machine.json` records it, `machine-<job>.json` the later job.
@@ -245,6 +247,54 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
   - **cd18717 against 00ae13f** (2026-10-17): the GPU memory peak fell from 7.2 to 3.4 GiB (HIGGS) and from 35.0 to 13.3 GiB (airline).
   - **35cf315** (2026-10-15, HIGGS CART depth 19 only): ./tree took 0.42 s on the H100 and 0.58 s on the A100. It kept a mirror of the hand-offs on the GPU (5.0–7.2 GiB); cd18717 replaced the mirror with a fixed 512 MB ring.
 
+## Forest: 1 tree against 10 trees, depth ≤ 10
+
+**Run on 2026-10-27** (jobs 46 on hopper, 47 on ampere; `scripts/submit-forest.sh`), 3 runs per case, mean times. ./tree was not rerun: its bars are the one-tree depth-10 unpruned CUDA runs of the test-set benchmarks (`cluster-<dataset>/cuda-<node>-<dataset>`, `cart_depth10` and `c45_depth10_unpruned`; chess: `cart_full_nodepth`/`c45_unpruned`, whose exact tree has depth 4).
+
+- **The question:** what a library pays once (loading, binning, setup) and what it pays per tree.
+- **Same trees:** every forest tree sees all rows and all features (no bootstrap, `max_features` 1.0), so the 10 trees are the same tree. Every job checked that the forest predicts like the single tree (`warmup_agreement_one_tree` 1.0), and the test accuracy of the forest is that of the tree. So **per tree = (T10 − T1) / 9** and **setup = T1 − per tree**.
+- **cuML** (26.10): one `RandomForestClassifier` fit with `n_estimators` 1 or 10, Gini (CART) and entropy, 128 bins, `n_streams` 4 for 10 trees (1 for one tree), after a full-size untimed warm-up fit.
+- **XGBoost** (3.4.1): `num_parallel_tree` 10 in one boosting round, `reg:squarederror` with `lambda` 0 (the Gini split), 256 bins. The time includes the `QuantileDMatrix` binning, which is recorded separately (`dmatrix_seconds`).
+- **Test sets:** HIGGS and SUSY the last 500,000 rows, airline the 2008 flights, ECBDL the official test set, chess its 1,000-row test file.
+
+| Dataset | GPU | cuML Gini 1 → 10 trees | cuML entropy 1 → 10 | XGBoost 1 → 10 (binning) | ./tree CART, 1 tree |
+|---|---|--:|--:|--:|--:|
+| HIGGS | H100 | 456 ms → 3.09 s (×6.78) | 432 ms → 3.07 s (×7.11) | 3.43 s → 3.83 s (3.37 s) | 176 ms |
+| HIGGS | A100 | 498 ms → 3.53 s (×7.08) | 495 ms → 3.48 s (×7.04) | 3.94 s → 4.33 s (3.71 s) | 242 ms |
+| SUSY | H100 | 133 ms → 892 ms (×6.69) | 128 ms → 885 ms (×6.89) | 1.43 s → 1.52 s (1.28 s) | 99 ms |
+| SUSY | A100 | 161 ms → 1.04 s (×6.45) | 158 ms → 1.02 s (×6.49) | 1.03 s → 1.25 s (944 ms) | 101 ms |
+| airline | H100 | 2.13 s → 15 s (×7.04) | 2.16 s → 14.9 s (×6.88) | 15.5 s → 17.4 s (15 s) | 647 ms |
+| airline | A100 | 2.59 s → 18.3 s (×7.07) | 2.6 s → 18.1 s (×6.96) | 19.1 s → 21.2 s (18.4 s) | 992 ms |
+| ECBDL 15M | H100 | 9.95 s → 69.9 s (×7.02) | 9.89 s → 69.6 s (×7.04) | 42.2 s → 42.1 s (38.3 s) | 3.74 s |
+| ECBDL 15M | A100 | 11.1 s → 74.8 s (×6.71) | 11.1 s → 74.4 s (×6.70) | 42.5 s → 45.5 s (40 s) | 5.84 s |
+| chess 1000M | H100 | 9.08 s → 67.1 s (×7.39) | 9.09 s → 77 s (×8.47) | 108 s → 113 s (101 s) | 976 ms |
+| chess 1000M | A100 | 12.3 s → 87.9 s (×7.12) | 12.3 s → 88 s (×7.13) | 143 s → 148 s (136 s) | 1.46 s |
+
+**Results:**
+- **cuML pays per tree.** 10 trees take 6.5–8.5× one tree; setup is 0.04–4.1 s and each tree costs 61–83% of a one-tree fit (H100: 0.29 s on HIGGS, 1.4 s on airline, 6.7 s on ECBDL, 6.5–7.5 s on chess).
+- **XGBoost pays once.** 10 trees take 1.0–1.21× one tree (ECBDL on the H100 even a little less, within noise). Binning the data is 91–96% of a one-tree fit, and one more tree costs 0.01–0.57 s: 4–21× less than a cuML tree.
+- **Which is faster for 10 trees:** cuML on HIGGS, SUSY, airline and chess; XGBoost on ECBDL (631 features), 42 s against 70–75 s. For one tree cuML is 3.8–12× faster than XGBoost; with more trees XGBoost's lower per-tree cost catches up.
+- **H100 against A100:** cuML is 1.07–1.36× faster on the H100, XGBoost 1.0–1.32×, except on SUSY, where XGBoost is 1.2–1.4× faster on the A100 (its binning takes 0.94 s there, against 1.28–1.35 s on the H100).
+- **VRAM grows with the forest for cuML:** HIGGS 1.9 → 2.6 GiB, airline 9.1–9.5 → 13.1 GiB, chess 42.4 → 72.6 GiB; ECBDL hardly (36.3 → 37.2 GiB). XGBoost's peak is the binned matrix on HIGGS, SUSY and ECBDL (unchanged), and grows on airline (6.4 → 10.1 GiB) and chess (43.5 → 77.1 GiB on the H100).
+- **Accuracy (one tree = the forest):** within 0.1 point of ./tree's exact CART tree on HIGGS, SUSY and ECBDL. On airline cuML is 1.0–1.3 points lower (65.3–65.6% against 66.55%), XGBoost 0.07 higher (66.62%). On chess the binned trees fill all 10 levels (365–393 nodes) at 98.4% (cuML) and 99.4% (XGBoost) test accuracy; ./tree's exact tree has 17 nodes and depth 4.
+- **./tree's one tree** (exact splits, GPU + CPU threads) takes 0.1–5.8 s on HIGGS, SUSY, airline and ECBDL and 1.0–1.5 s on chess. That is 1.3–3.3× less than cuML's one tree (8–9× on chess) and 7–111× less than XGBoost's.
+
+![HIGGS: 1 vs 10 trees](forest/chart-higgs.png)
+
+![SUSY: 1 vs 10 trees](forest/chart-susy.png)
+
+![airline: 1 vs 10 trees](forest/chart-airline.png)
+
+![ECBDL'14 15M sample: 1 vs 10 trees](forest/chart-ecbdl_15m.png)
+
+![chess 3×3, 1000M rows: 1 vs 10 trees](forest/chart-chess_1b.png)
+
+Run it: `scripts/submit-forest.sh` on the mordor3 login node (in `~/gpu-dt-bench`, with the setup of [Run it](#run-it)) writes `results-forest/<dataset>/<node>/results.jsonl`; both jobs took about 1 hour. Then, with matplotlib and the repository's results next to it (for the ./tree bars):
+
+```bash
+bench/.venv/bin/python bench/results/cluster-gpu-vs-others/scripts/forest_chart.py bench/results/cluster-gpu-vs-others/forest
+```
+
 ## Run it
 
 Everything runs on mordor3 in `~/gpu-dt-bench`, outside this repository. Every computation is a SLURM job on hopper or ampere, with `--exclusive`. The scripts are in [`scripts/`](scripts/). The data is the prepared HIGGS, airline, ecbdl_15m and chess_1b of [bench/cluster](../../cluster/README.md): `~/dt/bench/data/<dataset>`, with `train.csv` for ./tree and `train.f32`/`train.y.i32` and `test.*` for the libraries. The root is set by `DATA_ROOT`.
@@ -286,4 +336,5 @@ venv/bin/python summarize.py results <out dir>
 | `chart-higgs.png`, `chart-airline.png`, `chart-ecbdl_15m.png`, `chart-chess_1b.png` | Per dataset, CART and C4.5: training time per library and GPU (log axis where the slowest bar is 10× the fastest), peak VRAM, and each tree's node count, depth, test accuracy and agreement with ./tree |
 | `summary.csv` | One row per dataset, node, case and library: times, tree size, accuracies, agreement, VRAM, root split |
 | `higgs/`, `airline/`, `ecbdl_15m/`, `chess_1b/` | `<node>/results.jsonl` (every run), `<node>/machine.json` |
-| `scripts/` | `build.sh`, `job.sh` (SLURM), `gpubench.py` (cuML, XGBoost), `treebench.py` (./tree), `summarize.py` (tables and charts), `requirements-freeze.txt` |
+| `forest/` | The 1-vs-10-tree runs: `<dataset>/<node>/results.jsonl` and `machine.json`, `chart-<dataset>.png` (higgs, susy, airline, ecbdl_15m, chess_1b), `summary.csv` (one row per dataset, node, library, case and tree count) |
+| `scripts/` | `build.sh`, `job.sh` (SLURM), `gpubench.py` (cuML, XGBoost), `treebench.py` (./tree), `summarize.py` (tables and charts), `submit-forest.sh` and `forest_chart.py` (the forest runs), `requirements-freeze.txt` |
