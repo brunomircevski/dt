@@ -92,17 +92,25 @@ PROTOCOLS = {
             "tree": ["--cart", "--no-prune"],
         },
     },
-    # Growing only, to depth 10 (the profiling benchmark, cluster-profiling).
+    # Growing only, to depth 10 (the profiling benchmark, cluster-profiling; the
+    # test-set benchmarks; cluster-cpu-vs-others with scikit-learn and J48).
     "cart_depth10": {
         "title": "CART, grown to depth 10, no pruning",
         "impls": {
             "tree": ["--cart", "--no-prune", "-d", "10"],
+            "sklearn": {"mode": "fit", "max_depth": 10},
         },
     },
     "c45_depth10_unpruned": {
         "title": "C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)",
         "impls": {
             "tree": ["--c45", "--no-prune", "-d", "10"],
+            # J48 has no depth limit: the adapter's own (J48Fit max_depth).
+            "j48": {"options": "-U -M 2", "max_depth": 10},
+            # Not C4.5: scikit-learn's nearest tree, entropy, with C4.5's
+            # smallest split (2 rows on each side).
+            "sklearn": {"mode": "fit", "criterion": "entropy", "max_depth": 10,
+                        "min_samples_leaf": 2},
         },
     },
     # Pruned at the same fixed values, to depth 10 (the test-set benchmarks:

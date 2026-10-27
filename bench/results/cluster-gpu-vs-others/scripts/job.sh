@@ -11,6 +11,13 @@
 #   default threads, all the CPUs it may use: the same CPUs for everyone.
 #   REPLACE=1 sbatch ...   first moves the IMPLS' earlier rows out of each
 #   dataset's results.jsonl (to results.jsonl.before-<job id>)
+#   TREES="1 10" DEPTH=10 sbatch ...   the libraries' fits with 1 and with 10
+#   trees each, depth <= 10 (default: TREES=1, DEPTH=19; ./tree always grows
+#   one tree, at depth 19). A forest that fails with cuML's default 4 streams
+#   (out of GPU memory) is run again with N_STREAMS=1.
+#   RESULTS=$HOME/gpu-dt-bench/results-forest sbatch ...   where results go
+#   CUML_WARMUP_ROWS=0 sbatch ...   cuML's untimed warm-up fit on all rows
+#   (default 50,000), so its memory pools have grown before the timed fits
 # machine.json is written once per <dataset>/<node>; a later job that adds
 # rows writes machine-<job id>.json next to it.
 # Results: results/<dataset>/<node>/results.jsonl, test predictions in
@@ -18,7 +25,8 @@
 #SBATCH -J gdb-bench
 set -uo pipefail
 NODE="$1" REPS="${REPS:-3}" IMPLS="${IMPLS:-tree cuml xgboost}" DATASETS="${DATASETS:-higgs airline}"
-B=$HOME/gpu-dt-bench
+TREES="${TREES:-1}" DEPTH="${DEPTH:-19}" CUML_WARMUP_ROWS="${CUML_WARMUP_ROWS:-50000}"
+B=$HOME/gpu-dt-bench RESULTS="${RESULTS:-$HOME/gpu-dt-bench/results}"
 TREE_COMMIT=$(cut -c1-7 $B/dt/.git/HEAD)  # detached at the measured commit; no git on the nodes
 SCRATCH=$(mktemp -d /tmp/gdb.XXXXXX)  # node-local tmpfs, for the tree dumps
 export TMPDIR=$SCRATCH  # every temp file of the job, removed with it
@@ -49,6 +57,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64
 PY=$B/venv/bin/python
 TREE=$B/dt/tree
 echo "job ${SLURM_JOB_ID:-} on $(hostname), $(nproc) CPUs, $(date '+%F %T'), reps $REPS, ./tree $TREE_COMMIT"
+echo "trees per library fit: $TREES, depth <= $DEPTH, cuML warm-up rows: $CUML_WARMUP_ROWS (0 = all), results: $RESULTS"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "free memory per NUMA node: $(numactl -H | awk '/ free:/ { printf "%snode %s %d GiB", (n++ ? ", " : ""), $2, $4 / 1024 }')"
 [ -z "${NUMA_NODE:-}" ] || echo "NUMA node $NUMA_NODE: GPU $CUDA_VISIBLE_DEVICES, ${BIND[*]}, CPUs $(cat /sys/devices/system/node/node$NUMA_NODE/cpulist)"
@@ -56,13 +65,16 @@ echo "CPU governor: $(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,driver_version,power.limit --format=csv,noheader
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | sed 's/^/GPU process: /'
 
-run() {  # timeout per process: a case that does not finish in 30 min is reported as such;
+run() {  # timeout per process: a case that does not finish in 60 min is reported as such;
   # --foreground keeps the case in the job's process group, so scancel stops it
   echo; echo "=== $(date +%H:%M:%S) $*"
-  timeout --foreground 1800 "$@" || echo "{\"failed\": \"$*\", \"status\": $?}" | tee -a "$OUT/failed.jsonl"
+  timeout --foreground 3600 "$@" && return 0
+  local status=$?
+  echo "{\"failed\": \"$*\", \"status\": $status, \"n_streams\": \"${N_STREAMS:-}\"}" | tee -a "$OUT/failed.jsonl"
+  return $status
 }
 for dataset in $DATASETS; do
-  OUT=$B/results/$dataset/$NODE
+  OUT=$RESULTS/$dataset/$NODE
   mkdir -p "$OUT/pred"
   MACHINE=$OUT/machine.json
   [ -e "$MACHINE" ] && MACHINE=$OUT/machine-${SLURM_JOB_ID:-$$}.json
@@ -89,7 +101,16 @@ for line in open(sys.argv[1]):
         mode=split; [ "$impl" = tree_gpu ] && mode=gpu
         run ${BIND[@]+"${BIND[@]}"} $PY $B/treebench.py "$TREE" $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" "$SCRATCH" $mode
       else
-        run ${BIND[@]+"${BIND[@]}"} $PY $B/gpubench.py $impl $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred"
+        warmup=50000; [ "$impl" = cuml ] && warmup=$CUML_WARMUP_ROWS
+        for trees in $TREES; do
+          WARMUP_ROWS=$warmup run ${BIND[@]+"${BIND[@]}"} $PY $B/gpubench.py $impl $dataset $case "$REPS" \
+              "$OUT/results.jsonl" "$OUT/pred" $trees $DEPTH
+          status=$?  # 124: timed out, not worth a second try
+          if [ $status -ne 0 ] && [ $status -ne 124 ] && [ "$impl" = cuml ] && [ "$trees" -gt 1 ]; then
+            N_STREAMS=1 WARMUP_ROWS=$warmup run ${BIND[@]+"${BIND[@]}"} $PY $B/gpubench.py $impl $dataset \
+                $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" $trees $DEPTH
+          fi
+        done
       fi
     done
   done

@@ -25,6 +25,11 @@
 #                       cart, c45; J48 has no CART), each with its own time limit,
 #                       so a tool that fails or runs out of time stops only its own
 #                       job (HIGGS: hours of J48)
+#   vs-epyc-<data>-<tool>-<protocol>  the same tools, one job each, at depth 10
+#                       without pruning (cart_depth10, c45_depth10_unpruned;
+#                       J48 through its adapter's depth limit), every tree hashed
+#                       (only when named; cluster-cpu-vs-others since 2026-10-27,
+#                       with -e for the test sets and -w epyc1 or epyc2)
 # The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
 # on a GPU node would measure a CPU that is only there to feed the GPU.
 # The epyc and dell partitions have more nodes: the runs always take epyc1
@@ -141,9 +146,11 @@ for tool in "parallel  tree         all  02:00:00    3600" \
             "simple    tree_simple  1    1-00:00:00  21600" \
             "j48       j48          1    3-00:00:00  86400"; do
   read -r t impls threads limit timeout <<<"$tool"
-  OPTIONAL+=("simple-epyc-$DATASET-$t-c45  epyc  epyc1  $impls  $threads  c45  $limit  $timeout")
+  OPTIONAL+=("simple-epyc-$DATASET-$t-c45  epyc  epyc1  $impls  $threads  c45  $limit  $timeout"
+            "vs-epyc-$DATASET-$t-c45  epyc  epyc1  $impls  $threads  c45_depth10_unpruned  $limit  $timeout")
   [ "$t" = j48 ] ||  # Weka has no CART
-    OPTIONAL+=("simple-epyc-$DATASET-$t-cart  epyc  epyc1  $impls  $threads  cart_alpha_nodepth  $limit  $timeout")
+    OPTIONAL+=("simple-epyc-$DATASET-$t-cart  epyc  epyc1  $impls  $threads  cart_alpha_nodepth  $limit  $timeout"
+               "vs-epyc-$DATASET-$t-cart  epyc  epyc1  $impls  $threads  cart_depth10  $limit  $timeout")
 done
 
 # Only the runs named on the command line, if any.
@@ -177,10 +184,10 @@ for job in "${JOBS[@]}"; do
   read -r name partition node impls threads protocols limit timeout <<<"$job"
   node="${NODE:-$node}"
   mkdir -p "bench/results/$DIR/$name"
-  socket=; [[ "$name" != socket-* && "$name" != simple-* ]] || socket=,SOCKET=auto
-  [[ "$name" != simple-*-dual-* ]] || socket=  # both sockets
-  # The simple runs check that every backend grew the same tree.
-  extra=; [[ "$name" != simple-* ]] || extra=",RUN_EXTRA=--hash-trees"
+  socket=; [[ "$name" != socket-* && "$name" != simple-* && "$name" != vs-* ]] || socket=,SOCKET=auto
+  [[ "$name" != simple-*-dual-* && "$name" != vs-*-dual-* ]] || socket=  # both sockets
+  # The simple and vs runs check that every backend grew the same tree.
+  extra=; [[ "$name" != simple-* && "$name" != vs-* ]] || extra=",RUN_EXTRA=--hash-trees"
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "${limit:-$LIMIT}" \
     --export=ALL${NUMA:+,NUMA_NODE=$NUMA}${ACCURACY:+,ACCURACY=$ACCURACY}$socket$extra \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
