@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """The test-set benchmark's chart (cluster-airline, -higgs, -susy, -ecbdl): one
 dataset, ./tree on every node, trained on the training set and scored on the
-test set. One panel per protocol (CART and C4.5, unpruned and pruned at fixed
-values, depth <= 10), one bar per run (node and backend): the mean training
-time of its runs, a whisker from the fastest to the slowest. Next to each bar:
+test set. One panel per algorithm (CART, C4.5; depth <= 10), two bars per run
+(node and backend): no pruning on top, pruned at fixed values right below it
+(striped). A bar is the mean training time of its runs, a whisker from the
+fastest to the slowest. Next to each bar:
 the time, and peak RAM (and VRAM on a GPU) as numbers, the means of the runs.
-The panel title holds the tree: test and training accuracy, nodes, depth (when
+The panel title holds the trees: test and training accuracy, nodes, depth (when
 the runs grew different trees, each bar says its own).
 
   bench/.venv/bin/python bench/testset_chart.py bench/results/cluster-higgs
@@ -30,8 +31,13 @@ import benchlib as B  # noqa: E402
 from chart import GRID, INK, MUTED, NAMES, seconds_tick  # noqa: E402
 from machines_chart import COLORS  # noqa: E402  (the validated backend colours)
 
-PROTOCOLS = {"cart_depth10": "CART, no pruning", "cart_depth10_alpha": "CART, pruned: fixed α = 1e-5",
-             "c45_depth10_unpruned": "C4.5, no pruning", "c45_depth10": "C4.5, pruned: CF 0.25"}
+# One panel per algorithm: the unpruned and the pruned bar of a run next to each other.
+PANELS = {"CART": [("cart_depth10", "no pruning"), ("cart_depth10_alpha", "pruned, fixed α = 1e-5")],
+          "C4.5": [("c45_depth10_unpruned", "no pruning"), ("c45_depth10", "pruned, CF 0.25")]}
+PROTOCOLS = [protocol for variants in PANELS.values() for protocol, _ in variants]
+# Pruned bars: the backend colour with thin light stripes.
+PRUNED = {"hatch": "////", "edgecolor": (1, 1, 1, 0.55), "linewidth": 0}
+matplotlib.rcParams["hatch.linewidth"] = 0.6
 # Run directories are <backend>-<machine>-<dataset>.
 BACKENDS = {"cuda": ("cuda", "CUDA hybrid"), "gpuonly": ("gpu_only", "CUDA, GPU only"),
             "cpu": ("parallel", "Parallel, both sockets")}
@@ -84,45 +90,55 @@ def tree_text(rows):
     return " · ".join(parts)
 
 
+def bar_note(rows, same, text):
+    times = [r["train_seconds"] for r in rows]
+    memory = f"RAM {gib(statistics.mean(r['peak_rss_train_bytes'] for r in rows))}"
+    gpu = [r["gpu_peak_bytes"] for r in rows if r.get("gpu_peak_bytes") is not None]
+    if gpu:
+        memory += f" · VRAM {gib(statistics.mean(gpu))}"
+    return f"{duration(statistics.mean(times))}   {memory}" + ("" if same else f"   {text}")
+
+
 def chart(dataset, runs, out):
     names = sorted(runs, key=lambda n: (ORDER.index("-".join(n.split("-")[:2]))
                                         if "-".join(n.split("-")[:2]) in ORDER else 99, n))
     meta = next(iter(runs.values()))["meta"]
     reps = max(len(rows) for run in runs.values() for rows in run["cases"].values())
-    fig, axes = plt.subplots(len(PROTOCOLS), 1, figsize=(11, 1.4 + len(PROTOCOLS) * (0.55 * len(names) + 0.9)),
+    fig, axes = plt.subplots(len(PANELS), 1, figsize=(11, 1.4 + len(PANELS) * (0.95 * len(names) + 1.2)),
                              sharex=True)
     largest = max(r["train_seconds"] for run in runs.values() for rows in run["cases"].values()
                   for r in rows)
-    for ax, (protocol, title) in zip(axes, PROTOCOLS.items()):
-        ok = {n: [r for r in runs[n]["cases"].get(protocol, []) if r["status"] == "ok"] for n in names}
-        texts = {n: tree_text(rows) for n, rows in ok.items() if rows}
-        same = len(set(texts.values())) == 1
-        ax.set_title(f"{title}" + (f"  —  {next(iter(texts.values()))}" if same and texts else ""),
-                     loc="left", fontsize=10, color=INK, fontweight="bold")
-        for i, name in enumerate(names):
-            backend, text = label(name, runs[name]["machine"])
-            rows = ok[name]
-            y = len(names) - 1 - i
-            if not rows:
-                failed = runs[name]["cases"].get(protocol, [])
-                ax.text(0, y, "  " + (failed[0]["status"] if failed else "not run"),
-                        va="center", fontsize=8.5, color=MUTED)
-                continue
-            times = [r["train_seconds"] for r in rows]
-            mean = statistics.mean(times)
-            ax.barh(y, mean, height=0.62, color=COLORS[BACKENDS[backend][0]])
-            if len(times) > 1:
-                ax.plot([min(times), max(times)], [y, y], color=INK, lw=1)
-            memory = f"RAM {gib(statistics.mean(r['peak_rss_train_bytes'] for r in rows))}"
-            gpu = [r["gpu_peak_bytes"] for r in rows if r.get("gpu_peak_bytes") is not None]
-            if gpu:
-                memory += f" · VRAM {gib(statistics.mean(gpu))}"
-            note = f"{duration(mean)}   {memory}" + ("" if same else f"   {texts[name]}")
-            ax.text(max(max(times), mean) + largest * 0.012, y, note, va="center", fontsize=8.5,
-                    color=INK)
+    wide = False
+    for ax, (algorithm, variants) in zip(axes, PANELS.items()):
+        lines = [algorithm]
+        for v, (protocol, title) in enumerate(variants):
+            ok = {n: [r for r in runs[n]["cases"].get(protocol, []) if r["status"] == "ok"] for n in names}
+            texts = {n: tree_text(rows) for n, rows in ok.items() if rows}
+            same = len(set(texts.values())) == 1
+            wide |= not same
+            lines.append(f"{title}" + (f":  {next(iter(texts.values()))}" if same and texts else ""))
+            for i, name in enumerate(names):
+                backend, _ = label(name, runs[name]["machine"])
+                rows = ok[name]
+                # Unpruned on top, pruned right below it.
+                y = len(names) - 1 - i + (0.21 if v == 0 else -0.21)
+                if not rows:
+                    failed = runs[name]["cases"].get(protocol, [])
+                    ax.text(0, y, "  " + (failed[0]["status"] if failed else "not run"),
+                            va="center", fontsize=8, color=MUTED)
+                    continue
+                times = [r["train_seconds"] for r in rows]
+                ax.barh(y, statistics.mean(times), height=0.4, color=COLORS[BACKENDS[backend][0]],
+                        **(PRUNED if v else {}))
+                if len(times) > 1:
+                    ax.plot([min(times), max(times)], [y, y], color=INK, lw=1)
+                ax.text(max(times) + largest * 0.012, y, bar_note(rows, same, texts[name]),
+                        va="center", fontsize=8, color=INK)
+        ax.set_title("\n".join(lines), loc="left", fontsize=9.5, color=INK, linespacing=1.5)
+        ax.title.set_fontweight("bold")
         ax.set_yticks(range(len(names)))
         ax.set_yticklabels([label(n, runs[n]["machine"])[1] for n in reversed(names)], fontsize=8)
-        ax.set_xlim(0, largest * (1.55 if same else 2.4))
+        ax.set_ylim(-0.6, len(names) - 0.4)
         ax.grid(axis="x", color=GRID, lw=0.8)
         ax.set_axisbelow(True)
         for side in ("top", "right"):
@@ -130,6 +146,7 @@ def chart(dataset, runs, out):
         ax.spines["left"].set_color(MUTED)
         ax.spines["bottom"].set_color(MUTED)
         ax.tick_params(colors=MUTED)
+    axes[-1].set_xlim(0, largest * (2.4 if wide else 1.55))
     axes[-1].xaxis.set_major_formatter(lambda v, _: seconds_tick(v) if v else "0")
     axes[-1].set_xlabel(f"training time, mean of {reps} runs (whisker: fastest to slowest); "
                         "RAM, VRAM: peak while training, mean", color=MUTED, fontsize=9)
@@ -148,9 +165,11 @@ def chart(dataset, runs, out):
              "./tree, depth ≤ 10; trained on the training rows, accuracy on the test rows",
              fontsize=9, color=MUTED)
     used = sorted({BACKENDS[n.split("-")[0]][0] for n in names}, key=list(COLORS).index)
-    fig.legend(handles=[Patch(color=COLORS[b], label=dict(BACKENDS.values())[b]) for b in used],
-               loc="upper left", bbox_to_anchor=(0.005, 1 - 0.62 / height), ncol=len(used),
-               frameon=False, fontsize=9)
+    handles = [Patch(color=COLORS[b], label=dict(BACKENDS.values())[b]) for b in used]
+    handles += [Patch(facecolor=MUTED, label="upper bar: no pruning"),
+                Patch(facecolor=MUTED, label="lower, striped: pruned", **PRUNED)]
+    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.005, 1 - 0.62 / height),
+               ncol=len(handles), frameon=False, fontsize=9)
     fig.tight_layout(rect=(0, 0, 1, 1 - 0.95 / height))
     fig.savefig(out, dpi=150)
     plt.close(fig)
