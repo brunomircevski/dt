@@ -54,10 +54,10 @@ Settings shared by every case: all training rows and all features, no bootstrap 
 |---|--:|--:|--:|
 | HIGGS | 10,500,000 | 28 (real-valued) | 500,000: the published split's last rows |
 | airline (gbm-bench, US flights 1987–2008) | 114,569,017 | 13 (integer) | 500,000: a random sample held out when the data was prepared |
-| ECBDL'14, 15M sample ([cluster-ecbdl-old](../cluster-ecbdl-old/BENCHMARK.md)) | 15,000,000 | 631 (539 real, 92 nominal as integer codes) | 100,000: a random sample held out when the data was prepared; 2.16% positives |
+| ECBDL'14, 15M sample (cluster-ecbdl-old, removed; last in f4668df) | 15,000,000 | 631 (539 real, 92 nominal as integer codes) | 100,000: a random sample held out when the data was prepared; 2.16% positives |
 | chess 3×3, 1000M ([cluster-chess](../cluster-chess/BENCHMARK.md)) | 1,000,000,000 | 2 (x, y on a 3×3 board) | 1,000: a separate file (`chess_1b_test.csv`) |
 
-No tool trains on the test rows, and no extra 80/20 split is needed. On airline, `ActualElapsedTime` partly gives the delay away, so its accuracies say little ([cluster-airline-old](../cluster-airline-old/BENCHMARK.md)).
+No tool trains on the test rows, and no extra 80/20 split is needed. On airline, `ActualElapsedTime` partly gives the delay away, so its accuracies say little (cluster-airline-old, removed; last in f4668df).
 
 ### Measurement
 
@@ -165,7 +165,7 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
   - **The reason is C4.5's own rules:**
     - **Uneven splits:** gain ratio prefers them. On HIGGS its root is `f25 <= 1.837873`, against 1.08 for every Gini and entropy tree. Uneven splits use up the 19 levels on few rows.
     - **Earlier stops:** C4.5's minimum split size (up to 25 rows per side) and its collapse of useless splits stop it earlier still.
-    - **Without the depth limit,** C4.5 grows deeper (depth 74 on airline, [cluster-airline-old](../cluster-airline-old/BENCHMARK.md)).
+    - **Without the depth limit,** C4.5 grows deeper (depth 74 on airline, cluster-airline-old, removed; last in f4668df).
   - **Agreement:** the two trees agree on only 77% (HIGGS) and 85% (airline) of test rows.
   - **Timing still compares the same amount of data.** Every case reads the same rows, and ./tree's smaller C4.5 tree takes about as long as its CART tree.
 - **ECBDL'14 (631 features, 15M rows): ./tree still the fastest, the libraries closer.**
@@ -186,7 +186,7 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
     - **Without chunks,** the 2026-10-17 run gave 81.08% and 91.18%. The test predictions (100,000 rows) are not affected.
   - **VRAM:** ./tree 73.3–74.1 GiB of the 80 GB, XGBoost 47.9 GiB, cuML 36.2 GiB.
     - **./tree:** one copy of the presorted columns (632 slots × 15M rows × 8 bytes = 70.6 GiB), and the rest as on the other datasets.
-    - **15M rows are about the most ./tree fits** on these GPUs ([cluster-ecbdl-old](../cluster-ecbdl-old/BENCHMARK.md)).
+    - **15M rows are about the most ./tree fits** on these GPUs (cluster-ecbdl-old, removed; last in f4668df).
   - **cuML's first full-size fit** took 38.9 s on the H100 and 50.4 s on the A100, 18–28 s more than the next two; the medians leave it out.
 - **Chess 1000M (2 features, 10^9 rows): the largest gap.**
   - **CART:**
@@ -219,7 +219,7 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
   - **Same trees:** the same node counts and test predictions on both GPUs.
   - **VRAM:** up to 0.7 GiB more (HIGGS 3.7 against 3.4 GiB, ECBDL 74.1 against 73.4 GiB, chess the same), for the deeper GPU levels' buffers.
   - **Host memory:** the host arena for the hand-offs (8 bytes per value, 75 GB on ECBDL) is not allocated.
-  - **One CPU thread:** the GPU-only rows of [cluster-chess](../cluster-chess/BENCHMARK.md) and [cluster-ecbdl-old](../cluster-ecbdl-old/BENCHMARK.md) run under `taskset` on one CPU of the GPU's node, the like-for-like setting against single-threaded CPU tools.
+  - **One CPU thread:** the GPU-only rows of [cluster-chess](../cluster-chess/BENCHMARK.md) and cluster-ecbdl-old (removed; last in f4668df) run under `taskset` on one CPU of the GPU's node, the like-for-like setting against single-threaded CPU tools.
 - **Memory:** ./tree peaks at 3.3–3.4 GiB on HIGGS and 13.3 GiB on airline.
   - **What it holds:** one copy of the presorted columns (8 bytes per value) plus one spare column, a 512 MB hand-off ring, and the CUDA context ([docs/CUDA.md](../../../docs/CUDA.md)).
   - **The libraries:** cuML uses 1.8–1.9 GiB and 9.5–10.0 GiB, XGBoost 2.8 and 7.1 GiB. They split on histogram bins and keep no presorted columns, so they need less; ./tree keeps every exact value with its row.

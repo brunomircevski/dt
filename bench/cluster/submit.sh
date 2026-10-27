@@ -36,7 +36,7 @@
 #   bench/cluster/submit.sh -m 3 -d airline  # the airline dataset
 #   bench/cluster/submit.sh -m 3 cuda-hopper-higgs   # only the named runs
 #   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned \
-#       -o cluster-airline-old/noprunning            # unpruned trees
+#       -o cluster-airline/noprunning                # unpruned trees
 #   bench/cluster/submit.sh -m 3 -e -d higgs -p cart_depth10,cart_depth10_alpha,c45_depth10_unpruned,c45_depth10 \
 #       cuda-hopper-higgs gpuonly-hopper-higgs cuda-ampere-higgs gpuonly-ampere-higgs \
 #       cpu-epyc-higgs cpu-dell-higgs            # the test-set benchmark (cluster-higgs/README.md)

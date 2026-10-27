@@ -9,9 +9,7 @@ cluster (Politechnika Białostocka, SLURM), and tune it there. Results:
   [`cluster-higgs/`](../results/cluster-higgs/BENCHMARK.md),
   [`cluster-susy/`](../results/cluster-susy/BENCHMARK.md),
   [`cluster-ecbdl/`](../results/cluster-ecbdl/BENCHMARK.md)
-- [`bench/results/cluster-airline-old/`](../results/cluster-airline-old/BENCHMARK.md): airline (115M rows), pruned and (in `noprunning/`) unpruned trees, a random 500,000-row test set
 - [`bench/results/cluster-cpu-scaling/`](../results/cluster-cpu-scaling/BENCHMARK.md): HIGGS and airline with 1 to 48 threads on the two CPU nodes
-- [`bench/results/cluster-ecbdl-old/`](../results/cluster-ecbdl-old/BENCHMARK.md): ECBDL'14 (631 features): a 15M-row sample on all four nodes, the full 32M rows on the CPU nodes, both also on dell2 (512 GB); pruned and unpruned CART, C4.5; a random 100,000-row test set
 - [`bench/results/cluster-chess/`](../results/cluster-chess/BENCHMARK.md): a 3×3 checkerboard (2 features) at 1M, 10M, 100M and 1000M rows on all four nodes and dell2, with one thread on epyc1 and dell1, and `--gpu-only` on hopper and ampere; unpruned CART and C4.5
 
 Four nodes, two of each kind. **The GPU nodes (hopper, ampere) run CUDA
@@ -77,7 +75,7 @@ for node in epyc dell; do
   bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-higgs \
       --socket bench/results/cluster-higgs/socket-$node-higgs --out $t/$node.png
   bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$node-airline \
-      --socket bench/results/cluster-airline-old/socket-$node-airline --out $t/$node-airline.png
+      --socket bench/results/cluster-airline-old/socket-$node-airline --out $t/$node-airline.png  # removed; last in f4668df
 done
 bench/.venv/bin/python bench/grid_chart.py $t/epyc.png $t/dell.png \
     $t/epyc-airline.png $t/dell-airline.png --out $s/chart.png  # 2x2: HIGGS above airline
@@ -113,25 +111,6 @@ bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unp
     $d/{cuda-hopper,cuda-ampere,cpu-epyc}-chess_* $d/{cpu-dell,cpu-dell512}-chess_{1m,10m,100m} \
     $v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b $d/{socket-epyc,socket-dell,serial-epyc,serial-dell,gpuonly-hopper,gpuonly-ampere}-chess_* \
     --out $d/chart-rows.png
-```
-
-The unpruned airline run and its chart (pruned and unpruned side by side in one image):
-
-```bash
-bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airline-old/noprunning
-bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned -o cluster-airline-old/noprunning \
-    socket-epyc-airline socket-dell-airline
-d=bench/results/cluster-airline-old
-t=$(mktemp -d)  # one chart per run, only to build the grid
-bench/.venv/bin/python bench/machines_chart.py --protocols cart_alpha_nodepth,c45 \
-    $d/cuda-hopper-airline $d/cuda-ampere-airline $d/cpu-epyc-airline $d/cpu-dell-airline \
-    $d/socket-epyc-airline $d/socket-dell-airline --out $t/pruned.png
-bench/.venv/bin/python bench/machines_chart.py --protocols cart_full_nodepth,c45_unpruned \
-    $d/noprunning/cuda-hopper-airline $d/noprunning/cuda-ampere-airline \
-    $d/noprunning/cpu-epyc-airline $d/noprunning/cpu-dell-airline \
-    $d/noprunning/socket-epyc-airline $d/noprunning/socket-dell-airline --out $t/noprunning.png
-bench/.venv/bin/python bench/grid_chart.py $t/pruned.png $t/noprunning.png --out $d/chart.png
-rm -r $t
 ```
 
 - **`build.sh`** runs on hopper because the CPU nodes have no CUDA toolkit. It
@@ -308,7 +287,7 @@ competition's split: every training row (`train.csv` is a link to `ecbdl.csv`,
 which keeps its own feature names and labels 0/1; `prepare.py` records them in
 `meta.json` as `csv_features`/`csv_classes`) and `ecbdl_test.csv` as the test
 set. Before that it set 100,000 random rows aside as the test set and trained on
-the other 31,892,921 (the runs in `cluster-ecbdl-old` before that date); it writes
+the other 31,892,921 (the runs in `cluster-ecbdl-old`, removed; last in f4668df); it writes
 no YaDT files. The CUDA backend needs 8 bytes per value
 (one copy of the presorted columns, plus one spare column), about 160 GB for the
 full set, so the GPUs get `ecbdl_15m`: a random 15M of the training rows (9.5 G

@@ -1,3 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cuda-hopper-airline,airline,cart_alpha_nodepth,tree_cuda,16,ok,True,1.0622,1.0535,1.068,1.0612333333333333,0.007298173287428367,3,,9.904498013900593,6886854656,6885879808,6886920192,6208020480,3013,1507,25,0.715409,,,14251196416,0.0007
-cuda-hopper-airline,airline,c45,tree_cuda,16,ok,True,7.7491,7.6227,7.7616000000000005,7.711133333333334,0.07684011539120285,3,,17.52289724512957,23008378880,22968909824,23047987200,22329544704,8548725,4274363,72,0.874157,,,20670578688,2.8279
