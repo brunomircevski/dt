@@ -1,2 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-simple-epyc-susy-serial-cart,susy,cart_alpha_nodepth,tree,1,ok,True,5.2447,5.2447,5.2447,5.2447,,1,1.0,7.492347372230142,1118633984,1118633984,1118633984,1112449024,723,362,19,0.796831,,,,0.0006

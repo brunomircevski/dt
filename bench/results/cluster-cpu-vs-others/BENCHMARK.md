@@ -6,7 +6,7 @@
 
 Every tree is grown to depth ≤ 10 without pruning, and its accuracy is measured on the dataset's test set. Every job finished; none came near its time limit.
 
-The previous version of this benchmark (every tree pruned, no depth limit, training accuracy, 2026-10-21/22) is in [cluster-cpu-vs-others-old](../cluster-cpu-vs-others-old/BENCHMARK.md).
+The previous version of this benchmark (every tree pruned, no depth limit, training accuracy, 2026-10-21/22) was `bench/results/cluster-cpu-vs-others-old`, removed since; it is in the git history, commit 8ce4940.
 
 ![chart](chart.png)
 
@@ -57,7 +57,7 @@ The other tools:
 
 - **CART:** scikit-learn's gini tree has the same node count and the same test accuracy as ./tree's on every dataset.
 - **C4.5:** Weka J48 grows the same tree size and accuracy as ./tree on chess and Covertype, and nearly the same on SUSY (741 against 743 nodes) and HIGGS (923 against 935). ./tree follows C4.5 Release 8; J48 differs from R8 in small details.
-- **C4.5 is less accurate here:** on Covertype 59.9% against CART's 77.7%, and on HIGGS 63.7% against 70.5%. Both C4.5 implementations agree, so this comes from the algorithm, not from ./tree. scikit-learn's entropy tree (plain information gain, not charted) is as accurate as CART (77.2% on Covertype, 70.5% on HIGGS), so the cause is gain ratio. A likely explanation (not checked node by node): gain ratio favours splits that cut off a small group of rows, whose split information is low. At a depth limit of 10 those splits use up the levels, and C4.5's trees have half as many nodes as CART's. Without a depth limit, C4.5 grows on to depth 38–71 (see cluster-cpu-vs-others-old).
+- **C4.5 is less accurate here:** on Covertype 59.9% against CART's 77.7%, and on HIGGS 63.7% against 70.5%. Both C4.5 implementations agree, so this comes from the algorithm, not from ./tree. scikit-learn's entropy tree (plain information gain, not charted) is as accurate as CART (77.2% on Covertype, 70.5% on HIGGS), so the cause is gain ratio. A likely explanation (not checked node by node): gain ratio favours splits that cut off a small group of rows, whose split information is low. At a depth limit of 10 those splits use up the levels, and C4.5's trees have half as many nodes as CART's. Without a depth limit, C4.5 grows on to depth 38–71 (the previous version, in the git history).
 
 ## Results (training time, one run; peak memory)
 
@@ -80,7 +80,7 @@ The other tools:
 - **--parallel on one socket against --serial:** 2.2–4.7× faster on chess, which has only two features to share among 24 threads. 12–13× faster on Covertype, 10–11× on SUSY and 12–13× on HIGGS.
 - **Both sockets against one:** the second socket helps only on the big datasets: 1.5× faster on HIGGS and 1.1× on SUSY. It is 1.2–1.4× slower on Covertype and 2–5× slower on chess 10M, where the threads on the other socket mostly cost cross-socket memory traffic and synchronisation.
 - **--simple against the libraries:**
-  - CART: about as fast as scikit-learn on chess (6.15 s against 6.33 s), 1.7× slower on Covertype, 1.2× faster on SUSY and 1.1× slower on HIGGS. Without pruning, the two grow at about the same speed: the old benchmark's 6–13× lead on SUSY and HIGGS came from scikit-learn's quadratic pruning (cluster-cpu-vs-others-old).
+  - CART: about as fast as scikit-learn on chess (6.15 s against 6.33 s), 1.7× slower on Covertype, 1.2× faster on SUSY and 1.1× slower on HIGGS. Without pruning, the two grow at about the same speed: the old benchmark's 6–13× lead on SUSY and HIGGS came from scikit-learn's quadratic pruning (the previous version, in the git history).
   - 3.0–3.2× faster than J48 on chess, SUSY and HIGGS, and 8.4× faster on Covertype.
 - **--serial against the libraries:** CART 18× faster than scikit-learn on chess, 4× on Covertype, 30× on SUSY and 20× on HIGGS; C4.5 59–83× faster than J48.
 - **--parallel on one socket against the libraries:** CART 41× faster than scikit-learn on chess, 50× on Covertype, 300× on SUSY and 245× on HIGGS; C4.5 280–1,000× faster than J48.

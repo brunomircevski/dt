@@ -1,2 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-simple-epyc-susy-j48-c45,susy,c45,j48,1,ok,True,869.902414126,869.902414126,869.902414126,869.902414126,,1,,874.6205498781055,13592604672,13592604672,13592604672,13540564992,15479,7740,38,0.806817556,0.797086,0.0011147556080981396,,108.237900153

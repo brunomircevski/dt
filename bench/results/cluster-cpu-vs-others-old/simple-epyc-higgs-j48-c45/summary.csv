@@ -1,2 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-simple-epyc-higgs-j48-c45,higgs,c45,j48,1,ok,True,69205.494242441,69205.494242441,69205.494242441,69205.494242441,,1,,69238.30867748708,48241111040,48241111040,48241111040,48188121088,1152747,576374,71,0.878349333,0.701532,0.0012683633952401824,,543.159336198

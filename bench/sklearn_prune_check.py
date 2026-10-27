@@ -3,7 +3,7 @@
 For each row count: a plain fit(ccp_alpha=1e-5), the same fit split into
 growing (ccp_alpha=0) and _prune_tree() (what fit does last), whether both
 give the same tree, and the leaves of a one-pass bottom-up pruning of the
-full tree. Run on a compute node (bench/results/cluster-cpu-vs-others-old/BENCHMARK.md):
+full tree. Run on a compute node (for the old pruned "simple" benchmark, git history, commit 8ce4940):
 
   python bench/sklearn_prune_check.py bench/data/susy 250000 500000 1000000 2000000
 """
