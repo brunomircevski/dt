@@ -1,22 +1,16 @@
 # Benchmark results
 
-One directory per benchmark: `<backend>-<machine>-<dataset>/`.
+Every benchmark here ran on the faculty's mordor3 cluster. Each is one directory, `cluster-<what>/`, whose `BENCHMARK.md` gives the method, the results, the commands that ran it and the ones that drew its charts (`chart*.png`). The desktop and laptop benchmarks (`consumer/`) and the other older ones were removed in 254d4e8. Their rows below stay for the numbers, marked as removed; they are in the git history.
 
-- **backend:** `cpu` or `cuda`.
-- **machine:** a short name for the computer. `pc` is the i7-14700KF desktop (8 performance + 12 efficiency cores, 28 threads); `legion` is the laptop with an i7-13650HX (6 + 8 cores, 20 threads) and an RTX 5070 Laptop GPU (8 GB).
-  The desktop's and laptop's HIGGS runs are grouped in `consumer/pc-legion-higgs/`; every desktop and laptop benchmark is under `consumer/`. The mordor3 cluster's runs are grouped in `cluster-*/` directories, named after its nodes. Two GPU servers run CUDA only: `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402). Two CPU servers run parallel only: `epyc` (2× EPYC 9255) and `dell` (2× Xeon Gold 6542Y). Their scripts are in [bench/cluster/](../cluster/README.md), not in a `run.sh`.
-- **dataset:** the `bench/datasets.toml` entry, e.g. `susy` for the full SUSY dataset, `higgs`.
-- **`-vs-others`:** the directory also runs other implementations (sklearn, rpart, Weka J48, YaDT) next to ./tree: `cluster-susy-vs-others-cpu`, which has no machine in its name because it holds three, one subdirectory each (`pc`, `epyc`, `dell`). Every other directory is ./tree only.
+Inside a benchmark, one directory per run: `<backend>-<node>-<dataset>/`.
 
-Each directory holds a `run.sh` that runs that benchmark and writes all of its results into the same directory:
+- **backend:** `cuda` (`--cuda`, the CPU takes the small nodes), `gpuonly` (`--cuda --gpu-only`), `cpu` (parallel, both sockets), `socket` (parallel, one socket's CPUs and memory), `serial` (`--serial`, one thread).
+- **node:** `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402) run CUDA only; `epyc` (epyc1, 2× EPYC 9255), `dell` (dell1, 2× Xeon Gold 6542Y) and `dell512` (dell2, the same CPUs with 512 GB) run on the CPU only.
+- **dataset:** the `bench/datasets.toml` entry, e.g. `higgs`, `ecbdl_15m`, `chess_1b`.
 
-```bash
-bench/results/consumer/cpu-pc-susy-scaling/run.sh          # each case once
-bench/results/consumer/cpu-pc-susy-scaling/run.sh -m 5     # each case 5 times
-bench/results/cluster-susy-vs-others-cpu/run.sh pc -m 3   # its run.sh takes the machine: pc, epyc or dell
-```
+A run directory holds `results.jsonl` (one row per run of a case), `plan.json` (the cases and the dataset's rows, features and split), `machine.json` (hardware, commit, date), `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py`. Two benchmarks differ: `cluster-cpu-vs-others` names its runs `simple-epyc-<dataset>[-<backend or tool>-<algorithm>]`, and `cluster-gpu-vs-others` keeps one directory per dataset and node with the scripts it ran in `scripts/`; it ran outside this repository (`~/gpu-dt-bench`).
 
-`BENCHMARK.md` next to it describes the method, and the results once the run is done. `run.sh` refuses to run where results already exist, so move them away to run again. When only ./tree changed, a run that also holds other tools can keep their rows: `cluster-susy-vs-others-cpu/run.sh <machine> -t` runs ./tree alone into a subdirectory and replaces the ./tree rows of `results.jsonl` with its rows (`machine.json` → `tree_rerun` records it; `report.py` and the charts show the rerun's date).
+The runs are SLURM jobs: `bench/cluster/submit.sh` queues one job per node, and each runs `bench/run.py --run-id cluster-<what>/<run>`, which writes into `bench/results/<run-id>/`. Setup, data and every submit command are in [bench/cluster/README.md](../cluster/README.md).
 
 ## The benchmarks
 
@@ -36,7 +30,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 | Directory | What | Main result |
 |---|---|---|
 | `consumer/cpu-pc-susy-scaling` (removed in 254d4e8) | full SUSY, 1–28 threads on the desktop | 2026-10-10: CART 7.06 → 0.96 s (7.4×), C4.5 6.17 → 1.17 s (5.3×). Flat beyond 12–20 threads: memory bandwidth. The serial points were rerun on 2026-10-17 (4.67 and 5.88 s), the others not. |
-| `consumer/cpu-legion-susy-scaling` | full SUSY, 1–20 threads on the laptop (`scaling.csv`, `chart.png`) | CART 8.05 → 1.03 s (7.8×), C4.5 6.88 → 1.04 s (6.6×). Serial points from before the serial backend's change. |
+| `consumer/cpu-legion-susy-scaling` (removed in 254d4e8) | full SUSY, 1–20 threads on the laptop (`scaling.csv`, `chart.png`) | CART 8.05 → 1.03 s (7.8×), C4.5 6.88 → 1.04 s (6.6×). Serial points from before the serial backend's change. |
 | `consumer/cuda-legion-susy` (removed in 254d4e8) | full SUSY: serial, parallel and CUDA on the laptop | CUDA 0.37 s (CART) and 0.46 s (C4.5): 2.4–2.6× the desktop's 28 threads. |
 | `consumer/pc-legion-higgs` (removed in 254d4e8) | full HIGGS (10.5M rows): `cuda-legion-higgs` (laptop parallel and CUDA) and `cpu-pc-higgs` (desktop parallel) | CUDA 1.37 s (CART) and 2.00 s (C4.5), 2.3–2.6× the CPUs. The laptop's 20 threads match the desktop's 28: its DDR5 is faster. |
 
@@ -73,12 +67,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 |---|---|---|
 | [`visualization`](../../visualization/BENCHMARK.md) (at the repository root) | 14 SVGs (`svg/`), the exported trees (`results/`), a log-scale timing chart and `summary.csv` | ./tree, scikit-learn, rpart, J48 and YaDT all find the same 17-node, depth-4 tree with 100% test accuracy. The binned cuML and XGBoost trees fill all 10 levels (389 and 479 nodes) at 98.78% and 99.51%. cuML is fastest at 16 ms; ./tree takes 44–59 ms on CPU and 45 ms on CUDA, scikit-learn 0.69 s, rpart 0.82 s, YaDT 0.18–0.19 s, J48 1.48 s, XGBoost 0.11 s. |
 
-## A new machine
+## A new node or machine
 
-1. Copy a directory and rename it for the machine, e.g. `cpu-server-susy-scaling`. (`cluster-susy-vs-others-cpu` instead takes a new machine as a case in its `run.sh`.)
-2. In its `run.sh`, adjust `--cpus` to that machine's CPU numbering:
-   - the first CPU listed runs the 1-thread cases and should be a fast core;
-   - `--threads 1,all` uses every CPU listed.
-3. Run `bench/setup.sh` once, prepare the data (`bench/.venv/bin/python bench/prepare.py susy`), then run `run.sh`.
-
-CUDA benchmarks get `cuda-<machine>-<dataset>` directories the same way (`cuda-legion-susy`): `bench/run.py --impls tree_cuda` runs `./tree --cuda` (built by `make tree`) with the largest thread count and also records the peak GPU memory.
+- **Another mordor3 node:** add a line to the job table in `bench/cluster/submit.sh` (run name, partition, node, implementation, threads) and name the run after it, e.g. `cpu-<node>-<dataset>`. [bench/cluster/README.md](../cluster/README.md) has the settings each node needs.
+- **Elsewhere:** run `bench/setup.sh` once, prepare the data (`bench/.venv/bin/python bench/prepare.py <dataset>`), then `bench/run.py <dataset> --protocols <…> --impls tree|tree_cuda --threads all --cpus <list> --reps 3 --run-id <name>`. The first CPU of `--cpus` runs the one-thread cases and should be a fast core; `tree_cuda` runs `./tree --cuda` (built by `make tree`) and also records the peak GPU memory.
