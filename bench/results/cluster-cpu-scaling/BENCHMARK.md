@@ -7,7 +7,7 @@
 - **Each node ran alone** and was used whole.
 - **Same trees:** every thread count built the same tree on both nodes, the same as in [cluster-higgs](../cluster-higgs/BENCHMARK.md).
 
-The cluster's counterpart of the desktop's and laptop's scaling runs ([cpu-pc-susy-scaling](../cpu-pc-susy-scaling/BENCHMARK.md)), on HIGGS (10.5M rows, 28 features) and airline (115M rows, 13 features), on the two CPU servers only. The GPU servers are not benchmarked on their CPUs.
+The cluster's counterpart of the desktop's and laptop's scaling runs (`cpu-pc-susy-scaling`, removed in 254d4e8), on HIGGS (10.5M rows, 28 features) and airline (115M rows, 13 features), on the two CPU servers only. The GPU servers are not benchmarked on their CPUs.
 
 ```bash
 bench/cluster/scaling.sh -m 3              # on the login node: one job on epyc1, one on dell1

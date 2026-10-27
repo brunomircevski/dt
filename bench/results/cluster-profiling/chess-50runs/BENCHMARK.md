@@ -10,7 +10,7 @@ A rerun of the chess half of [the profiling benchmark](../BENCHMARK.md), with mo
 - **Datasets:** chess 10M, 50M, 100M, 500M, 1000M and 2000M: the 3×3 checkerboard, 2 features.
 - **Protocols:** CART = `cart_depth10` (`--cart --no-prune -d 10`); C4.5 = `c45_depth10_unpruned` (`--c45 --no-prune -d 10`).
 
-![chart](chart.png)
+![chart](../chart-chess50.png)
 
 Each tree is the same on every run and in every mode: 100% training accuracy, 17 nodes, depth 4. The chart therefore shows those facts once, in each panel's subtitle.
 

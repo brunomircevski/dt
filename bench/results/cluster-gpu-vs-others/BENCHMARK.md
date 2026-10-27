@@ -174,7 +174,7 @@ Median of 3 runs (min–max). The node count, depth and accuracies are for the l
     - **A100:** 9.50 s against 22.4 s (2.4×) and 53.4 s (5.6×).
   - **C4.5 against cuML's entropy tree:** 6.28 s against 20.6 s (3.3×) on the H100, 9.31 s against 22.1 s (2.4×) on the A100.
   - **The libraries gain little from the H100:** cuML 21.1 against 22.4 s, XGBoost 52.7 against 53.4 s; ./tree gains 1.5×.
-    - **./tree's time is GPU work:** 0.7 s of upload on the H100 and 1.7 s on the A100, then the kernels ([cluster-ecbdl-profile](../cluster-ecbdl-profile/gpu-plus-cpu/BENCHMARK.md)).
+    - **./tree's time is GPU work:** 0.7 s of upload on the H100 and 1.7 s on the A100, then the kernels (`cluster-ecbdl-profile`, removed in 254d4e8).
     - **What bounds the libraries' fits** (the binning, the copy to the GPU, the host) was not profiled.
   - **Accuracy says little here.** 97.84% of the test rows are negatives, and every depth-19 tree is below always predicting the majority class: CART 97.58–97.69%, C4.5 97.80%, cuML's entropy tree 97.54%. The trees agree with ./tree on 99.4–99.6% of the test rows.
   - **Trees:**

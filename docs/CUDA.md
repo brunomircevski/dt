@@ -125,7 +125,7 @@ so the tree is the same to the bit. It is off by default, with `--gpu-only`
 too: each call costs about 0.45 ms on the host side, the columns the tree uses
 have to be uploaded first unless the raw values were kept (ECBDL: 631
 columns, 2.5 s), and the CPU was faster on every dataset and threshold tried
-(see [cluster-gpu-prune](../bench/results/cluster-gpu-prune/BENCHMARK.md)).
+(measured in `cluster-gpu-prune`, a benchmark that was never committed).
 
 ### Inside the sweep (kernels 3a / 3c)
 

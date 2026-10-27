@@ -126,7 +126,7 @@ bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unp
 - **`profile.sh`** queues the same job with `run.py --profile` on hopper,
   ampere and epyc1, then (one after the other on each node) again without it
   into `plain/`, to see what profiling costs:
-  [`cluster-ecbdl-profile`](../results/cluster-ecbdl-profile/BENCHMARK.md).
+  `cluster-ecbdl-profile` (removed in 254d4e8).
 - **`scaling.sh`** queues the same job on epyc1 and dell1 with the thread list
   `1,2,4,8,12,…,48` (1 thread: `--serial`); `run.log` records the CPU order
   the threads take (`lscpu`).
