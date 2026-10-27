@@ -50,7 +50,8 @@ mordor3 nodes; before = 66bd66c.
 | airline C4.5 | 1.30 s, 35.0 GiB | 1.33 s, 13.3 GiB | 1.87 s, 34.9 GiB | 1.91 s, 13.3 GiB |
 
 * GPU memory: 53% less on HIGGS, 62% less on airline (cuML used 1.9 and
-  9.5–10 GiB, [cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)).
+  9.5–10 GiB in the depth-19 run of cluster-gpu-vs-others, in the git history
+  before 325039f).
 * Airline is 2–3% slower: the partition is 3% slower (a column waits for the
   one before it to leave its slot, 3–5 ms of 500), and the GPU sometimes
   waits for the ring's copies to the host.

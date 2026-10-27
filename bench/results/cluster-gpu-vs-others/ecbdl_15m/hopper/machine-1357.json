@@ -1,6 +1,0 @@
-{"host": "hopper", "cpu": "Intel(R) Xeon(R) Gold 6444Y",
- "cpus": 32, "gpu": "NVIDIA H100 PCIe, 81559 MiB",
- "driver": "615.71.09",
- "cuda": "Cuda compilation tools, release 12.9, V12.9.86",
- "numa_node": "1", "gpu_index": 2,
- "tree_commit": "b014290", "dataset": "ecbdl_15m", "date": "2026-10-20 16:30:18"}

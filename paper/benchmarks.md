@@ -2,6 +2,8 @@
 
 Source: [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
 (run 2026-10-17; ./tree rows rerun on 6f6cecb on 2026-10-19; scripts in its `scripts/`).
+That directory now holds a depth-10 comparison (2026-10-27); the depth-19 results
+these notes cite are in the git history (last at 325039f).
 
 ## Setup
 

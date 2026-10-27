@@ -3,4 +3,4 @@
  "driver": "615.71.09",
  "cuda": "Cuda compilation tools, release 12.9, V12.9.86",
  "numa_node": "0", "gpu_index": 0,
- "tree_commit": "8b1ecd1", "dataset": "ecbdl_15m", "date": "2026-10-20 14:39:01"}
+ "tree_commit": "b014290", "dataset": "ecbdl_15m", "date": "2026-10-27 15:41:25"}
