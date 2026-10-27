@@ -1,0 +1,2 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+vs-epyc-covertype-simple-cart,covertype,cart_depth10,tree_simple,1,ok,True,4.013199999999999,4.013199999999999,4.013199999999999,4.013199999999999,,1,,4.303381031379104,117243904,117243904,117243904,112037888,1499,750,10,0.78091,0.7766217448925148,0.0023948288984396633,,0.0

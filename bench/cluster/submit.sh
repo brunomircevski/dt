@@ -18,7 +18,7 @@
 #   gpuonly-ampere-<data>  ampere, the same                           (only when named)
 #   simple-epyc-<data>  epyc1, one socket: ./tree --simple, --serial, parallel,
 #                       scikit-learn and Weka J48, every tree hashed
-#                       (only when named; -o cluster-cpu-vs-others, the "simple" benchmark)
+#                       (only when named; the old "simple" benchmark, cluster-cpu-vs-others-old)
 #   simple-epyc-<data>-<tool>-<protocol>  the same, one tool and protocol per job
 #                       (tool: simple, serial, parallel, dual (parallel on both
 #                       sockets, every CPU), sklearn, j48; protocol:
