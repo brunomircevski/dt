@@ -36,4 +36,8 @@ with equal or slightly better CART test accuracy.
 - **Memory cost of exactness:** ./tree uses 1.3–1.8× cuML's VRAM.
 - The existing optimization numbers come from different commits and machines;
   a clean same-commit ablation and a per-kernel profile are still to do (see
-  [benchmarks.md](benchmarks.md#experiments-still-missing)).
+  [benchmarks.md](benchmarks.md#experiments-still-missing)). Only the
+  2026-10-28 changes (smaller-side bitmap, split column by position,
+  upload/presort overlap, GPU root counts) were measured on one commit
+  ([optimizations.md](optimizations.md#same-commit-measurement-of-3-10b-and-10c-2026-10-27));
+  the benchmark tables predate them and must be rerun.

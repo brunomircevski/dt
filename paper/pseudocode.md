@@ -10,10 +10,11 @@ contiguous range of one node in one column. Explanations in
 
 ```
 Input: X ∈ R^{n×F}, labels y ∈ {0..K-1}^n, depth limit D, hand-off size m
- 1  Upload X, y through 4 pinned 32 MB staging buffers (on the GPU's NUMA node)
- 2  for f ← 1..F:                                     ▷ presort, once per tree
+ 1  Upload y; upload X through 4 pinned 32 MB staging buffers (GPU's NUMA node),
+    on a copy stream, column after column
+ 2  for f ← 1..F, as soon as column f is uploaded:     ▷ presort, overlapped with step 1
  3      C_f ← StableRadixSort{ (X[i,f], pack(i, y_i)) }    ▷ 8 B/entry, stored in slot f
- 4  L ← {root};  counts(root) ← Histogram(y)
+ 4  L ← {root};  counts(root) ← Histogram(y)            ▷ on the GPU, during the presort
  5  while L ≠ ∅:
  6      S ← {(v,f) : v ∈ L, f usable at v}              ▷ segments, cut into tiles of T
  7      if L = {root}: TileHistogram(S)                 ▷ below the root, step 13 did it
@@ -24,7 +25,7 @@ Input: X ∈ R^{n×F}, labels y ∈ {0..K-1}^n, depth limit D, hand-off size m
         host: pick the split of each v (CART / C4.5 rule);
               children's counts = winning feature's left counts;
               mark leaves (pure, < minChild, depth = D) without touching the GPU
-12      MarkGoesLeft: B[row] ← 1 for rows left of each winning cut   ▷ 1-bit bitmap, fits in L2
+12      MarkGoesLeft: B[row] ← 1 for the rows of the smaller side    ▷ Alg. 5; 1-bit bitmap, fits in L2
 13      Partition(S) → children's columns in free slots
                        + next level's tile histograms      ▷ Alg. 4
 14      small ← children with < m rows:
@@ -101,7 +102,9 @@ Pass 2 (double), per tile:
 
 ```
 t ← atomicAdd(tileCounter, 1)          ▷ dynamic tile ids: predecessors are already running
-load T entries (coalesced); g_j ← B[row_j]
+load T entries (coalesced)
+g_j ← (pos_j < nL(v))         if f is v's split feature    ▷ left rows come first there
+      B[row_j] ⊕ flip(v)      otherwise                    ▷ flip(v) = 1 if B marks the right rows
 (prefix_j, ℓ_t) ← BlockScan(g)
 publish state[t] ← (PARTIAL, ℓ_t)      ▷ self-validating 64-bit words, no memory fences
                    (TOTAL if t is the segment's first tile)
@@ -120,8 +123,10 @@ while writing: class histogram of each next-level tile (match_any + shared atomi
 (`markGoesLeftKernel`)
 
 ```
-for each split node v with winning feature f and left size nL:
-    for i < nL in segment (v, f), in parallel:
+for each split node v with winning feature f, size n_v and left size nL:
+    flip(v) ← (2·nL > n_v)                        ▷ mark the smaller side
+    I ← flip(v) ? [nL, n_v) : [0, nL)
+    for i ∈ I in segment (v, f), in parallel:
         r ← row(C_f[base_v + i])
-        atomicOr(B[r / 32], 1 << (r mod 32))      ▷ only left rows; B cleared every level
+        atomicOr(B[r / 32], 1 << (r mod 32))      ▷ ≤ n_v/2 atomics; B cleared every level
 ```

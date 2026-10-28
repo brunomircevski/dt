@@ -56,6 +56,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
+#include <functional>
 #include <cctype>
 #include <optional>
 #include <chrono>
@@ -116,7 +117,10 @@ struct NodeDesc {
   std::int32_t partition = 0;     // split, and not both children are leaves
   float filterScale = 0.0f;       // see floatGainFilter()
   float filterMargin = 0.0f;
+  std::int32_t marksRight = 0;    // goesLeft holds the right rows (more left than right)
 };
+
+__host__ __device__ inline bool marksRight(const NodeDesc &node) { return node.marksRight != 0; }
 
 struct ScanParams {
   EntryCodec codec;
@@ -285,6 +289,36 @@ __global__ void gatherKernel(const float *values, const std::uint32_t *rows, std
   }
   const std::uint32_t row = rows ? rows[index] : index;
   column[index] = {values[row] + 0.0f, codec.pack(row, labels[row])}; // -0.0 -> +0.0, as on the CPU
+}
+
+// The class counts of the selected rows (the root's), during the presort
+// instead of countClasses() on the host (airline: 58 ms less on the H100
+// node). A shared histogram per block, one atomic per distinct label in a
+// warp; `counts` starts at zero.
+__global__ void countClassesKernel(const std::uint16_t *labels, const std::uint32_t *rows,
+                                   std::uint32_t count, int classCount, std::uint32_t *counts) {
+  __shared__ std::uint32_t local[kMaxGpuClasses];
+  for (int k = threadIdx.x; k < classCount; k += blockDim.x) {
+    local[k] = 0;
+  }
+  __syncthreads();
+  const std::uint32_t lane = threadIdx.x & 31;
+  const std::size_t step = std::size_t{gridDim.x} * blockDim.x;
+  for (std::size_t base = std::size_t{blockIdx.x} * blockDim.x; base < count; base += step) {
+    const std::size_t index = base + threadIdx.x;
+    const bool valid = index < count;
+    const std::uint32_t label = valid ? labels[rows ? rows[index] : index] : 0xFFFFu;
+    const unsigned same = __match_any_sync(0xFFFFFFFFu, label);
+    if (valid && lane == static_cast<std::uint32_t>(__ffs(same) - 1)) {
+      atomicAdd(local + label, static_cast<std::uint32_t>(__popc(same)));
+    }
+  }
+  __syncthreads();
+  for (int k = threadIdx.x; k < classCount; k += blockDim.x) {
+    if (local[k]) {
+      atomicAdd(counts + k, local[k]);
+    }
+  }
 }
 
 // The columns are sorted by value alone (radix sort, stable: equal values
@@ -1192,9 +1226,15 @@ __global__ void __launch_bounds__(kThreads)
   std::uint32_t length;
   tileRange(segment, tile, start, length);
   const Entry *column = src + segment.base;
-  // Only the left rows: the bits start at zero on every level.
-  const std::uint32_t end = min(length, node.leftCount > start ? node.leftCount - start : 0u);
-  for (std::uint32_t index = threadIdx.x; index < end; index += kThreads) {
+  // Only the rows of the smaller side: the bits start at zero on every
+  // level. The left ones, or (marksRight) the right ones; the partition
+  // flips the bit then.
+  const bool right = marksRight(node);
+  const std::uint32_t from = right ? node.leftCount : 0u;
+  const std::uint32_t to = right ? node.count : node.leftCount;
+  const std::uint32_t begin = from > start ? min(length, from - start) : 0u;
+  const std::uint32_t end = min(length, to > start ? to - start : 0u);
+  for (std::uint32_t index = begin + threadIdx.x; index < end; index += kThreads) {
     const std::uint32_t row = codec.row(column[start + index].packed);
     atomicOr(goesLeft + (row >> 5), 1u << (row & 31));
   }
@@ -1302,6 +1342,11 @@ __global__ void __launch_bounds__(kThreads)
     return;
   }
   const std::uint32_t leftCount = nodes[segment.node].leftCount;
+  const std::uint32_t flip = marksRight(nodes[segment.node]) ? 1u : 0u;
+  // In the split feature's own column the left rows are the first
+  // leftCount entries: no goesLeft read.
+  const bool byPosition =
+      nodes[segment.node].splitFeature == static_cast<std::int32_t>(segment.feature);
   const PartitionTarget target = targets[segmentIndex];
   // Only thread 0 reads the move (read by every thread, or waited for by
   // another one, it made the kernel 3% slower), early: the tile's load
@@ -1329,7 +1374,9 @@ __global__ void __launch_bounds__(kThreads)
 #pragma unroll
   for (int j = 0; j < kItems; ++j) {
     const std::uint32_t row = params.codec.row(items[j].packed);
-    left[j] = first + j < length && ((goesLeft[row >> 5] >> (row & 31)) & 1u);
+    left[j] = first + j < length &&
+              (byPosition ? start + first + j < leftCount
+                          : (((goesLeft[row >> 5] >> (row & 31)) & 1u) ^ flip) != 0);
     lefts += left[j];
   }
   __syncthreads(); // the scan reuses the load's shared memory (and `shared`)
@@ -2026,7 +2073,7 @@ public:
     arenaUsed_ = 0;
     scratchUsed_ = 0;
 
-    const std::vector<std::uint32_t> counts = countClasses(train_, rows, &pool_);
+    const std::vector<std::uint32_t> counts = hostRootCounts_; // presortStart()
     std::vector<std::uint32_t> allFeatures(features_);
     std::iota(allFeatures.begin(), allFeatures.end(), 0u);
     LevelNode root{store.add(counts.data()), 0, static_cast<std::uint32_t>(stride_), 0,
@@ -2282,10 +2329,58 @@ private:
     // uploaded into the end of the column buffer (see presort()). Through
     // page-locked staging buffers, without page-locking the source (see
     // uploadStaged()).
+    std::size_t tempBytes = 0;
+    cub::DoubleBuffer<Entry> buffers(columns_.get(), columns_.get());
+    CUDA_CHECK(cub::DeviceRadixSort::SortKeys(nullptr, tempBytes, buffers, static_cast<int>(rows_),
+                                              EntryValue{}, 0, 32, stream_));
+    // ... and room for C4.5's distinct values (distinctValues()): growing it
+    // there would synchronize.
+    std::size_t uniqueBytes = 0;
+    CUDA_CHECK(cub::DeviceSelect::Unique(
+        nullptr, uniqueBytes, thrust::make_transform_iterator(columns_.get(), ValueBits{}),
+        reinterpret_cast<std::uint32_t *>(columns_.get()), static_cast<int *>(nullptr),
+        static_cast<int>(rows_), stream_));
+    sortTemp_.reserve(std::max(tempBytes, uniqueBytes));
+    sortTempBytes_ = tempBytes;
+
     float *target = reusable_ ? values_.get() : uploadedValues();
     allocTimer.reset();
     double uploadSeconds = 0.0;
-    {
+    // Presort each feature as soon as its raw values are uploaded (copies
+    // on a copy stream, the presort on stream_ waiting for the chunk that
+    // completes the feature): ECBDL 0.5-0.6 s less on the H100 node. Only
+    // for a single grow of all rows; the kept copy of the raw values (C4.5
+    // pruning) is made per feature, before the presort can overwrite them.
+    if (!reusable_) {
+      ScopedTimer timer(uploadSeconds);
+      trace::Phase phase("upload+presort");
+      uploadStaged(labels_.get(), train_.labels.data(), rows_ * sizeof(std::uint16_t));
+      stride_ = rows_;
+      const bool distinct = options_.algorithm == Algorithm::C45;
+      presortStart({}, distinct);
+      std::size_t next = 0; // the next feature to presort
+      const std::size_t featureBytes = rows_ * sizeof(float);
+      if (keepValues) {
+        rawValues_.reserve(total);
+      }
+      uploadStaged(target, train_.values.data(), total * sizeof(float), "upload", copyStreams_[0],
+                   [&](std::size_t uploaded, cudaEvent_t done) {
+                     if (done && next < features_ && (next + 1) * featureBytes <= uploaded) {
+                       CUDA_CHECK(cudaStreamWaitEvent(stream_, done, 0));
+                     }
+                     while (next < features_ && (next + 1) * featureBytes <= uploaded) {
+                       if (keepValues) {
+                         profile_.run("copyValues", stream_, [&]() {
+                           CUDA_CHECK(cudaMemcpyAsync(rawValues_.get() + next * rows_,
+                                                      target + next * rows_, featureBytes,
+                                                      cudaMemcpyDeviceToDevice, stream_));
+                         });
+                       }
+                       presortFeature(next++, distinct);
+                     }
+                   });
+      overlapped_ = true; // presortFinish() at the end, once the arena's toucher runs
+    } else {
       ScopedTimer timer(uploadSeconds);
       trace::Phase phase("upload");
       uploadStaged(target, train_.values.data(), total * sizeof(float));
@@ -2303,20 +2398,6 @@ private:
       std::fprintf(stderr, "  setup alloc %.2f ms, upload %.2f ms\n", allocSeconds * 1e3,
                    uploadSeconds * 1e3);
     }
-
-    std::size_t tempBytes = 0;
-    cub::DoubleBuffer<Entry> buffers(columns_.get(), columns_.get());
-    CUDA_CHECK(cub::DeviceRadixSort::SortKeys(nullptr, tempBytes, buffers, static_cast<int>(rows_),
-                                              EntryValue{}, 0, 32, stream_));
-    // ... and room for C4.5's distinct values (distinctValues()): growing it
-    // there would synchronize.
-    std::size_t uniqueBytes = 0;
-    CUDA_CHECK(cub::DeviceSelect::Unique(
-        nullptr, uniqueBytes, thrust::make_transform_iterator(columns_.get(), ValueBits{}),
-        reinterpret_cast<std::uint32_t *>(columns_.get()), static_cast<int *>(nullptr),
-        static_cast<int>(rows_), stream_));
-    sortTemp_.reserve(std::max(tempBytes, uniqueBytes));
-    sortTempBytes_ = tempBytes;
 
     // c * log2(c) tables (the same for every grow).
     const std::vector<double> logs = xlog2xTable();
@@ -2344,6 +2425,10 @@ private:
     } else {
       toucher_ = std::thread([this, bytes = total * sizeof(Entry)]() { touchArena(bytes); });
     }
+    if (overlapped_) {
+      trace::Phase phase("presort finish");
+      presortFinish(options_.algorithm == Algorithm::C45 ? &overlapDistinct_ : nullptr);
+    }
     CUDA_CHECK(cudaStreamSynchronize(stream_));
   }
 
@@ -2355,16 +2440,28 @@ private:
   // 0.32 s page-locked in pipelined chunks and 0.35 s page-locked at once; on
   // the A100 node 0.45-0.55 s either way. Smaller chunks cost more per chunk
   // than they gain, more threads gained nothing.
+  // On `stream` (stream_ if null); `uploaded(bytes, done)` is called
+  // once the copies of the first `bytes` are enqueued, after
+  // staging.done[...] is recorded for the last of them (see setup()).
   void uploadStaged(void *target, const void *source, std::size_t bytes,
-                    const char *name = "upload") {
+                    const char *name = "upload", cudaStream_t stream = nullptr,
+                    const std::function<void(std::size_t, cudaEvent_t)> &uploaded = {}) {
     constexpr std::size_t kChunk = Staging::kBytes;
+    if (!stream) {
+      stream = stream_;
+    }
     trace::add("h2d_bytes", static_cast<double>(bytes));
     if (bytes <= kChunk) {
-      profile_.run(name, stream_, [&]() {
-        CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyHostToDevice, stream_));
+      profile_.run(name, stream, [&]() {
+        CUDA_CHECK(cudaMemcpyAsync(target, source, bytes, cudaMemcpyHostToDevice, stream));
       }, "copy");
-      trace::Doing waiting(trace::Work::GpuWait);
-      CUDA_CHECK(cudaStreamSynchronize(stream_));
+      {
+        trace::Doing waiting(trace::Work::GpuWait);
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+      }
+      if (uploaded) {
+        uploaded(bytes, nullptr); // already there: nothing to wait for
+      }
       return;
     }
     trace::Doing copying(trace::Work::Staging);
@@ -2387,13 +2484,16 @@ private:
         const std::size_t end = size * (part + 1) / parts;
         std::memcpy(stage + begin, from + offset + begin, end - begin);
       });
-      profile_.run(name, stream_, [&]() {
-        CUDA_CHECK(cudaMemcpyAsync(to + offset, stage, size, cudaMemcpyHostToDevice, stream_));
+      profile_.run(name, stream, [&]() {
+        CUDA_CHECK(cudaMemcpyAsync(to + offset, stage, size, cudaMemcpyHostToDevice, stream));
       }, "copy");
-      CUDA_CHECK(cudaEventRecord(staging.done[buffer], stream_));
+      CUDA_CHECK(cudaEventRecord(staging.done[buffer], stream));
+      if (uploaded) {
+        uploaded(offset + size, staging.done[buffer]);
+      }
     }
     trace::Doing waiting(trace::Work::GpuWait);
-    CUDA_CHECK(cudaStreamSynchronize(stream_));
+    CUDA_CHECK(cudaStreamSynchronize(stream));
   }
 
   // The reverse of uploadStaged(): chunks are downloaded into the staging
@@ -2509,34 +2609,54 @@ private:
   // last slots, which free up as their features are sorted: a slot is taken
   // only once the raw values in it are no longer needed.
   void presort(std::span<const std::uint32_t> rows, DistinctValues *distinct) {
-    const float *values = uploadedValues();
+    if (overlapped_) { // setup() did it during the upload
+      if (!rows.empty()) {
+        throw std::logic_error("GpuGrower: not created for repeated use");
+      }
+      if (distinct) {
+        *distinct = std::move(overlapDistinct_);
+      }
+      return;
+    }
+    presortStart(rows, distinct != nullptr);
+    for (std::size_t feature = 0; feature < features_; ++feature) {
+      presortFeature(feature, distinct != nullptr);
+    }
+    presortFinish(distinct);
+  }
+
+  // presort() in steps (setup() runs them during the upload).
+  const float *presortValues_ = nullptr;
+  const std::uint32_t *presortRows_ = nullptr;
+  std::vector<bool> presortTaken_;
+
+  void presortStart(std::span<const std::uint32_t> rows, bool distinct) {
+    presortValues_ = uploadedValues();
     if (reusable_) {
-      values = values_.get();
+      presortValues_ = values_.get();
     } else if (presorted_ || !rows.empty()) {
       throw std::logic_error("GpuGrower: not created for repeated use");
     }
     presorted_ = true;
-    const std::uint32_t *rowList = nullptr;
+    presortRows_ = nullptr;
     if (!rows.empty()) {
       CUDA_CHECK(cudaMemcpyAsync(rowList_.get(), rows.data(), rows.size() * sizeof(std::uint32_t),
                                  cudaMemcpyHostToDevice, stream_));
-      rowList = rowList_.get();
+      presortRows_ = rowList_.get();
     }
-    // Whether slot `slot` overlaps the raw values of features `first` onwards.
-    const std::size_t rawStart = 2 * slotCount_ * slotEntries_ - features_ * rows_; // in floats
-    auto holdsValues = [&](std::size_t slot, std::size_t first) {
-      return !reusable_ && first < features_ &&
-             2 * (slot + 1) * slotEntries_ > rawStart + first * rows_;
-    };
-    std::vector<bool> taken(slotCount_, false);
-    auto freeSlot = [&](std::size_t first, std::size_t other) {
-      for (std::size_t slot = 0; slot < slotCount_; ++slot) {
-        if (!taken[slot] && slot != other && !holdsValues(slot, first)) {
-          return slot;
-        }
-      }
-      throw std::logic_error("GpuGrower: no free column slot for the presort");
-    };
+    rootCounts_.reserve(classCount_);
+    CUDA_CHECK(cudaMemsetAsync(rootCounts_.get(), 0, classCount_ * sizeof(std::uint32_t), stream_));
+    profile_.run("countClasses", stream_, [&]() {
+      countClassesKernel<<<static_cast<unsigned>(4 * smCount_), 256, 0, stream_>>>(
+          labels_.get(), presortRows_, static_cast<std::uint32_t>(stride_), classCount_,
+          rootCounts_.get());
+    });
+    CUDA_CHECK(cudaGetLastError());
+    hostRootCounts_.assign(classCount_, 0);
+    CUDA_CHECK(cudaMemcpyAsync(hostRootCounts_.data(), rootCounts_.get(),
+                               classCount_ * sizeof(std::uint32_t), cudaMemcpyDeviceToHost,
+                               stream_));
+    presortTaken_.assign(slotCount_, false);
     if (distinct) {
       distinctCounts_.reserve(features_);
       distinctPlaces_.reserve(features_ + 1);
@@ -2544,33 +2664,51 @@ private:
                                  stream_));
     }
     slot_.assign(features_, 0);
-    for (std::size_t feature = 0; feature < features_; ++feature) {
-      const std::size_t first = freeSlot(feature, slotCount_);
-      const std::size_t second = freeSlot(feature + 1, first); // written after the gather
-      Entry *a = columns_.get() + first * slotEntries_;
-      Entry *b = columns_.get() + second * slotEntries_;
-      profile_.run("presortGather", stream_, [&]() {
-        gatherKernel<<<static_cast<unsigned>((stride_ + 255) / 256), 256, 0, stream_>>>(
-            values + feature * rows_, rowList, static_cast<std::uint32_t>(stride_), labels_.get(),
-            codec_, a);
-      });
-      CUDA_CHECK(cudaGetLastError());
-      cub::DoubleBuffer<Entry> buffers(a, b);
-      profile_.run("presortSort", stream_, [&]() {
-        std::size_t tempBytes = sortTempBytes_;
-        CUDA_CHECK(cub::DeviceRadixSort::SortKeys(sortTemp_.get(), tempBytes, buffers,
-                                                  static_cast<int>(stride_), EntryValue{}, 0, 32,
-                                                  stream_));
-      });
-      const bool inFirst = buffers.Current() == a;
-      slot_[feature] = static_cast<std::uint32_t>(inFirst ? first : second);
-      taken[slot_[feature]] = true;
-      if (distinct) { // the other slot is free
-        distinctValues(feature, buffers.Current(), inFirst ? b : a);
+  }
+
+  void presortFeature(std::size_t feature, bool distinct) {
+    // Whether slot `slot` overlaps the raw values of features `first` onwards.
+    const std::size_t rawStart = 2 * slotCount_ * slotEntries_ - features_ * rows_; // in floats
+    auto holdsValues = [&](std::size_t slot, std::size_t first) {
+      return !reusable_ && first < features_ &&
+             2 * (slot + 1) * slotEntries_ > rawStart + first * rows_;
+    };
+    auto freeSlot = [&](std::size_t first, std::size_t other) {
+      for (std::size_t slot = 0; slot < slotCount_; ++slot) {
+        if (!presortTaken_[slot] && slot != other && !holdsValues(slot, first)) {
+          return slot;
+        }
       }
+      throw std::logic_error("GpuGrower: no free column slot for the presort");
+    };
+    const std::size_t first = freeSlot(feature, slotCount_);
+    const std::size_t second = freeSlot(feature + 1, first); // written after the gather
+    Entry *a = columns_.get() + first * slotEntries_;
+    Entry *b = columns_.get() + second * slotEntries_;
+    profile_.run("presortGather", stream_, [&]() {
+      gatherKernel<<<static_cast<unsigned>((stride_ + 255) / 256), 256, 0, stream_>>>(
+          presortValues_ + feature * rows_, presortRows_, static_cast<std::uint32_t>(stride_),
+          labels_.get(), codec_, a);
+    });
+    CUDA_CHECK(cudaGetLastError());
+    cub::DoubleBuffer<Entry> buffers(a, b);
+    profile_.run("presortSort", stream_, [&]() {
+      std::size_t tempBytes = sortTempBytes_;
+      CUDA_CHECK(cub::DeviceRadixSort::SortKeys(sortTemp_.get(), tempBytes, buffers,
+                                                static_cast<int>(stride_), EntryValue{}, 0, 32,
+                                                stream_));
+    });
+    const bool inFirst = buffers.Current() == a;
+    slot_[feature] = static_cast<std::uint32_t>(inFirst ? first : second);
+    presortTaken_[slot_[feature]] = true;
+    if (distinct) { // the other slot is free
+      distinctValues(feature, buffers.Current(), inFirst ? b : a);
     }
+  }
+
+  void presortFinish(DistinctValues *distinct) {
     if (distinct) {
-      downloadDistinct(*distinct, taken);
+      downloadDistinct(*distinct, presortTaken_);
     }
     trace::Doing waiting(trace::Work::GpuWait);
     CUDA_CHECK(cudaStreamSynchronize(stream_));
@@ -2941,6 +3079,7 @@ private:
       }
       nodes[n].splitFeature = decision.feature;
       nodes[n].leftCount = decision.leftCount;
+      nodes[n].marksRight = 2 * std::size_t{decision.leftCount} > parent.count;
 
       const std::uint32_t *parentCounts = store_->counts(parent.node);
       std::vector<std::uint32_t> childCounts(2 * classes);
@@ -3315,6 +3454,10 @@ private:
   ThreadPool &pool_;
   bool reusable_;
   bool presorted_ = false;
+  bool overlapped_ = false;          // setup() presorted during the upload
+  DistinctValues overlapDistinct_;   // ... with these distinct values (C4.5)
+  DeviceArray<std::uint32_t> rootCounts_;
+  std::vector<std::uint32_t> hostRootCounts_;
   bool onePass_ = false;
   int smCount_ = 1;
   std::size_t rows_;

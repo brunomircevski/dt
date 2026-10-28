@@ -35,7 +35,7 @@ fine for a narrative, but the paper needs a clean ablation.
 |---|---|---|
 | 1 | **Presorted, label-packed columns, level-synchronous growth.** Every access coalesced; all nodes of a level share one set of launches; ~24 B per value per level. | The core design |
 | 2 | **Single-pass stable partition with decoupled look-back** (as in CUB's scans; self-validating 64-bit tile states, no fences; tiles taken from an atomic counter so a tile only waits for tiles already running). It also counts the **next level's tile class histograms and cut counts** while writing, so below the root the histogram pass disappears. | Partition at ~1.2 TB/s on the H100 PCIe (peak ~2 TB/s) |
-| 3 | **Goes-left flags as a bitmap**: one bit per row, set by `atomicOr` for left rows only; 14 MB for 115M rows stays in L2 (a byte per row, 115 MB, did not) | H100 airline CART build 1.73 → 1.09 s |
+| 3 | **Goes-left flags as a bitmap**: one bit per row, set by `atomicOr` for the rows of the smaller side only (a node with more left rows marks its right rows and the partition flips the bit); 14 MB for 115M rows stays in L2 (a byte per row, 115 MB, did not). The split feature's own column skips the bitmap: its left rows are the first `leftCount` entries. | H100 airline CART build 1.73 → 1.09 s (bitmap); smaller side and split column by position, each alone on chess_1b: −0.07 s and −0.12 s of 0.97 s |
 | 4 | **Warp-ballot class prefix counts**: `left[k] = before[k] + popc(ballot(cls == k) & lanesBelow)`, neighbours via `__shfl_up/down_sync`. No thread walks entries one by one; no shared-memory scan; no atomics. | Sweep is bandwidth-bound |
 | 5 | **Convexity bound per tile (2 classes)**: the gain is convex in the left class counts, a tile's cuts lie in the box between the counts before and after it, so their gains are at most the max over the box's 4 corners. Tiles below the exact gain of another cut of the segment (minus 1e-8) are skipped. (`tileBoundKernel`) | Skips most tiles in big nodes; used on HIGGS and airline (binary) |
 | 6 | **Boundary-point rule** (Fayyad–Irani style): a cut between two same-class entries whose neighbours are singleton values cannot be optimal and is not scored (`isSkippableCut`) | Fewer gain evaluations |
@@ -43,8 +43,31 @@ fine for a narrative, but the paper needs a clean ablation.
 | 8 | **CPU/GPU hybrid**: children below `--gpu-min-rows` (CART rows/8192 in [1024, 2048]; C4.5 rows/4096 in [1024, 4096]) are gathered into one block, copied through a 512 MB device ring on a second stream, and a host callback (`cudaLaunchHostFunc`) starts CPU subtree tasks; the GPU goes on with the next level. A level of thousands of small nodes costs the GPU about as much as one of big nodes. | Ampere C4.5 build 3.3 → 5.9 s if forced to 512 rows |
 | 9 | **Mixed precision with a proven error bound** (consumer GPUs only, FP32:FP64 > 4:1): float estimate of every cut, exact double `cutGain` (the CPU's function) only for cuts within a proven bound of the segment's best; ≤ 8 candidates kept per tile and scored by one warp. Closed-form Gini `Σ_k (l_k·n − t_k·n_L)² / (n²·n_L·n_R)` with differences exact in int64, so the error is relative to the gain, not to n. Entropy summed as `c·log2(m/c)` terms. | Laptop HIGGS exact pass 260–290 → 15 ms (CART), 55 ms (C4.5); CART overflow sweeps 130 → 0.2 ms |
 | 10 | **Setup**: upload through four pinned 32 MB staging buffers on the GPU's NUMA node instead of page-locking the data (slow under HMM); CUDA context created while the CSV loads; C4.5 distinct values via `cub::DeviceSelect::Unique` on the device instead of copying all sorted values back | 6 GB in 0.2 s vs 0.35 s pinned (H100 node); A100 node upload 0.5 → 0.3 s with NUMA placement; C4.5 presort 0.54 → 0.09 s |
+| 10b | **Upload/presort overlap**: the copies run on a copy stream; each feature is gathered and radix-sorted as soon as the staging event of the chunk that completes its column has fired, so the presort hides behind the upload (single trees; the C4.5-pruning copy of the raw values is made per feature before its sort) | Presort time disappears: H100 ECBDL-15M 0.52 s, airline 0.07 s; chess_1b (3 features) only half of it, the upload gets slower |
+| 10c | **Root class counts on the GPU** (shared-memory histogram with `__match_any_sync` warp aggregation, during the presort) instead of a host pass over the labels while the GPU waits | H100 airline −0.06 s, chess_1b −0.12 s |
 | 11 | **Column slots** (F + 1) instead of two ping-pong copies: the partition moves each column into a free slot and waits per segment for the column that left it | Airline VRAM 35 → 13.3 GiB, HIGGS 7.2 → 3.4 GiB, 0–3% slower |
 | 12 | **Stream-ordered allocation** (`cudaMallocAsync` with a pool that keeps its memory) for per-level arrays that change size | No device syncs on resize |
+
+### Same-commit measurement of 3, 10b and 10c (2026-10-27)
+
+The four changes added on 2026-10-28 (smaller side, split column by
+position, overlap, root counts) were measured on one commit and machine,
+switched by environment variables, depth 10 without pruning, `train total` medians
+of 5 runs (3 for chess_1b and ECBDL-15M). All trees were byte-identical to
+the previous code. These measurements are newer than the benchmark tables in
+[benchmarks.md](benchmarks.md).
+
+| Dataset | H100 CART | H100 C4.5 | A100 CART | A100 C4.5 |
+|---|---|---|---|---|
+| airline (115M × 13) | 655 → 522 ms | 676 → 538 ms | 978 → 798 ms | 997 → 815 ms |
+| chess_1b (1B × 3) | 969 → 620 ms | 969 → 670 ms | 1488 → 1055 ms | 1485 → 1127 ms |
+| ECBDL-15M | 3508 → 2979 ms | 3602 → 3003 ms | 5720 → 5059 ms | 5884 → 5132 ms |
+| HIGGS (10.5M × 28) | 174 → 162 ms | 202 → 178 ms | 238 → 207 ms | 255 → 244 ms |
+
+Without the overlap the other three change only the build: chess_1b CART
+build 654 → 350 ms on the H100, airline 392 → 328 ms; ECBDL and HIGGS barely
+move. The overlap removes the presort time from ECBDL (≈ 0.5 s H100, 0.7 s
+A100) and airline (≈ 0.07–0.09 s).
 
 ## Correctness / determinism (worth a paragraph)
 

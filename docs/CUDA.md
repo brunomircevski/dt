@@ -49,6 +49,14 @@ copies ping-ponged instead (and a third mirrored the host arena, see Memory).
    the CSV loads. All device buffers are allocated once per run.
 2. Per grown tree: build `(value, packed row/class)` pairs of the selected
    rows and sort each feature with CUB's radix sort (stable, like the CPU's).
+   The root's class counts come from a kernel in the same stream (a shared
+   histogram per block), not from a pass over the labels on the host.
+   For a single tree (no cross-validation) each feature is presorted as soon
+   as its raw values are uploaded: the copies run on a copy stream, and the
+   presort waits only for the staging event of the chunk that completes the
+   feature, so the upload and the presort overlap (ECBDL 0.5-0.6 s less on the
+   H100 node). With C4.5 pruning the kept copy of the raw values is made per
+   feature, just before its presort.
    For C4.5 the device keeps each feature's distinct values (CUB's
    `DeviceSelect::Unique` on the sorted values' bits, into free device
    memory) and copies only those to the host for the thresholds, instead of
@@ -95,9 +103,14 @@ Page-locking the arena instead took the CUDA driver's lock for 1.2-1.9 s
 (sometimes 4-6 s on the H100 node) and stalled the level loop's CUDA calls.
 
 The goes-left flags of step 5 are a bitmap (one bit per row, set with
-`atomicOr` for the left rows only, cleared every level): 14 MB for airline,
-which stays in L2, against 115 MB of bytes that did not. The H100's CART build
-on airline went from 1.73 to 1.09 s.
+`atomicOr` for the rows of the smaller side only, cleared every level): 14 MB
+for airline, which stays in L2, against 115 MB of bytes that did not. The
+H100's CART build on airline went from 1.73 to 1.09 s. A node with more left
+than right rows marks its right rows and the partition flips the bit
+(`NodeDesc::marksRight`), so at most half of a node's rows take an atomic. In
+the split feature's own column the partition does not read the bitmap at
+all: the left rows are the first `leftCount` entries. On chess_1b (H100,
+CART depth 10, total 0.97 s) each alone saved 0.07 and 0.12 s.
 
 The columns are gathered into a 512 MB ring of four parts on the device and
 copied to the host on the copy streams, and a host callback there

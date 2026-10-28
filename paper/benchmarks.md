@@ -140,6 +140,12 @@ different algorithms; lead with CART.
 
 ## Experiments still missing
 
+0. **Rerun all ./tree rows** after the 2026-10-28 changes (smaller-side
+   bitmap, split column by position, upload/presort overlap, GPU root counts;
+   see [optimizations.md](optimizations.md#same-commit-measurement-of-3-10b-and-10c-2026-10-27)):
+   the tables above predate them; same-commit measurements show 4–36% lower
+   `train total` at depth 10.
+
 1. **Clean ablation** on one commit and machine: `--gpu-sweep` (one exact pass
    vs float-filter two-pass, also on the RTX 5070 laptop), `--gpu-min-rows`
    sweep, CPU thread sweep; compile-time toggles would be needed for the
