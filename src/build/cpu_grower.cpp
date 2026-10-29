@@ -111,33 +111,51 @@ private:
 
   // Every feature's distinct values, from the sorted columns in work_ (stride
   // `count`, slots slotOf_): the last value of each run, in chunks on the pool.
+  // Counted first and then written in place, so that nothing is allocated on
+  // the pool (growing thousands of vectors at once took SOREL's presort on
+  // epyc from 11 s to 34 s in some runs) and nothing is copied on one thread.
+  // Without a pool (--serial) one pass straight into distinct.values.
   void distinctValues(std::size_t count, DistinctValues &distinct) {
     constexpr std::size_t kChunk = std::size_t{1} << 20;
     const std::size_t chunks = (count + kChunk - 1) / kChunk;
-    std::vector<std::vector<float>> parts(features_ * chunks);
-    parallelFor(pool_, parts.size(), [&](std::size_t part) {
+    const auto chunkOf = [&](std::size_t part, auto &&take) {
       const Entry *column = work_.get() + slotOf_[part / chunks] * count;
       const std::size_t begin = part % chunks * kChunk;
       const std::size_t end = std::min(count, begin + kChunk);
-      std::vector<float> &out = parts[part];
       for (std::size_t index = begin; index < end; ++index) {
         const float value = column[index].value;
         if (index + 1 == count ||
             std::bit_cast<std::uint32_t>(value) != std::bit_cast<std::uint32_t>(column[index + 1].value)) {
-          out.push_back(value);
+          take(value);
         }
       }
-    });
-    distinct.values.clear();
-    distinct.offsets.assign(1, 0);
-    for (std::size_t part = 0; part < parts.size(); ++part) {
-      distinct.values.insert(distinct.values.end(), parts[part].begin(), parts[part].end());
-      if (part % chunks == chunks - 1) {
-        distinct.offsets.push_back(distinct.values.size());
+    };
+    distinct.offsets.resize(features_ + 1);
+    if (!pool_ || pool_->workerCount() == 0) { // one thread: one pass, not two
+      distinct.values.clear();
+      distinct.offsets[0] = 0;
+      for (std::size_t feature = 0; feature < features_; ++feature) {
+        for (std::size_t part = feature * chunks; part < (feature + 1) * chunks; ++part) {
+          chunkOf(part, [&](float value) { distinct.values.push_back(value); });
+        }
+        distinct.offsets[feature + 1] = distinct.values.size();
       }
+      return;
     }
-    if (chunks == 0) {
-      distinct.offsets.assign(features_ + 1, 0);
+    std::vector<std::size_t> start(features_ * chunks + 1, 0);
+    parallelFor(pool_, features_ * chunks, [&](std::size_t part) {
+      std::size_t found = 0;
+      chunkOf(part, [&](float) { ++found; });
+      start[part + 1] = found;
+    });
+    std::partial_sum(start.begin(), start.end(), start.begin());
+    distinct.values.resize(start.back());
+    parallelFor(pool_, features_ * chunks, [&](std::size_t part) {
+      float *out = distinct.values.data() + start[part];
+      chunkOf(part, [&](float value) { *out++ = value; });
+    });
+    for (std::size_t feature = 0; feature <= features_; ++feature) {
+      distinct.offsets[feature] = start[feature * chunks];
     }
   }
 

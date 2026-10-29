@@ -1,0 +1,3 @@
+12:00:00 cluster-ecbdl-par cpu-epyc-ecbdl ecbdl tree 3 cart_depth10,c45_depth10_unpruned all 18000 ACCURACY=--test-accuracy
+12:00:00 cluster-ecbdl-par socket-epyc-ecbdl ecbdl tree 3 cart_depth10,c45_depth10_unpruned all 18000 ACCURACY=--test-accuracy,SOCKET=auto
+12:00:00 cluster-sorel-par cpu-epyc-sorel sorel tree 1 cart_depth10,c45_depth10_unpruned all 18000 ACCURACY=--test-accuracy

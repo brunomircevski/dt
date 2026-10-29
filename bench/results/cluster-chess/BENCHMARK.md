@@ -8,6 +8,10 @@
 - **Before:** the CUDA rows were 8b1ecd1's on the whole node (2026-10-20 from 13:52) and 6f6cecb's before that (2026-10-19), the GPU-only rows 7868bf4's on one CPU thread (2026-10-20 from 15:05, hopper's NUMA node 1 with GPU 2) and 0b3a2de's (that morning, GPU 0, unbound), the CPU rows d9da007's, the serial rows 673217f's, the dell/dell512 10-run check 41faca9's. The git history has them.
 - **Each node ran alone** and was reserved whole (`--exclusive`). The four sizes ran one after another on every node, smallest first.
 - **Same trees:** every case built the same tree on every node and backend: 17 nodes (9 leaves), depth 4, 100% training accuracy, at every size. That is the exact tree of a 3×3 board.
+- **Reruns queued (2026-10-28, jobs 381–545, `bench/cluster/submit-variants-2026-10-28.sh` and `submit-topup-2026-10-28.sh`):** every case on hopper and ampere (CUDA hybrid, GPU only) and epyc (parallel on both sockets and on one socket, --serial) gets 10 runs (each run, reading the CSV included, takes under about 2.5 minutes), and `--simple` on epyc is new here (10 runs; one at 1000M). The 3 runs here count; only the missing ones run (into `cluster-chess-new/` and `-top/` on mordor3), and `bench/merge_runs.py` adds them to the run folders here when done; the dell folders stay as they are. Superseded by the one-build reruns below: every chess folder was of 2026-10-20 builds, so all the ./tree_cpu ones start over. The charts mark the missing `simple-epyc-*` runs as "queued".
+- **Spin stall, fixed 2026-10-28 (rerun queued, jobs 550–570, `bench/cluster/submit-spinfix-2026-10-28.sh`):** the parallel backend partitions a big node (≥ 1M rows, few columns to move) in blocks taken in order by all threads, each block waiting for the one before it. It waited by spinning (`_mm_pause`) without end: when the thread of the block before was descheduled, the other threads spun and kept it off a CPU, so some runs took 2–8× as long (epyc chess_10m: user time 5 s instead of 2 s, the same system time; 11 of 80 runs > 2× the median). It now spins 2,048 pauses, then sleeps (`atomic::wait`, woken by the block before). On epyc2, 40 runs each of chess_10m (48 threads): CART 0.155 ± 0.131 s → 0.087 ± 0.005 s, C4.5 0.186 ± 0.163 s → 0.095 ± 0.005 s, no run above 2× the median. Only the parallel backend has those blocks (CUDA hybrid gives the CPU nodes under 4,096 rows; --serial and --simple have no pool), so only the parallel epyc runs (both sockets, one socket) start over, with 10 runs a case (full ECBDL 5), into `cluster-<dataset>-fix/`, replacing the old folders when done. The dell runs of ./tree_cpu run again too (below); until the reruns are in, the bars of old builds are marked (hatched, ⚠, from `problems.json`), as are runs more than twice the mean of the other runs.
+- **One build for every epyc ./tree_cpu run (2026-10-28, `bench/cluster/submit-final-2026-10-28.sh`):** after the spin fix, C4.5's list of distinct values (its thresholds are training values) was made allocation-free: counted, then written in place on the pool, and in one pass with --serial (SOREL's C4.5 presort on epyc varied 11–34 s; see cluster-sorel). Same trees as before in every check (SOREL, HIGGS, airline, ECBDL 15M, serial and parallel). So that every epyc run of ./tree_cpu is of that one build, the parallel runs started before it (jobs 550–556) run again, and --serial runs again for every dataset (10 runs a case of about 2 minutes or less, 5 under about 10 minutes, longer ones once), into `cluster-<dataset>-fix/`, replacing the old folders. The long runs (full ECBDL and SOREL parallel, every --serial, then --simple) run one after another on epyc2, the short parallel ones on epyc1. CUDA hybrid, GPU only and --simple do not use that code and are not rerun. Every dell run of ./tree_cpu (parallel on both sockets, on one socket, dell2's 512 GB, --serial) runs again on the same build too (`bench/cluster/submit-dell-chess-2026-10-28.sh`, jobs 592–618: parallel on dell1, then --serial there; dell2 only its 512 GB runs), the same runs as before, replacing the old folders; --simple on dell stays.
+- **Every run again on one build each, in batches (2026-10-28 evening, `bench/cluster/submit-batches-2026-10-28.sh`, jobs 636–645):** the pending jobs above were cancelled and replaced by a few batch jobs (`bench/cluster/batch.sh`: one SLURM job per node and group, its runs one after another). CUDA hybrid and GPU only on hopper and ampere run again on the new ./tree (67495f9, the CUDA rework: the smaller side's goes-left bitmap, the split column by position, upload overlapped with the presort, root counts on the GPU), installed by job 636 only after its trees matched the old build's (HIGGS, airline, ECBDL 15M; CART and C4.5, both GPU backends; 10–25 % faster there). On the CPU, dell and epyc for every backend (--simple, --serial, parallel on one socket, on both), on the final ./tree_cpu; the runs already done on it are kept, as are --simple's (that code did not change). Runs per case: about 2 minutes or less 10, under about 10 minutes 3, longer once; long runs on epyc2 (epyc1 stays free for the short ones), every dell run on dell1, short batch first. Test accuracy is now predicted once per distinct tree (`bench/run.py`), not once per run. The chart groups the bars by backend, the nodes under each; it reads `cluster-chess-fix/` too: a rerun done replaces the old bar, one pending marks it ("old build; rerun queued") or shows as "queued".
 - **Settings:** ./tree's defaults. The trees are grown without pruning (`cart_full_nodepth`, `c45_unpruned`), with no depth limit. Only training time and memory are compared; accuracy is ./tree's training accuracy (`run.py --train-accuracy-only`).
 
 How the runs are made, and where the data came from: [bench/cluster/README.md](../../cluster/README.md).
@@ -22,10 +26,10 @@ done
 The CPU rerun named only `cpu-epyc-$d cpu-dell-$d cpu-dell512-$d`, without `-a`. The serial runs were submitted with `serial-epyc-$d serial-dell-$d`, after a rebuild job (`-a <build job>`). The CUDA and GPU-only reruns named `cuda-hopper-$d cuda-ampere-$d gpuonly-hopper-$d gpuonly-ampere-$d` (job.sh puts every GPU run on its GPU's NUMA node), and the one-socket runs `socket-epyc-$d socket-dell-$d`.
 
 The charts are drawn as shown in the README:
-- `chart-1m.png`, `chart-10m.png`, `chart-100m.png`, `chart-1b.png`: one `machines_chart.py --spread` chart per size. The bars are medians, the whiskers run from the fastest to the slowest run, and the dots are the single runs. The time axis is log scale, as on every chart whose bars span 10× or more (automatic). A bar's darker part is the GPU setup, its lighter part the pruning, each drawn when it is at least 1% of the bar; both protocols here are unpruned (prune_seconds 0–0.3 ms), so there is no pruning segment, and each bar's label gives the recorded pruning time.
-- `chart-rows.png`: drawn by `rows_chart.py`.
+- `chart-chess_1m.png`, `chart-chess_10m.png`, `chart-chess_100m.png`, `chart-chess_1b.png`: one `testset_chart.py` chart per size (2026-10-28; before, `machines_chart.py --spread` charts drew medians). A bar is the mean of the runs, the whisker runs from the fastest to the slowest run, and its label gives the mean ± standard deviation, the number of runs and peak RAM (and VRAM). Log scale.
+- `chart-rows.png`: drawn by `rows_chart.py`: means, with whiskers from the fastest to the slowest run.
 
-Both use the 10-run results for dell and dell512 at 1000M.
+`chart-rows.png` uses the 10-run results for dell and dell512 at 1000M, the per-size charts the 3-run ones.
 
 **The dataset** is a 3×3 checkerboard: two features, x and y, uniform in [0, 3] with six decimals. The class (`A`, `B`) alternates over the nine unit squares (`B` on five of them: 55.5% of the rows), with no noise. Four sizes:
 
@@ -220,13 +224,13 @@ bench/.venv/bin/python bench/runs_chart.py $d/cpu-dell-chess_1b $d/cpu-dell512-c
 
 ## One chart per size
 
-![chess 3x3, 1M rows, on five mordor3 nodes](chart-1m.png)
+![chess 3x3, 1M rows, on five mordor3 nodes](chart-chess_1m.png)
 
-![chess 3x3, 10M rows, on five mordor3 nodes](chart-10m.png)
+![chess 3x3, 10M rows, on five mordor3 nodes](chart-chess_10m.png)
 
-![chess 3x3, 100M rows, on five mordor3 nodes](chart-100m.png)
+![chess 3x3, 100M rows, on five mordor3 nodes](chart-chess_100m.png)
 
-![chess 3x3, 1000M rows, on five mordor3 nodes](chart-1b.png)
+![chess 3x3, 1000M rows, on five mordor3 nodes](chart-chess_1b.png)
 
 ## Notes
 

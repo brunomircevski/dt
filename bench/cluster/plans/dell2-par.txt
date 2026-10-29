@@ -1,0 +1,4 @@
+02:00:00 cluster-chess-par cpu-dell512-chess_1m chess_1m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par cpu-dell512-chess_10m chess_10m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par cpu-dell512-chess_100m chess_100m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par cpu-dell512-chess_1b chess_1b tree 10 cart_full_nodepth,c45_unpruned all 3600 

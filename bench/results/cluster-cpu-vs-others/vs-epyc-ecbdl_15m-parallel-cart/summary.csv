@@ -1,0 +1,2 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+vs-epyc-ecbdl_15m-parallel-cart,ecbdl_15m,cart_depth10,tree,24,ok,True,12.664,12.664,12.664,12.664,,1,1.0,40.45329683832824,116772286464,116772286464,116772286464,116765872128,1863,932,10,0.9791979999999999,0.9830764649229085,0.0001485088354666009,,0.0

@@ -1,0 +1,9 @@
+04:00:00 cluster-airline-fix cpu-epyc-airline airline tree 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+04:00:00 cluster-airline-fix socket-epyc-airline airline tree 10 cart_depth10,c45_depth10_unpruned all 3600 SOCKET=auto,ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-fix cpu-epyc-higgs higgs tree 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-fix socket-epyc-higgs higgs tree 10 cart_depth10,c45_depth10_unpruned all 3600 SOCKET=auto,ACCURACY=--test-accuracy
+12:00:00 cluster-susy-fix cpu-epyc-susy susy tree 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+12:00:00 cluster-susy-fix socket-epyc-susy susy tree 10 cart_depth10,c45_depth10_unpruned all 10800 SOCKET=auto,ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-fix cpu-epyc-ecbdl_15m ecbdl_15m tree 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-fix socket-epyc-ecbdl_15m ecbdl_15m tree 10 cart_depth10,c45_depth10_unpruned all 10800 SOCKET=auto,ACCURACY=--test-accuracy
+12:00:00 cluster-sorel-fix cpu-epyc-sorel sorel tree 3 cart_depth10,c45_depth10_unpruned all 18000  ACCURACY=--test-accuracy

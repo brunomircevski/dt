@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <atomic>
 #include <bit>
+#include <chrono>
 #include <condition_variable>
 #include <cstring>
 #include <deque>
@@ -14,6 +15,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 
 #if defined(__SSE2__)
@@ -55,6 +57,47 @@ constexpr std::uint32_t kOutOfPlaceRows = 1u << 15;
 // slots do not limit the threads; their children are not swept on the way.
 constexpr std::uint32_t kBlockedRows = 1u << 20;
 constexpr std::uint32_t kPartitionBlock = 1u << 14;
+// waitNonZero(): pause loops it spins, how long it then yields its CPU, and
+// how long it then sleeps between looks.
+constexpr unsigned kSpinBeforeYield = 2048;
+constexpr std::chrono::milliseconds kYieldBeforeSleep{2};
+constexpr std::chrono::microseconds kSleepBetweenLooks{50};
+
+// Waits until value is not 0 and returns it. Not with atomic::wait(): libstdc++
+// (13) notifies only if it sees a waiter, and after a release store that check
+// can run before the store is visible (x86 lets a load pass an earlier store),
+// so the waiter slept on the old value for good (about 1 in 40 chess_1b
+// --parallel runs hung on dell). A seq_cst store closes that but waits for the
+// partition's streaming stores (ECBDL 15M C4.5 7% slower). So it spins briefly,
+// then yields its CPU (the thread it waits for may be descheduled, and 47
+// spinning threads would keep it off a CPU), then sleeps between looks: a
+// futex sleep right after the spin made dell's chess_100m build 2x slower
+// (waking is slow).
+std::uint32_t waitNonZero(const std::atomic<std::uint32_t> &value) {
+  std::uint32_t seen;
+  unsigned spin = 0;
+  std::chrono::steady_clock::time_point yieldingSince;
+  while ((seen = value.load(std::memory_order_acquire)) == 0) {
+    if (spin < kSpinBeforeYield) {
+      ++spin;
+#if defined(__SSE2__)
+      _mm_pause();
+#endif
+      continue;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (spin == kSpinBeforeYield) {
+      ++spin;
+      yieldingSince = now;
+    }
+    if (now - yieldingSince < kYieldBeforeSleep) {
+      std::this_thread::yield();
+    } else {
+      std::this_thread::sleep_for(kSleepBetweenLooks);
+    }
+  }
+  return seen;
+}
 
 // Such nodes are also partitioned in blocks when their columns to move would
 // keep at most 1 / kFewColumns of the threads busy (one thread per column),
@@ -616,10 +659,7 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
                   Entry *target = isWinner ? nullptr : columns.slot((*slots)[feature]) + item.begin;
                   if (waitFor[index] != kNone) {
                     trace::Doing waiting(trace::Work::Idle);
-                    std::atomic<std::uint32_t> &other = done[waitFor[index]];
-                    while (other.load(std::memory_order_acquire) == 0) {
-                      other.wait(0, std::memory_order_acquire);
-                    }
+                    waitNonZero(done[waitFor[index]]);
                   }
                   if (sweep) {
                     // CART: Gini, values must differ; C4.5: entropy, gap.
@@ -637,7 +677,6 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
                                                columns.leftBits);
                   }
                   done[index].store(1, std::memory_order_release);
-                  done[index].notify_all();
                 });
     return slots;
   }
@@ -773,14 +812,7 @@ void CpuTreeBuilder::partitionInBlocks(const std::vector<const Entry *> &sources
     }
     std::uint32_t before = 0; // left rows of the column before this block
     if (block > 0) {
-      const std::atomic<std::uint32_t> &previous = lefts[item - 1];
-      std::uint32_t value;
-      while ((value = previous.load(std::memory_order_acquire)) == 0) {
-#if defined(__SSE2__)
-        _mm_pause();
-#endif
-      }
-      before = value - 1;
+      before = waitNonZero(lefts[item - 1]) - 1; // (it is counting)
     }
     lefts[item].store(before + mine + 1, std::memory_order_release);
     if (waitFor[column] != ~0u) {

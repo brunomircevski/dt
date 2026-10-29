@@ -5,7 +5,7 @@ A rerun of the chess half of [the profiling benchmark](../BENCHMARK.md), with mo
 **Status:** run on 2026-10-22/23, jobs 226–261.
 - **Code:** `machine.json` says 0c6fb31. The binary is the build from job 167 (e4bc6a2); no source changed in between.
 - **Repetition:** every case ran 50 times profiled and 50 times without `--profile` (`plain/`).
-- **Averaging:** the chart and table show the **average** of the 50 runs, not the median, both for the training time and for every step's seconds (`profile_share_chart.py --mean`). Each step's share is its average seconds over the average attributed time.
+- **Averaging:** the chart and table show the **average** of the 50 runs, both for the training time and for every step's seconds (the script averages every chart). Each step's share is its average seconds over the average attributed time.
 - **Machines:** epyc1, 48 threads (2× EPYC 9255), for the parallel runs. hopper, on the GPU's socket (H100 PCIe, 16 CPU threads), for CUDA hybrid and `--gpu-only`.
 - **Datasets:** chess 10M, 50M, 100M, 500M, 1000M and 2000M: the 3×3 checkerboard, 2 features.
 - **Protocols:** CART = `cart_depth10` (`--cart --no-prune -d 10`); C4.5 = `c45_depth10_unpruned` (`--c45 --no-prune -d 10`).
@@ -19,7 +19,7 @@ for d in chess_10m chess_50m chess_100m chess_500m chess_1b chess_2b; do
   bench/cluster/profile.sh -m 50 -d $d -p cart_depth10,c45_depth10_unpruned -o cluster-profiling/chess-50runs \
       cpu-epyc-$d cuda-hopper-$d gpuonly-hopper-$d
 done
-bench/.venv/bin/python bench/profile_share_chart.py bench/results/cluster-profiling/chess-50runs --chess --mean
+bench/.venv/bin/python bench/profile_share_chart.py bench/results/cluster-profiling/chess-50runs --chess
 ```
 
 ## Results

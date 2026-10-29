@@ -18,16 +18,4 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | ./tree | 12.3 s | 12.2 s–12.4 s | 1.00× | 111.43 GiB | 111.43 GiB | 725 | 363 | 10 | 97.92% | 98.32% |
 
-**CART, grown to depth 10, pruned at a fixed alpha (cost-complexity)** (`cart_depth10_alpha`), 48 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 10.4 s | 10.3 s–10.6 s | 1.00× | 111.43 GiB | 111.43 GiB | 1 | 1 | 0 | 97.91% | 98.32% |
-
-**C4.5, grown to depth 10, error-based pruning (CF 0.25, subtree raising)** (`c45_depth10`), 48 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 12.4 s | 12.3 s–12.5 s | 1.00× | 111.75 GiB | 111.74 GiB | 161 | 81 | 10 | 97.91% | 98.32% |
-
 Test accuracy is measured on 2,897,917 rows: its 95% interval is ±0.01 percentage points at most.

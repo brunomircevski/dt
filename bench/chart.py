@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Chart of one benchmark run, one figure per dataset: training time (median,
+"""Chart of one benchmark run, one figure per dataset: training time (mean,
 line = min-max over the runs, log scale) and peak RSS up to the end of
-training (median of the same runs) per implementation. Single-thread and multi-thread cases are in
+training (mean of the same runs) per implementation. Single-thread and multi-thread cases are in
 separate rows of panels, never in one comparison. Each row is labelled with the
 tool and the tree it built (nodes, depth, test accuracy).
 
@@ -31,7 +31,8 @@ INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 NAMES = {"susy": "SUSY", "higgs": "HIGGS", "covertype": "Covertype", "diabetes": "Diabetes",
          "airline": "airline", "ecbdl": "ECBDL'14", "ecbdl_15m": "ECBDL'14 (15M sample)",
          "chess_1m": "chess 3×3 (1M)", "chess_10m": "chess 3×3 (10M)",
-         "chess_100m": "chess 3×3 (100M)", "chess_1b": "chess 3×3 (1000M)"}
+         "chess_100m": "chess 3×3 (100M)", "chess_1b": "chess 3×3 (1000M)",
+         "mnist8m": "MNIST8M", "sorel": "SOREL-20M"}
 GROUP = {"cart_alpha": "CART, fixed α", "cart_full": "CART, unpruned",
          "cart_depth12": "CART, depth 12", "cart_alpha_nodepth": "CART, fixed α, no depth limit", "c45": "C4.5, CF 0.25", "c45_unpruned": "C4.5, unpruned"}
 
@@ -129,7 +130,7 @@ def figure(run, dataset, times, memory, tree, status, vram, meta, machine, out):
                          ha="right", va="center", fontsize=7.8, color=MUTED)
             if key in times:
                 values = times[key]
-                mid = statistics.median(values)
+                mid = statistics.mean(values)
                 ax_time.plot([min(values), max(values)], [y, y], color=color, linewidth=2,
                              solid_capstyle="round", zorder=2)
                 ax_time.scatter([mid], [y], s=70, color=color, edgecolor="white",
@@ -140,9 +141,9 @@ def figure(run, dataset, times, memory, tree, status, vram, meta, machine, out):
                 ax_time.text(time_limits[0] * 1.2, y, status.get(key, "no data"), va="center",
                              fontsize=9, color=MUTED, style="italic")
             if key in memory:
-                gib = statistics.median(memory[key]) / 2**30
+                gib = statistics.mean(memory[key]) / 2**30
                 ax_rss.barh(y, gib, height=0.42, color=color, zorder=2)
-                gpu = (f"  + {statistics.median(vram[key]) / 2**30:.2f} GiB VRAM"
+                gpu = (f"  + {statistics.mean(vram[key]) / 2**30:.2f} GiB VRAM"
                        if vram.get(key) else "")
                 ax_rss.text(gib + rss_limit * 0.012, y, f"{gib:.2f} GiB RAM{gpu}", va="center",
                             fontsize=9, color=INK)
@@ -169,7 +170,7 @@ def figure(run, dataset, times, memory, tree, status, vram, meta, machine, out):
     fig.suptitle(f"{NAMES.get(dataset, dataset)}: {meta['n_train']:,} training rows, {meta['n_test']:,} test rows, "
                  f"{len(meta['features'])} features", x=0.215, y=1 - 0.1 / inches, ha="left", fontsize=12.5,
                  color=INK, fontweight="bold")
-    runs = f"median of {reps} runs; line: min–max" if reps and reps > 1 else "one run"
+    runs = f"mean of {reps} runs; line: min–max" if reps and reps > 1 else "one run"
     fig.text(0.215, 0.1 / inches, f"Dot: {runs}. Training time excludes reading the data. Same data "
              "and the same CPUs for every tool.\nPeak RSS: highest resident memory of the same "
              "process up to the end of training (runtime, data, warm-up, training).",

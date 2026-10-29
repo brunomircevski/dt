@@ -57,7 +57,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64
 PY=$B/venv/bin/python
 TREE=$B/dt/tree
 echo "job ${SLURM_JOB_ID:-} on $(hostname), $(nproc) CPUs, $(date '+%F %T'), reps $REPS, ./tree $TREE_COMMIT"
-echo "trees per library fit: $TREES, depth <= $DEPTH, cuML warm-up rows: $CUML_WARMUP_ROWS (0 = all), results: $RESULTS"
+echo "trees per library fit: $TREES (forest settings: ${FOREST:-identical}), depth <= $DEPTH, cuML warm-up rows: $CUML_WARMUP_ROWS (0 = all), results: $RESULTS"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "free memory per NUMA node: $(numactl -H | awk '/ free:/ { printf "%snode %s %d GiB", (n++ ? ", " : ""), $2, $4 / 1024 }')"
 [ -z "${NUMA_NODE:-}" ] || echo "NUMA node $NUMA_NODE: GPU $CUDA_VISIBLE_DEVICES, ${BIND[*]}, CPUs $(cat /sys/devices/system/node/node$NUMA_NODE/cpulist)"

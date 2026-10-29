@@ -1,0 +1,494 @@
+{
+ "cases": [
+  [
+   "chess_1b",
+   "cart_full_nodepth",
+   "tree",
+   24
+  ],
+  [
+   "chess_1b",
+   "c45_unpruned",
+   "tree",
+   24
+  ]
+ ],
+ "protocols": {
+  "cart_full": {
+   "title": "CART, grown to pure leaves (depth <= 30), no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 30
+    },
+    "rpart": {
+     "mode": "fit",
+     "maxdepth": 30
+    },
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ]
+   }
+  },
+  "cart_depth12": {
+   "title": "CART, grown to depth 12, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "12"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 12
+    },
+    "rpart": {
+     "mode": "fit",
+     "maxdepth": 12
+    },
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "12"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "12"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "12"
+    ]
+   }
+  },
+  "cart_alpha": {
+   "title": "CART, one tree pruned at a fixed alpha (cost-complexity)",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "30",
+     "--alpha",
+     "{alpha}"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 30,
+     "ccp_alpha": "{alpha}"
+    },
+    "rpart": {
+     "mode": "alpha",
+     "maxdepth": 30,
+     "alpha": "{alpha}"
+    },
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "30",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "30",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "30",
+     "--alpha",
+     "{alpha}"
+    ]
+   }
+  },
+  "cart_alpha_nodepth": {
+   "title": "CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--alpha",
+     "{alpha}"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "ccp_alpha": "{alpha}"
+    },
+    "tree_cuda": [
+     "--cart",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--alpha",
+     "{alpha}"
+    ]
+   }
+  },
+  "cart_full_nodepth": {
+   "title": "CART, grown to pure leaves, no pruning, no depth limit",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "--no-prune"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune"
+    ]
+   }
+  },
+  "cart_depth10": {
+   "title": "CART, grown to depth 10, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "10"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 10
+    },
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "10"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "10"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "10"
+    ]
+   }
+  },
+  "c45_depth10_unpruned": {
+   "title": "C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "10"
+    ],
+    "j48": {
+     "options": "-U -M 2",
+     "max_depth": 10
+    },
+    "sklearn": {
+     "mode": "fit",
+     "criterion": "entropy",
+     "max_depth": 10,
+     "min_samples_leaf": 2
+    },
+    "tree_cuda": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "10"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "10"
+    ],
+    "tree_simple": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "10"
+    ]
+   }
+  },
+  "cart_depth10_alpha": {
+   "title": "CART, grown to depth 10, pruned at a fixed alpha (cost-complexity)",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ]
+   }
+  },
+  "c45_depth10": {
+   "title": "C4.5, grown to depth 10, error-based pruning (CF 0.25, subtree raising)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "10"
+    ]
+   }
+  },
+  "c45": {
+   "title": "C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows",
+   "impls": {
+    "tree": [
+     "--c45"
+    ],
+    "j48": {
+     "options": "-C 0.25 -M 2"
+    },
+    "yadt": [
+     "-ebpg",
+     "-c",
+     "0.25",
+     "-m",
+     "2"
+    ],
+    "sklearn": {
+     "mode": "fit",
+     "criterion": "entropy",
+     "ccp_alpha": "{alpha}"
+    },
+    "tree_cuda": [
+     "--c45"
+    ],
+    "tree_gpu_only": [
+     "--c45"
+    ],
+    "tree_simple": [
+     "--c45"
+    ]
+   }
+  },
+  "c45_unpruned": {
+   "title": "C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows",
+   "impls": {
+    "tree": [
+     "--c45",
+     "--no-prune"
+    ],
+    "j48": {
+     "options": "-U -M 2"
+    },
+    "yadt": [
+     "-np",
+     "-m",
+     "2"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "--no-prune"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune"
+    ],
+    "tree_simple": [
+     "--c45",
+     "--no-prune"
+    ]
+   }
+  }
+ },
+ "impls": {
+  "tree": {
+   "label": "./tree",
+   "threads": "multi",
+   "warmup": false
+  },
+  "tree_cuda": {
+   "label": "./tree CUDA",
+   "threads": "all",
+   "warmup": false
+  },
+  "tree_gpu_only": {
+   "label": "./tree CUDA, GPU only",
+   "threads": "all",
+   "warmup": false
+  },
+  "tree_simple": {
+   "label": "./tree simple",
+   "threads": "single",
+   "warmup": false
+  },
+  "sklearn": {
+   "label": "scikit-learn",
+   "threads": "single",
+   "warmup": true
+  },
+  "rpart": {
+   "label": "rpart",
+   "threads": "single",
+   "warmup": true
+  },
+  "j48": {
+   "label": "Weka J48",
+   "threads": "single",
+   "warmup": true
+  },
+  "yadt": {
+   "label": "YaDT",
+   "threads": "multi",
+   "warmup": false
+  }
+ },
+ "warmup_rows": "50000",
+ "datasets": {
+  "_baseline": {
+   "name": "_baseline",
+   "features": [
+    "f0",
+    "f1",
+    "f2",
+    "f3"
+   ],
+   "feature_names": [
+    "x0",
+    "x1",
+    "x2",
+    "x3"
+   ],
+   "classes": [
+    "c0",
+    "c1"
+   ],
+   "class_names": [
+    "0",
+    "1"
+   ],
+   "n_train": 200,
+   "n_test": 50,
+   "source": "synthetic"
+  },
+  "chess_1b": {
+   "name": "chess_1b",
+   "features": [
+    "f0",
+    "f1"
+   ],
+   "feature_names": [
+    "x",
+    "y"
+   ],
+   "classes": [
+    "c0",
+    "c1"
+   ],
+   "class_names": [
+    "A",
+    "B"
+   ],
+   "n_train": 1000000000,
+   "n_test": 1000,
+   "spec": {
+    "source": "datasets/chess_1b.csv",
+    "test_source": "datasets/chess_1b_test.csv",
+    "yadt": false
+   }
+  }
+ },
+ "data_files": {
+  "_baseline": {
+   "meta.json": "4b324f2a45ca7ec08b13730e7b34b62ad730cb736c853f9cc37d32e8e0e2c7e7",
+   "test.f32": "03586feac2b171b20efedcc1e911e5b02ee4b79ac718b05790275441dccd5e4e",
+   "test.y.i32": "ea27eaef1452c2147c54f99f138113941b241ea047cf016adb62dad0aff76db8",
+   "test.yadt.csv": "e9846c11091c9df30b38cf2875615b42b4e5403f93b3cf3050e02caaf3f6a794",
+   "train.csv": "db2931af58aaf09174a4c38d4adcfa0456da35270a65c5943250604a6a24633d",
+   "train.f32": "4cdf1b4cfdc1bfea73f3b4d3c2224fdabd464dc8395978a6d7c1e54d36d7052a",
+   "train.y.i32": "e45debe117bd9a6b4b0e4518549b4e34f1a7727098d6a4d55cef9d9ec3a894fa",
+   "train.yadt.csv": "77928268dc58a666aa3a1621b04edfcdd215191de8bb53cb333d1fcef2b95efb",
+   "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168"
+  },
+  "chess_1b": {
+   "meta.json": "67631b43d7cc0e3d4615628e3fef23ee3ead5259df40cbd8a27a34b41d0293c5",
+   "test.f32": "193cf1d7f3dc8fcdff938dae7dbc29a9d503aa4e74b731b19d9646b31ede75e2",
+   "test.y.i32": "976125d62ce026228ec0d3bb2635f5af385741eef6cb3eced6180ba491183676",
+   "train.csv": "124073b81a26e28a693ce3ce4a5e3ccf8edc41d8dcdcd7a2431fb642fb42fca1",
+   "train.f32": "9ebca8e0a4876a0e8caaee6172bfc395b17ad29e8b7507e83bda65fd0690026e",
+   "train.y.i32": "f83dd5165e8f3c02403ec5e2e3df0cf245a8b371bfec7099cf47bb0e1a2db21e"
+  }
+ }
+}

@@ -19,6 +19,7 @@ machines_chart.py checks.
 import argparse
 import json
 import math
+import statistics
 from collections import defaultdict
 from pathlib import Path
 
@@ -151,6 +152,10 @@ def main():
                 ax.plot([e["rows"] for e in points], [e[field] for e in points], color=color,
                         linewidth=2, marker=marker[key], markersize=8, markeredgecolor="white",
                         markeredgewidth=1.5, zorder=3)
+                if field == "time":  # whisker: fastest to slowest run
+                    for e in points:
+                        ax.plot([e["rows"]] * 2, [min(e["times"]), max(e["times"])], color=color,
+                                linewidth=1.2, zorder=4)
                 ends.append((key, points[-1]["rows"], points[-1][field]))
             if not ends:
                 ax.text(0.5, 0.5, "no GPU runs", transform=ax.transAxes, ha="center",
@@ -243,9 +248,10 @@ def main():
     fig.legend(handles=handles, loc="upper left", ncol=math.ceil(len(handles) / 2), frameon=False,
                fontsize=8.8, bbox_to_anchor=(0.035, 0.985 - header / inches),
                handletextpad=0.4, columnspacing=1.4)
-    reps = {json.load(open(run / "machine.json"))["settings"]["reps"] for run in args.runs}
+    counts = {len(e["times"]) for e in entries}
     fig.text(0.04, 0.12 / inches,
-             ("Points: median over the runs of each case. " if reps != {1} else
+             (f"Points: mean over the runs of each case ({min(counts)}–{max(counts)} runs), "
+              "whiskers from the fastest to the slowest run. " if counts != {1} else
               "Points: one run per case. ")
              + "Time: ./tree's 'train total' (presort, build, prune; CUDA also upload and "
              "device sort), not reading the CSV. Log-log axes.\nRAM: peak RSS of the process "

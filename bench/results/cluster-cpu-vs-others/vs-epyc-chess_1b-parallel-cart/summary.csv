@@ -1,0 +1,2 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+vs-epyc-chess_1b-parallel-cart,chess_1b,cart_depth10,tree,24,ok,True,6.5048,6.5048,6.5048,6.5048,,1,1.0,25.79465706832707,50141724672,50141724672,50141724672,50135650304,17,9,4,1.0,1.0,0.0,,0.0

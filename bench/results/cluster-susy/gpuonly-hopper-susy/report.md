@@ -18,16 +18,4 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA, GPU 
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | ./tree CUDA, GPU only | 132 ms | 114 ms–150 ms |  | 1.03 GiB (+ GPU 1.67 GiB) | 410 MiB | 743 | 372 | 10 | 78.74% | 78.65% |
 
-**CART, grown to depth 10, pruned at a fixed alpha (cost-complexity)** (`cart_depth10_alpha`), 16 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA, GPU only | 102 ms | 96 ms–105 ms |  | 971 MiB (+ GPU 1.67 GiB) | 322 MiB | 339 | 170 | 10 | 79.08% | 78.99% |
-
-**C4.5, grown to depth 10, error-based pruning (CF 0.25, subtree raising)** (`c45_depth10`), 16 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA, GPU only | 174 ms | 173 ms–186 ms |  | 1.40 GiB (+ GPU 1.99 GiB) | 790 MiB | 573 | 287 | 10 | 78.74% | 78.64% |
-
 Test accuracy is measured on 500,000 rows: its 95% interval is ±0.11 percentage points at most.

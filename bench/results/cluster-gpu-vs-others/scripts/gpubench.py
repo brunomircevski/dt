@@ -22,6 +22,13 @@ fitted model: copy to the GPU, quantile binning, growing.
 Environment:
   WARMUP_ROWS  rows of the untimed warm-up fit (default 50,000; 0 = all rows,
                a full-size fit that also grows the library's memory pools)
+  FOREST       identical (default): the settings above, every tree the same;
+               default: each library's own random-forest defaults, only the
+               criterion and the depth limit set, so the trees differ:
+                 cuML RandomForestClassifier: bootstrap, max_features "sqrt"
+                 XGBoost (as XGBRFClassifier): binary:logistic, subsample 0.8,
+                 colsample_bynode 0.8, lambda 1e-5, eta 1
+               nodes is then the mean over the forest's trees, depth the max.
   N_STREAMS    cuML's n_streams (default: 1 for one tree, cuML's default 4
                for a forest, whose trees it grows concurrently, one per stream)
 """
@@ -33,6 +40,8 @@ DEPTH = 19  # set by main()
 TREES = 1   # set by main()
 WARMUP_ROWS = int(os.environ.get("WARMUP_ROWS", 50_000)) or None
 BINS = {"cuml": 128, "xgboost": 256}  # each library's default
+FOREST = os.environ.get("FOREST", "identical")
+assert FOREST in ("identical", "default"), FOREST
 
 
 def load(dataset, part):
@@ -88,6 +97,12 @@ def cuml_fit(X, y, case, trees):
     # c45: entropy (information gain; cuML has no gain ratio), and C4.5's
     # smallest split: at least 2 rows on each side, so 4 rows to split.
     from cuml.ensemble import RandomForestClassifier
+    if FOREST == "default":
+        model = RandomForestClassifier(
+            n_estimators=trees, split_criterion="gini" if case == "cart" else "entropy",
+            max_depth=DEPTH, n_streams=n_streams(), random_state=0, output_type="numpy")
+        model.fit(X, y)
+        return model, {}
     model = RandomForestClassifier(
         n_estimators=trees, bootstrap=False, max_samples=1.0, max_features=1.0,
         split_criterion="gini" if case == "cart" else "entropy",
@@ -109,13 +124,23 @@ def cuml_predict(model, X):
     return predict_chunks(model.predict, X, 1_000_000).astype(np.int8)
 
 
+def forest_shape(shapes):
+    """(depth, nodes) per tree -> max depth, mean node count."""
+    depths, nodes = zip(*shapes)
+    return max(depths), float(np.mean(nodes))
+
+
 def cuml_info(model, X, y, Xt):
     acc = float(np.mean(cuml_predict(model, X) == y))
     pred = cuml_predict(model, Xt)
-    tree = model.as_treelite().get_tree_accessor(0)
-    left = np.asarray(tree.get_field("cleft")).astype(np.int64)
-    right = np.asarray(tree.get_field("cright")).astype(np.int64)
-    d, nodes = depth_of(left, right)
+    forest = model.as_treelite()
+    shapes = []
+    for i in range(forest.num_tree):
+        tree = forest.get_tree_accessor(i)
+        shapes.append(depth_of(np.asarray(tree.get_field("cleft")).astype(np.int64),
+                               np.asarray(tree.get_field("cright")).astype(np.int64)))
+    d, nodes = forest_shape(shapes)
+    tree = forest.get_tree_accessor(0)
     feat = int(np.asarray(tree.get_field("split_index"))[0])
     thr = float(np.asarray(tree.get_field("threshold"))[0])
     return acc, pred, nodes, d, f"f{feat} <= {thr:.7g}"
@@ -126,6 +151,15 @@ def xgb_fit(X, y, case, trees):
     # so the split gain is the drop in the children's squared error, which is
     # n/2 times the drop in Gini impurity: the CART split, on histogram bins.
     assert case == "cart", "XGBoost has no entropy criterion"
+    if FOREST == "default":  # XGBRFClassifier's defaults, one round
+        import xgboost as xgb
+        t = time.perf_counter()
+        dtrain = xgb.QuantileDMatrix(X, label=y.astype(np.float32))
+        dmatrix = time.perf_counter() - t
+        params = {"device": "cuda", "tree_method": "hist", "objective": "binary:logistic",
+                  "eta": 1.0, "subsample": 0.8, "colsample_bynode": 0.8, "lambda": 1e-5,
+                  "max_depth": DEPTH, "num_parallel_tree": trees, "seed": 0}
+        return xgb.train(params, dtrain, num_boost_round=1), {"dmatrix_seconds": dmatrix}
     # trees > 1: XGBoost's random-forest mode, num_parallel_tree trees in one
     # round on the same gradients; with all rows and features they are the same
     # tree, and XGBoost averages the forest (each leaf scaled by 1/trees).
@@ -151,10 +185,10 @@ def xgb_predict(booster, X):
 def xgb_info(booster, X, y, Xt):
     acc = float(np.mean(xgb_predict(booster, X) == y))
     pred = xgb_predict(booster, Xt)
-    tree = json.loads(booster.save_raw("json"))["learner"]["gradient_booster"]["model"]["trees"][0]
-    left = np.array(tree["left_children"], dtype=np.int64)
-    right = np.array(tree["right_children"], dtype=np.int64)
-    d, nodes = depth_of(left, right)
+    trees = json.loads(booster.save_raw("json"))["learner"]["gradient_booster"]["model"]["trees"]
+    d, nodes = forest_shape([depth_of(np.array(t["left_children"], dtype=np.int64),
+                                      np.array(t["right_children"], dtype=np.int64)) for t in trees])
+    tree = trees[0]
     root = f"f{tree['split_indices'][0]} < {tree['split_conditions'][0]:.7g}"
     return acc, pred, nodes, d, root
 
@@ -180,7 +214,7 @@ def main():
     warmup = time.perf_counter() - t
     del model
     extra = {}
-    if TREES > 1:  # check on 50,000 rows that the forest predicts as its one tree does
+    if TREES > 1 and FOREST == "identical":  # check on 50,000 rows that the forest predicts as its one tree does
         forest, _ = fit(X[:50_000], y[:50_000], case, TREES)
         one, _ = fit(X[:50_000], y[:50_000], case, 1)
         extra["warmup_agreement_one_tree"] = float(np.mean(predict(forest, Xt) == predict(one, Xt)))
@@ -190,14 +224,14 @@ def main():
         model, timing = fit(X, y, case, TREES)
         seconds = time.perf_counter() - t
         row = {"impl": impl, "dataset": dataset, "case": case, "bins": BINS[impl], "rep": rep,
-               "trees": TREES, "depth_limit": DEPTH, "train_seconds": seconds, **timing,
+               "trees": TREES, "forest": FOREST, "depth_limit": DEPTH, "train_seconds": seconds, **timing,
                "warmup_seconds": warmup, "warmup_rows": WARMUP_ROWS or len(X), **extra,
                "version": version(impl), "host": socket.gethostname(), "time": time.strftime("%F %T")}
         if impl == "cuml":
             row["n_streams"] = n_streams()
         if rep == int(reps) - 1:
             train_acc, pred, nodes, d, root = info(model, X, y, Xt)
-            np.save(f"{pred_dir}/{impl}-{case}-{TREES}.npy", pred)
+            np.save(f"{pred_dir}/{impl}-{case}-{TREES}-{FOREST}.npy", pred)
             row.update(train_accuracy=train_acc, test_accuracy=float(np.mean(pred == yt)),
                        nodes=nodes, depth=d, root=root, gpu_peak_mib=gpu.stop())
         print(json.dumps(row), flush=True)

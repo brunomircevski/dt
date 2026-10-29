@@ -1,0 +1,22 @@
+02:00:00 cluster-chess-par cpu-dell-chess_1m chess_1m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par socket-dell-chess_1m chess_1m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-par cpu-dell-chess_10m chess_10m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par socket-dell-chess_10m chess_10m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-par cpu-dell-chess_100m chess_100m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par socket-dell-chess_100m chess_100m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-par cpu-dell-chess_1b chess_1b tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par socket-dell-chess_1b chess_1b tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+04:00:00 cluster-airline-par cpu-dell-airline airline tree 10 cart_depth10,c45_depth10_unpruned all 3600 ACCURACY=--test-accuracy
+04:00:00 cluster-airline-par socket-dell-airline airline tree 10 cart_depth10,c45_depth10_unpruned all 3600 ACCURACY=--test-accuracy,SOCKET=auto
+01:00:00 cluster-higgs-par cpu-dell-higgs higgs tree 10 cart_depth10,c45_depth10_unpruned all 3600 ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-par socket-dell-higgs higgs tree 10 cart_depth10,c45_depth10_unpruned all 3600 ACCURACY=--test-accuracy,SOCKET=auto
+12:00:00 cluster-susy-par cpu-dell-susy susy tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy
+12:00:00 cluster-susy-par socket-dell-susy susy tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy,SOCKET=auto
+08:00:00 cluster-ecbdl-par cpu-dell-ecbdl_15m ecbdl_15m tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-par socket-dell-ecbdl_15m ecbdl_15m tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy,SOCKET=auto
+08:00:00 cluster-mnist8m-par cpu-dell-mnist8m mnist8m tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy
+08:00:00 cluster-mnist8m-par socket-dell-mnist8m mnist8m tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy,SOCKET=auto
+12:00:00 cluster-ecbdl-par cpu-dell-ecbdl ecbdl tree 3 cart_depth10,c45_depth10_unpruned all 18000 ACCURACY=--test-accuracy
+12:00:00 cluster-ecbdl-par socket-dell-ecbdl ecbdl tree 3 cart_depth10,c45_depth10_unpruned all 18000 ACCURACY=--test-accuracy,SOCKET=auto
+12:00:00 cluster-sorel-par cpu-dell-sorel sorel tree 1 cart_depth10,c45_depth10_unpruned all 18000 ACCURACY=--test-accuracy
+12:00:00 cluster-sorel-par socket-dell-sorel sorel tree 1 cart_depth10,c45_depth10_unpruned all 18000 ACCURACY=--test-accuracy,SOCKET=auto

@@ -23,10 +23,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
+import benchlib as B  # noqa: E402
 from chart import GRID, INK, MUTED, NAMES, seconds_tick  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
-DATASETS = ("chess_10m", "covertype", "susy", "higgs")
+DATASETS = ("chess_10m", "covertype", "susy", "higgs", "ecbdl_15m", "chess_1b")
 PROTOCOLS = {"cart_depth10": "CART: gini, depth ≤ 10, no pruning",
              "c45_depth10_unpruned": "C4.5: gain ratio, ≥ 2 rows per leaf, depth ≤ 10, no pruning"}
 # (impl, threads) -> bar label, colour; in this order, top to bottom.
@@ -56,15 +57,14 @@ def memory(nbytes):
 
 
 def load(root):
-    """-> {(dataset, protocol, impl, threads): the run's record}; one run per case."""
+    """-> {(dataset, protocol, impl, threads): the run's record}; one run per case.
+    A case that did not finish ok keeps its record, with its status."""
     cases = {}
     for path in sorted(root.glob("vs-*/results.jsonl")):
         for line in open(path):
             r = json.loads(line)
             if r["kind"] != "run":
                 continue
-            if r["status"] != "ok":
-                raise SystemExit(f"{path}: {r['impl']} {r['protocol']} {r['dataset']}: {r['status']}")
             key = (r["dataset"], r["protocol"], r["impl"], r["threads"])
             if key in cases:
                 raise SystemExit(f"{path}: {key} ran twice")
@@ -76,7 +76,7 @@ def check_same(cases):
     """Every ./tree backend: one tree per dataset and protocol."""
     hashes = defaultdict(set)
     for (dataset, protocol, impl, _), r in cases.items():
-        if impl in TREE:
+        if impl in TREE and r["status"] == "ok":
             hashes[(dataset, protocol)].add(r["tree_sha256"])
     for key, found in sorted(hashes.items()):
         if len(found) != 1:
@@ -106,7 +106,7 @@ def main():
         box = fig.add_subplot(grid[2 * row + 1, column])
         box.axis("off")
         times = [r["train_seconds"] for key, r in cases.items()
-                 if key[0] == dataset and (key[1], key[2]) not in SKIP]
+                 if key[0] == dataset and (key[1], key[2]) not in SKIP and r["status"] == "ok"]
         low, high = min(times) / 3, max(times)
         labels, y, lines = [], 0, []
         for protocol, title in PROTOCOLS.items():
@@ -115,8 +115,15 @@ def main():
             y += 0.55
             trees = {}
             for (impl, threads), (label, color) in BARS.items():
+                if (protocol, impl) in SKIP or (protocol == "cart_depth10" and impl == "j48"):
+                    continue
                 r = cases.get((dataset, protocol, impl, threads))
-                if not r or (protocol, impl) in SKIP:
+                if not r or r["status"] != "ok":  # still queued or running, or failed
+                    note = f"failed: {B.failure(r)}" if r else "not finished yet"
+                    ax.text(low * 1.08, y, note, va="center", fontsize=9, color=MUTED,
+                            style="italic")
+                    labels.append((y, label))
+                    y += 1
                     continue
                 total = r["train_seconds"]
                 ax.barh(y, total - low, left=low, color=color, height=0.72)
@@ -142,7 +149,7 @@ def main():
         ax.set_axisbelow(True)
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
-        first = next(r for key, r in cases.items() if key[0] == dataset)
+        first = next(r for key, r in cases.items() if key[0] == dataset and r["status"] == "ok")
         ax.set_title(f"{NAMES.get(dataset, dataset)}   ({first['n_train_loaded']:,} training rows, "
                      f"{first['n_features_loaded']} features)", fontsize=12, color=INK, loc="left",
                      fontweight="bold")

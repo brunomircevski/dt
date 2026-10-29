@@ -1,0 +1,18 @@
+04:00:00 cluster-airline-fix cuda-hopper-airline airline tree_cuda 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+04:00:00 cluster-airline-fix gpuonly-hopper-airline airline tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-fix cuda-hopper-higgs higgs tree_cuda 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-fix gpuonly-hopper-higgs higgs tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+12:00:00 cluster-susy-fix cuda-hopper-susy susy tree_cuda 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+12:00:00 cluster-susy-fix gpuonly-hopper-susy susy tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-fix cuda-hopper-ecbdl_15m ecbdl_15m tree_cuda 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-fix gpuonly-hopper-ecbdl_15m ecbdl_15m tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-mnist8m-fix cuda-hopper-mnist8m mnist8m tree_cuda 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-mnist8m-fix gpuonly-hopper-mnist8m mnist8m tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+02:00:00 cluster-chess-fix cuda-hopper-chess_1m chess_1m tree_cuda 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix gpuonly-hopper-chess_1m chess_1m tree_gpu_only 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix cuda-hopper-chess_10m chess_10m tree_cuda 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix gpuonly-hopper-chess_10m chess_10m tree_gpu_only 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix cuda-hopper-chess_100m chess_100m tree_cuda 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix gpuonly-hopper-chess_100m chess_100m tree_gpu_only 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix cuda-hopper-chess_1b chess_1b tree_cuda 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix gpuonly-hopper-chess_1b chess_1b tree_gpu_only 10 cart_full_nodepth,c45_unpruned all 3600

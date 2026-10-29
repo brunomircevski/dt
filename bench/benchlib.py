@@ -367,6 +367,19 @@ def hardware(machine):
     return {"cpu": cpu, "ram": ram, "gpu": gpu}
 
 
+def failure(row):
+    """A failed run's reason, short enough for a chart label."""
+    error = row.get("error") or ""
+    if row["status"] == "timeout":
+        return "timeout"
+    if "OutOfMemoryError" in error:
+        return "out of memory (Java heap)"
+    if row["status"] == "error" and not error and row.get("peak_rss_bytes"):
+        # no output at all: killed by a signal, on these nodes the kernel's OOM killer
+        return f"killed at {int(row['peak_rss_bytes']) / 2**30:,.0f} GiB RAM (out of memory)"
+    return row["status"]
+
+
 def hardware_line(machine, gpu_used):
     """One line for a chart: "CPU ... · RAM ... · GPU ..." (or "no GPU used")."""
     info = hardware(machine)

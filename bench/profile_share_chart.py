@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Where ./tree's training time goes, as shares of the training wall time: one
 3×2 grid (columns: Parallel, CUDA, CUDA --gpu-only; rows: CART and C4.5, both
-grown to depth 10, unpruned), one stacked bar per dataset (the median of each
-case's profiled runs, or with --mean their average), from runs made with bench/cluster/profile.sh
+grown to depth 10, unpruned), one stacked bar per dataset (the average of each
+case's profiled runs), from runs made with bench/cluster/profile.sh
 (results.jsonl + profiles/*.json, ./tree --profile, src/core/trace.h) in <root>.
 
   d=bench/results/cluster-profiling
   bench/.venv/bin/python bench/profile_share_chart.py $d --out $d/chart.png
-  bench/.venv/bin/python bench/profile_share_chart.py $d/chess-50runs --chess --mean
+  bench/.venv/bin/python bench/profile_share_chart.py $d/chess-50runs --chess
 
 Every millisecond of the training time goes to one step (attribute()): first
 to the GPU kernels running then, then to copies between host and GPU, and the
@@ -181,10 +181,6 @@ def runs(path):
     return rows
 
 
-def median(rows):
-    return sorted(rows, key=lambda row: row["train_seconds"])[(len(rows) - 1) // 2]
-
-
 def mean_row(rows):
     """-> the first row, with the average training time of all of them."""
     return dict(rows[0], train_seconds=sum(row["train_seconds"] for row in rows) / len(rows))
@@ -199,9 +195,8 @@ def mean_parts(traces):
     return {key: value / len(traces) for key, value in total.items()}
 
 
-def load(root, datasets, average):
-    """-> {(mode, dataset, protocol): case} of the median profiled run per case,
-    or (average) of the average of all of them."""
+def load(root, datasets):
+    """-> {(mode, dataset, protocol): case}: the average of each case's profiled runs."""
     cases = {}
     for mode, _ in MODES:
         for dataset in datasets:
@@ -214,16 +209,11 @@ def load(root, datasets, average):
                 rows = [row for row in rows if "profile" in row]
                 if not rows:
                     continue
-                pick = mean_row if average else median
-                if average:
-                    traces = [json.load(open(run / row["profile"])) for row in rows]
-                    trace, parts = traces[0], mean_parts(traces)
-                else:
-                    trace = json.load(open(run / pick(rows)["profile"]))
-                    parts = attribute(trace)
+                traces = [json.load(open(run / row["profile"])) for row in rows]
                 cases[(mode, dataset, protocol)] = {
-                    "row": pick(rows), "trace": trace, "machine": machine, "runs": len(rows),
-                    "parts": parts, "plain": pick(plain[protocol]) if protocol in plain else None}
+                    "row": mean_row(rows), "trace": traces[0], "machine": machine, "runs": len(rows),
+                    "parts": mean_parts(traces),
+                    "plain": mean_row(plain[protocol]) if protocol in plain else None}
     return cases
 
 
@@ -375,7 +365,7 @@ def hardware_text(cases, mode):
     return f"{node}: {gpu} + {threads} CPU threads ({info['cpu'].split(',')[0]})"
 
 
-def chart(cases, datasets, average, out):
+def chart(cases, datasets, out):
     height = 27
     unit = 32 / height  # the text block's spacing was set for a 32-inch-high figure
     fig = plt.figure(figsize=(38, height))
@@ -397,7 +387,7 @@ def chart(cases, datasets, average, out):
     fig.suptitle("Where ./tree's training time goes: share of each step, per dataset "
                  f"(trees grown to depth 10, no pruning{'; chess only' if len(datasets) <= CHESS else ''})",
                  x=0.01, y=0.99, ha="left", fontsize=20, fontweight="bold", color=INK)
-    fig.text(0.01, 0.975, f"The {'average' if average else 'median'} of each case's profiled runs "
+    fig.text(0.01, 0.975, "The average of each case's profiled runs "
              f"({'/'.join(map(str, counts))} "
              f"runs per case; ./tree --profile, commit {', '.join(commits)}). Bar "
              "height = training wall time (100%), the total above each bar; reading the CSV is "
@@ -479,12 +469,10 @@ def main():
     parser.add_argument("root", type=Path, help="results directory (e.g. cluster-profiling)")
     parser.add_argument("--out", type=Path, help="PNG (default: <root>/chart.png)")
     parser.add_argument("--chess", action="store_true", help="only the chess datasets")
-    parser.add_argument("--mean", action="store_true",
-                        help="average every case's runs (time and steps) instead of the median run")
     args = parser.parse_args()
     datasets = DATASETS[:CHESS] if args.chess else DATASETS
-    cases = load(args.root, datasets, args.mean)
-    chart(cases, datasets, args.mean, args.out or args.root / "chart.png")
+    cases = load(args.root, datasets)
+    chart(cases, datasets, args.out or args.root / "chart.png")
     table(cases, datasets)
 
 

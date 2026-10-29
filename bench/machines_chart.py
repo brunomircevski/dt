@@ -126,6 +126,10 @@ def short_gpu(info):
     return info["gpu"].split(",")[0].replace("NVIDIA ", "") if info["gpu"] else "GPU"
 
 
+# The bars' and points' average over the runs of a case: the mean, as everywhere.
+AVERAGE = statistics.mean
+
+
 def bars(run, reference):
     """-> one dict per ./tree case of the run that went well."""
     rows = [json.loads(line) for source in sources(run) for line in open(source / "results.jsonl")]
@@ -155,17 +159,17 @@ def bars(run, reference):
             setup = [r["gpu_setup_seconds"] for r in ok if r.get("gpu_setup_seconds") is not None]
             out.append({"protocol": protocol, "backend": backend, "hardware": hardware,
                         "run": run, "reference": reference,
-                        "time": statistics.median(r["train_seconds"] for r in ok),
+                        "time": AVERAGE(r["train_seconds"] for r in ok),
                         "times": [r["train_seconds"] for r in ok],
-                        "ram": statistics.median(r["peak_rss_train_bytes"] for r in ok) / 2**30,
-                        "vram": (statistics.median(gpu) / 2**30
+                        "ram": AVERAGE(r["peak_rss_train_bytes"] for r in ok) / 2**30,
+                        "vram": (AVERAGE(gpu) / 2**30
                                  if gpu and run.name not in NO_VRAM else None),
-                        # Median pruning time, if every run recorded it.
-                        "prune": (statistics.median(prune)
+                        # Pruning time, if every run recorded it.
+                        "prune": (AVERAGE(prune)
                                   if len(prune) == len(ok) and protocol not in UNPRUNED else None),
-                        "pruned": statistics.median(prune) if len(prune) == len(ok) else None,
-                        # Median GPU setup (fixed cost), if every run recorded it.
-                        "setup": (statistics.median(setup)
+                        "pruned": AVERAGE(prune) if len(prune) == len(ok) else None,
+                        # GPU setup (fixed cost), if every run recorded it.
+                        "setup": (AVERAGE(setup)
                                   if len(setup) == len(ok) and backend in GPU else None),
                         # Test accuracy, or training accuracy where only that was
                         # recorded (run.py --train-accuracy-only).
@@ -425,7 +429,7 @@ def main():
                columnspacing=1.3)
     reps = {json.load(open(source / "machine.json"))["settings"]["reps"]
             for run in runs for source in sources(run)}
-    runs_text = "one run per case" if reps == {1} else "median over the runs of each case"
+    runs_text = "one run per case" if reps == {1} else "mean over the runs of each case"
     if SPREAD and reps != {1}:
         runs_text += " (whisker: fastest to slowest run; dots: every run).\n"
     fig.text(LEFT, 0.1 / inches,

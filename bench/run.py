@@ -188,6 +188,10 @@ def profile_name(case, rep):
     return f"profiles/{protocol}-{impl}-t{threads}-r{rep}.json"
 
 
+# {(dataset, part, SHA-256 of the dumped tree): accuracy}: one prediction per distinct tree.
+ACCURACY = {}
+
+
 def build_command(case, kind, args, scratch, rep=0):
     """-> (argv, extra env, parser of stdout -> result dict)."""
     dataset, protocol, impl, threads = case
@@ -245,11 +249,18 @@ def build_command(case, kind, args, scratch, rep=0):
                 # Both accuracies from the dumped tree, so ./tree is measured like the
                 # others: by predicting every row. ./tree's own training accuracy
                 # (printed to 4 decimals) must agree.
-                tree = B.parse_tree_dump(dump, *B.csv_names(m))
                 printed = float(re.search(r"train accuracy\s+([\d.]+)%", stdout).group(1))
+                digest = hashlib.sha256(dump.read_bytes()).hexdigest()
                 for part in ("test",) if args.test_accuracy else ("train", "test"):
-                    X, y = B.load(dataset, part)
-                    result[f"{part}_accuracy"] = float(np.mean(B.predict_tree(tree, X) == y))
+                    # The runs of a case grow the same tree: its rows are predicted once
+                    # (minutes on SOREL's test set), the repeats reuse the accuracy.
+                    key = (dataset, part, digest)
+                    if key not in ACCURACY:
+                        X, y = B.load(dataset, part)
+                        ACCURACY[key] = float(np.mean(B.predict_tree(
+                            B.parse_tree_dump(dump, *B.csv_names(m)), X) == y))
+                        del X, y  # never held while the next process runs
+                    result[f"{part}_accuracy"] = ACCURACY[key]
                 if args.test_accuracy:
                     # --test-accuracy: the training accuracy as ./tree printed it.
                     result["train_accuracy"] = printed / 100
@@ -442,6 +453,16 @@ def numa_mem_free_kb():
     return free
 
 
+VMSTAT = ("pgscan_kswapd", "pgscan_direct", "pgsteal_kswapd", "pgsteal_direct", "allocstall_normal",
+          "allocstall_movable", "compact_stall", "numa_miss", "numa_foreign", "pgmigrate_success")
+
+
+def vmstat():
+    """The node's page-reclaim and NUMA counters (whole node: the job owns it)."""
+    counters = dict(line.split() for line in (read_text("/proc/vmstat") or "").splitlines() if " " in line)
+    return {k: int(counters[k]) for k in VMSTAT if k in counters}
+
+
 def drop_page_cache(root):
     """Drop root's files (the datasets) from the page cache: posix_fadvise
     DONTNEED, which needs no privileges. Cached CSVs of earlier runs pile up
@@ -567,9 +588,15 @@ def main():
     datasets = sorted({case[0] for case in cases} | {B.BASELINE})
     print("checking the data (SHA-256 of every file, every CSV row against the binary files):")
     data_files = {}
+    # In a child process: pyarrow keeps the CSV's memory after the check (SOREL:
+    # about 135 GiB on epyc), which got C4.5's 370 GiB killed on a 512 GB node.
+    import concurrent.futures
+    import multiprocessing
     for dataset in datasets:
         start = time.perf_counter()
-        data_files[dataset] = B.verify_dataset(dataset)
+        with concurrent.futures.ProcessPoolExecutor(
+                1, mp_context=multiprocessing.get_context("fork")) as pool:
+            data_files[dataset] = pool.submit(B.verify_dataset, dataset).result()
         print(f"  {dataset}: identical in every format ({time.perf_counter() - start:.0f} s)")
     json.dump({"cases": cases, "protocols": B.PROTOCOLS, "impls": B.IMPLS,
                "warmup_rows": args.warmup_rows,
@@ -616,10 +643,12 @@ def main():
         if args.drop_cache:
             drop_page_cache(B.DATA)
         mem_free = numa_mem_free_kb()
+        before = vmstat()
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
         if args.membind is not None:
             pin = ["numactl", f"--membind={args.membind}"] + pin
         run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl in ("tree_cuda", "tree_gpu_only"))
+        after = vmstat()
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
                "threads": threads, "kind": kind, "rep": rep,
                "time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -651,6 +680,9 @@ def main():
             row["profile"] = profile_name(case, rep)
         row["command"] = shlex.join(pin + argv)
         row.update({f"mem_free_{node}_kb": kb for node, kb in mem_free.items()})
+        # page reclaim and remote allocations during the run (SOREL C4.5 on epyc, 2026-10-28:
+        # presort 11 s in one run, 34 s in the next two)
+        row.update({f"vmstat_{k}": after[k] - before[k] for k in before if k in after})
         results.write(json.dumps(row) + "\n")
         results.flush()
         walls[case].append(run["wall_seconds"])

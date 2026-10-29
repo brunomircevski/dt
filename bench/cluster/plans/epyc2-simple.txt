@@ -1,0 +1,4 @@
+12:00:00 cluster-chess-fix simple-epyc-chess_1m chess_1m tree_simple 10 cart_full_nodepth,c45_unpruned 1 43200 ACCURACY=--train-accuracy-only
+12:00:00 cluster-chess-fix simple-epyc-chess_10m chess_10m tree_simple 10 cart_full_nodepth,c45_unpruned 1 43200 ACCURACY=--train-accuracy-only
+12:00:00 cluster-chess-fix simple-epyc-chess_100m chess_100m tree_simple 10 cart_full_nodepth,c45_unpruned 1 43200 ACCURACY=--train-accuracy-only
+12:00:00 cluster-chess-fix simple-epyc-chess_1b chess_1b tree_simple 1 cart_full_nodepth,c45_unpruned 1 43200 ACCURACY=--train-accuracy-only

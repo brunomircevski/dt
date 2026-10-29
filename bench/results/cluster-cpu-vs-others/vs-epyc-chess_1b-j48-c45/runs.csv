@@ -1,0 +1,13 @@
+run_id,dataset,protocol,impl,threads,kind,rep,time,wall_seconds,peak_rss_bytes,user_seconds,system_seconds,status,error,command,mem_free_node0_kb,mem_free_node1_kb,train_seconds,build_seconds,prune_seconds,nodes,leaves,depth,n_train_loaded,n_features_loaded,peak_rss_train_bytes
+cluster-cpu-vs-others/vs-epyc-chess_1b-j48-c45,chess_1b,c45_depth10_unpruned,j48,1,run,0,2026-10-27T22:08:19+01:00,9361.12587633403,261467496448,9298.624926,39.88034,error,"Exception in thread ""main"" java.lang.OutOfMemoryError: Java heap space
+	at weka.core.DenseInstance.copy(DenseInstance.java:145)
+	at weka.core.Instances.add(Instances.java:322)
+	at weka.classifiers.trees.j48.ClassifierSplitModel.split(ClassifierSplitModel.java:280)
+	at weka.classifiers.trees.j48.ClassifierTree.buildTree(ClassifierTree.java:169)
+	at J48Fit$DepthLimitedTree.getNewTree(J48Fit.java:149)
+	at weka.classifiers.trees.j48.ClassifierTree.buildTree(ClassifierTree.java:173)
+	at J48Fit$DepthLimitedTree.getNewTree(J48Fit.java:149)
+	at weka.classifiers.trees.j48.ClassifierTree.buildTree(ClassifierTree.java:173)
+	at J48Fit.build(J48Fit.java:194)
+	at J48Fit.main(J48Fit.java:223)",numactl --membind=0 taskset -c 0 java -Xmx251g -cp /home/bmircevski/dt/bench/.tools/weka.jar:/home/bmircevski/dt/bench/.tools/bounce.jar:/home/bmircevski/dt/bench/.tools/classes J48Fit data=/home/bmircevski/dt/bench/data/chess_1b n_train=1000000000 n_test=1000 n_features=2 n_classes=2 threads=1 warmup=50000 eval=1 'options=-U -M 2' max_depth=10,260318216,259932188,,,,,,,,,
+cluster-cpu-vs-others/vs-epyc-chess_1b-j48-c45,_baseline,c45,j48,1,baseline,0,2026-10-27T22:08:19+01:00,0.22319390904158354,102473728,0.181685,0.021962,ok,,numactl --membind=0 taskset -c 0 java -Xmx251g -cp /home/bmircevski/dt/bench/.tools/weka.jar:/home/bmircevski/dt/bench/.tools/bounce.jar:/home/bmircevski/dt/bench/.tools/classes J48Fit data=/home/bmircevski/dt/bench/data/_baseline n_train=200 n_test=50 n_features=4 n_classes=2 threads=1 warmup=0 eval=0 'options=-C 0.25 -M 2',261811992,260470788,0.047625177,0.047107354,0.000517823,3,2,1,200,4,102023168

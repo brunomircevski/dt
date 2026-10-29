@@ -1,0 +1,18 @@
+04:00:00 cluster-airline-fix cuda-ampere-airline airline tree_cuda 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+04:00:00 cluster-airline-fix gpuonly-ampere-airline airline tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-fix cuda-ampere-higgs higgs tree_cuda 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-fix gpuonly-ampere-higgs higgs tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 3600  ACCURACY=--test-accuracy
+12:00:00 cluster-susy-fix cuda-ampere-susy susy tree_cuda 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+12:00:00 cluster-susy-fix gpuonly-ampere-susy susy tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-fix cuda-ampere-ecbdl_15m ecbdl_15m tree_cuda 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-fix gpuonly-ampere-ecbdl_15m ecbdl_15m tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-mnist8m-fix cuda-ampere-mnist8m mnist8m tree_cuda 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+08:00:00 cluster-mnist8m-fix gpuonly-ampere-mnist8m mnist8m tree_gpu_only 10 cart_depth10,c45_depth10_unpruned all 10800  ACCURACY=--test-accuracy
+02:00:00 cluster-chess-fix cuda-ampere-chess_1m chess_1m tree_cuda 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix gpuonly-ampere-chess_1m chess_1m tree_gpu_only 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix cuda-ampere-chess_10m chess_10m tree_cuda 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix gpuonly-ampere-chess_10m chess_10m tree_gpu_only 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix cuda-ampere-chess_100m chess_100m tree_cuda 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix gpuonly-ampere-chess_100m chess_100m tree_gpu_only 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix cuda-ampere-chess_1b chess_1b tree_cuda 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix gpuonly-ampere-chess_1b chess_1b tree_gpu_only 10 cart_full_nodepth,c45_unpruned all 3600

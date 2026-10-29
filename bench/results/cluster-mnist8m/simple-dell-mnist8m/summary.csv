@@ -1,0 +1,3 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+simple-dell-mnist8m,mnist8m,cart_depth10,tree_simple,1,ok,True,2116.6772,2116.6772,2116.6772,2116.6772,,1,,2210.5144621259533,25567371264,25567371264,25567371264,25562363904.0,2047,1024,10,0.8076779999999999,0.8451,0.007091462833463911,,0.0
+simple-dell-mnist8m,mnist8m,c45_depth10_unpruned,tree_simple,1,ok,True,2159.296,2159.296,2159.296,2159.296,,1,,2252.52249455126,25611587584,25611587584,25611587584,25606580224.0,1453,727,10,0.7096330000000001,0.7465,0.008526287236540885,,112.3283

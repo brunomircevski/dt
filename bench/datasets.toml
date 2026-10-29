@@ -145,3 +145,19 @@ yadt = false
 source = "datasets/chess/chess_2b.csv"
 test_source = "datasets/chess/chess_100m_test.csv"
 yadt = false
+
+# MNIST8M (infinite MNIST: 8.1M distorted digits, 784 pixel features 0-255,
+# 10 classes) and SOREL-20M (malware detection, EMBER v2 features: 2381, label
+# 0/1), each with its own test file; cluster-only, added 2026-10-27, CSVs with
+# a header f0..fN,label (train.csv links to the training CSV). No YaDT files.
+# SOREL's training CSV is 136 GB (about 12.7M rows, 120 GB as float32): too big
+# for an 80 GB GPU, and preparing it needs a 1 TB node (dell1).
+[mnist8m]
+source = "datasets/mnist8m/mnist8m.csv"
+test_source = "datasets/mnist8m/mnist8m_test.csv"
+yadt = false
+
+[sorel]
+source = "datasets/sorel/sorel_full.csv"
+test_source = "datasets/sorel/sorel_test.csv"
+yadt = false

@@ -1,0 +1,43 @@
+log: bench/results/cluster-sorel-rerun/cpu-dell-sorel/run.log, job 336 on dell1, started 2026-10-28 12:32:25
+
+=== 12:32:25  1/3 machine check
+CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: powersave 
+load average: 2.56 1.37 1.12
+free memory per NUMA node: node 0 210 GiB, node 1 251 GiB, node 2 250 GiB, node 3 251 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:2/1/1 2:1/0/2 3:3/1/3 4:0/0/4 5:2/1/5 6:1/0/6 7:3/1/7 8:0/0/8 9:2/1/9 10:1/0/10 11:3/1/11 12:0/0/12 13:2/1/13 14:1/0/14 15:3/1/15 16:0/0/16 17:2/1/17 18:1/0/18 19:3/1/19 20:0/0/20 21:2/1/21 22:1/0/22 23:3/1/23 24:0/0/24 25:2/1/25 26:1/0/26 27:3/1/27 28:0/0/28 29:2/1/29 30:1/0/30 31:3/1/31 32:0/0/32 33:2/1/33 34:1/0/34 35:3/1/35 36:0/0/36 37:2/1/37 38:1/0/38 39:3/1/39 40:0/0/40 41:2/1/41 42:1/0/42 43:3/1/43 44:0/0/44 45:2/1/45 46:1/0/46 47:3/1/47
+code: 8187eb9a778c-dirty (from submit.sh: hopper has no git)
+runs per case: 3
+
+=== 12:32:25  2/3 benchmark: sorel, cart_depth10,c45_depth10_unpruned, tree, threads all (of 48), 3 run(s) per case
+2 cases, 9 processes:
+  sorel | cart_depth10 | tree | 48
+  sorel | c45_depth10_unpruned | tree | 48
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  sorel: identical in every format (3143 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
+[1/9] 13:24:49 run 1/3: CART ./tree, 48 threads, sorel ...
+    ok: train 32.6 s, peak 350,944 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 2m42s, elapsed 3m20s
+[2/9] 13:28:09 run 1/3: C4.5 ./tree, 48 threads, sorel ...
+    ok: train 46.81 s, peak 378,382 MiB, 379 nodes, depth 10, test acc 78.11% | process 2m55s, elapsed 6m50s, about 11m15s left
+[3/9] 13:31:39 run 2/3: CART ./tree, 48 threads, sorel ...
+    ok: train 33.02 s, peak 350,944 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 2m42s, elapsed 10m07s, about 8m33s left
+[4/9] 13:34:57 run 2/3: C4.5 ./tree, 48 threads, sorel ...
+    ok: train 46.9 s, peak 378,286 MiB, 379 nodes, depth 10, test acc 78.11% | process 2m57s, elapsed 13m40s, about 5m39s left
+[5/9] 13:38:29 run 3/3: C4.5 ./tree, 48 threads, sorel ...
+    ok: train 46.7 s, peak 378,675 MiB, 379 nodes, depth 10, test acc 78.11% | process 2m55s, elapsed 17m10s, about 2m42s left
+[6/9] 13:42:00 run 3/3: CART ./tree, 48 threads, sorel ...
+    ok: train 32.96 s, peak 350,944 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 2m43s, elapsed 20m28s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[7/9] 13:45:17 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0008 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 20m29s, about 0m00s left
+[8/9] 13:45:18 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0008 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 20m29s, about 0m00s left
+[9/9] 13:45:18 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0007 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 20m29s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-sorel-rerun/cpu-dell-sorel/results.jsonl
+
+=== 13:45:18  3/3 tables and CSV files
+done 2026-10-28 13:45:18

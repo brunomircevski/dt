@@ -1,0 +1,5 @@
+2026-10-29 02:05:10  cluster-ecbdl-par/cpu-epyc-ecbdl
+2026-10-29 02:29:14  cluster-ecbdl-par/socket-epyc-ecbdl
+2026-10-29 02:53:26  cluster-sorel-par/cpu-epyc-sorel
+  failed (exit 1): bench/results/cluster-sorel-par/cpu-epyc-sorel/run.log
+2026-10-29 03:57:12  done, failed: cpu-epyc-sorel

@@ -60,6 +60,9 @@
 #   bench/cluster/submit.sh -m 3 -d higgs -o cluster-cpu-vs-others $(for t in parallel serial \
 #       sklearn simple; do echo simple-epyc-higgs-$t-cart simple-epyc-higgs-$t-c45; done) \
 #       simple-epyc-higgs-j48-c45                # one job per tool and protocol
+# -P <file>: no jobs: append each run to that plan file instead, one line each
+# (time limit, then job.sh's arguments and environment), for batch.sh: several
+# runs, of any datasets, one after another in one job on one node.
 # -w: every job on that node instead (e.g. epyc2, the same hardware as epyc1);
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
@@ -80,7 +83,8 @@ NUMA=
 AFTER=
 NODE=
 ACCURACY=
-while getopts "m:d:p:o:a:n:w:eh" option; do
+PLAN=
+while getopts "m:d:p:o:a:n:w:P:eh" option; do
   case "$option" in
     m) RUNS="$OPTARG" ;;
     d) DATASET="$OPTARG" ;;
@@ -90,6 +94,7 @@ while getopts "m:d:p:o:a:n:w:eh" option; do
     n) NUMA="$OPTARG" ;;
     w) NODE="$OPTARG" ;;
     e) ACCURACY=--test-accuracy ;;
+    P) PLAN="$OPTARG" ;;
     *) sed -n '2,50p' "$0"; exit 2 ;;
   esac
 done
@@ -101,11 +106,14 @@ case "$DATASET" in
   # ECBDL: the dell partition allows at most 12 hours.
   ecbdl_15m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
   ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
+  mnist8m) DIR=cluster-mnist8m; LIMIT=08:00:00 TIMEOUT=10800 ;;
+  # SOREL-20M: 136 GB of CSV, CPU nodes only.
+  sorel) DIR=cluster-sorel; LIMIT=12:00:00 TIMEOUT=18000 ;;
   chess_1m|chess_10m|chess_100m|chess_1b) DIR=cluster-chess; LIMIT=02:00:00 TIMEOUT=3600 ;;
   covertype) DIR=cluster-cpu-vs-others; LIMIT=02:00:00 TIMEOUT=3600 ;;
   # SUSY (4.5M rows) for the simple benchmark: hours of --simple, scikit-learn and J48.
   susy) DIR=cluster-cpu-vs-others; LIMIT=12:00:00 TIMEOUT=10800 ;;
-  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, covertype, susy or chess_1m, chess_10m, chess_100m, chess_1b" >&2
+  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, mnist8m, sorel, covertype, susy or chess_1m, chess_10m, chess_100m, chess_1b" >&2
      exit 2 ;;
 esac
 DIR="${OUTDIR:-$DIR}"
@@ -123,11 +131,15 @@ JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda  all"
       "cpu-epyc-$DATASET     epyc       epyc1   tree       all"
       "cpu-dell-$DATASET     dell       dell1   tree       all")
 
-# Full ECBDL needs about 160 GB of GPU memory: CPU nodes only.
-if [ "$DATASET" = ecbdl ]; then
+# Full ECBDL needs about 160 GB of GPU memory, SOREL about 240 GB: CPU nodes
+# only, unless the GPU runs are named (to record that they do not fit).
+GPU_JOBS=()
+if [ "$DATASET" = ecbdl ] || [ "$DATASET" = sorel ]; then
+  GPU_JOBS=("${JOBS[@]:0:2}")
   JOBS=("${JOBS[@]:2}")
 fi
-OPTIONAL=("cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
+OPTIONAL=(${GPU_JOBS[@]+"${GPU_JOBS[@]}"}
+          "cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
           "socket-epyc-$DATASET  epyc       epyc1   tree       all"
           "socket-dell-$DATASET  dell       dell1   tree       all"
           "serial-epyc-$DATASET  epyc       epyc1   tree       1"
@@ -188,6 +200,13 @@ for job in "${JOBS[@]}"; do
   [[ "$name" != simple-*-dual-* && "$name" != vs-*-dual-* ]] || socket=  # both sockets
   # The simple and vs runs check that every backend grew the same tree.
   extra=; [[ "$name" != simple-* && "$name" != vs-* ]] || extra=",RUN_EXTRA=--hash-trees"
+  if [ -n "$PLAN" ]; then
+    environment="${NUMA:+,NUMA_NODE=$NUMA}${ACCURACY:+,ACCURACY=$ACCURACY}$socket$extra"
+    echo "${limit:-$LIMIT} $DIR $name $DATASET $impls $RUNS ${protocols:-$PROTOCOLS} $threads ${timeout:-$TIMEOUT}" \
+      "${environment:+${environment#,}}" >> "$PLAN"
+    echo "$name: planned in $PLAN"
+    continue
+  fi
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "${limit:-$LIMIT}" \
     --export=ALL${NUMA:+,NUMA_NODE=$NUMA}${ACCURACY:+,ACCURACY=$ACCURACY}$socket$extra \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
@@ -195,5 +214,6 @@ for job in "${JOBS[@]}"; do
     "${timeout:-$TIMEOUT}")")
   echo "$name: job ${ids[-1]} on $node"
 done
+[ ${#ids[@]} -gt 0 ] || exit 0
 scontrol release "${ids[@]}"
 squeue -a -u "$USER" -o "%.8i %.10P %.20j %.2t %.10M %R"

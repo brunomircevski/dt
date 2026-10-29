@@ -6,10 +6,10 @@ pruning, on the H100 (hopper) and the A100 (ampere).
     ROOT  holds <dataset>/<node>/results.jsonl (cuML and XGBoost, from
           submit-forest.sh) and gets chart-<dataset>.png and summary.csv
 
-The libraries ran 1 tree and 10 trees. All 10 trees see every row and every
-feature (no bootstrap, max_features 1.0), so they are the same tree, and the
-job checks that the forest predicts like the single tree; "10 trees / 10" is
-then the time of one tree inside a forest.
+The libraries ran 1 tree on every row and feature, and a forest of 10 trees
+with their own random-forest defaults (gpubench.py FOREST=default: cuML
+bootstrap and sqrt(features) per node; XGBoost, as XGBRFClassifier, rows and
+features 0.8); "forest of 10 / 10" is the forest's time divided by 10.
 
 ./tree is not run here: its bars are the depth-10 unpruned CUDA runs of the
 test-set benchmarks, cluster-<dataset>/cuda-<node>-<dataset> (mean of 3).
@@ -41,12 +41,12 @@ CASES = {"cart": "CART", "c45": "C4.5"}
 # Per case, top to bottom: (impl, trees) -> label.
 BARS = {"cart": {("tree", 1): "./tree, exact Gini",
                  ("cuml", 1): "cuML, Gini, 1 tree",
-                 ("cuml", 10): "cuML, Gini, 10 trees / 10",
+                 ("cuml", 10): "cuML, Gini, forest of 10 / 10",
                  ("xgboost", 1): "XGBoost, 1 tree",
-                 ("xgboost", 10): "XGBoost, 10 trees / 10"},
+                 ("xgboost", 10): "XGBoost, forest of 10 / 10"},
         "c45": {("tree", 1): "./tree, exact gain ratio",
                 ("cuml", 1): "cuML, entropy, 1 tree",
-                ("cuml", 10): "cuML, entropy, 10 trees / 10"}}
+                ("cuml", 10): "cuML, entropy, forest of 10 / 10"}}
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
 
@@ -70,7 +70,9 @@ def load_libraries(root, dataset):
             last = rs[-1]
             if last["depth_limit"] != 10:
                 raise SystemExit(f"{path}: {impl} {case}: depth limit {last['depth_limit']}")
-            if trees > 1 and last.get("warmup_agreement_one_tree") != 1.0:
+            if trees > 1 and last.get("forest") != "default":
+                raise SystemExit(f"{path}: {impl} {case} {trees} trees: not a default-settings forest")
+            if trees == 1 and last.get("warmup_agreement_one_tree", 1.0) != 1.0:
                 raise SystemExit(f"{path}: {impl} {case} {trees} trees: the forest does not "
                                  f"predict like one tree")
             out[(node, impl, case, trees)] = {
@@ -100,8 +102,8 @@ def load_tree(results, dataset):
 
 
 def chart(dataset, runs, out):
-    fig = plt.figure(figsize=(13, 9.4))
-    grid = fig.add_gridspec(2, 1, height_ratios=[6, 1.7], left=0.21, right=0.97,
+    fig = plt.figure(figsize=(13, 10.8))
+    grid = fig.add_gridspec(2, 1, height_ratios=[7.4, 1.7], left=0.21, right=0.97,
                             top=0.885, bottom=0.01, hspace=0.2)
     ax = fig.add_subplot(grid[0])
     box = fig.add_subplot(grid[1])
@@ -129,15 +131,18 @@ def chart(dataset, runs, out):
                         linewidth=0)
                 text = f"{seconds(t)}   {r['vram_gib']:.3g} GiB"
                 if trees > 1:
-                    text = f"{seconds(t)}  (10 trees: {seconds(r['seconds'])})   {r['vram_gib']:.3g} GiB"
+                    text = f"{seconds(t)}  ({trees} trees: {seconds(r['seconds'])})   {r['vram_gib']:.3g} GiB"
                 ax.text(t * 1.06, y + offset, text, va="center", fontsize=8.5, color=INK)
             ticks.append((y, label))
             r = runs.get(("hopper", impl, case, trees)) or runs.get(("ampere", impl, case, trees))
+            accuracy = (f"test acc. {r['test_accuracy']:.2%}" if r["test_accuracy"] is not None
+                        else f"training acc. {r['train_accuracy']:.0%} (no test accuracy recorded)")
             if trees == 1:
-                accuracy = (f"test acc. {r['test_accuracy']:.2%}" if r["test_accuracy"] is not None
-                            else f"training acc. {r['train_accuracy']:.0%} (no test accuracy recorded)")
                 lines.append(f"{label.replace(', 1 tree', '')}:  {r['nodes']:,} nodes, depth "
                              f"{r['depth']}, {accuracy}")
+            else:
+                lines.append(f"{label.replace(' / 10', '')}:  {r['nodes']:,.0f} nodes per tree on "
+                             f"average, depth ≤ {r['depth']}, {accuracy} (the forest)")
             y += 1
         y += 0.5
     ax.set_xscale("log")
@@ -166,7 +171,8 @@ def chart(dataset, runs, out):
         "and features\n"
         "cuML RandomForest (128 bins); XGBoost: squared error with lambda 0, i.e. the Gini split "
         "(256 bins, CART only), binning inside the time.\n"
-        "10 trees / 10: a forest of 10 identical trees (no bootstrap), its time divided by 10.  "
+        "1 tree: all rows and features.  Forest of 10 / 10: the library's random-forest defaults (cuML: bootstrap, "
+        "sqrt(features) per node;\nXGBoost RF: 80% of rows, 80% of features per node), its time divided by 10.  "
         f"{', '.join(versions)}; ./tree: the {TREE_DIRS[dataset]} CUDA runs (depth 10, unpruned).",
         fontsize=10.5, color=INK, x=0.015, y=0.995, ha="left", va="top", linespacing=1.5)
     fig.savefig(out, dpi=120)

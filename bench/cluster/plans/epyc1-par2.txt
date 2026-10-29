@@ -1,0 +1,18 @@
+04:00:00 cluster-airline-par2 cpu-epyc-airline airline tree 10 cart_depth10,c45_depth10_unpruned all 3600 ACCURACY=--test-accuracy
+04:00:00 cluster-airline-par2 socket-epyc-airline airline tree 10 cart_depth10,c45_depth10_unpruned all 3600 ACCURACY=--test-accuracy,SOCKET=auto
+01:00:00 cluster-higgs-par2 cpu-epyc-higgs higgs tree 10 cart_depth10,c45_depth10_unpruned all 3600 ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-par2 socket-epyc-higgs higgs tree 10 cart_depth10,c45_depth10_unpruned all 3600 ACCURACY=--test-accuracy,SOCKET=auto
+12:00:00 cluster-susy-par2 cpu-epyc-susy susy tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy
+12:00:00 cluster-susy-par2 socket-epyc-susy susy tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy,SOCKET=auto
+08:00:00 cluster-ecbdl-par2 cpu-epyc-ecbdl_15m ecbdl_15m tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-par2 socket-epyc-ecbdl_15m ecbdl_15m tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy,SOCKET=auto
+08:00:00 cluster-mnist8m-par2 cpu-epyc-mnist8m mnist8m tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy
+08:00:00 cluster-mnist8m-par2 socket-epyc-mnist8m mnist8m tree 10 cart_depth10,c45_depth10_unpruned all 10800 ACCURACY=--test-accuracy,SOCKET=auto
+02:00:00 cluster-chess-par2 cpu-epyc-chess_1m chess_1m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par2 socket-epyc-chess_1m chess_1m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-par2 cpu-epyc-chess_10m chess_10m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par2 socket-epyc-chess_10m chess_10m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-par2 cpu-epyc-chess_100m chess_100m tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par2 socket-epyc-chess_100m chess_100m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-par2 cpu-epyc-chess_1b chess_1b tree 10 cart_full_nodepth,c45_unpruned all 3600 
+02:00:00 cluster-chess-par2 socket-epyc-chess_1b chess_1b tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto

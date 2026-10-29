@@ -1,0 +1,17 @@
+12:00:00 cluster-ecbdl-fix cpu-dell-ecbdl ecbdl tree 3 cart_depth10,c45_depth10_unpruned all 18000  ACCURACY=--test-accuracy
+12:00:00 cluster-ecbdl-fix socket-dell-ecbdl ecbdl tree 3 cart_depth10,c45_depth10_unpruned all 18000 SOCKET=auto,ACCURACY=--test-accuracy
+12:00:00 cluster-sorel-fix cpu-dell-sorel sorel tree 3 cart_depth10,c45_depth10_unpruned all 18000  ACCURACY=--test-accuracy
+12:00:00 cluster-sorel-fix socket-dell-sorel sorel tree 3 cart_depth10,c45_depth10_unpruned all 18000 SOCKET=auto,ACCURACY=--test-accuracy
+02:00:00 cluster-chess-fix cpu-dell-chess_1m chess_1m tree 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix socket-dell-chess_1m chess_1m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-fix cpu-dell-chess_10m chess_10m tree 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix socket-dell-chess_10m chess_10m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-fix cpu-dell-chess_100m chess_100m tree 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix socket-dell-chess_100m chess_100m tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+02:00:00 cluster-chess-fix cpu-dell-chess_1b chess_1b tree 10 cart_full_nodepth,c45_unpruned all 3600
+02:00:00 cluster-chess-fix socket-dell-chess_1b chess_1b tree 10 cart_full_nodepth,c45_unpruned all 3600 SOCKET=auto
+04:00:00 cluster-airline-fix socket-dell-airline airline tree 10 cart_depth10,c45_depth10_unpruned all 3600 SOCKET=auto,ACCURACY=--test-accuracy
+01:00:00 cluster-higgs-fix socket-dell-higgs higgs tree 10 cart_depth10,c45_depth10_unpruned all 3600 SOCKET=auto,ACCURACY=--test-accuracy
+12:00:00 cluster-susy-fix socket-dell-susy susy tree 10 cart_depth10,c45_depth10_unpruned all 10800 SOCKET=auto,ACCURACY=--test-accuracy
+08:00:00 cluster-ecbdl-fix socket-dell-ecbdl_15m ecbdl_15m tree 10 cart_depth10,c45_depth10_unpruned all 10800 SOCKET=auto,ACCURACY=--test-accuracy
+08:00:00 cluster-mnist8m-fix socket-dell-mnist8m mnist8m tree 10 cart_depth10,c45_depth10_unpruned all 10800 SOCKET=auto,ACCURACY=--test-accuracy

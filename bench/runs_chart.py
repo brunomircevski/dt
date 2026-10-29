@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """How much ./tree's times vary from run to run: one row per machine and phase
-(train total, presort, build), the bar at the median of the runs, a whisker
+(train total, presort, build), the bar at the mean of the runs, a whisker
 from the fastest to the slowest run and a dot for every run. One panel per
-protocol. Colour follows the machine; each bar is labelled with its median and
+protocol. Colour follows the machine; each bar is labelled with its mean and
 min–max. Meant for runs with many repetitions (submit.sh -m 10).
 
 Refuses to draw when the runs did not read the same data, as machines_chart.py.
@@ -67,9 +67,9 @@ def main():
             for run in runs:
                 times = [r[field] for r in run["rows"] if r["protocol"] == protocol]
                 reps.add(len(times))
-                median, low, high = statistics.median(times), min(times), max(times)
+                mean, low, high = statistics.mean(times), min(times), max(times)
                 strong = phase == 0
-                ax.barh(y, median, height=0.62, color=run["color"],
+                ax.barh(y, mean, height=0.62, color=run["color"],
                         alpha=1 if strong else 0.55, zorder=2)
                 ax.plot([low, high], [y, y], color=INK, linewidth=1.3, zorder=3)
                 for end in (low, high):
@@ -79,7 +79,7 @@ def main():
                 ax.scatter(times, [y - 0.22 + 0.44 * k / max(n - 1, 1) for k in range(n)],
                            s=14, color="white", edgecolor=INK, linewidth=0.8, zorder=4)
                 ax.text(high + longest * 0.012, y,
-                        f"{median:.2f} s  (min {low:.2f}, max {high:.2f})",
+                        f"{mean:.2f} s  (min {low:.2f}, max {high:.2f})",
                         va="center", fontsize=8.8, color=INK,
                         fontweight="bold" if strong else "normal")
                 ticks.append(y)
@@ -110,7 +110,7 @@ def main():
                  f"{run['name']}: CPU {info['cpu']} · RAM {info['ram']}",
                  fontsize=8.8, color=MUTED)
     fig.legend(handles=[Patch(color=run["color"], label=run["name"]) for run in runs]
-               + [Patch(color="white", label="bar: median · whisker: min to max · dots: every run;"
+               + [Patch(color="white", label="bar: mean · whisker: min to max · dots: every run;"
                                               " darker bar: train total = presort + build")],
                loc="upper left", bbox_to_anchor=(0.012, 1 - (0.5 + 0.19 * len(runs)) / fig.get_figheight()),
                frameon=False, fontsize=8.8, ncols=len(runs) + 1, handlelength=1.4)

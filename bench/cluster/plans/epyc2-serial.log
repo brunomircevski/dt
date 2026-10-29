@@ -1,0 +1,12 @@
+2026-10-28 18:39:15  cluster-airline-fix/serial-epyc-airline
+2026-10-28 19:07:05  cluster-higgs-fix/serial-epyc-higgs
+2026-10-28 19:18:13  cluster-susy-fix/serial-epyc-susy
+2026-10-28 19:21:33  cluster-chess-fix/serial-epyc-chess_1m
+2026-10-28 19:21:39  cluster-chess-fix/serial-epyc-chess_10m
+2026-10-28 19:22:18  cluster-chess-fix/serial-epyc-chess_100m
+2026-10-28 19:27:49  cluster-chess-fix/serial-epyc-chess_1b
+2026-10-28 20:41:52  cluster-mnist8m-fix/serial-epyc-mnist8m
+2026-10-28 21:22:47  cluster-ecbdl-fix/serial-epyc-ecbdl_15m
+2026-10-28 22:07:38  cluster-ecbdl-fix/serial-epyc-ecbdl
+2026-10-28 22:50:38  cluster-sorel-fix/serial-epyc-sorel
+2026-10-29 00:55:54  done

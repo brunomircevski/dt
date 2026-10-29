@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Thread-scaling chart of ./tree: training time (solid lines, left axis) and peak
 memory (dashed lines, right axis) against the number of threads, one colour per
-protocol (CART, C4.5); dot = median over the runs, bar = min-max of the time.
+protocol (CART, C4.5); dot = mean over the runs, bar = min-max of the time.
 Threads and time on log axes, so that ideal scaling (dotted: the 1-thread time
 divided by the threads) is a straight line; memory on a linear axis.
 --socket: a run of the same data on one socket of the same machine (submit.sh's
 socket-* runs: its CPUs and its memory only), drawn as a hollow diamond.
 
-Also writes scaling.csv: one row per (protocol, threads) with the median time,
+Also writes scaling.csv: one row per (protocol, threads) with the mean time,
 speedup over 1 thread (serial backend), parallel efficiency and peak RSS.
 
   bench/.venv/bin/python bench/scaling_chart.py bench/results/<run> [--socket <run>] [--out chart.png]
@@ -57,22 +57,22 @@ def collect(run):
 
 
 def summarise(cases):
-    """-> {protocol: [row per thread count, ascending]} with medians and speedup."""
+    """-> {protocol: [row per thread count, ascending]} with means and speedup."""
     out = defaultdict(list)
     for (protocol, threads), rows in sorted(cases.items(), key=lambda kv: kv[0][1]):
         times = [r["train_seconds"] for r in rows]
         rss = [r["peak_rss_train_bytes"] for r in rows]
         out[protocol].append({
             "protocol": protocol, "threads": threads, "runs": len(rows),
-            "time_median": statistics.median(times), "time_min": min(times),
-            "time_max": max(times), "peak_rss_median": statistics.median(rss),
+            "time_mean": statistics.mean(times), "time_min": min(times),
+            "time_max": max(times), "peak_rss_mean": statistics.mean(rss),
             "nodes": rows[0]["nodes"], "test_accuracy": rows[0].get("test_accuracy"),
             "train_accuracy": rows[0].get("train_accuracy"),
             "same_tree": len({(r["nodes"], r["leaves"], r["depth"]) for r in rows}) == 1})
     for protocol, points in out.items():
-        serial = next((p["time_median"] for p in points if p["threads"] == 1), None)
+        serial = next((p["time_mean"] for p in points if p["threads"] == 1), None)
         for p in points:
-            p["speedup"] = serial / p["time_median"] if serial else None
+            p["speedup"] = serial / p["time_mean"] if serial else None
             p["efficiency"] = p["speedup"] / p["threads"] if serial else None
         # Every thread count must grow the same tree (the backends are exact).
         if len({p["nodes"] for p in points}) > 1:
@@ -110,24 +110,24 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
     for protocol in protocols:
         points, color = series[protocol], COLORS.get(protocol, INK)
         xs = [p["threads"] for p in points]
-        serial = next((p["time_median"] for p in points if p["threads"] == 1), None)
+        serial = next((p["time_mean"] for p in points if p["threads"] == 1), None)
         if serial:  # ideal scaling: n threads take 1/n of the serial time
             ax.plot(xs, [serial / x for x in xs], color=color, linewidth=1, linestyle=":",
                     alpha=0.7, zorder=1)
-        ax.plot(xs, [p["time_median"] for p in points], color=color, linewidth=2, marker="o",
+        ax.plot(xs, [p["time_mean"] for p in points], color=color, linewidth=2, marker="o",
                 markersize=7, markeredgecolor="white", markeredgewidth=1.5, zorder=3)
         ax.vlines(xs, [p["time_min"] for p in points], [p["time_max"] for p in points],
                   color=color, linewidth=2, zorder=2)
-        mem.plot(xs, [p["peak_rss_median"] / 1e9 for p in points], color=color, linewidth=1.6,
+        mem.plot(xs, [p["peak_rss_mean"] / 1e9 for p in points], color=color, linewidth=1.6,
                  linestyle=(0, (4, 2.5)), marker="s", markersize=5, markerfacecolor="white",
                  markeredgecolor=color, markeredgewidth=1.4, zorder=3)
     for protocol in protocols if socket else []:
         color = COLORS.get(protocol, INK)
         for p in socket.get(protocol, []):
             ax.vlines(p["threads"], p["time_min"], p["time_max"], color=color, linewidth=1.5, zorder=4)
-            ax.plot(p["threads"], p["time_median"], marker="D", markersize=8, color=color,
+            ax.plot(p["threads"], p["time_mean"], marker="D", markersize=8, color=color,
                     markerfacecolor="white", markeredgewidth=1.8, linestyle="none", zorder=5)
-            ax.annotate(f"1 socket: {p['time_median']:.3g} s", (p["threads"], p["time_median"]),
+            ax.annotate(f"1 socket: {p['time_mean']:.3g} s", (p["threads"], p["time_mean"]),
                         xytext=(-8, 0), textcoords="offset points", ha="right", va="center",
                         fontsize=8.5, color=INK,
                         bbox=dict(facecolor="white", edgecolor="none", pad=1, alpha=0.85))
@@ -138,7 +138,7 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
     ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
     ax.yaxis.set_minor_formatter(NullFormatter())
     ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
-    mem.set_ylim(0, 1.15 * max(p["peak_rss_median"] for points in series.values()
+    mem.set_ylim(0, 1.15 * max(p["peak_rss_mean"] for points in series.values()
                                for p in points) / 1e9)
     mem.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GB RAM"))
 
@@ -146,8 +146,8 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
     # vertically where two lines end close together.
     fig.canvas.draw()
     gap = 13  # pixels between label centres
-    for axis, key, scale, unit in ((ax, "time_median", 1, "s"),
-                                   (mem, "peak_rss_median", 1e9, "GB")):
+    for axis, key, scale, unit in ((ax, "time_mean", 1, "s"),
+                                   (mem, "peak_rss_mean", 1e9, "GB")):
         placed = []
         ends = [(series[p][-1]["threads"], series[p][-1][key] / scale) for p in protocols]
         for x, y in sorted(ends, key=lambda end: end[1]):
@@ -181,7 +181,7 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
                  x=0.08, y=1 - 0.05 / 5.4, ha="left", fontsize=12.5, color=INK,
                  fontweight="bold")
     reps = settings.get("reps")
-    runs = f"median of {reps} runs, bar: min–max" if reps and reps > 1 else "one run per point"
+    runs = f"mean of {reps} runs, bar: min–max" if reps and reps > 1 else "one run per point"
     rerun = machine.get("serial_rerun")
     if rerun:  # bench/serial_rerun.py
         runs += f" (1 thread rerun on {rerun['started'][:10]})"
@@ -208,8 +208,8 @@ def main():
     machine = json.load(open(run / "machine.json"))
     cases, dataset = collect(run)
     protocols, series = summarise(cases)
-    fields = ["protocol", "threads", "runs", "time_median", "time_min", "time_max", "speedup",
-              "efficiency", "peak_rss_median", "nodes", "test_accuracy", "train_accuracy", "same_tree"]
+    fields = ["protocol", "threads", "runs", "time_mean", "time_min", "time_max", "speedup",
+              "efficiency", "peak_rss_mean", "nodes", "test_accuracy", "train_accuracy", "same_tree"]
     with open(run / "scaling.csv", "w", newline="") as handle:
         writer = csv.DictWriter(handle, fields)
         writer.writeheader()

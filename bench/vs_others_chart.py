@@ -55,7 +55,7 @@ def load(top, names):
 
 
 def prunes(run):
-    """Median pruning time per case, for the cases whose every run recorded it
+    """Mean pruning time per case, for the cases whose every run recorded it
     (only ./tree does)."""
     seconds, runs = {}, {}
     for line in open(run / "results.jsonl"):
@@ -66,7 +66,7 @@ def prunes(run):
         runs[key] = runs.get(key, 0) + 1
         if r.get("prune_seconds") is not None:
             seconds.setdefault(key, []).append(r["prune_seconds"])
-    return {k: statistics.median(v) for k, v in seconds.items() if len(v) == runs[k]}
+    return {k: statistics.mean(v) for k, v in seconds.items() if len(v) == runs[k]}
 
 
 def label(name):
@@ -175,7 +175,7 @@ def bars(fig, spec, machines, protocol, limits):
                         fontsize=8.5, color=MUTED, style="italic")
             continue
         values = data["times"][key]
-        mid = statistics.median(values)
+        mid = statistics.mean(values)
         low = limits["time"][0]
         prune = data["prune"].get(key)
         grow = max(mid - prune, low) if prune else mid
@@ -195,21 +195,21 @@ def bars(fig, spec, machines, protocol, limits):
         if prune and prune >= 0.01 * mid:
             note.append(f"prune {seconds_label(prune)} ({100 * prune / mid:.0f}%)")
         if impl != "tree" and tree_key in data["times"]:
-            note.append(f"{mid / statistics.median(data['times'][tree_key]):.0f}× ./tree")
+            note.append(f"{mid / statistics.mean(data['times'][tree_key]):.0f}× ./tree")
         single = (key[0], key[1], impl, 1)
         if threads > 1 and single in data["times"]:
-            note.append(f"speedup {statistics.median(data['times'][single]) / mid:.1f}× "
+            note.append(f"speedup {statistics.mean(data['times'][single]) / mid:.1f}× "
                         "over 1 thread")
         if name.endswith("-socket"):  # against the same machine's run on both sockets
             whole = machines.get(name.removesuffix("-socket"), {}).get("times", {})
-            note += [f"{statistics.median(v) / mid:.2f}× both sockets ({k[3]} threads)"
+            note += [f"{statistics.mean(v) / mid:.2f}× both sockets ({k[3]} threads)"
                      for k, v in whole.items() if k[:3] == key[:3] and k[3] > 1]
         x = max(values) * 1.12
         label = ax_time.text(x, y, seconds_label(mid), va="center", fontsize=8.8, color=INK)
         if note:
             ax_time.annotate("   " + "  ·  ".join(note), xycoords=label, xy=(1, 0.5),
                              va="center", fontsize=8, color=MUTED)
-        gib = statistics.median(data["memory"][key]) / 2**30
+        gib = statistics.mean(data["memory"][key]) / 2**30
         ax_rss.barh(y, gib - limits["rss"][0], left=limits["rss"][0], height=0.66, color=color,
                     hatch=hatch, edgecolor="white", linewidth=0, zorder=2)
         ax_rss.text(gib * 1.07, y, gib_label(gib), va="center", fontsize=8.8, color=INK)
@@ -303,14 +303,14 @@ def trees(fig, spec, machines):
 
 
 def run_counts(machines):
-    """"median of 3 runs, black line: min-max", plus the cases that have another
+    """"mean of 3 runs, black line: min-max", plus the cases that have another
     number of runs (e.g. the desktop's other tools, kept from an older run)."""
     counts = {}
     for name, data in machines.items():
         for key, values in data["times"].items():
             counts.setdefault(len(values), []).append((name, key[2]))
     usual = max(counts, key=lambda n: len(counts[n]))
-    text = f"median of {usual} runs, black line: min–max" if usual > 1 else "one run"
+    text = f"mean of {usual} runs, black line: min–max" if usual > 1 else "one run"
     for n, cases in sorted(counts.items()):
         if n == usual:
             continue

@@ -84,7 +84,8 @@ rm -r $t
 
 The chess sets, unpruned, on the four nodes and dell2, each size after the
 other on every node (`-a`: after the job that prepared them), and their charts:
-one per size (`chart-<size>.png`), and time and memory against the rows:
+one per size (`chart-chess_<size>.png`), and time and memory against the rows
+(the 2026-10-28 five-run reruns: `submit-variants-2026-10-28.sh`, below):
 
 ```bash
 for d in chess_1m chess_10m chess_100m chess_1b; do
@@ -99,14 +100,7 @@ for d in chess_1m chess_10m chess_100m chess_1b; do
 done
 d=bench/results/cluster-chess
 v=$d/dell-variance  # dell and dell512 at 1000M: the 10-run check (BENCHMARK.md)
-for s in 1m 10m 100m 1b; do
-  dell="$d/cpu-dell-chess_$s $d/cpu-dell512-chess_$s"
-  [ $s = 1b ] && dell="$v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b"
-  bench/.venv/bin/python bench/machines_chart.py --spread --protocols cart_full_nodepth,c45_unpruned \
-      $d/cuda-hopper-chess_$s $d/cuda-ampere-chess_$s $d/cpu-epyc-chess_$s $dell \
-      $d/socket-epyc-chess_$s $d/socket-dell-chess_$s $d/serial-epyc-chess_$s $d/serial-dell-chess_$s \
-      $d/gpuonly-hopper-chess_$s $d/gpuonly-ampere-chess_$s --out $d/chart-$s.png
-done
+bench/.venv/bin/python bench/testset_chart.py $d  # chart-chess_<size>.png: means ± sd, run counts
 bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unpruned \
     $d/{cuda-hopper,cuda-ampere,cpu-epyc}-chess_* $d/{cpu-dell,cpu-dell512}-chess_{1m,10m,100m} \
     $v/cpu-dell-chess_1b $v/cpu-dell512-chess_1b $d/{socket-epyc,socket-dell,serial-epyc,serial-dell,gpuonly-hopper,gpuonly-ampere}-chess_* \
@@ -148,26 +142,109 @@ each `--dump`; the training accuracy is ./tree's own):
 | HIGGS | the first 10.5M | the last 500,000 (UCI's test set) |
 | SUSY | the first 4.5M | the last 500,000 (UCI's test set) |
 | ECBDL'14 | all 31,992,921 (`ecbdl`, CPU nodes only); the first 15M (`ecbdl_15m`, every node: the most an 80 GB GPU holds) | the competition's 2,897,917 |
+| MNIST8M | infinite MNIST's 8,100,000 (LIBSVM `mnist8m`, 784 features, 10 classes) | the original MNIST test set, 10,000 (LIBSVM `mnist.t`) |
+| SOREL-20M | its training set, 12,699,013 (2381 features; CPU nodes only, about 120 GB as float32) | its test set, 4,195,042 |
 
-Four protocols, depth ≤ 10, pruned at fixed values: `cart_depth10` (no
-pruning), `cart_depth10_alpha` (α = 1e-5), `c45_depth10_unpruned`,
-`c45_depth10` (CF 0.25). CUDA hybrid (`cuda-*`) and GPU only (`gpuonly-*`) on
-hopper and ampere, parallel on every CPU of both sockets on epyc1 and dell1
-(`cpu-*`); no serial runs. Three runs per case; `testset_chart.py` draws the
-means (training time, peak RAM and VRAM as numbers, the tree's accuracy, nodes
-and depth):
+Two protocols, depth ≤ 10, no pruning: `cart_depth10` and
+`c45_depth10_unpruned`. (Until 2026-10-27 also `cart_depth10_alpha`, α = 1e-5,
+and `c45_depth10`, CF 0.25; those runs are in git at 96705a7.) CUDA hybrid
+(`cuda-*`) and GPU only (`gpuonly-*`) on hopper and ampere, parallel on every
+CPU of both sockets on epyc1 and dell1 (`cpu-*`), three runs per case (five
+since 2026-10-28, below);
+`--serial` (`serial-*`) and `--simple` (`simple-*`, one job per protocol, one
+run) on epyc; on MNIST8M and SOREL also on dell1, with parallel on one socket
+(`socket-*`; not `socket-epyc-sorel`: one epyc socket has 256 GB, SOREL needs
+340–370 GiB). `testset_chart.py` draws the means on a log scale, with whiskers
+from the fastest to the slowest run (training time ± standard deviation, the
+number of runs, peak RAM and VRAM as numbers, the tree's accuracy, nodes and
+depth); a folder with no results yet is drawn as "queued", one without its
+report as "still running".
+
+On 2026-10-28 every test-set benchmark and cluster-chess got every variant on
+epyc and the GPUs, and more runs: 10 per case when a run (the whole process)
+takes about 2 minutes or less, 5 under about 10 minutes, the rest as they were.
+`bench/cluster/submit-variants-2026-10-28.sh` (jobs 381–469) adds parallel on
+one socket of epyc (`socket-epyc-*`; not SOREL), `--simple` on HIGGS, SUSY and
+chess, and CUDA hybrid and GPU only on full ECBDL and SOREL (one run, to record
+how they fail on an 80 GB GPU); `submit-topup-2026-10-28.sh` (jobs 470–545)
+re-queued its pending jobs with only the runs missing (the existing runs count)
+and topped up the ones it had started. They write into `cluster-<dataset>-new/`
+and `-top/`, which `bench/merge_runs.py` appends to the run folders (no new
+dell runs). The same day the parallel backend's spin stall was fixed
+(`partitionInBlocks` in `src/build/cpu_builder.cpp`: it spun without end on the
+block before, and a descheduled thread made small runs up to 8× slower), and
+`submit-spinfix-2026-10-28.sh` (jobs 550–570) runs every parallel epyc case
+again, 10 times (full ECBDL 5), into `cluster-<dataset>-fix/`: those folders
+replace the old ones instead of being merged. C4.5's distinct values
+(`distinctValues` in `src/build/cpu_grower.cpp`) were then made allocation-free
+(SOREL's presort varied 11–34 s on epyc), and `submit-final-2026-10-28.sh` puts
+every epyc `tree_cpu` run on that build: the parallel jobs that ran before it
+(550–556) and --serial for every dataset again, into `cluster-<dataset>-fix/`
+(old ones moved to `bench/results-old-build/` on mordor3). Long runs (full
+ECBDL and SOREL parallel, --serial, --simple) go one after another on epyc2,
+short ones on epyc1, which stays free for short and interactive runs.
+`submit-dell-chess-2026-10-28.sh` (jobs 592–634) does the same for dell (every
+`tree_cpu` run: parallel on dell1, then --serial there; dell2 only its 512 GB
+chess runs), into `cluster-<dataset>-fix/`.
+`submit-batches-2026-10-28.sh` then cancelled every pending job and put all
+that was left in a few batch jobs (636–645): `submit.sh -P <plan>` writes a
+run's line to a plan file instead of submitting it, and `batch.sh <plan>` (one
+SLURM job per node and group) runs the lines one after another, each into its
+folder's `run.log`, going on when one fails. It reruns every GPU case on the
+CUDA rework (67495f9; job 636 builds it and installs it as `~/dt/tree` only
+when its trees match the old build's; no GPU runs for SOREL and full ECBDL,
+they do not fit in VRAM), and adds dell and epyc for every CPU backend. Runs a
+case: about 2 minutes or less 10, under about 10 minutes 3, longer once. The
+`-new`/`-top` folders went to `bench/results-old-build/`, so nothing is merged
+any more. `submit-yield-2026-10-29.sh` then ran every parallel case again
+(dell, epyc, both sockets and one) on a build whose waits yield for up to 2 ms
+before they sleep: the spin fix slept right after its pauses, and waking made
+dell's chess runs about 2× slower. Its runs were dropped (ECBDL 15M C4.5 8% slower on
+epyc) and `submit-poll-2026-10-29.sh` runs them again on `~/dt/tree_cpu3`
+(via `TREE_BIN`), into `cluster-<dataset>-par2/`. Its waits poll with short
+sleeps (no notify, so libstdc++'s lost wake-up cannot hang them), and it is
+built with `-falign-functions=64 -falign-loops=32`: the 8% was C4.5's sweep
+landing on another code offset, not the waits. `testset_chart.py` reads
+`cluster-<dataset>-fix/`, then `-par2/`, next to the folder: done reruns
+replace the old bars, pending ones mark them or show as
+"queued". Charts mark potential problems from `cluster-<dataset>/problems.json`
+(and runs over twice the mean of the other runs).
 
 ```bash
-P=cart_depth10,cart_depth10_alpha,c45_depth10_unpruned,c45_depth10
-for d in higgs airline; do   # -a <prepare job> when the data is still being made
-  bench/cluster/submit.sh -m 3 -e -d $d -p $P {cuda,gpuonly}-{hopper,ampere}-$d cpu-{epyc,dell}-$d
+cd bench/results
+for x in airline higgs susy ecbdl mnist8m sorel chess; do
+  for f in fix par2; do
+    for run in cluster-$x-$f/*/; do rm -rf cluster-$x/$(basename $run); mv $run cluster-$x/; done
+    rm -rf cluster-$x-$f
+  done
 done
-bench/cluster/submit.sh -m 3 -e -d susy -p $P -o cluster-susy \
-  {cuda,gpuonly}-{hopper,ampere}-susy cpu-{epyc,dell}-susy
-bench/cluster/submit.sh -m 3 -e -d ecbdl_15m -p $P \
-  {cuda,gpuonly}-{hopper,ampere}-ecbdl_15m cpu-{epyc,dell}-ecbdl_15m
-bench/cluster/submit.sh -m 3 -e -d ecbdl -p $P cpu-epyc-ecbdl cpu-dell-ecbdl
-for d in airline higgs susy ecbdl; do bench/.venv/bin/python bench/testset_chart.py bench/results/cluster-$d; done
+```
+
+The submits
+before it:
+
+```bash
+P=cart_depth10,c45_depth10_unpruned
+for d in higgs airline susy ecbdl_15m; do   # -a <prepare job> when the data is still being made
+  bench/cluster/submit.sh -m 3 -e -d $d -p $P {cuda,gpuonly}-{hopper,ampere}-$d cpu-{epyc,dell}-$d serial-epyc-$d
+done
+bench/cluster/submit.sh -m 3 -e -d ecbdl -p $P cpu-epyc-ecbdl cpu-dell-ecbdl serial-epyc-ecbdl
+bench/cluster/submit.sh -m 3 -e -d mnist8m -p $P {cuda,gpuonly}-{hopper,ampere}-mnist8m \
+  {cpu,socket,serial}-dell-mnist8m
+bench/cluster/submit.sh -m 3 -e -d mnist8m -p $P -w epyc1 {cpu,socket,serial}-epyc-mnist8m
+bench/cluster/submit.sh -m 3 -e -d sorel -p $P cpu-dell-sorel socket-dell-sorel
+bench/cluster/submit.sh -m 1 -e -d sorel -p $P serial-dell-sorel
+bench/cluster/submit.sh -m 3 -e -d sorel -p $P -w epyc2 cpu-epyc-sorel
+bench/cluster/submit.sh -m 1 -e -d sorel -p $P -w epyc2 serial-epyc-sorel
+# --simple: one job per protocol and one run, straight to job.sh (2026-10-27:
+# bench/cluster/submit-mnist8m-sorel.sh on mordor3); e.g. SOREL on dell1, 3 days:
+n=simple-dell-sorel; mkdir -p bench/results/cluster-sorel/$n
+for p in cart_depth10 c45_depth10_unpruned; do
+  sbatch -J dt-$n-${p%%_*} -p dell-long -w dell1 --exclusive -t 3-00:00:00 \
+    --export=ALL,ACCURACY=--test-accuracy -o bench/results/cluster-sorel/$n/run-${p%%_*}.log \
+    bench/cluster/job.sh cluster-sorel $n sorel tree_simple 1 $p 1 172800
+done
+for d in airline higgs susy ecbdl mnist8m sorel; do bench/.venv/bin/python bench/testset_chart.py bench/results/cluster-$d; done
 ```
 
 ## Settings specific to the cluster
