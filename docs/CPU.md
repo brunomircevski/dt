@@ -17,7 +17,11 @@ Each feature is sorted once at the start (`presortColumns`, an LSD radix sort
 on the float bits, stable, 3 passes of 11 bits; a pass in which all keys share
 the digit is skipped). The histograms of all features are computed first, so
 that the features needing the most passes (continuous ones need three, binary
-ones one) are sorted first, which balances the threads. The first pass reads
+ones one) are sorted first, which balances the threads. Columns of 1M+ rows
+are counted in chunks on all threads (not one thread per column), and their
+digits then cover only the key bits that vary, in as few passes of up to 12
+bits as possible; an integer column whose range needs fewer passes is keyed by
+`int(v) − min` instead (`radixPlan`). The first pass reads
 the raw values directly and the last one writes the final column. With
 fewer features than threads (airline: 18 features, 48 threads) each big
 column is sorted by several threads: every thread counts the digits of its

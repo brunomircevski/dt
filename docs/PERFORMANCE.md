@@ -2,6 +2,55 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: a faster presort, and experiments that did not help (mordor3 cluster)
+
+Unpruned trees (`--no-prune -d 10`); every run's `--dump` compared with the
+base binary's. Two CPU presort changes are in `cpu_builder.cpp`
+([CPU.md](CPU.md)): the digit histograms of big columns are counted in chunks
+on all threads, and the radix sort covers only the key bits that vary
+(integer columns keyed by `int(v) − min`, 12-bit digits, columns of 1M+ rows).
+Same trees (`tests/check.sh`, 24 dumps). `--parallel` on dell (48 threads),
+medians of 3 interleaved reps against main 8bdf641:
+
+| | presort CART | train CART | presort C4.5 | train C4.5 |
+|---|--:|--:|--:|--:|
+| chess_1b | −62% | −32% | −49% | −20% |
+| chess_100m | −52% | −24% | −49% | −19% |
+| chess_10m | −37% | −17% | −42% | −6% |
+| airline | −34% | −7% | −29% | −2% |
+| ECBDL 15M | −25% | −4% | −19% | −6% |
+| SUSY | −17% | −0% | −15% | −12% |
+| covertype | −9% | −4% | −7% | −7% |
+| mnist8m | −3% | −2% | −8% | +3% |
+| HIGGS | +3% | +1% | +3% | −2% |
+
+Build time is unchanged (dell noise ±8%). HIGGS's 28 columns of 11M rows keep
+all threads busy without chunks, and its float columns save no pass. Serial:
+covertype / SUSY / HIGGS presort −2 / −9 / −4% (CART), train within 2%.
+
+Tried and dropped (same trees in every case):
+
+* **Skipping the column writes of the last level** (fused child sweeps at depth
+  max−1 write columns nobody reads again): build −5% to +3%, noise.
+* **Prefetching the left/right flag** 32 rows ahead in the partition loops:
+  within ±3%.
+* **CUDA: packed upload** (integer columns sent as uint8/16 and unpacked by a
+  kernel) and **cub radix over the varying bits only**: both slower on every
+  dataset, train +28 to +105% on the H100 and +3 to +40% on the A100 (e.g.
+  airline CART 530 → 1089 / 983 ms on the H100, 793 → 1068 / 1054 ms on the
+  A100). Both went through an upload path that scans each staged chunk on the
+  host before sending it (airline user time 33 → 58 s), which costs more than
+  the saved bytes or radix passes. A new try would have to fold the scan into
+  the staging copy.
+* **Page-locking the hand-off arena in 1 GB chunks** (2026-10-18): ECBDL CART
+  on the H100 23.0 → 18.6 s, but C4.5 on the A100 66.5 → 68.6 s and airline C4.5
+  crashed in chunk mode. Superseded by the staged hand-offs below, which do not
+  page-lock the arena at all.
+* The `--parallel` hang (about 1 in 40 big runs on dell) was a lost wake-up in
+  libstdc++ 13's `atomic::notify` after a release store; `waitNonZero()` in
+  `cpu_builder.cpp` avoids `atomic::wait` (a `seq_cst` store also fixed it but
+  made ECBDL C4.5 7% slower).
+
 ## October 2026: hand-offs without page-locking the arena (CUDA, mordor3 cluster)
 
 The host arena that receives the hand-offs (75 GB for ECBDL'14's 15M sample)
