@@ -1,78 +1,16 @@
-# Handoff: CART / C4.5 performance work (2026-10-28/29)
+# CART / C4.5 performance work (2026-10-28/29): finished
 
-This note is for the next agent that picks up the optimisation work, on any machine. Nothing here is merged into `main` yet, and **the user decides what gets merged**. Do not merge without their approval.
+The brief was to make the C++ CART / C4.5 builder faster or leaner without changing a single tree. Experiments ran unpruned (`--no-prune -d 10`) on mordor3 compute nodes, CPU on dell (48 threads) and CUDA on hopper (H100) / ampere (A100). Every run's `--dump` was compared with the base binary's.
 
-## The task and its rules
+The work is done. The experiment branches (`exp/perf-d10`, `merge/perf-d10`, and the older `wip/arena-pagelock-fix`) are deleted, as is the server clone `~/dt-perf`. This file is the record of the results.
 
-The user's brief: make the C++ CART / C4.5 builder faster or leaner, without changing a single tree.
+## Merged into main
 
-Rules the user set:
-- **Experiments:** unpruned trees, `--no-prune -d 10`.
-- **Correctness:** trees must stay identical. Compare every run's `--dump` with the base binary's.
-- **Run limits:** keep each run under about 10 minutes. Don't run the largest datasets with `--serial` or `--simple`.
-- **`--simple`:** never modify it; it is the reference implementation.
-- **Nothing heavy locally, and nothing on the mordor3 login node.** Use cluster compute nodes:
-  - CPU work on `dell` or `epyc`.
-  - CUDA work on `hopper` or `ampere`, never CPU benchmarks there.
-- **Shared cluster:** other users' jobs run there too, so behave well.
-- **Branches:** work on a branch; don't touch `main` until the user approves.
-- **Commits:** end every commit message with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+**CPU presort (commit "CPU presort: column histograms in chunks on all threads; radix over the varying key bits only", `src/build/cpu_builder.cpp` only):**
+- **HISTPAR:** the presort digit histograms of big columns are counted in chunks on all threads, not one thread per column.
+- **RADIX:** the radix sort runs only over the key bits that vary. Integer columns are keyed by `int(v) − min`, with 12-bit digits, for columns of ≥ 1M rows only. The old `radixHistogram()` is gone.
 
-## Branches (on GitHub)
-
-| Branch | What |
-|---|---|
-| `exp/perf-d10` | All the experiments, behind environment switches (`src/core/experiment.h`). It also holds the job scripts in `bench/exp/` and the full write-up in **`bench/exp/FINDINGS.md`**. Read FINDINGS.md first. |
-| `merge/perf-d10` | The clean merge candidate: the recommended CPU changes with no switches. **One commit, 79fee09, on top of `main` dabf303**, so it fast-forwards (details below). |
-
-**`exp/perf-d10`**
-- Its base is 0c1c21d: main 67495f9 plus main's uncommitted cpu_builder/cpu_grower changes as they were on 2026-10-28.
-- How the switches work:
-  - `DT_EXP_<NAME>=1` turns one on.
-  - `DT_EXP_ALL=1` turns all of them on.
-  - `DT_EXP_<NAME>=0` turns one off again.
-
-**`merge/perf-d10`**
-- **79fee09:** HISTPAR + RADIX as permanent code, in the presort part of `src/build/cpu_builder.cpp` only. The old `radixHistogram()` is removed.
-- It was measured on top of the code in main 8bdf641:
-  - The `--parallel` hang fix from another session: `waitNonZero()` spins, then yields, then sleeps, and never uses `atomic::wait`.
-  - `-falign-functions=64 -falign-loops=32` in the Makefile.
-  - The two-pass `distinctValues`.
-  - Main 8bdf641 committed exactly the code jobs 775/776 used as their base (9731c36, now dropped as already upstream).
-- If main moves on, rebase 79fee09. It only touches presort code, so conflicts are unlikely.
-
-## Results (all trees identical, `--parallel` on dell, 48 threads)
-
-| Change | Verdict | Effect |
-|---|---|---|
-| **HISTPAR**: presort digit histograms of big columns counted in chunks on all threads, not one thread per column | merge (in merge/perf-d10) | presort −40 to −58% on chess, −17 to −26% on SUSY, −15 to −22% on airline (CART / C4.5) |
-| **RADIX**: radix sort only over the key bits that vary; integer columns keyed by `int(v) − min`; 12-bit digits; columns of ≥ 1M rows only | merge (in merge/perf-d10) | presort −25% / −19% on ECBDL 15M; together with HISTPAR −37% / −29% on airline |
-| **Hang fix**: lost wake-up in libstdc++ 13 `atomic::notify` after a release store (see below) | fixed on main in 8bdf641 by another session (no notify), so exp/perf-d10's ece66ab is not needed | about 1 in 40 big `--parallel` runs on dell hung forever |
-| **NOWRITE**: fused child sweeps at depth max−1 skip writing columns that are never read again | skip | build −5% to +3%, noise |
-| **PREFETCH**: partition loops prefetch the left/right flag 32 rows ahead | drop | within ±3% |
-| **PACK** (CUDA): upload integer columns as uint8/16 and unpack them in a kernel | **pending** | trees identical (job 751); not timed yet |
-| **SORTBITS** (CUDA): cub radix over the varying bits only | **pending** | trees identical (job 751); not timed yet |
-
-End-to-end train time with all CPU switches on:
-- CART: chess_100m −27%, chess_1b −20%, airline −14%, chess_10m −13%, ECBDL −8%, SUSY −7%.
-- C4.5: chess_1b −16%, chess_10m −9%, ECBDL −5%.
-- Build time is unchanged; the whole gain is in presort.
-
-**Root cause of the hang**
-- libstdc++ 13 `notify_*` makes the futex wake call only if it sees a waiter in the bucket's waiter count.
-- After a `memory_order_release` store (a plain `mov` on x86), the load of that count can run before the store is visible. The waiter then sleeps on the old value for good.
-- It was caught under gdb in job 739: the main thread was in `atomic::wait` in `partitionInBlocks`, and all 47 pool workers were idle.
-- The waits involved were `lefts[]` in `partitionInBlocks` and `done[]` in the column partition.
-- Two possible fixes:
-  - A `seq_cst` store, as in ece66ab. Job 749 ran it 160 times on dell with 0 hangs.
-  - Avoiding `atomic::wait` altogether, as main's working tree now does.
-
-## Check of merge/perf-d10 against main's code (jobs 775 / 776, 2026-10-29)
-
-`bench/exp/merge.sh` compared the base (9731c36 = main 8bdf641's code) with the merge build (20250b6 = 79fee09's code):
-- **Nodes:** dell2 for CART, dell3 for C4.5. Median of 3 interleaved reps.
-- **Trees:** `tests/check.sh` passes, and all 24 trees are identical.
-- **Raw data:** `~/dt-perf/bench/exp/out/exp-merge-{cart-775,c45-776}/ab.csv` on mordor3.
+Check against main 8bdf641's code (jobs 775/776, dell2 CART, dell3 C4.5, median of 3 interleaved reps). `tests/check.sh` passes and all 24 trees are identical:
 
 | dataset | presort CART | train CART | presort C4.5 | train C4.5 |
 |---|---|---|---|---|
@@ -87,60 +25,37 @@ End-to-end train time with all CPU switches on:
 | higgs par | +3% | +1% | +3% | −2% |
 | covertype / susy / higgs serial | −2 / −9 / −4% | −0 / −2 / −1% | −2 / −5 / −3% | −0 / −2 / −0% |
 
-- Build time is unchanged within the dell run-to-run noise (±8%; chess C4.5 up to ±18%).
-- The higgs +3% presort is noise: 28 columns of 11M rows keep all threads busy without chunks, and RADIX saves no pass on its float columns.
+Build time is unchanged within the dell noise (±8%; chess C4.5 up to ±18%). The +3% higgs presort is noise: its 28 columns of 11M rows keep all threads busy without chunks, and RADIX saves no pass on its float columns.
 
-## What is left
+## Not merged
 
-1. **CUDA timing (PACK, SORTBITS).**
-   - Jobs **721** (hopper) and **722** (ampere) are queued on mordor3 with `--exclusive`. They wait behind another user's open-ended GPU jobs (asawicki, 11+ h so far).
-   - They run `bench/exp/cuda.sh` from `~/dt-perf` with the binaries in `~/dt-perf/bench/exp/bin/{base,exp}/tree`. Those are built from the tarballs in `bench/exp/src` (0c1c21d vs 82dafdb; the CUDA code at 82dafdb is the same as the branch head).
-   - Results go to `~/dt-perf/bench/exp/out/exp-cuda-{hopper-721,ampere-722}/`:
-     - `ab.csv`: base / off / pack / sortbits / all, 3 reps each.
-     - `dumps.txt`: tree comparisons.
-     - `profile.csv`: `--gpu-profile` steps.
-   - Check with `squeue -a`. If the jobs have been cancelled, resubmit them; the command is in the header of `bench/exp/cuda.sh`.
-   - **Decision rule:**
-     - If PACK and/or SORTBITS make upload + presort clearly faster on both GPUs and the trees are the same, port them to `merge/perf-d10` without switches. The code is in `src/build/gpu_grower.cu`; see `git diff 0c1c21d exp/perf-d10 -- src/build/gpu_grower.cu`. Then rebuild and run `tests/check.sh` (CUDA backends) on hopper.
-     - Otherwise leave them out.
-   - Update §6 of `bench/exp/FINDINGS.md`.
-2. **Report to the user, then ask whether to merge.** Give the CUDA verdict and what `merge/perf-d10` contains, with its numbers. Then **ask the user explicitly whether they want these changes merged into `main`**. Do not merge without a clear yes.
-   - **On yes:**
-     - Bring `merge/perf-d10` up to date with `main` (rebase if main moved), and re-run `tests/check.sh` on a dell node if the code changed.
-     - Merge it into `main` and push.
-   - **On no:** merge nothing.
-3. **Leave only `main` in the GitHub repo**, whichever answer the user gave:
-   - Delete both branches on GitHub: `git push origin --delete exp/perf-d10 merge/perf-d10`.
-   - Delete any local copies of them.
-   - Delete any other branch you created.
-   - Check with `git ls-remote --heads origin` that only `refs/heads/main` is left.
-   - `bench/exp/FINDINGS.md` goes away with `exp/perf-d10`. This file keeps the results.
-4. **Clean up mordor3** once 721/722 have finished, or have been cancelled if the user doesn't want to wait:
-   - Delete the whole server clone, `~/dt-perf`. It holds the tarballs `bench/exp/src` and `srcm` (219 MB each), `bench/exp/bin`, and the job outputs in `bench/exp/out`. Copy any numbers you still need into this file first.
-   - Cancel any of your jobs still queued (`squeue -a`, `scancel <id>`).
-   - Leave everything else in the home directory alone, including `~/dt`, `~/datasets` and `~/dt-final*`: other sessions use them.
-   - On the laptop where this work started (/home/bruno/Projects), these extra git worktrees can also go:
-     - `../dt-perf` (exp/perf-d10).
-     - `../dt-merge` (merge/perf-d10).
-     - Remove them with `git worktree remove` before deleting the branches.
-5. **Update this file on `main`** to say the work is finished and what was merged, or delete it if the user prefers.
+| Change | Result |
+|---|---|
+| **NOWRITE** (CPU): fused child sweeps at depth max−1 skip writing columns that are never read again | build −5% to +3%, noise |
+| **PREFETCH** (CPU): partition loops prefetch the left/right flag 32 rows ahead | within ±3% |
+| **PACK** (CUDA): upload integer columns as uint8/16 and unpack them in a kernel | trees identical, but slower everywhere (below) |
+| **SORTBITS** (CUDA): cub radix over the varying key bits only | trees identical, but slower everywhere (below) |
+| **Chunked arena page-locking** (`wip/arena-pagelock-fix`, 2026-10-18) | wins on hopper ECBDL, but C4.5 is +3% on ampere and airline C4.5 crashes in chunk mode. Its count-table part (no zero-fill) was already on main. |
 
-## The cluster (mordor3)
+**CUDA timing (jobs 721 hopper / 722 ampere, 2026-10-29):** all 76 tree dumps are identical. Median train time, 3 reps, compared with the experiment binary with its switches off. The off binary is as fast as base.
 
-- **Login:** `ssh mordor3`. To avoid quoting problems, send commands as a heredoc: `ssh mordor3 bash -l <<'EOF' ... EOF`. The login node is submit-only.
-- **Partitions:**
-  - `dell`: dell1–4, Xeon, 48 threads.
-  - `epyc`: epyc1–2.
-  - `hopper`: H100.
-  - `ampere`: A100.
-- **Quirks:**
-  - Use `--exclusive` for timing.
-  - `--mem` fails on hopper/ampere.
-  - Slurm accounting is off; list jobs with `squeue -a`.
-- **Locations:**
-  - Datasets: `~/dt/bench/data/<name>/train.csv`.
-  - Server clone of the branches: `~/dt-perf`. Update it from a laptop with `git push mordor3:dt-perf <branch>`, or pull from GitHub there.
-- **A/B harness** (`bench/exp/`, on exp/perf-d10):
-  - `pack.sh <base> <exp> [folder]` writes git-archive tarballs.
-  - A job (`cpu.sh`, `cuda.sh`, `merge.sh`, …) builds both versions in `/tmp`, runs `tests/check.sh`, then runs interleaved reps through `bench/cluster/tune.sh`. Each run has a 600 s timeout and its `--dump` is compared with base.
-  - Output goes to `bench/exp/out/<job>-<id>/`.
+| dataset | hopper PACK / SORTBITS | ampere PACK / SORTBITS |
+|---|---|---|
+| covertype CART | +28% / +18% | +9% / +3% |
+| susy CART | +52% / +53% | +24% / +19% |
+| higgs CART | +48% / +103% | +40% / +30% |
+| chess_100m CART | +55% / +51% | +34% / +23% |
+| airline CART | +105% / +86% | +35% / +33% |
+| mnist8m CART | +56% / +40% | +14% / +19% |
+| ecbdl_15m CART | +38% / +36% | +22% / +30% |
+| chess_1b CART | +77% / +85% | +28% / +26% |
+| higgs C4.5 | +92% / +40% | +26% / +28% |
+| airline C4.5 | +97% / +84% | +25% / +29% |
+| ecbdl_15m C4.5 | +41% / +35% | +20% / +26% |
+| chess_1b C4.5 | +53% / +77% | +26% / +26% |
+
+All of the extra time is in setup (upload + presort); build time is unchanged. Both switches go through a new upload path (`uploadPacked`) that scans each staged chunk on the host before it is sent. That costs more than PACK saves in bytes or SORTBITS saves in radix passes: airline CART user time goes from 33 s to 58 s on hopper. Any future try needs the scan hidden in the existing copy pipeline, for example fused into the staging memcpy, rather than as an extra pass.
+
+## Parallel hang (fixed on main in 8bdf641)
+
+About 1 in 40 big `--parallel` runs on dell hung forever. The cause is a lost wake-up in libstdc++ 13's `atomic::notify` after a `memory_order_release` store. `notify_*` makes the futex wake call only if it sees a waiter in the bucket's waiter count. That load can run before the store is visible (on x86 the store is a plain `mov`), so the waiter sleeps on the old value for good. It was caught under gdb in `partitionInBlocks` (`lefts[]`) and in the column partition (`done[]`). Main's `waitNonZero()` avoids `atomic::wait` altogether: it spins, then yields, then sleeps. A `seq_cst` store also fixed it (160 runs, 0 hangs).
