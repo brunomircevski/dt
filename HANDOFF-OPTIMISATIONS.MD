@@ -23,7 +23,7 @@ Rules the user set:
 | Branch | What |
 |---|---|
 | `exp/perf-d10` | All the experiments, behind environment switches (`src/core/experiment.h`). It also holds the job scripts in `bench/exp/` and the full write-up in **`bench/exp/FINDINGS.md`**. Read FINDINGS.md first. |
-| `merge/perf-d10` | The clean merge candidate: the recommended CPU changes with no switches. 2 commits on top of `main` 67495f9 (details below). |
+| `merge/perf-d10` | The clean merge candidate: the recommended CPU changes with no switches. **One commit, 79fee09, on top of `main` dabf303**, so it fast-forwards (details below). |
 
 **`exp/perf-d10`**
 - Its base is 0c1c21d: main 67495f9 plus main's uncommitted cpu_builder/cpu_grower changes as they were on 2026-10-28.
@@ -33,12 +33,13 @@ Rules the user set:
   - `DT_EXP_<NAME>=0` turns one off again.
 
 **`merge/perf-d10`**
-- **9731c36:** main's *uncommitted* working-tree changes as of 2026-10-29 08:40, copied unchanged: `src/build/cpu_builder.cpp`, `src/build/cpu_grower.cpp` and `Makefile`.
-  - They include **another session's fix for the `--parallel` hang**: `waitNonZero()` spins, then yields, then sleeps, and never uses `atomic::wait`.
-  - They also add `-falign-functions=64 -falign-loops=32` to the Makefile.
-  - That other session copied the code to `~/dt-final*` on mordor3 and kept working on it. If main's working tree has moved on since, rebase the second commit onto the newer code. It only touches the presort part of `cpu_builder.cpp`.
-- **20250b6:** HISTPAR + RADIX as permanent code. The old `radixHistogram()` is removed.
-- **Merging:** git refuses to merge while those three files have uncommitted changes on main, even identical ones. The user must first commit or stash their working copy.
+- **79fee09:** HISTPAR + RADIX as permanent code, in the presort part of `src/build/cpu_builder.cpp` only. The old `radixHistogram()` is removed.
+- It was measured on top of the code in main 8bdf641:
+  - The `--parallel` hang fix from another session: `waitNonZero()` spins, then yields, then sleeps, and never uses `atomic::wait`.
+  - `-falign-functions=64 -falign-loops=32` in the Makefile.
+  - The two-pass `distinctValues`.
+  - Main 8bdf641 committed exactly the code jobs 775/776 used as their base (9731c36, now dropped as already upstream).
+- If main moves on, rebase 79fee09. It only touches presort code, so conflicts are unlikely.
 
 ## Results (all trees identical, `--parallel` on dell, 48 threads)
 
@@ -46,7 +47,7 @@ Rules the user set:
 |---|---|---|
 | **HISTPAR**: presort digit histograms of big columns counted in chunks on all threads, not one thread per column | merge (in merge/perf-d10) | presort −40 to −58% on chess, −17 to −26% on SUSY, −15 to −22% on airline (CART / C4.5) |
 | **RADIX**: radix sort only over the key bits that vary; integer columns keyed by `int(v) − min`; 12-bit digits; columns of ≥ 1M rows only | merge (in merge/perf-d10) | presort −25% / −19% on ECBDL 15M; together with HISTPAR −37% / −29% on airline |
-| **Hang fix**: lost wake-up in libstdc++ 13 `atomic::notify` after a release store (see below) | fixed on main's working tree by the other session, so not needed from exp/perf-d10 (ece66ab) | about 1 in 40 big `--parallel` runs on dell hung forever |
+| **Hang fix**: lost wake-up in libstdc++ 13 `atomic::notify` after a release store (see below) | fixed on main in 8bdf641 by another session (no notify), so exp/perf-d10's ece66ab is not needed | about 1 in 40 big `--parallel` runs on dell hung forever |
 | **NOWRITE**: fused child sweeps at depth max−1 skip writing columns that are never read again | skip | build −5% to +3%, noise |
 | **PREFETCH**: partition loops prefetch the left/right flag 32 rows ahead | drop | within ±3% |
 | **PACK** (CUDA): upload integer columns as uint8/16 and unpack them in a kernel | **pending** | trees identical (job 751); not timed yet |
@@ -68,7 +69,7 @@ End-to-end train time with all CPU switches on:
 
 ## Check of merge/perf-d10 against main's code (jobs 775 / 776, 2026-10-29)
 
-`bench/exp/merge.sh` compared the base (9731c36, main's code) with the merge build (20250b6):
+`bench/exp/merge.sh` compared the base (9731c36 = main 8bdf641's code) with the merge build (20250b6 = 79fee09's code):
 - **Nodes:** dell2 for CART, dell3 for C4.5. Median of 3 interleaved reps.
 - **Trees:** `tests/check.sh` passes, and all 24 trees are identical.
 - **Raw data:** `~/dt-perf/bench/exp/out/exp-merge-{cart-775,c45-776}/ab.csv` on mordor3.
