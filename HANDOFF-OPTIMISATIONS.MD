@@ -104,8 +104,26 @@ End-to-end train time with all CPU switches on:
      - If PACK and/or SORTBITS make upload + presort clearly faster on both GPUs and the trees are the same, port them to `merge/perf-d10` without switches. The code is in `src/build/gpu_grower.cu`; see `git diff 0c1c21d exp/perf-d10 -- src/build/gpu_grower.cu`. Then rebuild and run `tests/check.sh` (CUDA backends) on hopper.
      - Otherwise leave them out.
    - Update §6 of `bench/exp/FINDINGS.md`.
-2. **Report to the user.** Give the CUDA verdict and confirm that `merge/perf-d10` is ready. The user merges.
-3. **Clean up mordor3 once 721/722 are done.** Delete `~/dt-perf/bench/exp/src`, `srcm` (219 MB each) and `bin`.
+2. **Report to the user, then ask whether to merge.** Give the CUDA verdict and what `merge/perf-d10` contains, with its numbers. Then **ask the user explicitly whether they want these changes merged into `main`**. Do not merge without a clear yes.
+   - **On yes:**
+     - Bring `merge/perf-d10` up to date with `main` (rebase if main moved), and re-run `tests/check.sh` on a dell node if the code changed.
+     - Merge it into `main` and push.
+   - **On no:** merge nothing.
+3. **Leave only `main` in the GitHub repo**, whichever answer the user gave:
+   - Delete both branches on GitHub: `git push origin --delete exp/perf-d10 merge/perf-d10`.
+   - Delete any local copies of them.
+   - Delete any other branch you created.
+   - Check with `git ls-remote --heads origin` that only `refs/heads/main` is left.
+   - `bench/exp/FINDINGS.md` goes away with `exp/perf-d10`. This file keeps the results.
+4. **Clean up mordor3** once 721/722 have finished, or have been cancelled if the user doesn't want to wait:
+   - Delete the whole server clone, `~/dt-perf`. It holds the tarballs `bench/exp/src` and `srcm` (219 MB each), `bench/exp/bin`, and the job outputs in `bench/exp/out`. Copy any numbers you still need into this file first.
+   - Cancel any of your jobs still queued (`squeue -a`, `scancel <id>`).
+   - Leave everything else in the home directory alone, including `~/dt`, `~/datasets` and `~/dt-final*`: other sessions use them.
+   - On the laptop where this work started (/home/bruno/Projects), these extra git worktrees can also go:
+     - `../dt-perf` (exp/perf-d10).
+     - `../dt-merge` (merge/perf-d10).
+     - Remove them with `git worktree remove` before deleting the branches.
+5. **Update this file on `main`** to say the work is finished and what was merged, or delete it if the user prefers.
 
 ## The cluster (mordor3)
 
