@@ -1,3 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cuda-ampere-chess_100m,chess_100m,cart_full_nodepth,tree_cuda,24,ok,True,0.11515,0.11270000000000001,0.1177,0.11506000000000001,0.0014953260514014972,10,,2.547736428445205,3276009472.0,3274743808,3276800000,2604161024.0,17,9,4,1.0,,,3664773120.0,0.0
-cuda-ampere-chess_100m,chess_100m,c45_unpruned,tree_cuda,24,ok,True,0.12279999999999999,0.1211,0.1348,0.12401,0.003905110611607423,10,,2.569683418609202,3276761088.0,3276009472,3277766656,2604912640.0,17,9,4,1.0,,,3664773120.0,0.0001

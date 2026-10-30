@@ -1,6 +1,6 @@
 ## cuda-ampere-higgs
 
-**cuda-ampere-higgs**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree 74a011fda9d3, CPUs in order of use 0-23, 3 run(s) per case, warm-up 50000 rows
+**cuda-ampere-higgs**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree ec77727, CPUs in order of use 0-23, 10 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 641 MiB
 
@@ -10,12 +10,12 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 641 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 242 ms | 240 ms–244 ms |  | 3.95 GiB (+ GPU 3.30 GiB) | 3.32 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
+| ./tree CUDA | 210 ms | 208 ms–213 ms |  | 3.95 GiB (+ GPU 3.30 GiB) | 3.32 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 24 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 264 ms | 257 ms–283 ms |  | 3.98 GiB (+ GPU 3.30 GiB) | 3.35 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
+| ./tree CUDA | 250 ms | 244 ms–254 ms |  | 3.98 GiB (+ GPU 3.30 GiB) | 3.36 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
 
 Test accuracy is measured on 500,000 rows: its 95% interval is ±0.13 percentage points at most.

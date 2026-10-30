@@ -208,6 +208,7 @@ def chart(dataset, runs, out, notes={}):
     meta = next(run["meta"] for run in runs.values() if run["meta"])
     reps = max(len(rows) for run in runs.values() for rows in run["cases"].values())
     panels = [(p, PANELS[p]) for p in PROTOCOLS if any(p in run["cases"] for run in runs.values())]
+    warned = False
     test_set = any(r.get("test_accuracy") is not None for run in runs.values()
                    for rows in run["cases"].values() for r in rows)
     side = len(panels) > 1 and BAR * span > TALL  # tall panels: side by side, sharing the bars' labels
@@ -245,6 +246,7 @@ def chart(dataset, runs, out, notes={}):
             rerun = runs[name].get("rerun")
             warn = problems(rows, f"old build; rerun {'queued' if rerun == 'queued' else 'running'}" if rerun
                             else note)
+            warned = warned or bool(warn)
             ax.barh(y, mean - low, left=low, height=0.62, color=COLORS[BACKENDS[backend][0]],
                     hatch="////" if warn else None, edgecolor=WARN if warn else None, lw=0)
             if len(times) > 1:
@@ -277,8 +279,9 @@ def chart(dataset, runs, out, notes={}):
     axes[-1].xaxis.set_major_formatter(FuncFormatter(lambda v, _: seconds_tick(v)))
     axes[-1].xaxis.set_minor_formatter(NullFormatter())
     axes[0 if side else -1].set_xlabel(f"training time (log scale): mean ± standard deviation of each bar's runs (1 to {reps}), "
-                        "whisker: fastest to slowest\nRAM, VRAM: peak while training, mean of the runs; "
-                        "hatched, ⚠: a potential problem (see BENCHMARK.md)", color=MUTED, fontsize=9)
+                        "whisker: fastest to slowest\nRAM, VRAM: peak while training, mean of the runs"
+                        + ("; hatched, ⚠: a potential problem (see BENCHMARK.md)" if warned else ""),
+                        color=MUTED, fontsize=9)
     split = ("the official test set" if meta.get("spec", {}).get("test_source") or
              meta.get("spec", {}).get("split") == "tail" else "held-out rows")
     if "test_from" in meta.get("spec", {}):

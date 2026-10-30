@@ -1,6 +1,6 @@
 ## cuda-hopper-higgs
 
-**cuda-hopper-higgs**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor schedutil, turbo on, ./tree 74a011fda9d3, CPUs in order of use 0-15, 3 run(s) per case, warm-up 50000 rows
+**cuda-hopper-higgs**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor schedutil, turbo on, ./tree ec77727, CPUs in order of use 16-31, 10 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 648 MiB
 
@@ -10,12 +10,12 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 648 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 176 ms | 175 ms–177 ms |  | 3.96 GiB (+ GPU 3.33 GiB) | 3.32 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
+| ./tree CUDA | 151 ms | 145 ms–156 ms |  | 3.96 GiB (+ GPU 3.33 GiB) | 3.32 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 16 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 191 ms | 186 ms–192 ms |  | 3.99 GiB (+ GPU 3.33 GiB) | 3.36 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
+| ./tree CUDA | 171 ms | 167 ms–172 ms |  | 3.99 GiB (+ GPU 3.33 GiB) | 3.36 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
 
 Test accuracy is measured on 500,000 rows: its 95% interval is ±0.13 percentage points at most.

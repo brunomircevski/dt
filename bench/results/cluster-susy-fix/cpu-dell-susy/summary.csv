@@ -1,3 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cpu-dell-susy,susy,cart_depth10,tree,48,ok,True,0.3608,0.3392,0.4068,0.36568,0.02601161279121308,10,1.0,1.910056852037087,1693018112.0,1690447872,1694523392,1686827008.0,1959,980,10,0.791554,0.790082,0.0011288389678542122,,0.0
-cpu-dell-susy,susy,c45_depth10_unpruned,tree,48,ok,True,0.3831,0.3683,0.4347,0.39665,0.024570454253477314,10,1.0,1.914168186020106,1784424448.0,1783734272,1786187776,1778233344.0,743,372,10,0.787429,0.786472,0.0011359000484361162,,0.0006

@@ -1,0 +1,3 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+socket-epyc-susy,susy,cart_depth10,tree,24,ok,True,0.2813,0.2746,0.2857,0.28095,0.0030873397394304797,10,1.0,1.8253223390784115,1690349568.0,1688117248,1691512832,1684152320.0,1959,980,10,0.791554,0.790082,0.0011288389678542122,,0.0
+socket-epyc-susy,susy,c45_depth10_unpruned,tree,24,ok,True,0.2743,0.2701,0.2852,0.27693,0.0050714998877167666,10,1.0,2.0067452867515385,1782669312.0,1781100544,1784156160,1776472064.0,743,372,10,0.787429,0.786472,0.0011359000484361162,,0.0003

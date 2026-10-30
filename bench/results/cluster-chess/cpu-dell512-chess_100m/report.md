@@ -1,19 +1,21 @@
 ## cpu-dell512-chess_100m
 
-**cpu-dell512-chess_100m**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree 8b1ecd151dd2, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**cpu-dell512-chess_100m**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree ec77727, CPUs in order of use 0-47, 30 run(s) per case, warm-up 50000 rows
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
 ### chess_100m (100,000,000 train / 4,500 test rows, 2 features, 2 classes)
 
-**CART, grown to pure leaves, no pruning, no depth limit** (`cart_full_nodepth`), 48 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.13 s | 1.12 s–1.2 s | 1.00× | 4.68 GiB | 4.68 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree | 881 ms | 792 ms–1.01 s | 1.00× | 4.68 GiB | 4.68 GiB | 17 | 9 | 4 | 100.00% | 99.98% |
 
-**C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows** (`c45_unpruned`), 48 threads
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.38 s | 1.38 s–1.39 s | 1.00× | 4.68 GiB | 4.68 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree | 1.14 s | 1.07 s–1.23 s | 1.00× | 4.68 GiB | 4.68 GiB | 17 | 9 | 4 | 100.00% | 100.00% |
+
+Test accuracy is measured on 4,500 rows: its 95% interval is ±0.04 percentage points at most.

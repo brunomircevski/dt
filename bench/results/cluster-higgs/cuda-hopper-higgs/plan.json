@@ -8,19 +8,7 @@
   ],
   [
    "higgs",
-   "cart_depth10_alpha",
-   "tree_cuda",
-   16
-  ],
-  [
-   "higgs",
    "c45_depth10_unpruned",
-   "tree_cuda",
-   16
-  ],
-  [
-   "higgs",
-   "c45_depth10",
    "tree_cuda",
    16
   ]
@@ -202,6 +190,10 @@
      "-d",
      "10"
     ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 10
+    },
     "tree_cuda": [
      "--cart",
      "--no-prune",
@@ -231,6 +223,16 @@
      "-d",
      "10"
     ],
+    "j48": {
+     "options": "-U -M 2",
+     "max_depth": 10
+    },
+    "sklearn": {
+     "mode": "fit",
+     "criterion": "entropy",
+     "max_depth": 10,
+     "min_samples_leaf": 2
+    },
     "tree_cuda": [
      "--c45",
      "--no-prune",

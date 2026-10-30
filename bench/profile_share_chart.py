@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Where ./tree's training time goes, as shares of the training wall time: one
-3×2 grid (columns: Parallel, CUDA, CUDA --gpu-only; rows: CART and C4.5, both
+grid (columns: Parallel on epyc and on dell, CUDA, CUDA --gpu-only, those of
+them that ran; rows: CART and C4.5, both
 grown to depth 10, unpruned), one stacked bar per dataset (the average of each
 case's profiled runs), from runs made with bench/cluster/profile.sh
 (results.jsonl + profiles/*.json, ./tree --profile, src/core/trace.h) in <root>.
 
   d=bench/results/cluster-profiling
   bench/.venv/bin/python bench/profile_share_chart.py $d --out $d/chart.png
-  bench/.venv/bin/python bench/profile_share_chart.py $d/chess-50runs --chess
+  bench/.venv/bin/python bench/profile_share_chart.py $d --chess --out $d/chart-chess.png
 
 Every millisecond of the training time goes to one step (attribute()): first
 to the GPU kernels running then, then to copies between host and GPU, and the
@@ -38,7 +39,8 @@ LABELS = {"chess_10m": "chess 10M", "chess_50m": "chess 50M", "chess_100m": "che
           "chess_500m": "chess 500M", "chess_1b": "chess 1000M", "chess_2b": "chess 2000M",
           "higgs": "HIGGS", "airline": "Airline", "ecbdl_15m": "ECBDL'14 15M"}
 PROTOCOLS = [("cart_depth10", "CART"), ("c45_depth10_unpruned", "C4.5")]
-MODES = [("cpu-epyc", "Parallel (CPU only)"),
+MODES = [("cpu-epyc", "Parallel (CPU only), epyc"),
+         ("cpu-dell", "Parallel (CPU only), dell"),
          ("cuda-hopper", "CUDA hybrid (default)"),
          ("gpuonly-hopper", "CUDA --gpu-only")]
 
@@ -359,20 +361,23 @@ def hardware_text(cases, mode):
     info = B.hardware(case["machine"])
     node = case["machine"].get("host", "").split(".")[0]
     threads = case["row"]["threads"]
-    if mode == "cpu-epyc":
-        return f"{node}: {info['cpu']}, all used"
+    runs = f"{case['runs']} runs, ./tree {case['machine']['versions'].get('tree_git', '?')}, " \
+           f"{case['machine']['started'][:10]}"
+    if mode.startswith("cpu-"):
+        return f"{node}: {info['cpu']}, all used · {runs}"
     gpu = info["gpu"].split(",")[0] if info["gpu"] else "GPU"
-    return f"{node}: {gpu} + {threads} CPU threads ({info['cpu'].split(',')[0]})"
+    return f"{node}: {gpu} + {threads} CPU threads ({info['cpu'].split(',')[0]}) · {runs}"
 
 
 def chart(cases, datasets, out):
     height = 27
     unit = 32 / height  # the text block's spacing was set for a 32-inch-high figure
-    fig = plt.figure(figsize=(38, height))
-    grid = fig.add_gridspec(len(PROTOCOLS), len(MODES), left=0.028, right=0.995, top=0.905,
-                            bottom=0.3, hspace=0.42, wspace=0.08)
+    modes = [(m, t) for m, t in MODES if any(key[0] == m for key in cases)]
+    fig = plt.figure(figsize=(12.7 * len(modes), height))
+    grid = fig.add_gridspec(len(PROTOCOLS), len(modes), left=0.028 * 3 / len(modes), right=0.995,
+                            top=0.905, bottom=0.3, hspace=0.42, wspace=0.08)
     for r, (protocol, algorithm) in enumerate(PROTOCOLS):
-        for c, (mode, mode_title) in enumerate(MODES):
+        for c, (mode, mode_title) in enumerate(modes):
             ax = fig.add_subplot(grid[r, c])
             draw_panel(ax, cases, datasets, mode, protocol)
             ax.set_title(f"{mode_title} · {algorithm}", loc="left", fontsize=15,
@@ -389,7 +394,8 @@ def chart(cases, datasets, out):
                  x=0.01, y=0.99, ha="left", fontsize=20, fontweight="bold", color=INK)
     fig.text(0.01, 0.975, "The average of each case's profiled runs "
              f"({'/'.join(map(str, counts))} "
-             f"runs per case; ./tree --profile, commit {', '.join(commits)}). Bar "
+             f"runs per case; ./tree --profile, builds {', '.join(commits)}: each panel's "
+             "subtitle names its node, runs, build and date). Bar "
              "height = training wall time (100%), the total above each bar; reading the CSV is "
              "not included. Under each bar: the dataset, its training accuracy, node count and "
              "depth (what every bar of a panel shares is in the panel's subtitle).\nLabels: share "
@@ -422,7 +428,8 @@ def chart(cases, datasets, out):
         "every 5 ms, idle threads ignored, the time shared among the busy ones). While the "
         "training thread drives the GPU, its time is transfer (staging copies) or other (launching, "
         "waiting). · CPU / GPU tells which processor did the step; transfer is between them.",
-        "Parallel: CPU only, every thread of both sockets. CUDA hybrid (default): the GPU grows "
+        "Parallel: CPU only, every thread of both sockets (epyc: 2× EPYC 9255; dell: dell1, "
+        "2× Xeon Gold 6542Y, 1 TB). CUDA hybrid (default): the GPU grows "
         "the big nodes level by level and hands small nodes (< --gpu-min-rows) to the CPU threads, "
         "which grow those subtrees meanwhile; that CPU work is hidden behind the GPU and only "
         "shows when the GPU has finished and waits for it. CUDA --gpu-only: the GPU grows every "

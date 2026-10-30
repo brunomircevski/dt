@@ -1,3 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cpu-dell512-chess_10m,chess_10m,cart_full_nodepth,tree,48,ok,True,0.3014,0.2812,0.3225,0.30082,0.010980771071893505,10,1.0,0.8446445919107646,516982784.0,516562944,517132288,510828544.0,17,9,4,1.0,,,,0.0
-cpu-dell512-chess_10m,chess_10m,c45_unpruned,tree,48,ok,True,0.32555,0.2993,0.3359,0.32284999999999997,0.01289394776198852,10,1.0,0.8905652042012662,517681152.0,517128192,517795840,511526912.0,17,9,4,1.0,,,,0.00015000000000000001

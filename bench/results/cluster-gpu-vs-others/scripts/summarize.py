@@ -12,7 +12,7 @@ bootstrap and sqrt(features) per node; XGBoost, as XGBRFClassifier, rows and
 features 0.8); "forest of 10 / 10" is the forest's time divided by 10.
 
 ./tree is not run here: its bars are the depth-10 unpruned CUDA runs of the
-test-set benchmarks, cluster-<dataset>/cuda-<node>-<dataset> (mean of 3).
+test-set benchmarks, cluster-<dataset>/cuda-<node>-<dataset> (mean of 10, chess 30).
 """
 import argparse, csv, json, statistics
 from pathlib import Path
@@ -155,7 +155,7 @@ def chart(dataset, runs, out):
     ax.set_axisbelow(True)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.set_xlabel("training time of one tree, mean of 3 runs (log scale); label: time, peak VRAM",
+    ax.set_xlabel("training time of one tree, mean of the runs (log scale: ./tree 10, chess 30; libraries 3); label: time, peak VRAM",
                   fontsize=9.5, color=MUTED)
     ax.set_title(DATASETS[dataset], fontsize=12, color=INK, loc="left", fontweight="bold")
     ax.legend(handles=[Patch(color=COLORS[n], label=f"{NODES[n]} ({n})") for n in NODES],

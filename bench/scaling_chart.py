@@ -33,8 +33,11 @@ from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 # Categorical slots 1-5 of the reference palette (slots 1-2, CART and C4.5,
 # validated: CVD dE 24.7); both CART variants are CART, so they share slot 1.
 COLORS = {"cart_alpha_nodepth": "#2a78d6", "cart_alpha": "#2a78d6", "c45": "#eb6834",
+          "cart_depth10": "#2a78d6", "c45_depth10_unpruned": "#eb6834",
           "cart_full": "#1baf7a", "cart_depth12": "#eda100", "c45_unpruned": "#e87ba4"}
 LABELS = {"cart_alpha_nodepth": "CART", "cart_alpha": "CART, depth ≤ 30", "c45": "C4.5",
+          "cart_depth10": "CART, depth ≤ 10, no pruning",
+          "c45_depth10_unpruned": "C4.5, depth ≤ 10, no pruning",
           "cart_full": "CART unpruned", "cart_depth12": "CART depth 12",
           "c45_unpruned": "C4.5 unpruned"}
 
@@ -68,7 +71,8 @@ def summarise(cases):
             "time_max": max(times), "peak_rss_mean": statistics.mean(rss),
             "nodes": rows[0]["nodes"], "test_accuracy": rows[0].get("test_accuracy"),
             "train_accuracy": rows[0].get("train_accuracy"),
-            "same_tree": len({(r["nodes"], r["leaves"], r["depth"]) for r in rows}) == 1})
+            "same_tree": len({(r["nodes"], r["leaves"], r["depth"]) for r in rows}) == 1,
+            "rows": rows})
     for protocol, points in out.items():
         serial = next((p["time_mean"] for p in points if p["threads"] == 1), None)
         for p in points:
@@ -86,7 +90,7 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
     threads = sorted({p["threads"] for points in series.values() for p in points})
     fig, ax = plt.subplots(figsize=(8.6, 5.4))
     ax.set_xscale("log", base=2)
-    ax.set_xlim(min(threads) / 1.15, max(threads) * 1.45)  # room for the end labels
+    ax.set_xlim(min(threads) / 1.15, max(threads) * 2.6)  # room for the end labels
     ax.xaxis.set_minor_locator(NullLocator())
     ax.set_xticks([t for t in threads if t in (1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128)
                    or t == max(threads)])
@@ -99,7 +103,9 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
     ax.grid(axis="both", color=GRID, linewidth=0.8)
     ax.set_axisbelow(True)
     ax.set_xlabel("threads", fontsize=9, color=MUTED)
-    ax.set_title("Training time (solid, left, log) and peak RAM, RSS (dashed, right)", loc="left",
+    tree = LABELS.get(protocols[0], "").partition(", ")[2]
+    ax.set_title("Time (solid, left, log), peak RSS (dashed, right)"
+                 + (f"; trees: {tree}" if tree else ""), loc="left",
                  fontsize=10.5, color=INK, fontweight="bold")
     mem = ax.twinx()
     mem.tick_params(colors=MUTED, labelsize=8.5, length=0)
@@ -121,6 +127,7 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
         mem.plot(xs, [p["peak_rss_mean"] / 1e9 for p in points], color=color, linewidth=1.6,
                  linestyle=(0, (4, 2.5)), marker="s", markersize=5, markerfacecolor="white",
                  markeredgecolor=color, markeredgewidth=1.4, zorder=3)
+    slowest = max((p["time_mean"] for points in (socket or {}).values() for p in points), default=0)
     for protocol in protocols if socket else []:
         color = COLORS.get(protocol, INK)
         for p in socket.get(protocol, []):
@@ -128,7 +135,8 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
             ax.plot(p["threads"], p["time_mean"], marker="D", markersize=8, color=color,
                     markerfacecolor="white", markeredgewidth=1.8, linestyle="none", zorder=5)
             ax.annotate(f"1 socket: {p['time_mean']:.3g} s", (p["threads"], p["time_mean"]),
-                        xytext=(-8, 0), textcoords="offset points", ha="right", va="center",
+                        xytext=(-8, 0 if len(protocols) == 1 else 7 if p["time_mean"] == slowest else -7),
+                        textcoords="offset points", ha="right", va="center",
                         fontsize=8.5, color=INK,
                         bbox=dict(facecolor="white", edgecolor="none", pad=1, alpha=0.85))
     every = [p[k] for points in [*series.values(), *(socket or {}).values()] for p in points
@@ -149,13 +157,14 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
     for axis, key, scale, unit in ((ax, "time_mean", 1, "s"),
                                    (mem, "peak_rss_mean", 1e9, "GB")):
         placed = []
-        ends = [(series[p][-1]["threads"], series[p][-1][key] / scale) for p in protocols]
-        for x, y in sorted(ends, key=lambda end: end[1]):
+        ends = [(series[p][-1]["threads"], series[p][-1][key] / scale,
+                 series[p][-1]["speedup"] if key == "time_mean" else None) for p in protocols]
+        for x, y, speedup in sorted(ends, key=lambda end: end[1]):
             pixel = wanted = axis.transData.transform((x, y))[1]
             if placed and pixel - placed[-1] < gap:
                 pixel = placed[-1] + gap
             placed.append(pixel)
-            axis.annotate(f"{y:.3g} {unit}", (x, y), xytext=(7, (pixel - wanted) * 72 / fig.dpi),
+            axis.annotate(f"{y:.3g} {unit}" + (f" ({speedup:.1f}×)" if speedup else ""), (x, y), xytext=(7, (pixel - wanted) * 72 / fig.dpi),
                           textcoords="offset points", va="center", fontsize=9, color=INK)
 
     def accuracy(point):
@@ -168,7 +177,7 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
         return ""
 
     handles = [Line2D([], [], color=COLORS.get(p, INK), linewidth=2, marker="o", markersize=7,
-                      markeredgecolor="white", label=f"{LABELS.get(p, p)}: "
+                      markeredgecolor="white", label=f"{LABELS.get(p, p).split(',')[0]}: "
                       f"{series[p][0]['nodes']:,} nodes{accuracy(series[p][0])}")
                for p in protocols]
     fig.text(0.08, 1 - 0.4 / 5.4, B.hardware_line(machine, False), fontsize=8.6, color=INK,
@@ -180,8 +189,20 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
                  f"{meta['n_train']:,} training rows, {len(meta['features'])} features",
                  x=0.08, y=1 - 0.05 / 5.4, ha="left", fontsize=12.5, color=INK,
                  fontweight="bold")
-    reps = settings.get("reps")
-    runs = f"mean of {reps} runs, bar: min–max" if reps and reps > 1 else "one run per point"
+    counts = defaultdict(set)  # runs per point -> thread counts
+    for points in series.values():
+        for p in points:
+            counts[p["runs"]].add(p["threads"])
+    if len(counts) == 1:
+        n = next(iter(counts))
+        runs = f"mean of {n} runs, bar: min–max" if n > 1 else "one run per point"
+    else:
+        common = max(counts, key=lambda n: len(counts[n]))
+        runs = f"mean of {common} runs (" + "; ".join(
+            f"{', '.join(map(str, sorted(t)))} threads: {n}" for n, t in sorted(counts.items())
+            if n != common) + "), bar: min–max"
+    days = sorted({r["time"][:10] for points in series.values() for p in points for r in p["rows"]})
+    dates = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
     rerun = machine.get("serial_rerun")
     if rerun:  # bench/serial_rerun.py
         runs += f" (1 thread rerun on {rerun['started'][:10]})"
@@ -189,11 +210,13 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
              f"Dot: {runs}. 1 thread = the serial backend, more = the parallel backend;\n"
              "every thread count builds the same tree. Training time excludes reading the data;\n"
              "peak memory is the peak RSS up to the end of training, the loaded data included.\n"
-             "Log axes for time and threads; dotted: ideal scaling (the 1-thread time divided by the threads)."
+             "Log axes for time and threads; dotted: ideal scaling (the 1-thread time divided by the threads).\n"
+             f"End label: time (speedup over 1 thread). ./tree {machine.get('versions', {}).get('tree_git', '?')}, "
+             f"run {dates}, {machine.get('host', '?')}."
              + ("\nHollow diamond: one socket, all its CPUs, memory bound to its NUMA nodes "
                 "(the line's CPUs come from both sockets' CPU list in order)." if socket else ""),
              fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.08, right=0.84, top=1 - 1.25 / 5.4, bottom=0.27 if socket else 0.235)
+    fig.subplots_adjust(left=0.08, right=0.84, top=1 - 1.25 / 5.4, bottom=0.32 if socket else 0.29)
     fig.savefig(out, dpi=150, facecolor="white")
     return out
 
@@ -214,7 +237,7 @@ def main():
         writer = csv.DictWriter(handle, fields)
         writer.writeheader()
         for protocol in protocols:
-            writer.writerows(series[protocol])
+            writer.writerows({k: p[k] for k in fields} for p in series[protocol])
     print(run / "scaling.csv")
     socket = None
     if args.socket:

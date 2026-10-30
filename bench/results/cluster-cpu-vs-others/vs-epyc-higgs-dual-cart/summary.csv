@@ -1,2 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-vs-epyc-higgs-dual-cart,higgs,cart_depth10,tree,48,ok,True,0.5992999999999999,0.5992999999999999,0.5992999999999999,0.5992999999999999,,1,1.0,3.231935777235776,6023516160,6023516160,6023516160,6017396736,2029,1015,10,0.706345,0.705172,0.0012638716206309134,,0.0

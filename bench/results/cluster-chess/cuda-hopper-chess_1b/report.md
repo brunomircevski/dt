@@ -1,19 +1,19 @@
 ## cuda-hopper-chess_1b
 
-**cuda-hopper-chess_1b**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor schedutil, turbo on, ./tree 235c43175b46-dirty, CPUs in order of use 0-15, 3 run(s) per case, warm-up 50000 rows
+**cuda-hopper-chess_1b**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor schedutil, turbo on, ./tree ec77727, CPUs in order of use 16-31, 30 run(s) per case, warm-up 50000 rows
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 647 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 648 MiB
 
 ### chess_1b (1,000,000,000 train / 1,000 test rows, 2 features, 2 classes)
 
-**CART, grown to pure leaves, no pruning, no depth limit** (`cart_full_nodepth`), 16 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 16 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 969 ms | 964 ms–996 ms |  | 24.87 GiB (+ GPU 25.43 GiB) | 24.23 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree CUDA | 640 ms | 634 ms–649 ms |  | 24.87 GiB (+ GPU 25.43 GiB) | 24.23 GiB | 17 | 9 | 4 | 100.00% | 100.00% |
 
-**C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows** (`c45_unpruned`), 16 threads
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 16 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 964 ms | 964 ms–966 ms |  | 24.87 GiB (+ GPU 25.43 GiB) | 24.23 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree CUDA | 702 ms | 690 ms–710 ms |  | 24.87 GiB (+ GPU 25.43 GiB) | 24.24 GiB | 17 | 9 | 4 | 100.00% | 100.00% |

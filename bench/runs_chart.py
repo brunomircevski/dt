@@ -7,9 +7,9 @@ min–max. Meant for runs with many repetitions (submit.sh -m 10).
 
 Refuses to draw when the runs did not read the same data, as machines_chart.py.
 
-  d=bench/results/cluster-chess/dell-variance
-  bench/.venv/bin/python bench/runs_chart.py --protocols cart_full_nodepth,c45_unpruned \\
-      $d/cpu-dell-chess_1b $d/cpu-dell512-chess_1b --out $d/chart.png
+  d=bench/results/cluster-chess
+  bench/.venv/bin/python bench/runs_chart.py \\
+      $d/cpu-dell-chess_1b $d/cpu-dell512-chess_1b --out $d/dell-variance/chart.png
 """
 
 import argparse
@@ -36,7 +36,7 @@ PHASES = (("train_seconds", "train total"), ("presort_seconds", "presort"),
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("runs", nargs="+", type=Path)
-    parser.add_argument("--protocols", default="cart_full_nodepth,c45_unpruned")
+    parser.add_argument("--protocols", default="cart_depth10,c45_depth10_unpruned")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     protocols = args.protocols.split(",")

@@ -54,7 +54,9 @@ COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "socket": "#8e5bd0", "cuda
 BACKENDS = {"serial": "Serial", "parallel": "Parallel", "socket": "Parallel, one socket",
             "cuda": "CUDA", "gpu_only": "GPU only"}
 GPU = {"cuda", "gpu_only"}
-TITLES = {"cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25",
+TITLES = {"cart_depth10": "CART, gini, depth ≤ 10, no pruning",
+          "c45_depth10_unpruned": "C4.5, gain ratio, depth ≤ 10, no pruning",
+          "cart_alpha": "CART, fixed α = 1e-5, depth ≤ 30", "c45": "C4.5, CF 0.25",
           "cart_full": "CART, no pruning, depth ≤ 30", "c45_unpruned": "C4.5, no pruning",
           "cart_alpha_nodepth": "CART, fixed α = 1e-5", "cart_full_nodepth": "CART, no pruning"}
 PROTOCOLS = {p: TITLES[p] for p in ("cart_alpha", "c45")}  # the panels; --protocols

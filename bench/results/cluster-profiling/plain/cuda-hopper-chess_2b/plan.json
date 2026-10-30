@@ -190,6 +190,10 @@
      "-d",
      "10"
     ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 10
+    },
     "tree_cuda": [
      "--cart",
      "--no-prune",
@@ -219,6 +223,16 @@
      "-d",
      "10"
     ],
+    "j48": {
+     "options": "-U -M 2",
+     "max_depth": 10
+    },
+    "sklearn": {
+     "mode": "fit",
+     "criterion": "entropy",
+     "max_depth": 10,
+     "min_samples_leaf": 2
+    },
     "tree_cuda": [
      "--c45",
      "--no-prune",
@@ -234,6 +248,64 @@
     "tree_simple": [
      "--c45",
      "--no-prune",
+     "-d",
+     "10"
+    ]
+   }
+  },
+  "cart_depth10_alpha": {
+   "title": "CART, grown to depth 10, pruned at a fixed alpha (cost-complexity)",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ]
+   }
+  },
+  "c45_depth10": {
+   "title": "C4.5, grown to depth 10, error-based pruning (CF 0.25, subtree raising)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_simple": [
+     "--c45",
      "-d",
      "10"
     ]

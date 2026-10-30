@@ -190,6 +190,10 @@
      "-d",
      "10"
     ],
+    "sklearn": {
+     "mode": "fit",
+     "max_depth": 10
+    },
     "tree_cuda": [
      "--cart",
      "--no-prune",
@@ -219,6 +223,16 @@
      "-d",
      "10"
     ],
+    "j48": {
+     "options": "-U -M 2",
+     "max_depth": 10
+    },
+    "sklearn": {
+     "mode": "fit",
+     "criterion": "entropy",
+     "max_depth": 10,
+     "min_samples_leaf": 2
+    },
     "tree_cuda": [
      "--c45",
      "--no-prune",
@@ -234,6 +248,64 @@
     "tree_simple": [
      "--c45",
      "--no-prune",
+     "-d",
+     "10"
+    ]
+   }
+  },
+  "cart_depth10_alpha": {
+   "title": "CART, grown to depth 10, pruned at a fixed alpha (cost-complexity)",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "10",
+     "--alpha",
+     "{alpha}"
+    ]
+   }
+  },
+  "c45_depth10": {
+   "title": "C4.5, grown to depth 10, error-based pruning (CF 0.25, subtree raising)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "10"
+    ],
+    "tree_simple": [
+     "--c45",
      "-d",
      "10"
     ]
@@ -1648,11 +1720,10 @@
     "1"
    ],
    "n_train": 15000000,
-   "n_test": 100000,
+   "n_test": 2897917,
    "spec": {
-    "source": "datasets/ecbdl.csv",
-    "split": "random",
-    "test_rows": 100000,
+    "source": "datasets/ecbdl/ecbdl.csv",
+    "test_source": "datasets/ecbdl/ecbdl_test.csv",
     "train_rows": 15000000,
     "yadt": false
    }
@@ -1671,12 +1742,12 @@
    "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168"
   },
   "ecbdl_15m": {
-   "meta.json": "8c89cb38f7e0675858912eeda7e4190f42aba3c7d931b38f0e0ea7cbac5ccf23",
-   "test.f32": "5ee9cb4a9934262bd203fa2504a1e8e369041fa480fa20c9b742a43393e4a919",
-   "test.y.i32": "a812cf274fd39342c17a71711ade719a97d6566b0d36d080f2174336ec4de9a0",
-   "train.csv": "15dfc382d9b45632b24661d42375d2ced1edf212597e209f4eed5f0c98c9d6f1",
-   "train.f32": "88b582bbae700c53a8743c22cf8978eebada7da676b240f837c3157b49669f52",
-   "train.y.i32": "469a385a35b9b612009e59416172f1808e18dc7740d9f146ee28c93950254270"
+   "meta.json": "9eea324900c26cb01f9ac6bddc1e66cbb650518b56f067604325679be2523912",
+   "test.f32": "89289779fa0dd238798d6aace852ba207cb3132d04dd50f51693805750dec70f",
+   "test.y.i32": "e9defcc0b77562d3684e79c59dcdd6ef9c7d25a7b6609d67103a6cf105337cfe",
+   "train.csv": "83e7f1960aeeba65990d73671962e596693bd1746be8bff66fb350f59af634ff",
+   "train.f32": "7d3880fae4ae25f1554b08080e9d81b5415ff624f84422408a5aea5f8a2e46fd",
+   "train.y.i32": "a4709242ab8251e056e4e77fa218899284327888cf8c5fe2d646f0566def20aa"
   }
  }
 }

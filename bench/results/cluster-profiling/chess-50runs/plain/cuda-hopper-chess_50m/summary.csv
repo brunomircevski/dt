@@ -1,3 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cuda-hopper-chess_50m,chess_50m,cart_depth10,tree_cuda,16,ok,True,0.09645000000000001,0.0855,0.1076,0.097124,0.005987045879843157,50,,2.3152629965916276,1983232000.0,1982853120,1983709184,1303875584.0,17,9,4,1.0,,,2377121792.0,0.0
-cuda-hopper-chess_50m,chess_50m,c45_depth10_unpruned,tree_cuda,16,ok,True,0.0973,0.0823,0.10729999999999999,0.096652,0.006407783532230031,50,,2.3425798394018784,1984157696.0,1983606784,1984692224,1304801280.0,17,9,4,1.0,,,2379218944.0,0.0

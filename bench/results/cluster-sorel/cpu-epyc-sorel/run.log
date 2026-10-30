@@ -1,43 +1,43 @@
-log: bench/results/cluster-sorel-rerun/cpu-epyc-sorel/run.log, job 339 on epyc2, started 2026-10-28 12:45:39
+log: bench/results/cluster-sorel-main/cpu-epyc-sorel/run.log, job 882 on epyc2, started 2026-10-30 04:44:12
 
-=== 12:45:39  1/3 machine check
+=== 04:44:12  1/3 machine check
 CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
 CPU governor: performance 
-load average: 2.31 1.29 1.10
-free memory per NUMA node: node 0 250 GiB, node 1 250 GiB
+load average: 1.00 1.00 2.24
+free memory per NUMA node: node 0 249 GiB, node 1 250 GiB
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
 0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
-code: 8187eb9a778c-dirty (from submit.sh: hopper has no git)
+code: ec77727 (from submit.sh: hopper has no git)
 runs per case: 3
 
-=== 12:45:39  2/3 benchmark: sorel, cart_depth10,c45_depth10_unpruned, tree, threads all (of 48), 3 run(s) per case
+=== 04:44:12  2/3 benchmark: sorel, cart_depth10,c45_depth10_unpruned, tree, threads all (of 48), 3 run(s) per case
 2 cases, 9 processes:
   sorel | cart_depth10 | tree | 48
   sorel | c45_depth10_unpruned | tree | 48
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  sorel: identical in every format (4142 s)
+  sorel: identical in every format (4698 s)
 2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
-[1/9] 13:54:42 run 1/3: CART ./tree, 48 threads, sorel ...
-    ok: train 22.41 s, peak 350,945 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 2m24s, elapsed 3m00s
-[2/9] 13:57:42 run 1/3: C4.5 ./tree, 48 threads, sorel ...
-    ok: train 33.7 s, peak 380,028 MiB, 379 nodes, depth 10, test acc 78.11% | process 2m35s, elapsed 6m10s, about 10m00s left
-[3/9] 14:00:52 run 2/3: CART ./tree, 48 threads, sorel ...
-    ok: train 23.35 s, peak 350,947 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 2m25s, elapsed 9m09s, about 7m36s left
-[4/9] 14:03:52 run 2/3: C4.5 ./tree, 48 threads, sorel ...
-    ok: train 56.93 s, peak 379,639 MiB, 379 nodes, depth 10, test acc 78.11% | process 2m59s, elapsed 12m42s, about 5m12s left
-[5/9] 14:07:25 run 3/3: C4.5 ./tree, 48 threads, sorel ...
-    ok: train 56.84 s, peak 379,735 MiB, 379 nodes, depth 10, test acc 78.11% | process 2m59s, elapsed 16m16s, about 2m24s left
-[6/9] 14:10:59 run 3/3: CART ./tree, 48 threads, sorel ...
-    ok: train 22.95 s, peak 350,944 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 2m25s, elapsed 19m15s, about 0m00s left
+[1/9] 06:02:30 run 1/3: CART ./tree, 48 threads, sorel ...
+    ok: train 21.23 s, peak 350,944 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 3m43s, elapsed 4m35s
+[2/9] 06:07:06 run 1/3: C4.5 ./tree, 48 threads, sorel ...
+    ok: train 28.63 s, peak 360,688 MiB, 379 nodes, depth 10, test acc 78.11% | process 3m31s, elapsed 9m10s, about 14m29s left
+[3/9] 06:11:41 run 2/3: CART ./tree, 48 threads, sorel ...
+    ok: train 21.79 s, peak 350,944 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 3m45s, elapsed 12m56s, about 10m46s left
+[4/9] 06:15:27 run 2/3: C4.5 ./tree, 48 threads, sorel ...
+    ok: train 28.72 s, peak 360,689 MiB, 379 nodes, depth 10, test acc 78.11% | process 3m38s, elapsed 16m36s, about 7m19s left
+[5/9] 06:19:06 run 3/3: C4.5 ./tree, 48 threads, sorel ...
+    ok: train 29 s, peak 360,688 MiB, 379 nodes, depth 10, test acc 78.11% | process 3m55s, elapsed 20m31s, about 3m44s left
+[6/9] 06:23:02 run 3/3: CART ./tree, 48 threads, sorel ...
+    ok: train 22.25 s, peak 350,946 MiB, 1,767 nodes, depth 10, test acc 92.65% | process 3m43s, elapsed 24m15s, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[7/9] 14:13:58 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0005 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 19m16s, about 0m00s left
-[8/9] 14:13:59 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0004 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 19m16s, about 0m00s left
-[9/9] 14:13:59 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0004 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 19m16s, about 0m00s left
-results: /home/bmircevski/dt/bench/results/cluster-sorel-rerun/cpu-epyc-sorel/results.jsonl
+[7/9] 06:26:46 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0005 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 24m16s, about 0m00s left
+[8/9] 06:26:47 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0004 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 24m16s, about 0m00s left
+[9/9] 06:26:47 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0004 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 24m16s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/cluster-sorel-main/cpu-epyc-sorel/results.jsonl
 
-=== 14:13:59  3/3 tables and CSV files
-done 2026-10-28 14:13:59
+=== 06:26:47  3/3 tables and CSV files
+done 2026-10-30 06:26:47

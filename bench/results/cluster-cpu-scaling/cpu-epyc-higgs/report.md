@@ -1,175 +1,177 @@
 ## cpu-epyc-higgs
 
-**cpu-epyc-higgs**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2 x86_64, governor performance, turbo on, ./tree 1a2d9a9848ad-dirty, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**cpu-epyc-higgs**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2 x86_64, governor performance, turbo on, ./tree ec77727, CPUs in order of use 0-47, 10 run(s) per case, warm-up 50000 rows
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 8 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
 ### higgs (10,500,000 train / 500,000 test rows, 28 features, 2 classes)
 
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 1 thread
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 1 thread
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 17.9 s | 17.9 s–17.9 s | 1.00× | 3.58 GiB | 3.57 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 10.4 s | 10.4 s–10.4 s | 1.00× | 3.57 GiB | 3.56 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 2 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 9.44 s | 9.43 s–9.45 s | 1.00× | 3.65 GiB | 3.65 GiB | 1,611 | 806 | 19 | 71.79% |  |
-
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 4 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 2 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 4.83 s | 4.83 s–4.86 s | 1.00× | 3.81 GiB | 3.80 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 5.52 s | 5.5 s–5.53 s | 1.00× | 3.64 GiB | 3.64 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 8 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 3.04 s | 3.02 s–3.07 s | 1.00× | 4.12 GiB | 4.12 GiB | 1,611 | 806 | 19 | 71.79% |  |
-
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 12 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 4 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 2.16 s | 2.14 s–2.16 s | 1.00× | 4.44 GiB | 4.43 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 2.84 s | 2.83 s–2.86 s | 1.00× | 3.80 GiB | 3.80 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 16 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.85 s | 1.83 s–1.88 s | 1.00× | 4.75 GiB | 4.74 GiB | 1,611 | 806 | 19 | 71.79% |  |
-
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 20 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 8 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.61 s | 1.59 s–1.65 s | 1.00× | 5.07 GiB | 5.06 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 1.81 s | 1.78 s–1.91 s | 1.00× | 4.12 GiB | 4.11 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 24 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.43 s | 1.42 s–1.45 s | 1.00× | 5.38 GiB | 5.37 GiB | 1,611 | 806 | 19 | 71.79% |  |
-
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 28 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 12 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.44 s | 1.4 s–1.48 s | 1.00× | 5.62 GiB | 5.61 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 1.29 s | 1.26 s–1.31 s | 1.00× | 4.43 GiB | 4.42 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 32 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.38 s | 1.32 s–1.38 s | 1.00× | 5.62 GiB | 5.61 GiB | 1,611 | 806 | 19 | 71.79% |  |
-
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 36 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 16 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.33 s | 1.26 s–1.36 s | 1.00× | 5.62 GiB | 5.61 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 1.07 s | 1.04 s–1.14 s | 1.00× | 4.74 GiB | 4.74 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 40 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.23 s | 1.21 s–1.29 s | 1.00× | 5.62 GiB | 5.61 GiB | 1,611 | 806 | 19 | 71.79% |  |
-
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 44 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 20 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.16 s | 1.14 s–1.19 s | 1.00× | 5.62 GiB | 5.62 GiB | 1,611 | 806 | 19 | 71.79% |  |
+| ./tree | 946 ms | 932 ms–968 ms | 1.00× | 5.06 GiB | 5.05 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit** (`cart_alpha_nodepth`), 48 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.12 s | 1.08 s–1.17 s | 1.00× | 5.63 GiB | 5.62 GiB | 1,611 | 806 | 19 | 71.79% |  |
-
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 1 thread
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 24 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 36.2 s | 36.2 s–36.2 s | 1.00× | 3.91 GiB | 3.90 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 831 ms | 815 ms–854 ms | 1.00× | 5.37 GiB | 5.37 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 2 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 19 s | 19 s–19 s | 1.00× | 4.05 GiB | 4.04 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
-
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 4 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 28 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 9.67 s | 9.65 s–9.69 s | 1.00× | 4.21 GiB | 4.20 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 820 ms | 797 ms–868 ms | 1.00× | 5.61 GiB | 5.60 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 8 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 5.58 s | 5.52 s–5.72 s | 1.00× | 4.53 GiB | 4.52 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
-
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 12 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 3.96 s | 3.93 s–4 s | 1.00× | 4.85 GiB | 4.84 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 769 ms | 743 ms–824 ms | 1.00× | 5.61 GiB | 5.60 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 16 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 3.32 s | 3.28 s–3.35 s | 1.00× | 5.16 GiB | 5.16 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
-
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 20 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 36 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 2.8 s | 2.77 s–2.83 s | 1.00× | 5.48 GiB | 5.47 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 726 ms | 687 ms–782 ms | 1.00× | 5.61 GiB | 5.60 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 24 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 2.49 s | 2.48 s–2.5 s | 1.00× | 5.79 GiB | 5.78 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
-
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 28 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 40 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 2.36 s | 2.34 s–2.39 s | 1.00× | 6.03 GiB | 6.02 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 697 ms | 635 ms–773 ms | 1.00× | 5.61 GiB | 5.60 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 32 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 2.19 s | 2.18 s–2.25 s | 1.00× | 6.03 GiB | 6.02 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
-
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 36 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 44 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 2.14 s | 2.07 s–2.17 s | 1.00× | 6.03 GiB | 6.03 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 678 ms | 594 ms–727 ms | 1.00× | 5.61 GiB | 5.60 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 40 threads
-
-| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 2 s | 1.9 s–2.11 s | 1.00× | 6.04 GiB | 6.03 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
-
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 44 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.86 s | 1.81 s–1.87 s | 1.00× | 6.03 GiB | 6.03 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 609 ms | 579 ms–633 ms | 1.00× | 5.61 GiB | 5.60 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
 
-**C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows** (`c45`), 48 threads
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 1 thread
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 1.76 s | 1.72 s–1.8 s | 1.00× | 6.04 GiB | 6.03 GiB | 1,159,295 | 579,648 | 71 | 87.88% |  |
+| ./tree | 11.9 s | 11.9 s–12 s | 1.00× | 3.60 GiB | 3.59 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 2 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 6.32 s | 6.3 s–6.36 s | 1.00× | 3.68 GiB | 3.67 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 4 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 3.25 s | 3.22 s–3.26 s | 1.00× | 3.84 GiB | 3.83 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 8 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 1.9 s | 1.86 s–2.02 s | 1.00× | 4.15 GiB | 4.14 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 12 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 1.42 s | 1.39 s–1.42 s | 1.00× | 4.46 GiB | 4.46 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 1.13 s | 1.11 s–1.18 s | 1.00× | 4.78 GiB | 4.77 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 20 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 1.01 s | 995 ms–1.03 s | 1.00× | 5.09 GiB | 5.08 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 24 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 937 ms | 922 ms–956 ms | 1.00× | 5.40 GiB | 5.40 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 28 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 861 ms | 823 ms–898 ms | 1.00× | 5.64 GiB | 5.63 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 32 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 777 ms | 751 ms–847 ms | 1.00× | 5.64 GiB | 5.63 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 36 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 728 ms | 686 ms–851 ms | 1.00× | 5.64 GiB | 5.63 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 40 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 687 ms | 655 ms–822 ms | 1.00× | 5.64 GiB | 5.63 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 44 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 637 ms | 612 ms–809 ms | 1.00× | 5.64 GiB | 5.63 GiB | 935 | 468 | 10 | 63.76% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 48 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree | 589 ms | 568 ms–628 ms | 1.00× | 5.64 GiB | 5.63 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
+
+Test accuracy is measured on 500,000 rows: its 95% interval is ±0.13 percentage points at most.

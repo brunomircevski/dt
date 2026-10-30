@@ -1,10 +1,6 @@
 # CPU vs others: ./tree's backends against scikit-learn and Weka J48, depth 10, no pruning
 
-**Status:** run on 2026-10-27 at commit 872a9a2 (run as 1cf89a9 on mordor3, the same tree). One SLURM job per dataset, tool and algorithm (`vs-epyc-<data>-<tool>-<protocol>`), one run each, split over epyc1 and epyc2, which have the same hardware (2× EPYC 9255):
-- **epyc1:** SUSY, and HIGGS apart from J48.
-- **epyc2:** HIGGS's J48, chess 10M and Covertype.
-
-ECBDL'14's first 15M rows and chess 3×3 with 1000M rows were added on 2026-10-27/28 at 8187eb9: on epyc2, except ECBDL's --simple and J48 jobs (epyc1).
+**Status:** ./tree's --serial and --parallel bars are the test-set benchmarks' runs on ec77727 (main with the CPU presort of 4fb419c), 2026-10-29/30: [cluster-higgs](../cluster-higgs/BENCHMARK.md), [cluster-susy](../cluster-susy/BENCHMARK.md), [cluster-ecbdl](../cluster-ecbdl/BENCHMARK.md), [cluster-chess](../cluster-chess/BENCHMARK.md); Covertype's are the `*-epyc-covertype` folders here. --simple: the same folders (2026-10-27/29, its code has not changed). scikit-learn and Weka J48 (`vs-epyc-<data>-<tool>-<protocol>`): rerun on 2026-10-29/30 with 3 runs where a run takes under 10 minutes; the longer ones (J48 on HIGGS and ECBDL, scikit-learn on ECBDL and chess 1000M) are the single runs of 2026-10-27/28. All on epyc1 and epyc2, which have the same hardware (2× EPYC 9255).
 
 Every tree is grown to depth ≤ 10 without pruning, and its accuracy is measured on the dataset's test set. Every job finished but one: J48 on chess 1000M ran out of Java heap (251 GB, half the node's RAM) after 2 h 36 min.
 
@@ -16,10 +12,10 @@ The previous version of this benchmark (every tree pruned, no depth limit, train
 
 | Bar | Command | Threads | CPUs and memory |
 |---|---|--:|---|
-| ./tree --simple | `tree_cpu --simple --cart --no-prune -d 10` / `--simple --c45 --no-prune -d 10` | 1 | one socket |
-| ./tree --serial | `tree_cpu --serial ...` | 1 | one socket |
-| ./tree --parallel, one socket | `tree_cpu --parallel --threads 24 ...` | 24 | one socket |
-| ./tree --parallel, both sockets | `tree_cpu --parallel --threads 48 ...` | 48 | the whole node |
+| ./tree --simple | `tree_cpu_main --simple --cart --no-prune -d 10` / `--simple --c45 --no-prune -d 10` | 1 | one socket |
+| ./tree --serial | `tree_cpu_main --serial ...` | 1 | one socket |
+| ./tree --parallel, one socket | `tree_cpu_main --parallel --threads 24 ...` | 24 | one socket |
+| ./tree --parallel, both sockets | `tree_cpu_main --parallel --threads 48 ...` | 48 | the whole node |
 | scikit-learn 1.9.1 | `DecisionTreeClassifier(max_depth=10)`, gini, CART only | 1 | one socket |
 | Weka J48 3.8.7 | `-U -M 2` with the adapter's depth limit 10, C4.5 only | 1 | one socket |
 
@@ -29,13 +25,13 @@ The previous version of this benchmark (every tree pruned, no depth limit, train
 - **Test sets:** HIGGS and SUSY use UCI's official test rows (the last 500,000). chess 10M and 1000M use their own test files (4,500 and 1,000 rows), Covertype its prepared test split (116,202 rows), and ECBDL'14 the competition's labelled test set (2,897,917 rows). Every tool predicts the same test rows (`run.py --test-accuracy`).
 - **One socket:** every job owned its node (`--exclusive`).
   - Every run except the dual-socket bar was pinned to one socket (24 CPUs), with its memory bound to that socket's NUMA node (job.sh `SOCKET=auto`). The one-thread runs use that socket's first CPU.
-  - The dual-socket jobs use all 48 CPUs and both NUMA nodes, with no pinning.
+  - The two-socket runs use all 48 CPUs and both NUMA nodes.
 - **Time:** the training time, which does not include reading the data. Python and Java first get one untimed warm-up fit on 50,000 rows.
 - **Memory:** the peak resident memory (RSS) right after training: loading, warm-up and training.
 
 ## Same trees
 
-`run.py --hash-trees` records the SHA-256 of every ./tree tree (`--dump`). For each dataset and protocol, every ./tree backend (--simple, --serial, and --parallel on one socket and on both) grew the same tree:
+`run.py --hash-trees` records the SHA-256 of every ./tree tree (`--dump`). For each dataset and protocol, every ./tree backend (--simple, --serial, and --parallel on one socket and on both) grew the same tree, on the new runs too:
 
 | Dataset | Protocol | Tree SHA-256 (first 16) | Nodes | Depth | Test accuracy |
 |---|---|---|--:|--:|--:|
@@ -67,36 +63,36 @@ The other tools:
 - **C4.5:** Weka J48 grows the same tree size and accuracy as ./tree on chess and Covertype, and nearly the same on SUSY (741 against 743 nodes), HIGGS (923 against 935) and ECBDL'14 (711 against 725). ./tree follows C4.5 Release 8; J48 differs from R8 in small details.
 - **C4.5 is less accurate here:** on Covertype 59.9% against CART's 77.7%, and on HIGGS 63.7% against 70.5%. Both C4.5 implementations agree, so this comes from the algorithm, not from ./tree. scikit-learn's entropy tree (plain information gain, not charted) is as accurate as CART (77.2% on Covertype, 70.5% on HIGGS), so the cause is gain ratio. A likely explanation (not checked node by node): gain ratio favours splits that cut off a small group of rows, whose split information is low. At a depth limit of 10 those splits use up the levels, and C4.5's trees have half as many nodes as CART's. Without a depth limit, C4.5 grows on to depth 38–71 (the previous version, in the git history).
 
-## Results (training time, one run; peak memory)
+## Results (training time, mean of the runs; peak memory; number of runs)
 
 | Dataset | Protocol | --simple | --serial | --parallel, 24 (one socket) | --parallel, 48 (both) | scikit-learn | Weka J48 |
 |---|---|--:|--:|--:|--:|--:|--:|
-| chess_10m | CART | 6.15 s, 262 MiB | 349 ms, 490 MiB | 156 ms, 491 MiB | 316 ms, 493 MiB | 6.33 s, 586 MiB | – |
-| chess_10m | C4.5 | 7.34 s, 258 MiB | 397 ms, 491 MiB | 84.7 ms, 492 MiB | 437 ms, 494 MiB | – | 23.5 s, 3.55 GiB |
-| covertype | CART | 4.01 s, 112 MiB | 590 ms, 307 MiB | 45.9 ms, 392 MiB | 54.9 ms, 479 MiB | 2.31 s, 233 MiB | – |
-| covertype | C4.5 | 4.34 s, 126 MiB | 440 ms, 307 MiB | 35.8 ms, 392 MiB | 49.9 ms, 479 MiB | – | 36.3 s, 1.14 GiB |
-| susy | CART | 70.4 s, 438 MiB | 2.83 s, 1.03 GiB | 288 ms, 1.57 GiB | 247 ms, 1.58 GiB | 85.8 s, 608 MiB | – |
-| susy | C4.5 | 76.5 s, 565 MiB | 3.29 s, 1.18 GiB | 298 ms, 1.72 GiB | 263 ms, 1.77 GiB | – | 226 s, 4.81 GiB |
-| higgs | CART | 236 s, 1.32 GiB | 10.6 s, 3.57 GiB | 873 ms, 5.37 GiB | 599 ms, 5.61 GiB | 214 s, 1.61 GiB | – |
-| higgs | C4.5 | 256 s, 1.43 GiB | 12.6 s, 3.62 GiB | 964 ms, 5.44 GiB | 637 ms, 5.68 GiB | – | 830 s, 12.3 GiB |
-| ecbdl_15m | CART | 2,273 s, 35.5 GiB | 238 s, 106 GiB | 12.7 s, 109 GiB | 6.84 s, 111 GiB | 2,198 s, 42.3 GiB | – |
-| ecbdl_15m | C4.5 | 2,587 s, 35.6 GiB | 301 s, 106 GiB | 15.4 s, 109 GiB | 8.25 s, 111 GiB | – | 24,151 s, 129 GiB |
-| chess_1b | CART | 908 s, 21.4 GiB | 99.4 s, 46.7 GiB | 6.50 s, 46.7 GiB | 5.29 s, 46.7 GiB | 642 s, 45.8 GiB | – |
-| chess_1b | C4.5 | 1,029 s, 21.4 GiB | 103 s, 46.7 GiB | 7.15 s, 46.7 GiB | 6.57 s, 46.7 GiB | – | out of memory (heap 251 GB, after 2 h 36 min) |
+| chess_10m | CART | 6.14 s, 261 MiB (30) | 334 ms, 490 MiB (30) | 68.9 ms, 491 MiB (30) | 91.1 ms, 493 MiB (30) | 6.24 s, 586 MiB (3) | – |
+| chess_10m | C4.5 | 7.3 s, 260 MiB (30) | 382 ms, 491 MiB (30) | 76.7 ms, 492 MiB (30) | 103 ms, 494 MiB (30) | – | 27.1 s, 3.78 GiB (3) |
+| covertype | CART | 3.98 s, 112 MiB (10) | 567 ms, 307 MiB (10) | 48.6 ms, 392 MiB (10) | 61.2 ms, 481 MiB (10) | 2.31 s, 233 MiB (3) | – |
+| covertype | C4.5 | 4.31 s, 126 MiB (10) | 397 ms, 307 MiB (10) | 36.6 ms, 391 MiB (10) | 40.6 ms, 478 MiB (10) | – | 36.4 s, 1.14 GiB (3) |
+| susy | CART | 70.8 s, 436 MiB (3) | 2.84 s, 1.03 GiB (10) | 281 ms, 1.57 GiB (10) | 239 ms, 1.58 GiB (10) | 86.5 s, 608 MiB (3) | – |
+| susy | C4.5 | 77.2 s, 543 MiB (3) | 3.1 s, 1.12 GiB (10) | 277 ms, 1.66 GiB (10) | 249 ms, 1.66 GiB (10) | – | 230 s, 4.81 GiB (3) |
+| higgs | CART | 236 s, 1.32 GiB (3) | 10.4 s, 3.57 GiB (10) | 829 ms, 5.37 GiB (10) | 607 ms, 5.61 GiB (10) | 215 s, 1.61 GiB (3) | – |
+| higgs | C4.5 | 257 s, 1.43 GiB (3) | 11.9 s, 3.6 GiB (10) | 925 ms, 5.4 GiB (10) | 590 ms, 5.64 GiB (10) | – | 830 s, 12.3 GiB (1) |
+| ecbdl_15m | CART | 2,273 s, 35.5 GiB (1) | 225 s, 106 GiB (3) | 11.8 s, 109 GiB (10) | 6.32 s, 111 GiB (10) | 2,198 s, 35.9 GiB (1) | – |
+| ecbdl_15m | C4.5 | 2,587 s, 35.6 GiB (1) | 277 s, 106 GiB (3) | 14.4 s, 109 GiB (10) | 7.81 s, 111 GiB (10) | – | 24,151 s, 129 GiB (1) |
+| chess_1b | CART | 912 s, 21.3 GiB (1) | 98.6 s, 46.7 GiB (3) | 5.53 s, 46.7 GiB (30) | 4.44 s, 46.7 GiB (30) | 642 s, 45.8 GiB (1) | – |
+| chess_1b | C4.5 | 1,031 s, 21.4 GiB (1) | 101 s, 46.7 GiB (3) | 6.22 s, 46.7 GiB (30) | 5.45 s, 46.7 GiB (30) | – | out of memory (heap 251 GB, after 2 h 36 min) |
 
 - **--serial against --simple:** --serial is faster by:
-  - 18× on chess 10M and 7–10× on Covertype;
-  - 23–25× on SUSY and 20–22× on HIGGS;
+  - 18–19× on chess 10M and 7–11× on Covertype;
+  - 25× on SUSY and 22–23× on HIGGS;
   - only 9–10× on ECBDL'14 15M and chess 1000M (not investigated).
 
   --simple sorts each node's rows again for every feature; --serial sorts once and keeps the order while it partitions ([paper/simple-vs-serial.md](../../../paper/simple-vs-serial.md)).
-- **--parallel on one socket against --serial:** 2.2–4.7× faster on chess, which has only two features to share among 24 threads. 12–13× faster on Covertype, 10–11× on SUSY, 12–13× on HIGGS, 19–20× on ECBDL'14 15M and 14–15× on chess 1000M.
-- **Both sockets against one:** the second socket helps only on the big datasets: 1.9× faster on ECBDL'14 15M, 1.5× on HIGGS, 1.1–1.2× on chess 1000M and 1.1× on SUSY. It is 1.2–1.4× slower on Covertype and 2–5× slower on chess 10M, where the threads on the other socket mostly cost cross-socket memory traffic and synchronisation.
+- **--parallel on one socket against --serial:** 5× faster on chess 10M, which has only two features to share among 24 threads. 11–12× faster on Covertype, 10–11× on SUSY, 12–13× on HIGGS, 19× on ECBDL'14 15M and 16–18× on chess 1000M.
+- **Both sockets against one:** the second socket helps on the big datasets: 1.8–1.9× faster on ECBDL'14 15M, 1.4–1.6× on HIGGS, 1.1–1.2× on chess 1000M and on SUSY. It is 1.1–1.3× slower on Covertype and on chess 10M, where the threads on the other socket mostly cost cross-socket memory traffic and synchronisation.
 - **--simple against the libraries:**
-  - CART: about as fast as scikit-learn on chess (6.15 s against 6.33 s), 1.7× slower on Covertype, 1.2× faster on SUSY, 1.1× slower on HIGGS, as fast on ECBDL'14 (2,273 s against 2,198 s) and 1.4× slower on chess 1000M. Without pruning, the two grow at about the same speed: the old benchmark's 6–13× lead on SUSY and HIGGS came from scikit-learn's quadratic pruning (the previous version, in the git history).
-  - 3.0–3.2× faster than J48 on chess, SUSY and HIGGS, 8.4× faster on Covertype and 9.3× on ECBDL'14 (2,587 s against 24,151 s, 6.7 hours).
-- **--serial against the libraries:** CART 18× faster than scikit-learn on chess 10M, 4× on Covertype, 30× on SUSY, 20× on HIGGS, 9× on ECBDL'14 and 6.5× on chess 1000M; C4.5 59–83× faster than J48 (80× on ECBDL'14).
-- **--parallel on one socket against the libraries:** CART 41× faster than scikit-learn on chess 10M, 50× on Covertype, 300× on SUSY, 245× on HIGGS, 174× on ECBDL'14 and 99× on chess 1000M; C4.5 280–1,600× faster than J48 (1,570× on ECBDL'14).
+  - CART: as fast as scikit-learn on chess (6.14 s against 6.24 s), 1.7× slower on Covertype, 1.2× faster on SUSY, 1.1× slower on HIGGS, as fast on ECBDL'14 (2,273 s against 2,198 s) and 1.4× slower on chess 1000M. Without pruning, the two grow at about the same speed: the old benchmark's 6–13× lead on SUSY and HIGGS came from scikit-learn's quadratic pruning (the previous version, in the git history).
+  - 3.0–3.7× faster than J48 on chess, SUSY and HIGGS, 8.4× faster on Covertype and 9.3× on ECBDL'14 (2,587 s against 24,151 s, 6.7 hours).
+- **--serial against the libraries:** CART 19× faster than scikit-learn on chess 10M, 4× on Covertype, 30× on SUSY, 21× on HIGGS, 10× on ECBDL'14 and 6.5× on chess 1000M; C4.5 70–92× faster than J48 (87× on ECBDL'14).
+- **--parallel on one socket against the libraries:** CART 91× faster than scikit-learn on chess 10M, 48× on Covertype, 308× on SUSY, 259× on HIGGS, 186× on ECBDL'14 and 116× on chess 1000M; C4.5 350–1,680× faster than J48 (1,680× on ECBDL'14).
 - **Memory:**
   - --simple uses the least of the ./tree backends, as it keeps no presorted orders: 0.1–1.4 GiB, 21–36 GiB on the two big datasets (a third to a half of --serial's).
   - --serial uses 2–3× as much (sorted feature orders), and --parallel up to 1.5× more than --serial (per-thread buffers; about the same on chess).
@@ -110,21 +106,10 @@ In the old benchmark J48 grew HIGGS without a depth limit: 1,152,747 nodes, dept
 ## Reproduce
 
 ```bash
-# on mordor3, after build.sh, setup.sh (compiles J48Fit) and prepare.sh (bench/cluster/README.md)
-jobs() { d=$1; for t in parallel dual serial sklearn simple; do
-  echo vs-epyc-$d-$t-cart vs-epyc-$d-$t-c45; done; echo vs-epyc-$d-j48-c45; }
-bench/cluster/submit.sh -m 1 -e -d susy  -o cluster-cpu-vs-others -w epyc1 $(jobs susy)
-bench/cluster/submit.sh -m 1 -e -d higgs -o cluster-cpu-vs-others -w epyc1 $(jobs higgs | sed 's/ *vs-epyc-higgs-j48-c45//')
-bench/cluster/submit.sh -m 1 -e -d higgs -o cluster-cpu-vs-others -w epyc2 vs-epyc-higgs-j48-c45
-for d in chess_10m covertype; do
-  bench/cluster/submit.sh -m 1 -e -d $d -o cluster-cpu-vs-others -w epyc2 $(jobs $d)
-done
-for d in ecbdl_15m chess_1b; do   # 2026-10-27; the ECBDL --simple and J48 jobs ended up on epyc1
-  bench/cluster/submit.sh -m 1 -e -d $d -o cluster-cpu-vs-others -w epyc2 $(jobs $d)
-done
+# on mordor3: the libraries and Covertype's ./tree runs, with every other rerun of 2026-10-29/30
+bench/cluster/submit-main-2026-10-29.sh
 bench/.venv/bin/python bench/simple_chart.py bench/results/cluster-cpu-vs-others
 ```
 
-- Each `vs-epyc-<data>-<tool>-<protocol>` job runs one tool, with a time limit that fits it. `-w` picks the node, and `-e` adds the test accuracy.
-- Every vs job passes `RUN_EXTRA=--hash-trees` to job.sh, and all but the `dual` ones pass `SOCKET=auto`.
-- `simple_chart.py` refuses to draw if the ./tree backends' tree hashes differ, or if a case failed or ran twice.
+- Each `vs-epyc-<data>-<tool>-<protocol>` job runs one tool on one socket (`SOCKET=auto`).
+- `simple_chart.py` refuses to draw if the ./tree backends' tree hashes differ.

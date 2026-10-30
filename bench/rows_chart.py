@@ -12,7 +12,7 @@ must have read the same data files and built the same trees, as
 machines_chart.py checks.
 
   d=bench/results/cluster-chess
-  bench/.venv/bin/python bench/rows_chart.py --protocols cart_full_nodepth,c45_unpruned \\
+  bench/.venv/bin/python bench/rows_chart.py --protocols cart_depth10,c45_depth10_unpruned \\
       $d/{cuda-hopper,cuda-ampere,cpu-epyc,cpu-dell,cpu-dell512}-chess_* --out $d/chart-rows.png
 """
 
@@ -75,7 +75,7 @@ def spread(values, gap):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("runs", nargs="+", type=Path)
-    parser.add_argument("--protocols", default="cart_full_nodepth,c45_unpruned",
+    parser.add_argument("--protocols", default="cart_depth10,c45_depth10_unpruned",
                         help=f"one row of panels each, of: {', '.join(M.TITLES)}")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
@@ -120,7 +120,7 @@ def main():
                ("ram", "peak RAM (host)", gib_label),
                ("vram", "peak VRAM (GPU 0)", gib_label)]
     fig, axes = plt.subplots(len(protocols), 3, figsize=(16, 1.9 + 4.4 * len(protocols)),
-                             squeeze=False, gridspec_kw={"wspace": 0.42, "hspace": 0.75})
+                             squeeze=False, gridspec_kw={"wspace": 0.62, "hspace": 0.75})
     all_rows = sorted({e["rows"] for e in entries})
     headers = []  # (protocol title, its trees) above each row of panels
     for row, protocol in enumerate(protocols):
