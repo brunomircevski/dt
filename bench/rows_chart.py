@@ -120,7 +120,7 @@ def main():
                ("ram", "peak RAM (host)", gib_label),
                ("vram", "peak VRAM (GPU 0)", gib_label)]
     fig, axes = plt.subplots(len(protocols), 3, figsize=(16, 1.9 + 4.4 * len(protocols)),
-                             squeeze=False, gridspec_kw={"wspace": 0.62, "hspace": 0.75})
+                             squeeze=False, gridspec_kw={"wspace": 0.8, "hspace": 0.75})
     all_rows = sorted({e["rows"] for e in entries})
     headers = []  # (protocol title, its trees) above each row of panels
     for row, protocol in enumerate(protocols):
