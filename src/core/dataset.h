@@ -60,7 +60,7 @@ struct Dataset {
 // of feature f are values[offsets[f]] .. values[offsets[f + 1] - 1]. C4.5's
 // thresholds need them (a by-product of the presort).
 struct DistinctValues {
-  std::vector<float> values;
+  Dataset::Values values; // uninitialised: the threads that fill it touch its pages
   std::vector<std::size_t> offsets;
 };
 

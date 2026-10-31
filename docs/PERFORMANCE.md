@@ -2,6 +2,17 @@
 
 Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
 
+## October 2026: SOREL's C4.5 presort on epyc
+
+The presort took 7 s in some runs and 18 s in others, with the same tree: one
+thread worked alone for 11.5 s while the other 47 waited. That was the
+zero-fill of C4.5's distinct values, on one thread, between the two parallel
+passes of `distinctValues()` (no reclaim: `pgscan` 0; why it is only sometimes
+slow is not known). The values now stay uninitialised until those passes write
+them. 24 runs of each binary, alternating, on epyc1 and epyc2 (48 threads):
+13 slow before, none after; mean training 34.5 s → 28.5 s, the same trees and
+peak memory, and 28.5 s is what the fast runs took before.
+
 ## October 2026: a faster presort, and experiments that did not help (mordor3 cluster)
 
 Unpruned trees (`--no-prune -d 10`); every run's `--dump` compared with the

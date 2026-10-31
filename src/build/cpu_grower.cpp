@@ -114,6 +114,8 @@ private:
   // Counted first and then written in place, so that nothing is allocated on
   // the pool (growing thousands of vectors at once took SOREL's presort on
   // epyc from 11 s to 34 s in some runs) and nothing is copied on one thread.
+  // The resize leaves the values unset: zero-filling them on one thread took
+  // 0.4 s or, in most runs of the same SOREL presort, 11.5 s.
   // Without a pool (--serial) one pass straight into distinct.values.
   void distinctValues(std::size_t count, DistinctValues &distinct) {
     constexpr std::size_t kChunk = std::size_t{1} << 20;
