@@ -106,8 +106,8 @@ In the old benchmark J48 grew HIGGS without a depth limit: 1,152,747 nodes, dept
 ## Reproduce
 
 ```bash
-# on mordor3: the libraries and Covertype's ./tree runs, with every other rerun of 2026-10-29/30
-bench/cluster/submit-main-2026-10-29.sh
+# on mordor3, one job per tool and dataset, e.g.:
+bench/cluster/submit.sh -m 1 -e -d covertype -o cluster-cpu-vs-others -w epyc2 vs-epyc-covertype-sklearn-cart vs-epyc-covertype-j48-c45
 bench/.venv/bin/python bench/simple_chart.py bench/results/cluster-cpu-vs-others
 ```
 

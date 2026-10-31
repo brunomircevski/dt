@@ -42,4 +42,6 @@ __pycache__
 /bench/.tools/
 /bench/data
 /bench/profiles/
+/bench/cluster/*.log
+/bench/cluster/plans/
 *.nsys-rep

@@ -1,18 +1,17 @@
 # Benchmarks against GPU libraries: results, what is timed, fairness
 
-Source: [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
-(run 2026-10-17; ./tree rows rerun on 6f6cecb on 2026-10-19; scripts in its `scripts/`).
-That directory now holds a depth-10 comparison (2026-10-27); the depth-19 results
-these notes cite are in the git history (last at 325039f).
+Current results: [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
+(depth ≤ 10, 2026-10-27; ./tree from the ec77727 runs). The method below is the
+same; the depth-19 figures quoted in Fairness are from the git history, last at 325039f.
 
 ## Setup
 
 - **Machines (mordor3):** hopper = H100 PCIe 80 GB + 2× Xeon Gold 6444Y
   (32 cores); ampere = A100 80 GB PCIe + 2× EPYC 7402 (48 cores). GPU 0, whole
   node via `--exclusive`, CUDA 12.9.
-- **Data:** HIGGS 10.5M train rows × 28 real features; airline 114,569,017
-  train rows × 13 integer features; 500,000 test rows each.
-- **Task:** one unpruned tree, depth ≤ 19, all rows and features, no
+- **Data:** HIGGS, SUSY, airline, ECBDL'14 15M and chess 1000M, each with its own
+  test set.
+- **Task:** one unpruned tree, depth ≤ 10, all rows and features, no
   bootstrap or feature sampling.
 - **Competitors:** cuML 26.10 `RandomForestClassifier(n_estimators=1,
   bootstrap=False, max_features=1.0, n_bins=128, n_streams=1)`, Gini for
@@ -21,44 +20,13 @@ these notes cite are in the git history (last at 325039f).
   `eta=1, lambda=0` (= the CART Gini split on 256 bins), CART only.
   CudaTree (2013) does not run on CUDA 12; no public GPU C4.5 code exists.
 
-## Headline results (median of 3)
-
-| Case | ./tree H100 | ./tree A100 | cuML H100 | cuML A100 | XGBoost H100 | XGBoost A100 |
-|---|--:|--:|--:|--:|--:|--:|
-| HIGGS CART | 0.35 s | 0.45 s | 0.94 s | 1.08 s | 5.41 s | 6.02 s |
-| HIGGS C4.5 (cuML: entropy) | 0.32 s | 0.40 s | 0.87 s | 1.03 s | – | – |
-| airline CART | 1.21 s | 1.73 s | 4.23 s | 4.67 s | 20.40 s | 24.69 s |
-| airline C4.5 (cuML: entropy) | 1.14 s | 1.65 s | 4.18 s | 4.59 s | – | – |
-
-| Case | ./tree nodes / test acc. | cuML | XGBoost | Same predictions as ./tree |
-|---|---|---|---|---|
-| HIGGS CART | 302,341 / 71.74% | 342,393 / 71.70% | 319,733 / 71.64% | cuML 83.1%, XGB 84.0% |
-| airline CART | 621,689 / 74.88% | 655,631 / 74.59% | 641,161 / 74.76% | cuML 86.8%, XGB 90.8% |
-| HIGGS C4.5 | 84,695 / 68.65% | 292,477 / 71.76% | – | 76.7% |
-| airline C4.5 | 190,337 / 73.02% | 555,457 / 74.26% | – | 85.0% |
-
-| Peak VRAM (above idle, incl. context) | ./tree | cuML | XGBoost |
-|---|--:|--:|--:|
-| HIGGS | 3.3–3.4 GiB | 1.85–1.91 GiB | 2.86–2.90 GiB |
-| airline | 13.3 GiB | 9.5–10.0 GiB | 13.0 GiB |
-
-- Speed-up: CART 2.4–2.7× (HIGGS) and 2.7–3.5× (airline) over cuML,
-  13–17× over XGBoost; C4.5 2.6–3.7× over cuML's entropy tree.
-- The gap grows with the data (airline > HIGGS). ./tree gains more from the
-  H100 over the A100 (1.25–1.45×) than the libraries (1.1–1.2×).
-- Binned trees agree with the exact tree on only 83–91% of test rows; the
-  exact tree is the most accurate CART tree on both datasets (by ≤ 0.3 points).
-  Root thresholds differ even on integer data (airline: ./tree 70.5, cuML 70,
-  XGBoost < 71).
-- Every tree is identical on H100 and A100.
-
 ## What exactly is timed
 
 Both sides: float32 training data in host RAM → finished tree. Not timed on
 either side: reading the file, prediction, accuracy.
 
 **./tree**: its printed `train total`, a fresh process per run,
-`--cuda --threads <all cores> --cart|--c45 --no-prune -d 19`.
+`--cuda --threads <all cores> --cart|--c45 --no-prune -d 10`.
 `train total = gpu setup + presort + build + prune` (`src/app/trainer.h`):
 
 | Phase | Contents |
@@ -71,19 +39,6 @@ either side: reading the file, prediction, accuracy.
 Not in ./tree's total: CSV parsing; CUDA context creation and the pinned
 staging buffers (4×32 MB for uploads, 2×128 MB for the hand-offs) (both made on a background thread during the CSV load,
 `src/app/main.cpp`); evaluation; `--dump`.
-
-Phase medians (s):
-
-| Case | gpu setup | presort | build | total |
-|---|--:|--:|--:|--:|
-| H100 HIGGS CART | 0.094 | 0.018 | 0.243 | 0.352 |
-| H100 HIGGS C4.5 | 0.098 | 0.027 | 0.198 | 0.325 |
-| A100 HIGGS CART | 0.090 | 0.023 | 0.338 | 0.449 |
-| A100 HIGGS C4.5 | 0.089 | 0.034 | 0.277 | 0.403 |
-| H100 airline CART | 0.213 | 0.075 | 0.900 | 1.205 |
-| H100 airline C4.5 | 0.217 | 0.086 | 0.828 | 1.136 |
-| A100 airline CART | 0.320 | 0.098 | 1.286 | 1.725 |
-| A100 airline C4.5 | 0.314 | 0.111 | 1.222 | 1.650 |
 
 **cuML / XGBoost** (`gpubench.py`): one Python process loads row-major
 (C-order) NumPy float32 arrays, runs an **untimed warm-up fit on 50,000 rows**
@@ -139,12 +94,6 @@ different algorithms; lead with CART.
 - "Is the comparison end-to-end fair?" → the fairness variants below.
 
 ## Experiments still missing
-
-0. **Rerun all ./tree rows** after the 2026-10-28 changes (smaller-side
-   bitmap, split column by position, upload/presort overlap, GPU root counts;
-   see [optimizations.md](optimizations.md#same-commit-measurement-of-3-10b-and-10c-2026-10-27)):
-   the tables above predate them; same-commit measurements show 4–36% lower
-   `train total` at depth 10.
 
 1. **Clean ablation** on one commit and machine: `--gpu-sweep` (one exact pass
    vs float-filter two-pass, also on the RTX 5070 laptop), `--gpu-min-rows`

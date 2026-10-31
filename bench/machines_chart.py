@@ -12,8 +12,8 @@ log axes each part's length is its share of the bar.
 Refuses to draw when the runs did not read the same data (SHA-256 of the
 prepared files in plan.json) or did not build the same trees.
 
-  bench/.venv/bin/python bench/machines_chart.py bench/results/cuda-legion-susy \\
-      --reference bench/results/cluster-susy-vs-others-cpu/pc  # -> consumer/cuda-legion-susy/chart.png
+  d=bench/results/cluster-higgs
+  bench/.venv/bin/python bench/machines_chart.py $d/cuda-hopper-higgs $d/cpu-epyc-higgs --out $d/chart.png
 
 --spread draws on every time bar a whisker from the fastest to the slowest
 run and a dot per run, and writes their min and max.

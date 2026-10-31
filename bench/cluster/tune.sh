@@ -3,7 +3,7 @@
 # times, the cases interleaved (case 1, 2, ..., then again), so a slow phase of
 # the node does not hit one case only. Prints one CSV line per run with
 # ./tree's own phase timings, /usr/bin/time's CPU times, minor page faults and
-# context switches (bench/results/cluster-tuning/ has the sweeps made with it):
+# context switches:
 #
 #   sbatch -p epyc --exclusive -o out.csv bench/cluster/tune.sh <case file> <reps>
 #

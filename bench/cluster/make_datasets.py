@@ -39,10 +39,9 @@ Sources, in <downloads>:
   chess/chess3x3x*/        a 3x3 checkerboard in Quinlan's C4.5 format (.names, .data,
                            .test): 1M, 10M, 100M and 1000M rows. Not public: it was
                            in mordor3's ~/chess and was deleted after the first build
-                           (2026-10-19), so datasets/chess/chess_*.csv are the only copies;
-                           the originals' SHA-256 are in bench/cluster/README.md.
+                           (2026-10-19), so datasets/chess/chess_*.csv are the only copies.
                            Written in ./tree's format (f0,f1 and c0/c1, as prepare.py's
-                           train.csv) since 2026-10-22 (chess_tree_format.py)
+                           train.csv) since 2026-10-22
   (none)                   chess_2b: chess_100m's rows, then 1.9G rows drawn from a fixed seed
 
 A file whose SHA-256 differs from the expected one is left as <name>.csv.mismatch
@@ -73,7 +72,7 @@ EXPECTED = {
     "supersymmetry_20k": "4563a7385202d9e65dca12b36f5c5c0f66967751df2acf73fe100353f297376b",
     "airline": "255426039068522c2a5fb780b6fe4b31179bdc8988013d15db22ba914a742bcb",
     "ecbdl": "5bc39aecbec956ccb06b77295e292e0166db5f87c8341678b1e0ca35fd67120c",
-    # chess: ./tree's format (2026-10-22, chess_tree_format.py) of the first build
+    # chess: ./tree's format (2026-10-22) of the first build
     # (mordor3, 2026-10-19), from files that no longer exist; chess_2b: its first build.
     "chess_1m": "e627a390685d94edf73cec0fe90ff3bfcdbda6e4fb0f20c9bfb33eb895cee18a",
     "chess_1m_test": "4fcfc226655dec9b32b021f7936dfdeb61e8311413d7d58466cd47b8d060bfee",

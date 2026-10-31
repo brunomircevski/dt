@@ -18,7 +18,7 @@ Columns: Parallel on epyc, Parallel on dell, CUDA hybrid (the default), CUDA `--
 ## What runs
 
 ```bash
-bench/cluster/submit-main-2026-10-29.sh   # every case, with the other reruns of 2026-10-29/30
+bench/cluster/profile.sh -m 10 -d higgs -p cart_depth10,c45_depth10_unpruned -o cluster-profiling   # one dataset (chess: -m 30)
 d=bench/results/cluster-profiling
 bench/.venv/bin/python bench/profile_share_chart.py $d --out $d/chart.png
 bench/.venv/bin/python bench/profile_share_chart.py $d --chess --out $d/chart-chess.png

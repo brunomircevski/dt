@@ -216,4 +216,4 @@ bench/.venv/bin/python bench/runs_chart.py $d/cpu-dell-chess_1b $d/cpu-dell512-c
 
 - **Not timed:** reading the CSV, and the data check before each job (SHA-256 of every prepared file and every CSV row against the binary files: 113 s for `chess_1b` on ampere, 33 GB over NFS). Every run reads the CSV again over NFS (`--drop-cache`). A whole `chess_1b` process (`wall_seconds`) took 23–25 s on the GPU nodes, 35–40 s on epyc (both sockets or one), 40–47 s on dell and dell512, 176–216 s with --serial and 1,009–1,156 s with --simple.
 - **Hopper's and ampere's 1M and 10M runs** are dominated by fixed costs; their order there says little about the GPUs.
-- **The originals** (C4.5 files from mordor3's `~/chess`) were deleted after the conversion; `datasets/chess_*.csv` on mordor3 are the only copies. Their SHA-256 and those of the originals are in [bench/cluster/README.md](../../cluster/README.md) and `bench/cluster/chess-originals.sha256`.
+- **The originals** (C4.5 files from mordor3's `~/chess`) were deleted after the conversion; `datasets/chess_*.csv` on mordor3 are the only copies.

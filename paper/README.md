@@ -14,9 +14,11 @@ Notes for a future paper on `./tree --cuda` (`src/build/gpu_grower.cu`), collect
 ## The claim in one sentence
 
 `./tree` builds an **exact** (every distinct value tested, byte-identical to the
-CPU reference) CART or C4.5 tree on one GPU **2.2–3.2× faster than cuML** and
-**12–15× faster than XGBoost**, which split only on 128/256 histogram bins,
-with equal or slightly better CART test accuracy.
+CPU reference) CART or C4.5 tree of depth ≤ 10 on one GPU **1.1–4.3× faster than
+cuML** (11–14× on chess 1000M) and **8–31× faster than XGBoost** (136–168× on
+chess), which split only on 128/256 histogram bins, with the same CART test
+accuracy within 0.1 point on HIGGS, SUSY and ECBDL (on airline 1.0–1.3 above cuML,
+0.07 below XGBoost).
 
 ## Things to get right in the paper
 
@@ -32,12 +34,16 @@ with equal or slightly better CART test accuracy.
   GPU/CPU share and a thread sweep.
 - **CART is the clean comparison.** ./tree's C4.5 (gain ratio, MDL thresholds)
   against cuML's entropy tree compares different trees (airline: 190K vs 555K
-  nodes, 73.0% vs 74.3% test accuracy at depth 19). No public GPU C4.5 exists.
-- **Memory cost of exactness:** ./tree uses 1.3–1.8× cuML's VRAM.
+  nodes, 73.0% vs 74.3% test accuracy at depth 19; at depth 10 half the nodes or fewer). No public GPU C4.5 exists.
+- **Memory cost of exactness:** ./tree uses more VRAM than the libraries on HIGGS, SUSY and
+  ECBDL (73.3 GiB against 36–48 GiB) and less on chess (25.4 against 42–44 GiB).
+- **Depth matters:** the GPU's lead shrinks as trees deepen (HIGGS CART against epyc: 4× at
+  depth 10, 1.1× unlimited), and depth 10 underfits, C4.5 most
+  ([PERFORMANCE.md](../docs/PERFORMANCE.md#october-2026-what-the-benchmarks-showed-mordor3-cluster)).
+  State the depth with every figure.
 - The existing optimization numbers come from different commits and machines;
   a clean same-commit ablation and a per-kernel profile are still to do (see
   [benchmarks.md](benchmarks.md#experiments-still-missing)). Only the
   2026-10-28 changes (smaller-side bitmap, split column by position,
   upload/presort overlap, GPU root counts) were measured on one commit
-  ([optimizations.md](optimizations.md#same-commit-measurement-of-3-10b-and-10c-2026-10-27));
-  the benchmark tables predate them and must be rerun.
+  ([optimizations.md](optimizations.md#same-commit-measurement-of-3-10b-and-10c-2026-10-27)).

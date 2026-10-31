@@ -203,9 +203,6 @@ def figure(run, dataset, protocols, series, machine, out, socket=None):
             if n != common) + "), bar: min–max"
     days = sorted({r["time"][:10] for points in series.values() for p in points for r in p["rows"]})
     dates = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
-    rerun = machine.get("serial_rerun")
-    if rerun:  # bench/serial_rerun.py
-        runs += f" (1 thread rerun on {rerun['started'][:10]})"
     fig.text(0.08, 0.015,
              f"Dot: {runs}. 1 thread = the serial backend, more = the parallel backend;\n"
              "every thread count builds the same tree. Training time excludes reading the data;\n"

@@ -1,6 +1,86 @@
 # Performance
 
-Measurements of `./tree` on its own: what the latest optimizations changed. The current benchmark results (serial, parallel and CUDA on SUSY and HIGGS, and the comparison with scikit-learn, rpart, Weka J48 and YaDT) are in [bench/results/](../bench/results/), described in [bench/README.md](../bench/README.md).
+What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
+
+## October 2026: what the benchmarks showed (mordor3 cluster)
+
+Probes on ec77727 after the full rerun, 2026-10-30/31: the same binaries, in
+alternating rounds on whole nodes. Their raw runs were not kept.
+
+**Repeats.** Of 52 cases with under 10 runs under 10 minutes, 2 have a CV above
+2% (the highest 2.9%), so more runs would not change the means. The exception
+is a run with two modes: 3 fast runs hid the SOREL slowdown below, which hit 13
+of 24. Run 8 or more on the big datasets after a change to the presort or to
+allocation, and look at `--profile`'s idle time.
+
+**dell at 2–12 threads is noisy, and the cause is unknown.** HIGGS at 4 threads
+has a CV of 13–17% over 16 runs (epyc 0.3%); up to 48 threads and on one socket
+the means hold, with a CV of 2–4% and 5–9%. Ruled out:
+
+* **NUMA balancing:** `numactl --membind` on every node takes the migrations to
+  0, with the same trees, the times within about 1% and the noise unchanged.
+* **Pinning:** the first 2 of 4 rounds looked like the cure (CV 17% → 4%), but
+  over all 4 pinned is worse (CV 26%): pinned runs get a slow mode of their own,
+  1.5–1.65× the time at 4–12 threads. On epyc pinning changes nothing, except
+  about 7% better at 48 threads on HIGGS.
+* **Frequency:** a sampler at 200 ms shows the slow runs lose CPU time, not
+  clock speed: user time stays flat and a CPU sits idle at 800 MHz. With
+  spinners on the other 44 CPUs (3.6 GHz throughout) the CV falls from 9–11% to
+  5–6%, but the mean is slower. Pinned slow runs differ: their user time rises.
+
+So take small differences at low thread counts on dell as noise, use epyc for
+them, and do A/B runs interleaved in one job. `perf` is unusable there
+(`perf_event_paranoid` 4) and the governor is the admins'.
+
+**Thread placement.** Threads take CPUs in `lscpu` order: dell's go round its 4
+NUMA nodes (spread), epyc's fill the first 24 CPUs (compact), so the two curves
+of `cluster-cpu-scaling` are not like for like. Compact is faster on both at low
+thread counts, and equal at 48:
+
+| HIGGS CART (s) | 2 threads | 4 | 24 |
+|---|--:|--:|--:|
+| dell spread | 9.0–10.6 | 5.6–5.7 | 1.22 |
+| dell compact | 7.9 | 4.5–5.1 | 1.08–1.10 |
+| epyc spread | 6.9 | 4.0 | 0.92 |
+| epyc compact | 5.5 | 2.85 | 0.83 |
+
+**Nodes.** dell2–4 have half dell1's memory channels and are 1.13× slower on
+SUSY, 1.14× on HIGGS, 1.10–1.17× on airline, 1.30–1.34× on ECBDL 15M and
+1.38–1.46× on MNIST8M, with the same single-thread speed; never mix them. epyc1
+and epyc2 are within 2%. dell's single thread is 1.47× slower than epyc's on
+HIGGS and 1.6× on chess 10M, but equal on chess 1000M: core speed on small data,
+memory on big data.
+
+**`--serial` on chess** costs 2.9× more per row from 10M to 1000M rows (34 → 99
+ns: mark 5.6 → 41, partition 8 → 37), against 1.5× for `--simple` (617 → 912
+ns). That is why its lead over `--simple` is smaller on the big sets.
+
+**The A100 beats the H100 at chess 10M** because its fixed cost is lower (about
+0.05 s against 0.07 s, 71–79% of its time). The H100 wins from 100M rows up.
+
+**Depth.** CPU and both GPUs built identical trees at every depth below,
+unlimited included. Depth 10 underfits, and it is C4.5's limit that makes it look weak:
+gain ratio needs more levels, and unlimited it beats CART on all three.
+
+| Test accuracy | depth 5 | 10 | 15 | 20 | unlimited (depth reached) |
+|---|--:|--:|--:|--:|--:|
+| HIGGS CART | 66.4% | 70.5% | 72.0% | 71.6% | 67.4% (69) |
+| HIGGS C4.5 | 60.5% | 63.7% | 67.3% | 68.9% | 69.8% (71) |
+| airline CART | 61.9% | 66.6% | 69.4% | 70.9% | 65.1% (66) |
+| airline C4.5 | 61.8% | 66.2% | 68.8% | 70.4% | 68.4% (73) |
+| MNIST8M CART | 61.7% | 84.5% | 91.1% | 92.6% | 92.7% (115) |
+| MNIST8M C4.5 | 45.6% | 74.7% | 82.0% | 87.6% | 92.9% (147) |
+
+The GPU's lead shrinks with depth, because small nodes go to the CPU:
+
+| Training time (s), CART: epyc / H100 hybrid / H100 `--gpu-only` | depth 5 | 10 | 15 | 20 | unlimited |
+|---|--:|--:|--:|--:|--:|
+| HIGGS | 0.31 / 0.11 / 0.10 | 0.62 / 0.15 / 0.15 | 0.82 / 0.22 / 0.24 | 1.04 / 0.43 / 0.74 | 1.41 / 1.26 / 3.93 |
+| airline | 1.82 / 0.32 / 0.32 | 2.87 / 0.49 / 0.49 | 4.15 / 0.69 / 0.70 | 5.06 / 0.98 / 1.33 | 6.30 / 4.51 / 21.67 |
+| MNIST8M | 3.44 / 1.90 / 1.89 | 5.93 / 3.57 / 3.57 | 7.99 / 5.60 / 6.68 | 9.82 / 7.32 / 11.68 | 19.78 / 16.64 / 24.06 |
+
+Unlimited, airline's CART has 44.7M nodes. So state the depth limit next to any
+accuracy or GPU figure at depth 10.
 
 ## October 2026: SOREL's C4.5 presort on epyc
 
@@ -61,6 +141,15 @@ Tried and dropped (same trees in every case):
   libstdc++ 13's `atomic::notify` after a release store; `waitNonZero()` in
   `cpu_builder.cpp` avoids `atomic::wait` (a `seq_cst` store also fixed it but
   made ECBDL C4.5 7% slower).
+* **The waits of `partitionInBlocks`.** Spinning on `_mm_pause` without end kept
+  a descheduled thread off its CPU: on epyc chess_10m, 13 of 50 runs took over
+  twice the median. `atomic::wait` after 2,048 pauses made dell's chess about 2×
+  slower in some node states, and brought the hang above. `waitNonZero()` does
+  2,048 pauses, then `yield` for up to 2 ms, then 50 µs sleeps, with release
+  stores and no notify. On dell chess 100M and 1B got about twice as fast.
+* **Code alignment.** One build was 8% slower on epyc's ECBDL 15M C4.5 (7.80 →
+  8.41 s) because C4.5's sweep landed on another offset mod 64;
+  `-falign-functions=64 -falign-loops=32` in the Makefile restores it.
 
 ## October 2026: hand-offs without page-locking the arena (CUDA, mordor3 cluster)
 
@@ -71,7 +160,7 @@ GPU loop waited for it. Now each hand-off piece is downloaded into one of two
 page-locked 128 MB buffers (one per copy stream), and a host function copies
 it into the arena on the staging threads while the other stream downloads the
 next piece ([CUDA.md](CUDA.md)). Same trees. Medians against e0a9106
-(A/B logs and scripts in git history: `bench/results/cluster-handoff-staging/` at 6f6cecb):
+(A/B logs: `bench/results/cluster-handoff-staging/` at 6f6cecb):
 
 | Train total (s) | H100 before | H100 after | A100 before | A100 after |
 |---|--:|--:|--:|--:|
@@ -156,8 +245,7 @@ partitioned big nodes (≥ 32768 rows) out of place through a bitmap and swept
 the big children during the partition. Now both do the latter (commit
 4b1ced0); serial differs only in running on one thread (plain bit operations
 instead of atomics). Same trees everywhere. One-thread `./tree` rows of the
-benchmarks were rerun with `bench/serial_rerun.py` (median of 3, the same
-nodes):
+benchmarks were rerun (median of 3, the same nodes):
 
 | Serial | epyc1 | dell1 | desktop |
 |---|--:|--:|--:|
@@ -241,10 +329,7 @@ Tried and dropped:
 - **Tile sizes** of 4 or 16 entries per thread instead of 8: slower.
 
 The CPU builder's sweep and partition (most of epyc1's 10 s C4.5 build) are
-unchanged. The cluster benchmarks were rerun on this commit (`8da0c12`):
-cluster-airline-old (removed; last in f4668df),
-[cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
-[cluster-cpu-scaling](../bench/results/cluster-cpu-scaling/BENCHMARK.md).
+unchanged.
 
 ### Profiling with Nsight Systems
 
@@ -310,11 +395,7 @@ CART is `--cart --alpha 1e-5`. What changed:
 
 The parallel CPU build is unchanged (its code is the same; epyc1's C4.5 build
 is 1% slower in every binary built after the pruning changes, which we put
-down to code layout). The cluster benchmarks were rerun on this commit:
-cluster-airline-old (removed; last in f4668df),
-[cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
-[cluster-cpu-scaling](../bench/results/cluster-cpu-scaling/BENCHMARK.md). The
-laptop and desktop benchmarks were not.
+down to code layout).
 
 ## October 2026: the node store and the GPU hand-off (mordor3 cluster)
 
@@ -382,10 +463,6 @@ What changed:
 - **Parallel tree passes:** the copy, compaction and C4.5 bookkeeping run on
   all threads.
 
-The benchmarks on the cluster nodes are in
-[cluster-higgs](../bench/results/cluster-higgs/BENCHMARK.md) and
-cluster-airline-old (removed; last in f4668df). The
-laptop and desktop were not re-measured.
 
 ## October 2026: sweep, partition and pruning
 
