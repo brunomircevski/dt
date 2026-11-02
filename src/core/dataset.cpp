@@ -66,6 +66,12 @@ public:
     return done;
   }
 
+  // Drops bytes [offset, offset + length) from the page cache (a hint).
+  void forget(std::size_t offset, std::size_t length) const {
+    ::posix_fadvise(fd_, static_cast<off_t>(offset), static_cast<off_t>(length),
+                    POSIX_FADV_DONTNEED);
+  }
+
   // The offset just past the first '\n' at or after `offset` (the file size if none).
   std::size_t nextLineStart(std::size_t offset) const {
     char block[4096];
@@ -91,10 +97,13 @@ private:
 // training's later allocations would then stay on the heap (+28 MiB peak RSS
 // on SUSY).
 template <class Visit>
-void forEachLines(const InputFile &file, std::size_t first, std::size_t last, Visit &&visit) {
+void forEachLines(const InputFile &file, std::size_t first, std::size_t last, bool forget,
+                  Visit &&visit) {
+  constexpr std::size_t kForgetBytes = std::size_t{64} << 20;
   std::vector<char> buffer(std::size_t{64} << 10);
   std::size_t kept = 0; // bytes of an unfinished line at the front of the buffer
   std::size_t offset = first;
+  std::size_t forgotten = first; // the page cache holds no bytes before this
   while (offset < last) {
     if (kept == buffer.size()) {
       buffer.resize(buffer.size() * 2);
@@ -119,6 +128,10 @@ void forEachLines(const InputFile &file, std::size_t first, std::size_t last, Vi
     visit(buffer.data(), buffer.data() + whole);
     kept = filled - whole;
     std::memmove(buffer.data(), buffer.data() + whole, kept);
+    if (forget && (offset - forgotten >= kForgetBytes || offset == last)) {
+      file.forget(forgotten, offset - forgotten);
+      forgotten = offset;
+    }
   }
 }
 
@@ -291,7 +304,7 @@ Dataset loadDataset(const std::string &filePath, ThreadPool *pool) {
 
   // Pass 1: count rows per chunk so each chunk knows where its rows go.
   runOnChunks([](const InputFile &chunkFile, Chunk &chunk) {
-    forEachLines(chunkFile, chunk.begin, chunk.end, [&](const char *begin, const char *end) {
+    forEachLines(chunkFile, chunk.begin, chunk.end, false, [&](const char *begin, const char *end) {
       chunk.rowCount += countRows(begin, end);
     });
   });
@@ -307,13 +320,18 @@ Dataset loadDataset(const std::string &filePath, ThreadPool *pool) {
     throw std::runtime_error("Datasets are limited to 2^32 - 1 rows");
   }
 
-  // Pass 2: parse straight into the column-major arrays.
+  // Pass 2: parse straight into the column-major arrays, and drop the text
+  // from the page cache once parsed. Pass 1 read it from disk and pass 2 reads
+  // it from the cache, but kept to the end the cache is as large as the file:
+  // with one thread, SOREL's 136 GB of text and 121 GB of values fill a
+  // 256 GB NUMA node and can push part of the values to the other socket.
+  // Dropped as it goes, the cache shrinks while the values grow.
   dataset.rowCount = rowCount;
   dataset.values.resize(featureColumns * rowCount);
   dataset.labels.resize(rowCount);
   runOnChunks([&](const InputFile &chunkFile, Chunk &chunk) {
     std::size_t row = chunk.firstRow;
-    forEachLines(chunkFile, chunk.begin, chunk.end, [&](const char *begin, const char *end) {
+    forEachLines(chunkFile, chunk.begin, chunk.end, true, [&](const char *begin, const char *end) {
       parseLines(begin, end, chunk, row, columnCount, skipFirstColumn, rowCount,
                  dataset.values.data(), dataset.labels.data());
     });
