@@ -85,7 +85,7 @@ The other tools:
   - 25× on SUSY and 22–23× on HIGGS;
   - only 9–10× on ECBDL'14 15M and chess 1000M (not investigated).
 
-  --simple sorts each node's rows again for every feature; --serial sorts once and keeps the order while it partitions ([paper/simple-vs-serial.md](../../../paper/simple-vs-serial.md)).
+  --simple sorts each node's rows again for every feature; --serial sorts once and keeps the order while it partitions ([docs/SIMPLE.md](../../../docs/SIMPLE.md)).
 - **--parallel on one socket against --serial:** 5× faster on chess 10M, which has only two features to share among 24 threads. 11–12× faster on Covertype, 10–11× on SUSY, 12–13× on HIGGS, 19× on ECBDL'14 15M and 16–18× on chess 1000M.
 - **Both sockets against one:** the second socket helps on the big datasets: 1.8–1.9× faster on ECBDL'14 15M, 1.4–1.6× on HIGGS, 1.1–1.2× on chess 1000M and on SUSY. It is 1.1–1.3× slower on Covertype and on chess 10M, where the threads on the other socket mostly cost cross-socket memory traffic and synchronisation.
 - **--simple against the libraries:**

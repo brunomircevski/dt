@@ -180,6 +180,33 @@ next piece ([CUDA.md](CUDA.md)). Same trees. Medians against e0a9106
 * HIGGS C4.5 on the H100 lost 0.1 s: the pruning's arranged rows now go
   through the staging buffers too.
 
+## October 2026: four CUDA changes measured on one commit (mordor3 cluster)
+
+67495f9 added four changes ([CUDA.md](CUDA.md)): the goes-left bitmap marks
+only the smaller side of each split, the split feature's own column is
+partitioned by position, each feature is presorted as soon as its column is
+uploaded, and the root's class counts come from a kernel during the presort.
+They were measured on one commit and machine, switched by environment
+variables, depth 10 without pruning, `train total` medians of 5 runs (3 for
+chess_1b and ECBDL 15M). Every tree was byte-identical to the previous code.
+
+| Dataset | H100 CART | H100 C4.5 | A100 CART | A100 C4.5 |
+|---|--:|--:|--:|--:|
+| airline (115M × 13) | 655 → 522 ms | 676 → 538 ms | 978 → 798 ms | 997 → 815 ms |
+| chess_1b (1G × 2) | 969 → 620 ms | 969 → 670 ms | 1488 → 1055 ms | 1485 → 1127 ms |
+| ECBDL 15M | 3508 → 2979 ms | 3602 → 3003 ms | 5720 → 5059 ms | 5884 → 5132 ms |
+| HIGGS (10.5M × 28) | 174 → 162 ms | 202 → 178 ms | 238 → 207 ms | 255 → 244 ms |
+
+* Without the overlap the other three change only the build: chess_1b CART
+  654 → 350 ms on the H100, airline 392 → 328 ms; ECBDL and HIGGS barely move.
+  On chess_1b the smaller side alone saved 0.07 s and the split column by
+  position 0.12 s.
+* The overlap hides the presort behind the upload: about 0.5 s on ECBDL (H100,
+  0.7 s A100) and 0.07–0.09 s on airline. On chess_1b (2 features) only half
+  of it, and the upload gets slower.
+* The root counts on the GPU save 0.06 s on airline and 0.12 s on chess_1b
+  (H100).
+
 ## October 2026: one copy of the columns (CUDA, serial, parallel)
 
 The columns now live in **slots**, one per feature and a few spare ones, and a

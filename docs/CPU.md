@@ -23,7 +23,7 @@ digits then cover only the key bits that vary, in as few passes of up to 12
 bits as possible; an integer column whose range needs fewer passes is keyed by
 `int(v) − min` instead (`radixPlan`). The first pass reads
 the raw values directly and the last one writes the final column. With
-fewer features than threads (airline: 18 features, 48 threads) each big
+fewer features than threads (airline: 13 features, 48 threads) each big
 column is sorted by several threads: every thread counts the digits of its
 part, a prefix over (digit, part) gives each part its place, and the parts
 scatter in parallel, still stably. C4.5's thresholds then take each feature's
