@@ -270,6 +270,39 @@ transfer; GPU share of the hybrid; achieved bandwidth against peak.}
 \label{fig:profiling}
 \end{figure}
 
+\subsection{Energy Consumption}
+\plan{Whole-server power while each implementation trains one tree on
+ECBDL'14 15M (the one dataset every implementation runs on, GPUs included).
+Method: power source and sampling rate (BMC/IPMI for the server, RAPL for the
+CPUs, \texttt{nvidia-smi} for the GPU), idle power measured before the runs
+and subtracted, energy = integral of power over the training time, 10 runs
+each. The CPU implementations run on a CPU node, the GPU ones on a GPU node,
+so the totals compare servers, not only processors. Discuss energy per tree:
+a fast run at high power can still use the least energy.}
+
+\begin{table}
+\caption{Energy of one tree on ECBDL'14 15M (depth $\le$ 10, no pruning):
+mean training time $t$, mean power $P$ of the whole server above idle, and energy
+$E = P \cdot t$. Placeholder: no measurements yet.}
+\label{tab:energy}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrrrrrr@{}}
+\toprule
+ & & \multicolumn{3}{c}{CART} & \multicolumn{3}{c}{C4.5} \\
+\cmidrule(lr){3-5}\cmidrule(l){6-8}
+Implementation & Node & $t$ (s) & $P$ (W) & $E$ (kJ) & $t$ (s) & $P$ (W) & $E$ (kJ) \\
+\midrule
+\ImplSerialBase & epyc1  & ? & ? & ? & ? & ? & ? \\
+\ImplSerialOpt  & epyc1  & ? & ? & ? & ? & ? & ? \\
+\ImplParallel   & epyc1  & ? & ? & ? & ? & ? & ? \\
+\ImplGpu        & hopper & ? & ? & ? & ? & ? & ? \\
+\ImplHybrid     & hopper & ? & ? & ? & ? & ? & ? \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \section{Discussion}
 \label{sec:discussion}
 
