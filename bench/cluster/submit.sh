@@ -2,7 +2,8 @@
 # The cluster benchmark on mordor3: one SLURM job per node, one whole node
 # each, held until all are queued and then released together (run it on the
 # login node; it only calls sbatch). Results go to
-# bench/results/cluster-<dataset>/ (cluster-higgs, -airline, -susy, -ecbdl, -chess):
+# bench/results/cluster-<dataset>/ (cluster-higgs, -airline, -susy, -ecbdl, -chess;
+# sorel and sorel_4m in cluster-sorel):
 #   cuda-hopper-<data>  H100 PCIe (GPU 0 of 4), 2x Xeon Gold 6444Y   CUDA
 #   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          CUDA
 #   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
@@ -109,11 +110,13 @@ case "$DATASET" in
   mnist8m) DIR=cluster-mnist8m; LIMIT=08:00:00 TIMEOUT=10800 ;;
   # SOREL-20M: 136 GB of CSV, CPU nodes only.
   sorel) DIR=cluster-sorel; LIMIT=12:00:00 TIMEOUT=18000 ;;
+  # Its first 4M rows: what an 80 GB GPU holds (as ecbdl_15m).
+  sorel_4m) DIR=cluster-sorel; LIMIT=12:00:00 TIMEOUT=10800 ;;
   chess_1m|chess_10m|chess_100m|chess_1b) DIR=cluster-chess; LIMIT=02:00:00 TIMEOUT=3600 ;;
   covertype) DIR=cluster-cpu-vs-others; LIMIT=02:00:00 TIMEOUT=3600 ;;
   # SUSY (4.5M rows) for the simple benchmark: hours of --simple, scikit-learn and J48.
   susy) DIR=cluster-cpu-vs-others; LIMIT=12:00:00 TIMEOUT=10800 ;;
-  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, mnist8m, sorel, covertype, susy or chess_1m, chess_10m, chess_100m, chess_1b" >&2
+  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, mnist8m, sorel, sorel_4m, covertype, susy or chess_1m, chess_10m, chess_100m, chess_1b" >&2
      exit 2 ;;
 esac
 DIR="${OUTDIR:-$DIR}"

@@ -151,7 +151,10 @@ yadt = false
 # 0/1), each with its own test file; cluster-only, added 2026-10-27, CSVs with
 # a header f0..fN,label (train.csv links to the training CSV). No YaDT files.
 # SOREL's training CSV is 136 GB (about 12.7M rows, 120 GB as float32): too big
-# for an 80 GB GPU, and preparing it needs a 1 TB node (dell1).
+# for an 80 GB GPU, and preparing it needs a 1 TB node (dell1, or ampere).
+# sorel_4m (added 2026-11-02) is its first 4M training rows with the same test
+# set, for the GPUs: 9.5G values, about as many as ecbdl_15m (73.3 GiB of VRAM
+# on both GPUs at 8 bytes per value plus one spare column).
 [mnist8m]
 source = "datasets/mnist8m/mnist8m.csv"
 test_source = "datasets/mnist8m/mnist8m_test.csv"
@@ -160,4 +163,10 @@ yadt = false
 [sorel]
 source = "datasets/sorel/sorel_full.csv"
 test_source = "datasets/sorel/sorel_test.csv"
+yadt = false
+
+[sorel_4m]
+source = "datasets/sorel/sorel_full.csv"
+test_source = "datasets/sorel/sorel_test.csv"
+train_rows = 4_000_000
 yadt = false
