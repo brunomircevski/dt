@@ -148,6 +148,18 @@ PROTOCOLS = {
     },
 }
 
+# Growing only, to other depths, ./tree only (hybrid-vs-gpu-only: 5 to 30, with
+# depth 10 above and cart_full_nodepth / c45_unpruned for no limit).
+for _depth in (5, 15, 20, 25, 30):
+    PROTOCOLS[f"cart_depth{_depth}"] = {
+        "title": f"CART, grown to depth {_depth}, no pruning",
+        "impls": {"tree": ["--cart", "--no-prune", "-d", str(_depth)]},
+    }
+    PROTOCOLS[f"c45_depth{_depth}_unpruned"] = {
+        "title": f"C4.5, grown to depth {_depth}, unpruned (only C4.5's collapse of useless splits)",
+        "impls": {"tree": ["--c45", "--no-prune", "-d", str(_depth)]},
+    }
+
 # ./tree on the GPU (--cuda, and --cuda --gpu-only) and ./tree --simple run
 # every protocol ./tree runs, with the same flags.
 for _protocol in PROTOCOLS.values():
