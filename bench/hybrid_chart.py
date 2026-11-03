@@ -4,15 +4,15 @@
 node on the GPU), on one GPU node, grown to depth 5, 10, 15, 20, 25, 30 and
 without a depth limit, no pruning. One panel per dataset, one group of bars per
 depth: CART hybrid, CART GPU only, C4.5 hybrid, C4.5 GPU only. A bar is the
-mean training time of its runs (log scale), the whisker from the fastest to
+mean training time of its runs, the whisker from the fastest to
 the slowest; above each pair, GPU only / hybrid; under each group, the trees'
-nodes. The --gpu-min-rows each dataset ran with comes from <dir>/sweep.json
-({dataset: {"min_rows": N, "default": {"cart": N, "c45": N}, "note": "..."}}),
-written after the sweep (bench/results/hybrid-vs-gpu-only/BENCHMARK.md).
+nodes. The --gpu-min-rows each dataset ran with comes from
+<dir>/sweep/<node>-<dataset>.json ({"min_rows": N, ...}), written by the sweep
+(bench/cluster/hybrid_vs_gpu_only.sh).
 
-  bench/.venv/bin/python bench/hybrid_chart.py bench/results/hybrid-vs-gpu-only
+  bench/.venv/bin/python bench/hybrid_chart.py bench/results/hybrid-vs-gpu-only --node ampere
 
-Writes <dir>/chart.png.
+Writes <dir>/chart-<node>.png.
 """
 
 import argparse
@@ -46,14 +46,16 @@ def tint(color, alpha):
     return tuple(1 - (1 - c) * alpha for c in rgb)
 
 
-def load(folder):
+def load(folder, node):
     """{dataset: {"machine": ..., "rows": {(backend, protocol): [result rows]}}}"""
     data = {}
     for run in sorted(folder.iterdir()):
         results = run / "results.jsonl"
         if not run.is_dir() or not results.exists():
             continue
-        backend, _, dataset = run.name.split("-", 2)
+        backend, machine, dataset = run.name.split("-", 2)
+        if machine != node:
+            continue
         entry = data.setdefault(dataset, {"machine": None, "rows": {}})
         if (run / "machine.json").exists():
             entry["machine"] = json.loads((run / "machine.json").read_text())
@@ -71,6 +73,7 @@ def duration(value):
 def panel(ax, dataset, entry, sweep):
     width = 0.2
     labels = []
+    top = max(row["train_seconds"] for rows in entry["rows"].values() for row in rows)
     for g, depth in enumerate(DEPTHS):
         nodes = {}
         for a, algorithm in enumerate(ALGORITHMS):
@@ -90,7 +93,7 @@ def panel(ax, dataset, entry, sweep):
             if len(means) == 2:
                 ratio = means["gpuonly"] / means["cuda"]
                 x = g + (a * 2 - 0.5) * width
-                ax.text(x, max(means.values()) * 1.12, f"{ratio:.2f}×", ha="center", va="bottom",
+                ax.text(x, max(means.values()) + top * 0.015, f"{ratio:.2f}×", ha="center", va="bottom",
                         fontsize=7.5, color=INK if abs(ratio - 1) >= 0.05 else MUTED,
                         fontweight="bold" if ratio >= 1.5 else "normal")
         name = "no limit" if depth is None else f"depth {depth}"
@@ -98,14 +101,13 @@ def panel(ax, dataset, entry, sweep):
                            for a, v in nodes.items())
         labels.append(f"{name}\n{counts}")
     ax.set_xticks(range(len(DEPTHS)), labels, fontsize=7.5)
-    ax.set_yscale("log")
-    ax.yaxis.set_major_formatter(seconds_tick)
+    ax.yaxis.set_major_formatter(lambda v, _: "0 s" if v == 0 else seconds_tick(v))
     ax.grid(axis="y", color=GRID, linewidth=0.6, zorder=0)
     ax.set_axisbelow(True)
-    ax.margins(y=0.15)
+    ax.set_ylim(0, top * 1.1)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.set_ylabel("training time (log scale)", color=MUTED, fontsize=9)
+    ax.set_ylabel("training time", color=MUTED, fontsize=9)
     m = sweep.get(dataset, {})
     rows = entry["rows"]
     any_row = next(iter(next(iter(rows.values()))), {}) if rows else {}
@@ -114,19 +116,29 @@ def panel(ax, dataset, entry, sweep):
     title = f"{NAMES.get(dataset, dataset)}: {shape}"
     if m:
         title += f"; hybrid at --gpu-min-rows {m['min_rows']:,}"
-    ax.set_title(title, loc="left", fontsize=10.5, color=INK)
-    if m.get("note"):
-        ax.text(0, 1.0, m["note"], transform=ax.transAxes, fontsize=7.5, color=MUTED, va="bottom")
+    ax.text(0, 1.075, title, transform=ax.transAxes, fontsize=10.5, color=INK, va="bottom")
+    times = m.get("times", {})
+    chosen, default = times.get(str(m.get("min_rows"))), times.get("default")
+    if chosen and default:
+        def pair(t):
+            return f"CART {duration(t['cart_full_nodepth'])}, C4.5 {duration(t['c45_unpruned'])}"
+        tried = [int(v) for v in times if v != "default"]
+        rows_in = any_row.get("n_train_loaded", 0)  # ./tree's default: rows/8192 (CART), rows/4096 (C4.5), clamped
+        own = f"CART {min(max(rows_in // 8192, 1024), 2048):,}, C4.5 {min(max(rows_in // 4096, 1024), 4096):,}"
+        ax.text(0, 1.02, f"sweep (no depth limit, {len(tried)} values {min(tried):,}–{max(tried):,}): {m['min_rows']:,}: {pair(chosen)}; "
+                f"./tree's default ({own}): {pair(default)}", transform=ax.transAxes,
+                fontsize=7.5, color=MUTED, va="bottom")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("folder", type=Path)
+    parser.add_argument("--node", default="ampere", help="the GPU node (run folders <backend>-<node>-<dataset>)")
     parser.add_argument("--datasets", help="comma list, in panel order (default: every one found)")
     args = parser.parse_args()
-    data = load(args.folder)
-    sweep_file = args.folder / "sweep.json"
-    sweep = json.loads(sweep_file.read_text()) if sweep_file.exists() else {}
+    data = load(args.folder, args.node)
+    sweep = {f.name[len(args.node) + 1:-5]: json.loads(f.read_text())
+             for f in (args.folder / "sweep").glob(f"{args.node}-*.json")}
     datasets = args.datasets.split(",") if args.datasets else sorted(data)
     fig, axes = plt.subplots(len(datasets), 1, figsize=(12, 4.6 * len(datasets) + 1.6), squeeze=False)
     for ax, dataset in zip(axes[:, 0], datasets):
@@ -135,23 +147,21 @@ def main():
     machine = next((d["machine"] for d in data.values() if d["machine"]), None) or {}
     rows = [r for d in data.values() for v in d["rows"].values() for r in v]
     reps = sorted({len(v) for d in data.values() for v in d["rows"].values()})
-    gpu = machine.get("gpu") or "GPU"
-    if isinstance(gpu, list):
-        gpu = gpu[0]
-    if isinstance(gpu, dict):
-        gpu = gpu.get("name", "GPU")
+    versions = machine.get("versions", {})
+    gpus = (versions.get("gpu") or "GPU").splitlines()
+    gpu = gpus[int(machine.get("gpu_index", 0))].split(",")[0]
     threads = sorted({r["threads"] for r in rows})
-    commit = machine.get("tree_git", "?")
+    commit = versions.get("tree_git", "?")
     date = min((r["time"][:10] for r in rows), default="?")
     fig.suptitle("./tree CUDA: hybrid (GPU + CPU) vs GPU only, by depth limit, no pruning",
-                 x=0.06, ha="left", fontsize=13, color=INK)
+                 x=0.06, y=0.99, ha="left", fontsize=13, color=INK)
     legend = [Patch(facecolor=tint(COLORS[c], LIGHT[a]), edgecolor=COLORS[c],
                     label=f"{ALGORITHMS[a]}, {label}")
               for a in ALGORITHMS for c, label in BACKENDS.values()]
-    fig.legend(handles=legend, loc="upper right", ncol=4, frameon=False, fontsize=8.5,
-               bbox_to_anchor=(0.98, 0.985))
+    fig.legend(handles=legend, loc="upper left", ncol=4, frameon=False, fontsize=8.5,
+               bbox_to_anchor=(0.055, 0.965))
     details = (
-        f"ampere node: {gpu}, {threads[0] if threads else '?'} CPU threads (the GPU's socket, memory bound "
+        f"{args.node} node: {gpu}, {threads[0] if threads else '?'} CPU threads (the GPU's socket, memory bound "
         f"to its NUMA node), ./tree {commit}, {date}. Runs per case: "
         f"{'/'.join(map(str, reps))}; bar = mean training time (load excluded), whisker = fastest to slowest.\n"
         "Hybrid (--cuda): nodes with fewer rows than --gpu-min-rows are copied to the host and grown by the CPU "
@@ -160,8 +170,8 @@ def main():
         "Above each pair: GPU-only time / hybrid time (above 1: hybrid faster). Under each group: the tree's nodes "
         "(the same in both modes). --gpu-min-rows: the fastest value of a sweep on this node (BENCHMARK.md).")
     fig.text(0.06, 0.012, details, fontsize=7.8, color=MUTED, va="bottom", wrap=True)
-    fig.tight_layout(rect=(0.02, 0.09, 1, 0.95))
-    out = args.folder / "chart.png"
+    fig.tight_layout(rect=(0.02, 0.09, 1, 0.94), h_pad=3)
+    out = args.folder / f"chart-{args.node}.png"
     fig.savefig(out, dpi=150)
     print(out)
 
