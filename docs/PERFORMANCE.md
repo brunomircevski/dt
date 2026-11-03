@@ -2,6 +2,30 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: SOREL's --simple and NUMA
+
+One-thread runs on SOREL (121 GB of values) are sensitive to where the pages
+land. The first `--simple` runs (2026-10-27/28) were the only case on any
+dataset where epyc was slower than dell: 14,124 s (CART) and 14,240 s (C4.5)
+against 12,414 s and 12,712 s, 1.1×; elsewhere epyc's `--simple` is 0.89–1.00×
+dell. Those runs started with 159–185 GB free on epyc's node 0 (normally about
+260 GB): run.py's data check still kept about 135 GiB of pyarrow memory in the
+harness process, and the loader kept the 136 GB CSV in the page cache while
+parsing it. ./tree ran on CPU 0, so part of the columns most likely went to
+node 1, the other socket (the runs recorded no page placement, so this is not
+proven). `--simple` sorts row indices by `value(row, feature)`, a chain of
+random reads into a 50 MB column that is bound by memory latency, and remote
+memory hurts that most; `--serial` streams presorted columns, the prefetcher
+hides the latency, and its epyc runs (with the fixed harness) were 1.5× faster
+than dell's, as on other data.
+
+Fixes: the data check runs in a child process (8bdf641), and the loader drops
+the CSV from the page cache as pass 2 parses it (da1f100), so a one-thread
+SOREL load needs about max(136, 121) GB on its node instead of about 257. The
+rerun on 32cf657 (2026-11-02, 261 GB free on node 0) took 12,501 s and
+12,906 s on epyc, 11% and 9% less, and 13,325 s and 13,355 s on dell (5–7%
+more than its first runs, one run each): epyc is now 0.94–0.97× dell.
+
 ## October 2026: what the benchmarks showed (mordor3 cluster)
 
 Probes on ec77727 after the full rerun, 2026-10-30/31: the same binaries, in

@@ -135,7 +135,7 @@ each `--dump`; the training accuracy is ./tree's own):
 | SUSY | the first 4.5M | the last 500,000 (UCI's test set) |
 | ECBDL'14 | all 31,992,921 (`ecbdl`, CPU nodes only); the first 15M (`ecbdl_15m`, every node: the most an 80 GB GPU holds) | the competition's 2,897,917 |
 | MNIST8M | infinite MNIST's 8,100,000 (LIBSVM `mnist8m`, 784 features, 10 classes) | the original MNIST test set, 10,000 (LIBSVM `mnist.t`) |
-| SOREL-20M | its training set, 12,699,013 (2381 features; CPU nodes only, about 120 GB as float32) | its test set, 4,195,042 |
+| SOREL-20M | its training set, 12,699,013 (`sorel`, 2381 features; CPU nodes only, about 120 GB as float32); the first 4M (`sorel_4m`, the GPUs and epyc: the most an 80 GB GPU holds) | its test set, 4,195,042 |
 
 Two protocols, depth ≤ 10, no pruning: `cart_depth10` and
 `c45_depth10_unpruned`. (Until 2026-10-27 also `cart_depth10_alpha`, α = 1e-5,
@@ -143,8 +143,10 @@ and `c45_depth10`, CF 0.25; those runs are in git at 96705a7.) Every dataset
 runs CUDA hybrid (`cuda-*`) and GPU only (`gpuonly-*`) on hopper and ampere, and
 on epyc and dell parallel on both sockets (`cpu-*`), parallel on one socket
 (`socket-*`), `--serial` (`serial-*`) and `--simple` (`simple-*`). Not run: the
-GPUs on SOREL and full ECBDL (they do not fit in 80 GB of VRAM), and
-`socket-epyc-sorel` (one epyc socket has 256 GB, SOREL needs 340–370 GiB).
+GPUs on full SOREL and full ECBDL (they do not fit in 80 GB of VRAM; the
+GPUs get `sorel_4m` and `ecbdl_15m`), `socket-epyc-sorel` (one epyc socket has
+256 GB, SOREL needs 340–370 GiB), and on `sorel_4m` dell and one socket (it
+runs on the GPUs, and on epyc parallel, `--serial` and `--simple`).
 Runs per case: 10 when a run (the whole process) takes about 2 minutes or less
 (chess 30), 3 under about 10 minutes, longer ones once; a bar under 10 minutes
 of training always has at least 3. `testset_chart.py` groups the bars
@@ -161,8 +163,12 @@ The current results are from one build of main, ec77727 (2026-10-29/30), every
 backend (`git archive` into its own folder, installed as `~/dt/tree_main` and
 `~/dt/tree_cpu_main`, given to the jobs as `TREE_CUDA_BIN` and `TREE_BIN`). Not
 rerun then: `--simple` (its code had not changed), the libraries' runs over 10
-minutes, and the GPU libraries of cluster-gpu-vs-others. Each run's
-`machine.json` names its commit.
+minutes, and the GPU libraries of cluster-gpu-vs-others. Since then: SOREL's
+`--simple` was rerun on 32cf657 (2026-11-02; `src/` as da1f100, the loader
+that drops the CSV from the page cache), because the first runs had part of
+the data on the other socket ([docs/PERFORMANCE.md](../../docs/PERFORMANCE.md#november-2026-sorels---simple-and-numa)),
+and `sorel_4m` ran on 4ece22f (same `src/`). Each run's `machine.json` names
+its commit.
 
 ## Settings specific to the cluster
 
