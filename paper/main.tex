@@ -110,19 +110,20 @@ NUMA node (16 CPUs on hopper, 24 on ampere). Add measured memory bandwidth
 CUDA 12.9, NVIDIA driver 615.71.}
 
 \begin{table}
-\caption{Hardware. Every node has two sockets and no SMT; CPU, cores and L3
-are per socket. One GPU (PCIe) is used per run.}
+\caption{Hardware. Every node has two sockets with SMT disabled; CPU, cores and L3
+are per socket. Clock is base/max turbo in GHz. One GPU (PCIe) is used per run.}
 \label{tab:hardware}
 \centering
 \small
+\setlength{\tabcolsep}{5pt}
 \begin{tabular}{@{}llrrrll@{}}
 \toprule
 Node & CPU (per socket) & Cores & Clock & L3 & RAM & GPU \\
 \midrule
-hopper & Xeon Gold 6444Y & 16 & 4.0\,GHz  & 45\,MB  & 1\,TB DDR5-4800   & H100 80\,GB \\
-ampere & EPYC 7402       & 24 & 3.35\,GHz & 128\,MB & 1\,TB DDR4-3200   & A100 80\,GB \\
-epyc1  & EPYC 9255       & 24 & 4.3\,GHz  & 128\,MB & 512\,GB DDR5-6400 & -- \\
-dell1  & Xeon Gold 6542Y & 24 & 4.1\,GHz  & 60\,MB  & 1\,TB DDR5-5200   & -- \\
+hopper & Xeon Gold 6444Y & 16 & 3.6/4.0 & 45\,MB  & 1\,TB DDR5-4800   & H100 80\,GB \\
+ampere & EPYC 7402       & 24 & 2.8/3.35& 128\,MB & 1\,TB DDR4-3200   & A100 80\,GB \\
+epyc1  & EPYC 9255       & 24 & 3.25/4.3& 128\,MB & 512\,GB DDR5-6400 & -- \\
+dell1  & Xeon Gold 6542Y & 24 & 2.9/4.1 & 60\,MB  & 1\,TB DDR5-5200   & -- \\
 \bottomrule
 \end{tabular}
 \end{table}
