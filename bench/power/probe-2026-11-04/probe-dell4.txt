@@ -1,0 +1,227 @@
+===== dell4 2026-11-04T11:43:15+01:00 kernel 7.0.0-34-generic
+--- DMI
+sys_vendor: Dell Inc.
+product_name: PowerEdge R660
+board_vendor: Dell Inc.
+board_name: 0JG56T
+bios_version: 2.4.4
+--- CPU
+Model name:                              INTEL(R) XEON(R) GOLD 6542Y
+Thread(s) per core:                      1
+Core(s) per socket:                      24
+Socket(s):                               2
+NUMA node(s):                            4
+--- id
+uid=1034(bmircevski) gid=1034(bmircevski) groups=1034(bmircevski),100(users)
+--- powercap
+total 0
+drwxr-xr-x  2 root root 0 Nov  4 11:43 .
+drwxr-xr-x 90 root root 0 Sep 29 14:00 ..
+lrwxrwxrwx  1 root root 0 Sep 29 14:00 intel-rapl -> ../../devices/virtual/powercap/intel-rapl
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:0 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:0
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:0:0 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:0
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:1 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:1
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:2 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:2
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:2:0 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:2/intel-rapl:2:0
+/sys/class/powercap/intel-rapl:0/ name=package-0 -r-------- root root cat: '/sys/class/powercap/intel-rapl:0//energy_uj': Permission denied
+
+262143328850
+/sys/class/powercap/intel-rapl:0:0/ name=dram -r-------- root root cat: '/sys/class/powercap/intel-rapl:0:0//energy_uj': Permission denied
+
+262143328850
+/sys/class/powercap/intel-rapl:1/ name=psys -r-------- root root cat: '/sys/class/powercap/intel-rapl:1//energy_uj': Permission denied
+
+4294967295000000
+/sys/class/powercap/intel-rapl:2/ name=package-1 -r-------- root root cat: '/sys/class/powercap/intel-rapl:2//energy_uj': Permission denied
+
+262143328850
+/sys/class/powercap/intel-rapl:2:0/ name=dram -r-------- root root cat: '/sys/class/powercap/intel-rapl:2:0//energy_uj': Permission denied
+
+262143328850
+--- perf
+4
+breakpoint
+cpu
+cstate_core
+cstate_pkg
+dsa0
+dsa1
+intel_bts
+intel_pt
+kprobe
+msr
+power
+software
+tracepoint
+uncore_cha_0
+uncore_cha_1
+uncore_cha_10
+uncore_cha_11
+uncore_cha_12
+uncore_cha_13
+uncore_cha_14
+uncore_cha_15
+uncore_cha_16
+uncore_cha_17
+uncore_cha_18
+uncore_cha_19
+uncore_cha_2
+uncore_cha_20
+uncore_cha_21
+uncore_cha_22
+uncore_cha_23
+uncore_cha_24
+uncore_cha_25
+uncore_cha_26
+uncore_cha_27
+uncore_cha_28
+uncore_cha_29
+uncore_cha_3
+uncore_cha_30
+uncore_cha_31
+uncore_cha_4
+uncore_cha_5
+uncore_cha_6
+uncore_cha_7
+uncore_cha_8
+uncore_cha_9
+uncore_iio_0
+uncore_iio_1
+uncore_iio_2
+uncore_iio_3
+uncore_iio_6
+uncore_iio_7
+uncore_iio_8
+uncore_iio_free_running_0
+uncore_iio_free_running_1
+uncore_iio_free_running_2
+uncore_iio_free_running_3
+uncore_iio_free_running_4
+uncore_iio_free_running_5
+uncore_iio_free_running_6
+uncore_iio_free_running_7
+uncore_iio_free_running_8
+uncore_imc_0
+uncore_imc_1
+uncore_imc_2
+uncore_imc_3
+uncore_imc_4
+uncore_imc_5
+uncore_imc_6
+uncore_imc_7
+uncore_imc_free_running_0
+uncore_imc_free_running_1
+uncore_imc_free_running_2
+uncore_imc_free_running_3
+uncore_irp_0
+uncore_irp_1
+uncore_irp_2
+uncore_irp_3
+uncore_irp_6
+uncore_irp_7
+uncore_irp_8
+uncore_m2m_0
+uncore_m2m_1
+uncore_m2m_2
+uncore_m2m_3
+uncore_m2pcie_0
+uncore_m2pcie_1
+uncore_m2pcie_2
+uncore_m2pcie_3
+uncore_m2pcie_6
+uncore_m2pcie_7
+uncore_m2pcie_8
+uncore_m3upi_0
+uncore_m3upi_1
+uncore_m3upi_2
+uncore_pcu
+uncore_upi_0
+uncore_upi_1
+uncore_upi_2
+uprobe
+energy-pkg
+energy-pkg.scale
+energy-pkg.unit
+energy-psys
+energy-psys.scale
+energy-psys.unit
+energy-ram
+energy-ram.scale
+energy-ram.unit
+/usr/bin/perf
+
+valid terms: event,config,config1,config2,config3,config4,name,period,percore,metric-id,cpu
+
+event syntax error: 'power/energy-cores/'
+                           \___ unknown term 'energy-cores' for pmu 'power'
+
+valid terms: event,config,config1,config2,config3,config4,name,period,percore,metric-id,cpu
+Run 'perf list' for a list of valid events
+
+ Usage: perf stat [<options>] [<command>]
+
+    -e, --event <event>   event selector. use 'perf list' to list available events
+--- msr
+crw------- 1 root root 202, 0 Sep 29 14:00 /dev/cpu/0/msr
+intel_rapl_msr         20480  0
+intel_rapl_common      57344  1 intel_rapl_msr
+intel_uncore_frequency    12288  0
+intel_uncore_frequency_common    20480  1 intel_uncore_frequency
+coretemp               24576  0
+rapl                   20480  0
+ipmi_ssif              45056  0
+acpi_power_meter       24576  0
+ipmi_si                86016  1
+acpi_ipmi              24576  1 acpi_power_meter
+ipmi_devintf           20480  0
+ipmi_msghandler        94208  4 ipmi_devintf,ipmi_si,acpi_ipmi,ipmi_ssif
+msr                    12288  0
+--- hwmon
+/sys/class/hwmon/hwmon0 bnxt_en: power 
+/sys/class/hwmon/hwmon1 bnxt_en: power 
+/sys/class/hwmon/hwmon2 nvme: power 
+/sys/class/hwmon/hwmon3 power_meter: power power1_accuracy power1_average power1_average_interval power1_average_interval_max power1_average_interval_min power1_is_battery power1_model_number power1_oem_info power1_serial_number 
+   /sys/class/hwmon/hwmon3/power1_average = 140000000
+/sys/class/hwmon/hwmon4 coretemp: power 
+/sys/class/hwmon/hwmon5 coretemp: power 
+--- acpi power_meter
+ACPI000D:00
+bind
+module
+uevent
+unbind
+ACPI000D:00
+--- ipmi
+ls: cannot access '/dev/ipmidev*': No such file or directory
+crw------- 1 root root 238, 0 Sep 29 14:00 /dev/ipmi0
+/var/spool/slurmd/job00069/slurm_script: line 15: ipmitool: command not found
+--- tools
+nvidia-smi: dcgmi: likwid-powermeter: likwid-perfctr: turbostat: /usr/bin/turbostat
+powerstat: powertop: scaphandre: rocm-smi: amd-smi: uProf: AMDuProfCLI: s-tui: sensors: cpupower: /usr/bin/cpupower
+python3: /usr/bin/python3
+R: java: /usr/bin/java
+--- nvidia
+--- systemd/dcgm/services
+  upower.service                                        loaded active running Daemon for power management
+--- net (BMC hint)
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eno8303          DOWN           
+eno12399np0      UP             172.16.0.13/24 metric 100 fe80::6e92:cfff:fe8c:5b50/64 
+eno8403          DOWN           
+eno12409np1      DOWN           
+--- governor
+powersave
+intel_pstate
+--- dimm count
+mc0
+mc1
+mc2
+mc3
+mc4
+mc5
+mc6
+mc7
+power
+subsystem
+uevent
+8

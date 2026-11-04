@@ -1,0 +1,25 @@
+job 85 on dell4, 2026-11-04T12:20:08+01:00, kind cpu
+commit 50d29cd + uncommitted --repeat patch
+data bench/data/ecbdl_15m/train.csv, reps 3, target 120 s, idle 60 s, pre 20 s, algos cart c45, impls simple serial parallel
+protocol --no-prune -d 10
+kernel 7.0.0-34-generic
+dmi Dell Inc. PowerEdge R660
+Model name:                              INTEL(R) XEON(R) GOLD 6542Y
+Core(s) per socket:                      24
+Socket(s):                               2
+NUMA node(s):                            4
+governor intel_pstate powersave
+perf_event_paranoid 4
+power1_accuracy 90.0%
+power1_average 141000000
+power1_average_interval 2000
+power1_average_interval_max 604800000
+power1_average_interval_min 2000
+power1_is_battery 0
+power1_model_number PowerEdge
+power1_oem_info ___DELL
+power1_serial_number 
+               total        used        free      shared  buff/cache   available
+Mem:             503           3         431           0          70         499
+repeat parallel cart 10 (warm-up train 12225.5 ms)
+repeat parallel c45 8 (warm-up train 15517.2 ms)

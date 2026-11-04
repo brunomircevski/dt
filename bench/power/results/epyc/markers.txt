@@ -1,0 +1,46 @@
+1793791208.070573 job_start
+1793791208.073178 start warmup-parallel-cart impl=parallel algo=cart repeat=2
+1793791274.080220 end warmup-parallel-cart rc=0
+1793791274.095744 start warmup-parallel-c45 impl=parallel algo=c45 repeat=2
+1793791332.297555 end warmup-parallel-c45 rc=0
+1793791352.313382 idle_start
+1793791412.317557 idle_end
+1793791432.321942 start rep1-simple-cart impl=simple algo=cart repeat=1
+1793793775.229403 end rep1-simple-cart rc=0
+1793793795.233392 start rep1-serial-cart impl=serial algo=cart repeat=1
+1793794045.975472 end rep1-serial-cart rc=0
+1793794065.978938 start rep1-parallel-cart impl=parallel algo=cart repeat=19
+1793794213.421143 end rep1-parallel-cart rc=0
+1793794233.425116 start rep1-simple-c45 impl=simple algo=c45 repeat=1
+1793796869.571720 end rep1-simple-c45 rc=0
+1793796889.575325 start rep1-serial-c45 impl=serial algo=c45 repeat=1
+1793797192.793854 end rep1-serial-c45 rc=0
+1793797212.797486 start rep1-parallel-c45 impl=parallel algo=c45 repeat=16
+1793797364.643439 end rep1-parallel-c45 rc=0
+1793797384.646585 start rep2-simple-cart impl=simple algo=cart repeat=1
+1793799718.637343 end rep2-simple-cart rc=0
+1793799738.641153 start rep2-serial-cart impl=serial algo=cart repeat=1
+1793799989.922252 end rep2-serial-cart rc=0
+1793800009.925653 start rep2-parallel-cart impl=parallel algo=cart repeat=19
+1793800157.682508 end rep2-parallel-cart rc=0
+1793800177.686325 start rep2-simple-c45 impl=simple algo=c45 repeat=1
+1793802813.778960 end rep2-simple-c45 rc=0
+1793802833.782680 start rep2-serial-c45 impl=serial algo=c45 repeat=1
+1793803139.730873 end rep2-serial-c45 rc=0
+1793803159.734510 start rep2-parallel-c45 impl=parallel algo=c45 repeat=16
+1793803311.943672 end rep2-parallel-c45 rc=0
+1793803331.947252 start rep3-simple-cart impl=simple algo=cart repeat=1
+1793805662.295093 end rep3-simple-cart rc=0
+1793805682.298973 start rep3-serial-cart impl=serial algo=cart repeat=1
+1793805932.732989 end rep3-serial-cart rc=0
+1793805952.736885 start rep3-parallel-cart impl=parallel algo=cart repeat=19
+1793806100.303900 end rep3-parallel-cart rc=0
+1793806120.307987 start rep3-simple-c45 impl=simple algo=c45 repeat=1
+1793808753.841889 end rep3-simple-c45 rc=0
+1793808773.846166 start rep3-serial-c45 impl=serial algo=c45 repeat=1
+1793809079.237661 end rep3-serial-c45 rc=0
+1793809099.241175 start rep3-parallel-c45 impl=parallel algo=c45 repeat=16
+1793809251.578181 end rep3-parallel-c45 rc=0
+1793809271.581831 idle2_start
+1793809331.585018 idle2_end
+1793809331.587631 job_end

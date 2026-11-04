@@ -120,6 +120,10 @@ struct Options {
   // Stress tests: duplicate the loaded rows in memory (slightly rescaled) to
   // get a bigger dataset without a bigger CSV. 1 = no duplication.
   std::size_t multiplier = 1;
+  // Energy benchmarks: train this many trees on the loaded data, one after
+  // another, and print each one's training window as Unix times (0 = one
+  // tree, no windows printed). The last tree is the one evaluated and dumped.
+  std::size_t repeat = 0;
 
   bool printTree = false; // print the tree as text to stdout
   std::string dumpPath;   // write the tree as text to a file

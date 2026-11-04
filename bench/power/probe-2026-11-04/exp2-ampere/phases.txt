@@ -1,0 +1,7 @@
+1793789226.107 idle_start
+1793789246.114 idle_end
+1793789246.118 cuda_cart_m20 start
+1793789272.531 cuda_cart_m20 end
+1793789282.539 gpuonly_c45_m20 start
+1793789330.078 gpuonly_c45_m20 end
+1793789345.085 tail_end

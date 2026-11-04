@@ -1,0 +1,33 @@
+C4.5 on bench/data/ecbdl_15m/train.csv (backend cuda)
+  rows 15000000 train, 631 features, 2 classes
+  pruning off
+  repeat 1/17: train 5021.2 ms, unix 1793792813.796602 1793792818.967727
+  repeat 2/17: train 7109.2 ms, unix 1793792818.967778 1793792826.129552
+  repeat 3/17: train 7141.9 ms, unix 1793792826.129569 1793792833.419477
+  repeat 4/17: train 7117.9 ms, unix 1793792833.419501 1793792840.622610
+  repeat 5/17: train 7155.4 ms, unix 1793792840.622627 1793792847.834342
+  repeat 6/17: train 7153.3 ms, unix 1793792847.834366 1793792855.131101
+  repeat 7/17: train 7106.6 ms, unix 1793792855.131150 1793792862.420055
+  repeat 8/17: train 7113.6 ms, unix 1793792862.420080 1793792869.624069
+  repeat 9/17: train 7148.8 ms, unix 1793792869.624091 1793792876.828340
+  repeat 10/17: train 7158.0 ms, unix 1793792876.828362 1793792884.131083
+  repeat 11/17: train 7088.9 ms, unix 1793792884.131106 1793792891.311087
+  repeat 12/17: train 7112.5 ms, unix 1793792891.311109 1793792898.568671
+  repeat 13/17: train 7100.8 ms, unix 1793792898.568696 1793792905.720793
+  repeat 14/17: train 7156.4 ms, unix 1793792905.720810 1793792913.020952
+  repeat 15/17: train 7121.9 ms, unix 1793792913.020976 1793792920.220084
+  repeat 16/17: train 7155.5 ms, unix 1793792920.220101 1793792927.427752
+  repeat 17/17: train 7153.9 ms, unix 1793792927.427768 1793792934.633818
+Tree:
+  nodes 725, leaves 363, depth 10
+  train accuracy 97.9154%
+Timings:
+  load                 31773.5 ms
+  gpu setup             3975.8 ms
+  presort                  0.0 ms
+  build                 3177.9 ms
+  prune                    0.3 ms
+  train total           7153.9 ms
+  evaluate               622.7 ms
+Memory:
+  peak after training 37742032 KiB

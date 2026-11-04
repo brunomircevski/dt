@@ -1,0 +1,7 @@
+
+ Performance counter stats for 'system wide':
+
+              0.46 Joules power_core/energy-core/                                               
+
+       1.003914083 seconds time elapsed
+

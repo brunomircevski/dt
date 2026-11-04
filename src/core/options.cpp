@@ -61,6 +61,8 @@ void printUsage(const char *program) {
       << "  --seed N                 random seed for the holdout split and CART's CV\n"
       << "                           folds (default 1)\n"
       << "  -m N                     duplicate rows N times in memory (stress tests)\n"
+      << "  --repeat N               train N trees in a row on the loaded data and print\n"
+      << "                           each one's time and Unix start/end (energy runs)\n"
       << "  --threads N              CPU threads (0 = every CPU it may run on)\n"
       << "  --print                  print the tree\n"
       << "  --dump FILE              write the tree as text\n"
@@ -253,6 +255,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.c45.prune = false;
     } else if (arg == "-m") {
       options.multiplier = parseCount(arg, args.value(arg));
+    } else if (arg == "--repeat") {
+      options.repeat = parseCount(arg, args.value(arg));
     } else if (arg == "--holdout") {
       options.holdout = parseReal(arg, args.value(arg));
     } else if (arg == "--test-last") {

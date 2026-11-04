@@ -1,0 +1,23 @@
+job 84 on ampere, 2026-11-04T12:20:08+01:00, kind gpu
+commit 50d29cd + uncommitted --repeat patch
+data bench/data/ecbdl_15m/train.csv, reps 3, target 120 s, idle 60 s, pre 20 s, algos cart c45, impls cuda gpuonly
+protocol --no-prune -d 10
+kernel 7.0.0-38-generic
+dmi Supermicro AS -4124GS-TNR
+Model name:                              AMD EPYC 7402 24-Core Processor
+Core(s) per socket:                      24
+Socket(s):                               2
+NUMA node(s):                            2
+governor acpi-cpufreq ondemand
+perf_event_paranoid 0
+               total        used        free      shared  buff/cache   available
+Mem:            1007          11         934           0          67         996
+index, name, power.limit [W], driver_version
+0, NVIDIA A100 80GB PCIe, 300.00 W, 615.71.09
+1, NVIDIA A100 80GB PCIe, 300.00 W, 615.71.09
+2, NVIDIA A100-PCIE-40GB, 250.00 W, 615.71.09
+3, NVIDIA A100-PCIE-40GB, 250.00 W, 615.71.09
+repeat cuda cart 18 (warm-up train 6964.5 ms)
+repeat gpuonly cart 17 (warm-up train 7095.7 ms)
+repeat cuda c45 18 (warm-up train 6930.0 ms)
+repeat gpuonly c45 17 (warm-up train 7162.0 ms)

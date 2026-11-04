@@ -8,6 +8,7 @@
 #include "core/trace.h"
 #include "core/tree.h"
 
+#include <chrono>
 #include <fstream>
 #include <future>
 #include <iomanip>
@@ -117,7 +118,26 @@ int main(int argc, char *argv[]) {
     if (profile) {
       trace::start();
     }
-    const Tree tree = trainTree(train, options, &pool, timings);
+    // --repeat: the windows let an outside power sampler integrate the
+    // energy of training only (bench/power).
+    auto unixNow = [] {
+      return std::chrono::duration<double>(
+                 std::chrono::system_clock::now().time_since_epoch())
+          .count();
+    };
+    Tree tree;
+    const std::size_t repeats = options.repeat > 0 ? options.repeat : 1;
+    for (std::size_t run = 1; run <= repeats; ++run) {
+      timings = TrainTimings{};
+      const double start = unixNow();
+      tree = trainTree(train, options, &pool, timings);
+      const double end = unixNow();
+      if (options.repeat > 0) {
+        std::cout << "  repeat " << run << "/" << repeats << ": train " << std::fixed
+                  << std::setprecision(1) << timings.total() * 1000.0 << " ms, unix "
+                  << std::setprecision(6) << start << " " << end << "\n";
+      }
+    }
     if (profile) {
       trace::stop();
     }

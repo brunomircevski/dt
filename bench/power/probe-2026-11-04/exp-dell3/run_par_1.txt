@@ -1,0 +1,15 @@
+CART on bench/data/higgs/train.csv (backend parallel)
+  rows 10500000 train, 28 features, 2 classes
+  pruning off
+Tree:
+  nodes 2029, leaves 1015, depth 10
+  train accuracy 70.6345%
+Timings:
+  load                  6934.4 ms
+  presort                337.1 ms
+  build                  649.4 ms
+  prune                    0.0 ms
+  train total            986.5 ms
+  evaluate                37.5 ms
+Memory:
+  peak after training 5882836 KiB

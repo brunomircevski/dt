@@ -1,0 +1,16 @@
+CART on bench/data/higgs/train.csv (backend cuda)
+  rows 10500000 train, 28 features, 2 classes
+  pruning off
+Tree:
+  nodes 2029, leaves 1015, depth 10
+  train accuracy 70.6345%
+Timings:
+  load                  6954.7 ms
+  gpu setup               95.4 ms
+  presort                  0.0 ms
+  build                  110.0 ms
+  prune                    0.0 ms
+  train total            205.4 ms
+  evaluate                40.7 ms
+Memory:
+  peak after training 4142612 KiB

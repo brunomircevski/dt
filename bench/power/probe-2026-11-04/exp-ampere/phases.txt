@@ -1,0 +1,11 @@
+1793789089.106 idle_start
+1793789104.114 idle_end
+1793789104.117 cuda_cart_1 start
+1793789111.602 cuda_cart_1 end
+1793789116.609 cuda_cart_2 start
+1793789123.766 cuda_cart_2 end
+1793789128.773 cuda_cart_3 start
+1793789134.863 cuda_cart_3 end
+1793789139.869 cuda_c45 start
+1793789143.998 cuda_c45 end
+1793789154.007 tail_end

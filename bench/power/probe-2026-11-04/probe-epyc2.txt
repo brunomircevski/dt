@@ -1,0 +1,126 @@
+===== epyc2 2026-11-04T11:43:15+01:00 kernel 7.0.0-31-generic
+--- DMI
+sys_vendor: Dell Inc.
+product_name: PowerEdge R6725
+board_vendor: Dell Inc.
+board_name: 0KRFPX
+bios_version: 1.5.3
+--- CPU
+Model name:                              AMD EPYC 9255 24-Core Processor
+Thread(s) per core:                      1
+Core(s) per socket:                      24
+Socket(s):                               2
+NUMA node(s):                            2
+--- id
+uid=1034(bmircevski) gid=1034(bmircevski) groups=1034(bmircevski),100(users)
+--- powercap
+total 0
+drwxr-xr-x  2 root root 0 Nov  4 11:43 .
+drwxr-xr-x 83 root root 0 Nov  2 14:30 ..
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl -> ../../devices/virtual/powercap/intel-rapl
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:0 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:0
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:0:0 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:0
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:1 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:1
+lrwxrwxrwx  1 root root 0 Nov  4 11:43 intel-rapl:1:0 -> ../../devices/virtual/powercap/intel-rapl/intel-rapl:1/intel-rapl:1:0
+/sys/class/powercap/intel-rapl:0/ name=package-0 -r-------- root root cat: '/sys/class/powercap/intel-rapl:0//energy_uj': Permission denied
+
+65532610987
+/sys/class/powercap/intel-rapl:0:0/ name=core -r-------- root root cat: '/sys/class/powercap/intel-rapl:0:0//energy_uj': Permission denied
+
+65532610987
+/sys/class/powercap/intel-rapl:1/ name=package-1 -r-------- root root cat: '/sys/class/powercap/intel-rapl:1//energy_uj': Permission denied
+
+65532610987
+/sys/class/powercap/intel-rapl:1:0/ name=core -r-------- root root cat: '/sys/class/powercap/intel-rapl:1:0//energy_uj': Permission denied
+
+65532610987
+--- perf
+4
+amd_iommu_0
+amd_iommu_1
+amd_iommu_2
+amd_iommu_3
+amd_iommu_4
+amd_iommu_5
+amd_iommu_6
+amd_iommu_7
+breakpoint
+cpu
+ibs_fetch
+ibs_op
+kprobe
+msr
+power
+power_core
+software
+tracepoint
+uprobe
+energy-pkg
+energy-pkg.scale
+energy-pkg.unit
+/usr/bin/perf
+
+valid terms: event,config,config1,config2,config3,config4,name,period,percore,metric-id,cpu
+
+event syntax error: 'power/energy-ram/'
+                           \___ unknown term 'energy-ram' for pmu 'power'
+
+valid terms: event,config,config1,config2,config3,config4,name,period,percore,metric-id,cpu
+Run 'perf list' for a list of valid events
+
+ Usage: perf stat [<options>] [<command>]
+
+    -e, --event <event>   event selector. use 'perf list' to list available events
+--- msr
+crw------- 1 root root 202, 0 Sep 17 06:16 /dev/cpu/0/msr
+ipmi_ssif              45056  0
+intel_rapl_msr         20480  0
+intel_rapl_common      57344  1 intel_rapl_msr
+rapl                   20480  0
+acpi_power_meter       24576  0
+k10temp                16384  0
+ipmi_si                86016  1
+acpi_ipmi              24576  1 acpi_power_meter
+ipmi_devintf           20480  0
+ipmi_msghandler        94208  4 ipmi_devintf,ipmi_si,acpi_ipmi,ipmi_ssif
+msr                    12288  0
+--- hwmon
+/sys/class/hwmon/hwmon0 bnxt_en: power 
+/sys/class/hwmon/hwmon1 bnxt_en: power 
+/sys/class/hwmon/hwmon2 k10temp: power 
+/sys/class/hwmon/hwmon3 k10temp: power 
+/sys/class/hwmon/hwmon4 power_meter: power power1_accuracy power1_average power1_average_interval power1_average_interval_max power1_average_interval_min power1_is_battery power1_model_number power1_oem_info power1_serial_number 
+   /sys/class/hwmon/hwmon4/power1_average = 127000000
+--- acpi power_meter
+ACPI000D:00
+bind
+module
+uevent
+unbind
+ACPI000D:00
+--- ipmi
+ls: cannot access '/dev/ipmidev*': No such file or directory
+crw------- 1 root root 240, 0 Sep 17 06:16 /dev/ipmi0
+/var/spool/slurmd/job00067/slurm_script: line 15: ipmitool: command not found
+--- tools
+nvidia-smi: dcgmi: likwid-powermeter: likwid-perfctr: turbostat: /usr/bin/turbostat
+powerstat: powertop: scaphandre: rocm-smi: amd-smi: uProf: AMDuProfCLI: s-tui: sensors: cpupower: /usr/bin/cpupower
+python3: /usr/bin/python3
+R: java: /usr/bin/java
+--- nvidia
+--- systemd/dcgm/services
+  upower.service                                        loaded active running Daemon for power management
+--- net (BMC hint)
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eno16895np0      UP             172.16.0.15/24 metric 100 fe80::6e83:75ff:fe02:4934/64 
+eno16905np1      DOWN           
+--- governor
+performance
+amd-pstate-epp
+--- dimm count
+mc0
+mc1
+power
+subsystem
+uevent
+0

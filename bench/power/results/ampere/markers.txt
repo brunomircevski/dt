@@ -1,0 +1,39 @@
+1793791208.155901 perf_start
+1793791208.160515 job_start
+1793791208.164289 start warmup-cuda-cart impl=cuda algo=cart repeat=2
+1793791283.572736 end warmup-cuda-cart rc=0
+1793791283.605426 start warmup-gpuonly-cart impl=gpuonly algo=cart repeat=2
+1793791343.488017 end warmup-gpuonly-cart rc=0
+1793791343.518007 start warmup-cuda-c45 impl=cuda algo=c45 repeat=2
+1793791388.991370 end warmup-cuda-c45 rc=0
+1793791389.020013 start warmup-gpuonly-c45 impl=gpuonly algo=c45 repeat=2
+1793791433.975882 end warmup-gpuonly-c45 rc=0
+1793791454.007389 idle_start
+1793791514.014522 idle_end
+1793791534.023822 start rep1-cuda-cart impl=cuda algo=cart repeat=18
+1793791695.570693 end rep1-cuda-cart rc=0
+1793791715.578139 start rep1-gpuonly-cart impl=gpuonly algo=cart repeat=17
+1793791868.825742 end rep1-gpuonly-cart rc=0
+1793791888.833247 start rep1-cuda-c45 impl=cuda algo=c45 repeat=18
+1793792051.303543 end rep1-cuda-c45 rc=0
+1793792071.311130 start rep1-gpuonly-c45 impl=gpuonly algo=c45 repeat=17
+1793792225.541734 end rep1-gpuonly-c45 rc=0
+1793792245.549831 start rep2-cuda-cart impl=cuda algo=cart repeat=18
+1793792407.304518 end rep2-cuda-cart rc=0
+1793792427.311879 start rep2-gpuonly-cart impl=gpuonly algo=cart repeat=17
+1793792580.103147 end rep2-gpuonly-cart rc=0
+1793792600.110483 start rep2-cuda-c45 impl=cuda algo=c45 repeat=18
+1793792762.000078 end rep2-cuda-c45 rc=0
+1793792782.008296 start rep2-gpuonly-c45 impl=gpuonly algo=c45 repeat=17
+1793792935.613322 end rep2-gpuonly-c45 rc=0
+1793792955.621704 start rep3-cuda-cart impl=cuda algo=cart repeat=18
+1793793117.096139 end rep3-cuda-cart rc=0
+1793793137.103198 start rep3-gpuonly-cart impl=gpuonly algo=cart repeat=17
+1793793290.225149 end rep3-gpuonly-cart rc=0
+1793793310.232958 start rep3-cuda-c45 impl=cuda algo=c45 repeat=18
+1793793472.188217 end rep3-cuda-c45 rc=0
+1793793492.195404 start rep3-gpuonly-c45 impl=gpuonly algo=c45 repeat=17
+1793793646.003659 end rep3-gpuonly-c45 rc=0
+1793793666.010869 idle2_start
+1793793726.018291 idle2_end
+1793793726.023045 job_end

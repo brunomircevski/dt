@@ -1,0 +1,9 @@
+/sys/class/hwmon/hwmon3/power1_accuracy: 90.0%
+/sys/class/hwmon/hwmon3/power1_average: 145000000
+/sys/class/hwmon/hwmon3/power1_average_interval: 2000
+/sys/class/hwmon/hwmon3/power1_average_interval_max: 604800000
+/sys/class/hwmon/hwmon3/power1_average_interval_min: 2000
+/sys/class/hwmon/hwmon3/power1_is_battery: 0
+/sys/class/hwmon/hwmon3/power1_model_number: PowerEdge
+/sys/class/hwmon/hwmon3/power1_oem_info: ___DELL
+/sys/class/hwmon/hwmon3/power1_serial_number: 
