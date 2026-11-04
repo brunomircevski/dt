@@ -24,10 +24,6 @@ udevadm control --reload
 chmod 0444 /sys/class/powercap/intel-rapl:*/energy_uj
 ```
 
-Note: the counters are root-only by default because of the PLATYPUS side
-channel (CVE-2020-8694). Since jobs on these nodes run exclusively, we
-believe the risk is acceptable.
-
 ## Step 2: PSU power (ampere, hopper)
 
 These servers expose PSU power only through the BMC (`ipmitool`), which
@@ -59,9 +55,6 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload && systemctl enable --now psu-poll
 ```
-
-If `ipmitool dcmi power reading` does not report power on a node, please send
-us the output of `ipmitool sdr elist | grep -iE 'watt|psu'`.
 
 ## Verification (as a normal user)
 
