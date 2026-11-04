@@ -13,8 +13,11 @@
 # $DIR/sweep/cuda-<node>-<dataset>-mr<N>/ (the sweep, "default" = ./tree's own),
 # $DIR/sweep/<node>-<dataset>.json (the value taken). The value taken has the
 # smallest mean, over CART and C4.5, of its time / that algorithm's fastest.
+# For the datasets in PROFILE_DATASETS (default mnist8m) the depth runs are then
+# made once more with ./tree --profile, into $DIR/profile/{cuda,gpuonly}-<node>-<dataset>/
+# (results.jsonl + profiles/*.json; chart: bench/hybrid_profile_chart.py).
 # Environment (for a quick check of the script): DIR, DATASETS, VALUES, RUNS,
-# SWEEP_RUNS, PROTOCOLS.
+# SWEEP_RUNS, PROTOCOLS, PROFILE_DATASETS ("" for none).
 
 set -uo pipefail
 NODE="$1"
@@ -24,6 +27,7 @@ DATASETS="${DATASETS:-airline mnist8m}"
 VALUES="${VALUES:-default 256 512 1024 2048 4096 8192 16384 32768}"
 RUNS="${RUNS:-3}" SWEEP_RUNS="${SWEEP_RUNS:-3}"
 PROTOCOLS="${PROTOCOLS:-cart_depth5,cart_depth10,cart_depth15,cart_depth20,cart_depth25,cart_depth30,cart_full_nodepth,c45_depth5_unpruned,c45_depth10_unpruned,c45_depth15_unpruned,c45_depth20_unpruned,c45_depth25_unpruned,c45_depth30_unpruned,c45_unpruned}"
+PROFILE_DATASETS="${PROFILE_DATASETS-mnist8m}"
 SWEEP_PROTOCOLS=cart_full_nodepth,c45_unpruned
 PY=bench/.venv/bin/python
 failed=()
@@ -65,6 +69,10 @@ EOF
   echo "$(date '+%F %T')  $dataset: --gpu-min-rows $best"
   run "$DIR" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS" "--gpu-min-rows $best"
   run "$DIR" "gpuonly-$NODE-$dataset" "$dataset" tree_gpu_only "$RUNS" "$PROTOCOLS"
+  if [[ " $PROFILE_DATASETS " == *" $dataset "* ]]; then
+    run "$DIR/profile" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS" "--gpu-min-rows $best --profile"
+    run "$DIR/profile" "gpuonly-$NODE-$dataset" "$dataset" tree_gpu_only "$RUNS" "$PROTOCOLS" "--profile"
+  fi
 done
 echo "$(date '+%F %T')  done${failed[*]:+, failed: ${failed[*]}}"
 [ ${#failed[@]} -eq 0 ]
