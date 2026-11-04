@@ -9,12 +9,12 @@
 \renewcommand\UrlFont{\color{blue}\rmfamily}
 \urlstyle{rm}
 %
-\graphicspath{{../bench/results/}}
+\graphicspath{{../bench/results/}{figs/}}
 \newcommand{\plan}[1]{{\color{blue}\itshape[#1]}}
 % Names of this work's implementations in the paper (one place to rename).
 \newcommand{\ImplSerialBase}{Serial-Simple}
 \newcommand{\ImplSerialOpt}{Serial-Opt}
-\newcommand{\ImplParallel}{Parallel}
+\newcommand{\ImplParallel}{Multicore}
 \newcommand{\ImplGpu}{GPU}
 \newcommand{\ImplHybrid}{Hybrid}
 % Time-table cell: mean over the run range; \est marks a rough estimate.
@@ -66,7 +66,7 @@ error-based pruning). Only what is needed to read Sect.~\ref{sec:impl}.}
 
 \subsection{Serial}
 
-\subsection{Parallel}
+\subsection{Multicore}
 
 \subsection{GPU}
 
@@ -269,11 +269,6 @@ with the number of rows (subsamples of one dataset).}
 \plan{Where the time goes: presort, split search, partition, CPU--GPU
 transfer; GPU share of the hybrid; achieved bandwidth against peak.}
 
-\begin{figure}
-\includegraphics[width=\textwidth]{cluster-profiling/chart.png}
-\caption{Temporary: breakdown of the growing time (cluster-profiling).}
-\label{fig:profiling}
-\end{figure}
 
 \subsection{Energy Consumption}
 \plan{Whole-server power while each implementation trains one tree on
@@ -307,6 +302,41 @@ Implementation & Node & $t$ (s) & $P$ (W) & $E$ (kJ) & $t$ (s) & $P$ (W) & $E$ (
 \bottomrule
 \end{tabular}
 \end{table}
+
+%% ------------------------------------------------------------------------
+%% TEMPORARY: chart-style test section. Remove before submission.
+%% Figures: paper/figs/test-*.pdf, made by paper/charts.py from bench/results.
+%% ------------------------------------------------------------------------
+\section{TEMPORARY: Chart Style Tests}
+\label{sec:chart-tests}
+
+\begin{figure}
+\includegraphics[width=\textwidth]{test-ladder.pdf}
+\caption{Training time of one tree (depth $\le$ 10, unpruned) through the steps of this work: \ImplSerialBase{}, \ImplSerialOpt{} and \ImplParallel{} on epyc1, then \ImplGpu{} and \ImplHybrid{} on the H100 (grey). Boxes: range of the step's speed-up over the five datasets. SOREL 4M on the H100 is estimated (demo).}
+\label{fig:test-ladder}
+\end{figure}
+
+\begin{figure}
+\includegraphics[width=0.49\textwidth]{test-scaling-epyc.pdf}\hfill
+\includegraphics[width=0.49\textwidth]{test-scaling-dell.pdf}
+\caption{Speed-up of \ImplParallel{} over one thread on epyc1 (left) and dell1 (right), depth $\le$ 10, unpruned. Labels: speed-up and parallel efficiency at 48 threads; dotted line: the second socket starts at 25 threads.}
+\label{fig:test-scaling}
+\end{figure}
+
+\begin{figure}
+\includegraphics[width=\textwidth]{test-profile.pdf}
+\caption{Where the training time goes (percent of the training time; mean of the profiled runs, depth $\le$ 10, unpruned). EPYC, Xeon: \ImplParallel{} with 48 threads on epyc1 and dell1; \ImplGpu{} and \ImplHybrid{} on the H100. Triangle: share of the time the GPU is busy. Chess: 3$\times$3 board, $10^9$ rows.}
+\label{fig:test-profile}
+\end{figure}
+
+\begin{figure}
+\includegraphics[width=\textwidth]{test-depth.pdf}
+\caption{\ImplHybrid{} against \ImplGpu{} by depth limit on the A100 (unpruned, mean of 3 runs). Numbers above the bars: how many times slower \ImplGpu{} is. Both modes grow the same trees.}
+\label{fig:test-depth}
+\end{figure}
+
+\clearpage
+%% ------------------------------------------------------------ end TEMPORARY
 
 \section{Discussion}
 \label{sec:discussion}
