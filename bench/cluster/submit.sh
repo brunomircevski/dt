@@ -4,7 +4,7 @@
 # login node; it only calls sbatch). Results go to
 # bench/results/cluster-<dataset>/ (cluster-higgs, -airline, -susy, -ecbdl, -chess;
 # sorel and sorel_4m in cluster-sorel):
-#   cuda-hopper-<data>  H100 PCIe (GPU 0 of 4), 2x Xeon Gold 6444Y   CUDA
+#   cuda-hopper-<data>  H100 PCIe (GPU 2 of 4), 2x Xeon Gold 6444Y   CUDA
 #   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          CUDA
 #   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
 #   cpu-dell-<data>     dell1: 2x Xeon Gold 6542Y                     parallel

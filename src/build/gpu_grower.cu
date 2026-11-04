@@ -2379,7 +2379,7 @@ private:
                        presortFeature(next++, distinct);
                      }
                    });
-      overlapped_ = true; // presortFinish() at the end, once the arena's toucher runs
+      overlapped_ = true; // presortFinish() at the end
     } else {
       ScopedTimer timer(uploadSeconds);
       trace::Phase phase("upload");
@@ -2420,16 +2420,20 @@ private:
     const bool fewHandOffs = options_.gpu.only ||
                              (options_.algorithm == Algorithm::Cart &&
                               options_.cart.pruning == CartPruning::Alpha);
-    if (fewHandOffs) {
-      touchedBytes_ = total * sizeof(Entry);
-    } else {
-      toucher_ = std::thread([this, bytes = total * sizeof(Entry)]() { touchArena(bytes); });
-    }
     if (overlapped_) {
       trace::Phase phase("presort finish");
       presortFinish(options_.algorithm == Algorithm::C45 ? &overlapDistinct_ : nullptr);
     }
     CUDA_CHECK(cudaStreamSynchronize(stream_));
+    // Only now: touching the arena during presortFinish() made the download
+    // of C4.5's distinct values (4 GB on SOREL 4M) 3x slower, both on the
+    // GPU's socket (setup 3.4 s instead of 2.2 s on the A100 node; the build
+    // 0.05 s longer this way, CART's setup 0.1 s shorter).
+    if (fewHandOffs) {
+      touchedBytes_ = total * sizeof(Entry);
+    } else {
+      toucher_ = std::thread([this, bytes = total * sizeof(Entry)]() { touchArena(bytes); });
+    }
   }
 
   // Copy `bytes` from pageable host memory to the device at the speed of
@@ -2561,9 +2565,9 @@ private:
   }
 
   // Touch the arena's pages on all threads, in the background (the pool is
-  // idle while the GPU presorts), so the hand-offs' copies into it do not
-  // fault them in: that made C4.5 on airline 0.2-0.9 s slower on the H100
-  // node. The pages are spread over the NUMA nodes, like the threads that
+  // idle while the GPU grows the first levels), so the hand-offs' copies
+  // into it do not fault them in: that made C4.5 on airline 0.2-0.9 s
+  // slower on the H100 node. The pages are spread over the NUMA nodes, like the threads that
   // read them. In chunks, in order: a hand-off waits only for the part it
   // fills (waitTouched()). (MADV_POPULATE_WRITE, which leaves the contents
   // alone, holds the process's mmap lock: other threads' allocations and
@@ -2772,17 +2776,35 @@ private:
     if (placed == features_) {
       return;
     }
+    // The rest in batches: as many features as fit, back to back, into the
+    // larger of the pool (downloaded, so free again) and a free slot (room for
+    // any feature: two rows per slot), then one staged download. One feature
+    // at a time was ~2000 synchronous copies on SOREL 4M (1G distinct values,
+    // 8x the pool); batched, C4.5's setup there is 0.12-0.15 s shorter on the
+    // A100 node.
     const std::size_t free = static_cast<std::size_t>(
         std::find(taken.begin(), taken.end(), false) - taken.begin());
-    auto *unique = reinterpret_cast<std::uint32_t *>(columns_.get() + free * slotEntries_);
-    for (std::size_t feature = placed; feature < features_; ++feature) {
-      std::size_t tempBytes = sortTemp_.capacity();
-      const auto bits = thrust::make_transform_iterator(column(feature), ValueBits{});
-      CUDA_CHECK(cub::DeviceSelect::Unique(sortTemp_.get(), tempBytes, bits, unique,
-                                           distinctCounts_.get() + feature,
-                                           static_cast<int>(stride_), stream_));
-      downloadStaged(distinct.values.data() + distinct.offsets[feature], unique,
-                     static_cast<std::size_t>(counts[feature]) * sizeof(float), "downloadDistinct");
+    std::uint32_t *buffer = reinterpret_cast<std::uint32_t *>(columns_.get() + free * slotEntries_);
+    std::size_t capacity = slotEntries_ * sizeof(Entry) / sizeof(std::uint32_t);
+    if (distinctPoolCapacity() > capacity) {
+      buffer = distinctPool();
+      capacity = distinctPoolCapacity();
+    }
+    for (std::size_t first = placed; first < features_;) {
+      std::size_t end = first;
+      for (; end < features_ && distinct.offsets[end + 1] - distinct.offsets[first] <= capacity;
+           ++end) {
+        std::size_t tempBytes = sortTemp_.capacity();
+        const auto bits = thrust::make_transform_iterator(column(end), ValueBits{});
+        CUDA_CHECK(cub::DeviceSelect::Unique(
+            sortTemp_.get(), tempBytes, bits,
+            buffer + (distinct.offsets[end] - distinct.offsets[first]),
+            distinctCounts_.get() + end, static_cast<int>(stride_), stream_));
+      }
+      downloadStaged(distinct.values.data() + distinct.offsets[first], buffer,
+                     (distinct.offsets[end] - distinct.offsets[first]) * sizeof(float),
+                     "downloadDistinct");
+      first = end;
     }
   }
 

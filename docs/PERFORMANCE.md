@@ -2,6 +2,25 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: C4.5's GPU setup on SOREL 4M (CUDA hybrid)
+
+C4.5's setup on SOREL 4M took 3.4 s on the A100 node against CART's 1.9 s
+and 2.2 s with `--gpu-only`. Host-side timings showed where: the download of
+the distinct values (1G values, 4 GB) took 1.5 s in the hybrid and 0.33 s
+with `--gpu-only`. The hybrid started the arena's toucher (76 GB of memset on
+24 threads) just before it, and both wrote to the GPU's socket at once. The
+toucher now starts after the download; it still finishes early in the build
+(0.05-0.08 s longer on SOREL 4M).
+
+The features whose distinct values do not fit the device pool (most of them
+on SOREL 4M, 8x its size) were also downloaded one at a time, about 2000
+synchronous copies; they now go in batches (0.12-0.15 s of the setup).
+
+Both, ampere, hybrid, `--no-prune -d 10`, 3 alternating runs each, the same
+trees in every case: SOREL 4M C4.5 6.38 s → 5.33 s (the same as
+`--gpu-only`), HIGGS C4.5 237 → 218 ms, SUSY C4.5 111 → 100 ms; airline
+(C4.5 at depth 10 and 20, CART), chess 10M and every CART run within noise.
+
 ## November 2026: SOREL's --simple and NUMA
 
 One-thread runs on SOREL (121 GB of values) are sensitive to where the pages

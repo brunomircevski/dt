@@ -19,10 +19,10 @@ half dell1's memory channels and 512 GB, up to 1.46× slower, so they are never
 compared with dell1 (`dell512` in the results is dell2). turing (RTX 2080 Ti)
 is not used.
 
-| Node | CPU | RAM | GPU (GPU 0 used) |
+| Node | CPU | RAM | GPU (GPU used: hopper 2, ampere 0) |
 |---|---|---|---|
 | hopper | 2× Xeon Gold 6444Y (Sapphire Rapids), 32 cores | 1 TB DDR5-4800 | 4× H100 PCIe 80 GB |
-| ampere | 2× EPYC 7402 (Zen 2), 48 cores | 1 TB DDR4-3200 | 2× A100 80 GB + 2× A100 40 GB PCIe (GPU 0: 80 GB) |
+| ampere | 2× EPYC 7402 (Zen 2), 48 cores | 1 TB DDR4-3200 | 2× A100 80 GB + 2× A100 40 GB PCIe (GPU 0, used: 80 GB) |
 | epyc1 | 2× EPYC 9255 (Zen 5), 48 cores | 512 GB DDR5-6400 | – |
 | dell1 | 2× Xeon Gold 6542Y (Emerald Rapids), 48 cores | 1 TB DDR5-5200 | – |
 
@@ -178,16 +178,18 @@ The data and measurements are those of the other benchmarks
 | Backend | Command | Threads |
 |---|---|---|
 | Parallel (epyc1, dell1) | `./tree_cpu --parallel --threads N` | N = every CPU (48) |
-| CUDA (hopper, ampere) | `./tree --cuda --threads N` | GPU 0, plus N CPU threads (hopper 32, ampere 48) for the small subtrees and pruning |
+| CUDA (hopper, ampere) | `./tree --cuda --threads N` | one GPU, plus N CPU threads of its socket (hopper 16, ampere 24) for the small subtrees and pruning |
 
 - **Whole nodes.** SLURM on mordor3 hands out cores only: it tracks no GPUs
   (no GRES) and no memory. Every job therefore takes its node with
   `--exclusive`, so no other job shares its cores, memory bandwidth or GPUs.
   `run.log` records the load average and the GPU processes at the start.
-- **One GPU.** `CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0`: ./tree
-  uses GPU 0 in nvidia-smi's order. That is the GPU whose memory `run.py`
-  samples (`nvidia-smi --id=0`); on ampere it is an A100 80 GB. The other
-  GPUs sit idle.
+- **One GPU, on its own socket.** job.sh takes the NUMA node with a GPU and
+  the most free memory, the first GPU on it (`CUDA_DEVICE_ORDER=PCI_BUS_ID`,
+  `CUDA_VISIBLE_DEVICES`), that node's CPUs and `numactl --membind`: hopper
+  GPU 2 on node 1 (CPUs 16–31; another user's /dev/shm fills node 0), ampere
+  GPU 0 on node 0 (CPUs 0–23), an A100 80 GB. `run.py` samples that GPU's
+  memory (`gpu_index` in `machine.json`). The other GPUs sit idle.
 - **CPU governors are as the admins set them.** epyc1 `performance`, dell1
   `powersave` (intel_pstate, which still boosts), hopper
   `schedutil`, ampere `ondemand`. A user can't change them; `machine.json`

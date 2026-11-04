@@ -2,7 +2,7 @@
 
 - **Runs:** every case on hopper and ampere (CUDA hybrid, GPU only), and on epyc and dell (parallel on both sockets, parallel on one socket, --serial, --simple); parallel on both sockets also on dell2 (`dell512`, half the memory channels). 30 runs a case, except --serial at 1000M (3), --simple at 100M (3) and at 1000M (one, about 17 minutes a run). The tables and charts give means.
 - **Builds:** every run on one build of main, ./tree at ec77727 (with the CPU presort of 4fb419c and `-falign-functions=64 -falign-loops=32`), 2026-10-29/30, except `simple-epyc-chess_10m` and `simple-epyc-chess_1b` (67495f9, 2026-10-29; --simple's code is the same). Why, and the batches that ran them: [bench/cluster/README.md](../../cluster/README.md#reruns-of-2026-102930).
-- **Each node ran alone** and was reserved whole (`--exclusive`). Every GPU run is on its GPU's socket: GPU 0, the CPUs of its NUMA node (16 threads on hopper, 24 on ampere) and the memory bound to that node.
+- **Each node ran alone** and was reserved whole (`--exclusive`). Every GPU run is on its GPU's socket: hopper's GPU 2 (NUMA node 1, CPUs 16–31) and ampere's GPU 0 (NUMA node 0, CPUs 0–23), the CPUs of that node (16 threads on hopper, 24 on ampere) and the memory bound to it (`gpu_index` in `machine.json`).
 - **Same trees:** every case built the same tree on every node and backend (`--hash-trees`): 17 nodes (9 leaves), depth 4, 100% training accuracy, at every size. That is the exact tree of a 3×3 board. Test accuracy: 100% for C4.5 at every size; CART 99.98% at 10M and 100M, 100% at 1M and 1000M.
 - **Settings:** ./tree's defaults. `cart_depth10` and `c45_depth10_unpruned`, like every other test-set benchmark: depth ≤ 10 without pruning. The tree stops at depth 4, so the limit never acts; until 2026-10-29 these runs used the same trees without a depth limit (`cart_full_nodepth`, `c45_unpruned`). Trained on the training rows, scored on the size's test file.
 
@@ -24,7 +24,7 @@ The charts:
 
 **What it measures.** The tree is tiny (4 levels, 8 splits), so a run is the presort plus a few full sweeps over all rows: time per row at the top levels, without the many small nodes of a deep tree. With two features, the CPU backend has only two columns to share among 48 threads.
 
-| Run | Node | CPU | RAM | GPU (GPU 0) | Backend |
+| Run | Node | CPU | RAM | GPU (hopper GPU 2, ampere GPU 0) | Backend |
 |---|---|---|---|---|---|
 | `cuda-hopper-*` | hopper | 2× Xeon Gold 6444Y, 32 cores | 1 TB DDR5-4800 | H100 PCIe 80 GB | CUDA (+ 16 CPU threads of the GPU's socket) |
 | `cuda-ampere-*` | ampere | 2× EPYC 7402, 48 cores | 1 TB DDR4-3200 | A100 80 GB PCIe | CUDA (+ 24 CPU threads of the GPU's socket) |
