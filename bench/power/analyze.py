@@ -25,6 +25,7 @@ power x time.
 Writes into the given folder: runs.csv (every run), summary.csv (mean and
 standard deviation per case), summary.md (tables) and charts chart-*.png.
 """
+import bisect
 import csv
 import gzip
 import math
@@ -212,13 +213,17 @@ class Job:
             vals = self.values_between("sys_W", a + self.lag + skip, b + self.lag)
             return max(vals) if vals else float("nan")
         best = 0.0
-        rapl = {k: dict((round(t, 1), j / d) for t, j, d in v if d > 0) for k, v in self.rapl.items()}
-        for i, t in enumerate(self.t):
-            if a <= t <= b:
-                gpu = sum(self.samples["gpu%d_W" % g][i] for g in self.gpus)
-                cpu = sum(min(v.items(), key=lambda kv: abs(kv[0] - t))[1] for v in rapl.values()) \
-                    if rapl else 0
-                best = max(best, gpu + cpu)
+        # per socket: interval ends and watts; a sample at t falls in the first interval ending >= t
+        rapl = [([t for t, _, d in v if d > 0], [j / d for _, j, d in v if d > 0])
+                for v in self.rapl.values()]
+        # widen by one sample period so that a window shorter than it still has samples
+        for i in range(bisect.bisect_left(self.t, a - 0.1), bisect.bisect_right(self.t, b + 0.1)):
+            t = self.t[i]
+            power = sum(self.samples["gpu%d_W" % g][i] for g in self.gpus)
+            for ends, watts in rapl:
+                if ends:
+                    power += watts[min(bisect.bisect_left(ends, t), len(ends) - 1)]
+            best = max(best, power)
         return best
 
 
@@ -514,29 +519,53 @@ def chart_time(folder, summary):
 
 
 def chart_scatter(folder, summary):
-    """Time against energy, log-log, with lines of constant power."""
-    fig, ax = plt.subplots(figsize=(8.5, 6.2))
+    """Time against energy, linear axes, with lines of constant power; an inset zooms
+    in on the fast implementations, which sit in the corner at this scale."""
+    fig, ax = plt.subplots(figsize=(9.5, 6.6))
     ts = [s["train_s"] for s in summary]
-    lo, hi = min(ts) / 2, max(ts) * 2
-    for watts in (100, 200, 500, 1000):
-        ax.plot([lo, hi], [lo * watts / 1e3, hi * watts / 1e3], color=GRID, lw=1, zorder=0)
-        ax.text(hi, hi * watts / 1e3, f" {watts} W", fontsize=7.5, color=MUTED, va="center")
-    for s in summary:
-        filled = s["algo"] == "cart"
-        color = NODE_COLORS.get(s["node"], INK)
-        ax.scatter(s["train_s"], s["energy_J"] / 1e3, marker=MARKERS[s["impl"]], s=60,
-                   facecolors=color if filled else "white", edgecolors=color, linewidths=1.5, zorder=3)
-        ax.scatter(s["train_s"], s["above_idle_J"] / 1e3, marker=MARKERS[s["impl"]], s=18,
-                   color=color, alpha=0.45, zorder=2)
-        ax.plot([s["train_s"]] * 2, [s["above_idle_J"] / 1e3, s["energy_J"] / 1e3], color=color,
-                alpha=0.35, lw=0.8, zorder=1)
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlim(lo, hi * 3)
+    es = [s["energy_J"] / 1e3 for s in summary]
+    fast = [s for s in summary if s["train_s"] < 60]
+    fx = max(s["train_s"] for s in fast) * 1.15
+    fy = max(s["energy_J"] for s in fast) / 1e3 * 1.15
+
+    def draw(a, xmax, ymax, size, hidden=None):
+        for watts in (100, 200, 500, 1000):
+            a.plot([0, xmax], [0, xmax * watts / 1e3], color=GRID, lw=1, zorder=0)
+            # label just inside the plot, where the line leaves it
+            x = min(xmax, ymax * 1e3 / watts)
+            y = x * watts / 1e3
+            if hidden and hidden(x, y):
+                continue
+            if x < xmax:
+                a.text(x, ymax, f" {watts} W", fontsize=7.5, color=MUTED, ha="left", va="top")
+            else:
+                a.text(xmax, y, f"{watts} W ", fontsize=7.5, color=MUTED, ha="right", va="bottom")
+        for s in summary:
+            color = NODE_COLORS.get(s["node"], INK)
+            t, e, ea = s["train_s"], s["energy_J"] / 1e3, s["above_idle_J"] / 1e3
+            a.scatter(t, e, marker=MARKERS[s["impl"]], s=size,
+                      facecolors=color if s["algo"] == "cart" else "white", edgecolors=color,
+                      linewidths=1.5, zorder=3, clip_on=True)
+            a.scatter(t, ea, marker=MARKERS[s["impl"]], s=size * 0.3, color=color, alpha=0.45, zorder=2)
+            a.plot([t, t], [ea, e], color=color, alpha=0.35, lw=0.8, zorder=1)
+        a.set_xlim(0, xmax)
+        a.set_ylim(0, ymax)
+        a.grid(color=GRID, which="major")
+        style(a)
+
+    xmax, ymax = max(ts) * 1.08, max(es) * 1.1
+    box = (0.07, 0.42, 0.42, 0.52)  # inset, in axes fractions
+    draw(ax, xmax, ymax, 60, lambda x, y: x < (box[0] + box[2] + 0.02) * xmax and y > box[1] * ymax)
     ax.set_xlabel("training time per tree (s)", color=INK)
     ax.set_ylabel("energy per tree (kJ)", color=INK)
-    ax.grid(color=GRID, which="major")
-    style(ax)
+    ins = ax.inset_axes(list(box))
+    ins.set_facecolor("white")
+    ins.patch.set_alpha(1)
+    ins.set_zorder(5)
+    draw(ins, fx, fy, 50)
+    ins.tick_params(labelsize=7)
+    ins.set_title("zoom: Parallel, GPU, Hybrid", fontsize=8, color=MUTED, loc="left")
+    ax.indicate_inset_zoom(ins, edgecolor=MUTED, alpha=0.6)
     handles = [plt.Line2D([], [], marker=MARKERS[i], ls="", color=INK, label=IMPLS[i])
                for i in IMPL_ORDER if any(s["impl"] == i for s in summary)]
     handles += [Patch(color=NODE_COLORS[n], label=NODE_HW[n]) for n in NODE_ORDER
@@ -545,12 +574,87 @@ def chart_scatter(folder, summary):
                 plt.Line2D([], [], marker="o", ls="", markerfacecolor="white", color=INK, label="C4.5"),
                 plt.Line2D([], [], marker="o", ls="", color=INK, alpha=0.45, markersize=4,
                            label="small dot: energy above idle")]
-    ax.legend(handles=handles, fontsize=8, frameon=False, loc="upper left")
+    ax.legend(handles=handles, fontsize=7.5, frameon=False, loc="lower right")
     ax.set_title("ECBDL'14 15M: time and energy per tree (grey lines: constant power)",
                  fontsize=11, color=INK, loc="left")
     fig.tight_layout()
     fig.savefig(folder / "chart-time-energy.png", dpi=150)
     plt.close(fig)
+
+
+def chart_cpu_gpu(folder, summary):
+    """Nodes with CPU (RAPL) and GPU (NVML) sensors but no PSU: energy above idle per
+    tree split into CPU and GPU, time per tree and peak power, every implementation."""
+    cases = [s for s in summary if "E_cpu0" in s and "E_psu" not in s]
+    nodes = sorted({s["node"] for s in cases})
+    if not cases or len({s["impl"] for s in cases}) < 3:
+        return
+    cpu_c, gpu_c = COMPONENTS["cpu0"][1], COMPONENTS["gpu_used"][1]
+
+    def above(s, comps):
+        return sum(s.get(f"E_{c}", 0) - s.get(f"Eidle_{c}", 0) for c in comps)
+
+    for node in nodes:
+        algos = [a for a in ALGOS if any(s["node"] == node and s["algo"] == a for s in cases)]
+        fig, axes = plt.subplots(len(algos), 3, figsize=(15.5, 4.4 * len(algos)), squeeze=False)
+        for row, algo in zip(axes, algos):
+            ss = [s for s in cases if s["node"] == node and s["algo"] == algo]
+            ss.sort(key=lambda s: IMPL_ORDER.index(s["impl"]))
+            x = list(range(len(ss)))
+            names = [IMPLS[s["impl"]] for s in ss]
+            # energy above idle, CPU + GPU, log scale
+            ax = row[0]
+            cpu = [max(above(s, ("cpu0", "cpu1")), 0) for s in ss]
+            gpu = [max(above(s, ("gpu_used", "gpu_idle")), 0) for s in ss]
+            floor = min(c + g for c, g in zip(cpu, gpu)) / 4
+            ax.bar(x, [c - floor for c in cpu], bottom=floor, color=cpu_c, width=0.62,
+                   label="CPU sockets 0 + 1 (RAPL)")
+            ax.bar(x, gpu, bottom=cpu, color=gpu_c, width=0.62, label="GPUs 0–3 (NVML)")
+            ax.set_yscale("log")
+            ax.set_ylim(floor, max(c + g for c, g in zip(cpu, gpu)) * 4)
+            for i, (c, g) in enumerate(zip(cpu, gpu)):
+                share = g / (c + g) * 100 if c + g else 0
+                ax.text(i, (c + g) * 1.15, f"{fmt_j(c + g)}\nGPU {share:.0f}%", ha="center",
+                        va="bottom", fontsize=7.5, color=INK)
+            ax.set_ylabel("energy above idle per tree (log)", color=INK)
+            # time per tree, log scale
+            ax = row[1]
+            t = [s["train_s"] for s in ss]
+            ax.bar(x, t, yerr=[s["train_s_sd"] for s in ss], color=[IMPL_COLORS[s["impl"]] for s in ss],
+                   width=0.62, error_kw={"lw": 0.8, "capsize": 2, "ecolor": MUTED})
+            ax.set_yscale("log")
+            ax.set_ylim(min(t) / 3, max(t) * 4)
+            for i, v in enumerate(t):
+                ax.text(i, v * 1.15, fmt_s(v), ha="center", va="bottom", fontsize=7.5, color=INK)
+            ax.set_ylabel("training time per tree (s, log)", color=INK)
+            # peak power: idle level (lighter) + above idle
+            ax = row[2]
+            peak = [s["peak_W"] for s in ss]
+            idle = [s["idle_W"] for s in ss]
+            ax.bar(x, idle, color=MUTED, alpha=0.3, width=0.62, label="idle level (CPU + GPUs)")
+            ax.bar(x, [p - i for p, i in zip(peak, idle)], bottom=idle, color=[IMPL_COLORS[s["impl"]] for s in ss],
+                   width=0.62, label="peak above idle")
+            ax.set_ylim(0, max(peak) * 1.35)
+            for i, (p, q) in enumerate(zip(peak, idle)):
+                ax.text(i, p + max(peak) * 0.02, f"{p:.0f} W\n(+{p - q:.0f})", ha="center", va="bottom",
+                        fontsize=7.5, color=INK)
+            ax.set_ylabel("peak power, CPU + GPUs (W)", color=INK)
+            for k, ax in enumerate(row):
+                ax.set_xticks(x)
+                ax.set_xticklabels(names, fontsize=8.5)
+                ax.grid(axis="y", color=GRID, which="major")
+                style(ax)
+                ax.set_title(f"{ALGOS[algo]} · " + ["energy above idle", "time", "peak power"][k],
+                             fontsize=10, color=INK, loc="left")
+            row[0].legend(fontsize=7.5, frameon=False, loc="upper right")
+            row[2].legend(fontsize=7.5, frameon=False, loc="upper left", ncol=2)
+        runs = ", ".join(sorted({f"{IMPLS[s['impl']]} {s['runs']}×" for s in cases if s["node"] == node},
+                                key=lambda r: [IMPLS[i] for i in IMPL_ORDER].index(r.rsplit(" ", 1)[0])))
+        fig.suptitle(f"ECBDL'14 15M on {NODE_HW.get(node, node)}: one tree, depth ≤ 10 (means of {runs})",
+                     fontsize=11, color=INK, x=0.01, ha="left")
+        fig.tight_layout()
+        fig.savefig(folder / f"chart-cpu-gpu-{node}.png", dpi=150)
+        plt.close(fig)
 
 
 def chart_traces(folder, jobs, rows):
@@ -634,6 +738,7 @@ def main():
     chart_time(folder, summary)
     chart_scatter(folder, summary)
     chart_traces(folder, jobs, rows)
+    chart_cpu_gpu(folder, summary)
     print((folder / "summary.md").read_text())
 
 

@@ -13,6 +13,11 @@
 #      the memory of its NUMA node, as in the cluster benchmarks; RAPL is read with
 #      perf (ampere allows it to users).
 # cpu: Serial-Simple (--simple), Serial-Opt (--serial) and Parallel on all cores.
+# all: all five on one node with readable CPU (RAPL) and GPU power (ampere), so
+#      that every implementation gets the same CPU/GPU split:
+#   sbatch -p ampere -w ampere --exclusive -t 9:00:00 -J pwr-all \
+#     --export=ALL,TARGET=30,REPS=5,REPS_BY="simple=1 serial=3" \
+#     -o bench/results/power-ampere/ampere/job.log bench/power/power_bench.sh all bench/results/power-ampere/ampere
 #
 # The run: a warm-up run of each fast backend (Parallel, Hybrid, GPU) per
 # algorithm (two trees), which also picks its repeat count K = ceil(TARGET /
@@ -23,8 +28,10 @@
 # of idle again. ./tree --repeat K prints every tree's training window as Unix
 # times; bench/power/analyze.py integrates the samples over those windows.
 #
-# Environment: DATA (CSV), REPS (3), TARGET (120), IDLE (60), PRE (20),
-# ALGOS ("cart c45"), IMPLS (gpu: "cuda gpuonly", cpu: "simple serial parallel").
+# Environment: DATA (CSV), REPS (3), REPS_BY (per-implementation rounds,
+# e.g. "simple=1 serial=3"; the rest run REPS rounds), TARGET (120), IDLE (60),
+# PRE (20), ALGOS ("cart c45"), IMPLS (gpu: "cuda gpuonly", cpu: "simple serial
+# parallel", all: all five).
 set -uo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 KIND=$1
@@ -43,8 +50,16 @@ mark() { echo "$(now) $*" >> "$OUT/markers.txt"; }
 case $KIND in
   gpu) IMPLS=${IMPLS:-cuda gpuonly}; FAST="cuda gpuonly" ;;
   cpu) IMPLS=${IMPLS:-simple serial parallel}; FAST="parallel" ;;
-  *) echo "usage: $0 gpu|cpu OUTDIR" >&2; exit 2 ;;
+  all) IMPLS=${IMPLS:-simple serial parallel cuda gpuonly}; FAST="parallel cuda gpuonly" ;;
+  *) echo "usage: $0 gpu|cpu|all OUTDIR" >&2; exit 2 ;;
 esac
+declare -A NREPS
+MAXREP=$REPS
+for impl in $IMPLS; do NREPS[$impl]=$REPS; done
+for kv in ${REPS_BY:-}; do
+  NREPS[${kv%%=*}]=${kv#*=}
+  [ "${kv#*=}" -gt "$MAXREP" ] && MAXREP=${kv#*=}
+done
 
 command_of() { # impl -> the command line before the algorithm flags
   case $1 in
@@ -60,12 +75,13 @@ command_of() { # impl -> the command line before the algorithm flags
 {
   echo "job ${SLURM_JOB_ID:-none} on $(hostname), $(date -Is), kind $KIND"
   echo "commit ${TREE_GIT_DESCRIBE:-$(git describe --always --dirty 2>/dev/null)}"
-  echo "data $DATA, reps $REPS, target $TARGET s, idle $IDLE s, pre $PRE s, algos $ALGOS, impls $IMPLS"
+  echo "data $DATA, reps $REPS ${REPS_BY:-}, target $TARGET s, idle $IDLE s, pre $PRE s, algos $ALGOS, impls $IMPLS"
   echo "protocol ${PROTOCOL[*]}"
   echo "kernel $(uname -r)"
   echo "dmi $(cat /sys/class/dmi/id/sys_vendor) $(cat /sys/class/dmi/id/product_name)"
   lscpu | grep -E 'Model name|Socket|Core\(s\)|NUMA node\(s\)'
   echo "governor $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_driver) $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)"
+  echo "cpus available $(nproc)"
   echo "perf_event_paranoid $(cat /proc/sys/kernel/perf_event_paranoid)"
   for h in /sys/class/hwmon/hwmon*; do
     [ "$(cat "$h/name")" = power_meter ] && for f in "$h"/power1_*; do echo "$(basename "$f") $(cat "$f")"; done
@@ -77,7 +93,7 @@ command_of() { # impl -> the command line before the algorithm flags
 python3 bench/power/pwrlog.py 0.1 "$OUT/samples.csv" &
 SAMPLER=$!
 PERF=
-if [ "$KIND" = gpu ] && [ "$(cat /proc/sys/kernel/perf_event_paranoid)" -le 0 ]; then
+if [ "$KIND" != cpu ] && [ "$(cat /proc/sys/kernel/perf_event_paranoid)" -le 0 ]; then
   mark perf_start
   perf stat -a --per-socket -x, -I 100 -e power/energy-pkg/ -o "$OUT/perf_rapl.csv" &
   PERF=$!
@@ -119,9 +135,10 @@ sleep "$PRE"
 mark idle_start
 sleep "$IDLE"
 mark idle_end
-for rep in $(seq 1 "$REPS"); do
+for rep in $(seq 1 "$MAXREP"); do
   for algo in $ALGOS; do
     for impl in $IMPLS; do
+      [ "$rep" -le "${NREPS[$impl]}" ] || continue
       sleep "$PRE"
       run "rep$rep-$impl-$algo" "$impl" "$algo" "${REPEAT[$impl-$algo]}"
     done

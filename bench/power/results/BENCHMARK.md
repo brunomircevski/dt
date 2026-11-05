@@ -198,14 +198,17 @@ Parallel and 2.4× faster than dell's.
 
 ![Time vs energy](chart-time-energy.png)
 
-Each case as a point, log-log: the marker shape is the implementation, the
+Each case as a point on linear axes. The inset zooms in on the fast
+implementations (Parallel, GPU, Hybrid), which sit in the corner next to the
+origin at the full scale. The marker shape is the implementation, the
 colour is the node, and filled markers are CART (hollow ones C4.5). The small
 dot under each marker is the energy above idle. Grey lines are constant mean
 power (100, 200, 500 and 1,000 W); along them, energy grows in proportion to
-time. The serial runs lie
-on the 260–310 W line, so making them faster saves energy in proportion. The
+time. The serial runs lie between the 200 W and 500 W lines (at 260–310 W), so making them faster saves energy in proportion. The
 fast implementations move to a higher power line, but they finish so much
-sooner that their energy is 1–2 orders of magnitude lower. The ideal is down and
+sooner that their energy is 1–2 orders of magnitude lower. On linear axes, the distances are real: going
+from Serial-Simple to Serial-Opt saves far more joules than any later step,
+while the inset shows that the GPU's advantage over epyc's Parallel is about 1 kJ. The ideal is down and
 to the left: GPU and Hybrid sit lowest and furthest left, and the two Parallel
 points come next.
 
