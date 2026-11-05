@@ -59,13 +59,15 @@ Jobs 19 and 22 will run what was current on 2026-11-02, not today's main:
   (2026-11-04: the arena toucher now starts after C4.5's distinct download),
   which made SOREL 4M C4.5 hybrid on the A100 6.38 → 5.33 s (job 61); the
   committed ampere hybrid C4.5 number (6.57 s) is from the old build.
-- **GPU and socket:** mordor3's `~/dt` checkout is still at ad7e06a, whose
-  `job.sh` uses GPU 0 and every CPU. Main's docs (50d29cd) now say hopper runs
-  on GPU 2, NUMA node 1, CPUs 16–31, because another user's /dev/shm fills
-  node 0. So these runs would differ from how the other hopper results are
-  now described.
-- Don't `git pull` in mordor3's `~/dt` while they are queued unless that is
-  the choice: the jobs read `run.py` and the binaries from there.
+- **GPU and socket:** `job.sh` (unchanged on main) uses GPU 0 and every CPU.
+  Main's docs (50d29cd) now say hopper runs on GPU 2, NUMA node 1, CPUs
+  16–31, because another user's /dev/shm fills node 0. So these runs would
+  differ from how the other hopper results are now described.
+- mordor3's `~/dt` was pulled to main on 2026-11-05 (e49b2ed). That does not
+  change jobs 19 and 22: `job.sh` is the same, `run.py` only gained an opt-in
+  `--gpu-min-rows`, and the binaries (`tree`, `tree_cpu`, gitignored) are
+  still the 2026-11-02 build. Don't rebuild them while the jobs are queued
+  unless that is the choice.
 
 The user said (2026-11-03) all benchmarks will be redesigned, so ask:
 
