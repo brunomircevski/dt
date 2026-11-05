@@ -335,6 +335,12 @@ Implementation & Node & $t$ (s) & $P$ (W) & $E$ (kJ) & $t$ (s) & $P$ (W) & $E$ (
 \label{fig:test-depth}
 \end{figure}
 
+\begin{figure}
+\includegraphics[width=\textwidth]{test-bars.pdf}
+\caption{Training time of one tree (depth $\le$ 10, unpruned), log scale: mean over the runs. \ImplSerialBase{}, \ImplSerialOpt{} and \ImplParallel{} on epyc1, \ImplGpu{} and \ImplHybrid{} on the H100 (\ImplHybrid{} with 16 CPU threads). N/A: no run (the full ECBDL'14 and SOREL-20M do not fit in the 80\,GB of VRAM; SOREL 4M not yet run on the H100).}
+\label{fig:test-bars}
+\end{figure}
+
 \clearpage
 %% ------------------------------------------------------------ end TEMPORARY
 

@@ -17,6 +17,7 @@ Styles:
             CART and C4.5, ideal line and the 48-thread efficiency
   pareto    time-accuracy-memory bubbles for one dataset: every implementation
   profile   100 % stacked bars: where the training time goes, per backend
+  bars      grouped bars, log scale: the five implementations on every dataset
 """
 
 import csv
@@ -522,8 +523,52 @@ def profile():
     fig.subplots_adjust(wspace=0.45)
     save(fig, "profile")
 
+# ---------------------------------------------------------------- 8. bars
+def bars():
+    """Grouped bars, log scale: this work's five implementations on every dataset (CPU on
+    epyc1, GPU on the H100), value above each bar, N/A where there is no run."""
+    datasets = ["susy", "higgs", "mnist8m", "ecbdl", "ecbdl_15m", "sorel", "sorel_4m"]
+    impls = [("simple", "epyc"), ("serial", "epyc"), ("cpu", "epyc"), ("gpuonly", "hopper"),
+             ("cuda", "hopper")]
+    labels = {"simple": "Serial-Simple, 1 thread", "serial": "Serial-Opt, 1 thread",
+              "cpu": "Multicore, 48 threads", "gpuonly": "GPU, H100", "cuda": "Hybrid, H100"}
+    n = len(impls)
+    w = 0.85 / n
+    x = np.arange(len(datasets))
+    fig, axes = plt.subplots(2, 1, figsize=(FULL, 3.6), sharex=True, gridspec_kw={"hspace": 0.12})
+    for ax, algo in zip(axes, ["cart", "c45"]):
+        for j, (mode, node) in enumerate(impls):
+            _, c, _ = STYLE[mode]
+            for i, ds in enumerate(datasets):
+                xi = x[i] + (j - (n - 1) / 2) * w
+                r = ours(ds, mode, node, algo)
+                if not r:
+                    ax.text(xi, 0.042, "N/A", rotation=90, ha="center", va="bottom", fontsize=4.6,
+                            color=MUTED)
+                    continue
+                t = r["time_mean"]
+                ax.bar(xi, t, w * 0.9, color=c, ec=INK, lw=0.3, zorder=2,
+                       label=labels[mode] if i == 0 else None)
+                ax.text(xi, t * 1.12, tsec(t), rotation=90, ha="center", va="bottom", fontsize=4.6,
+                        color=INK)
+        log_axis(ax, "y")
+        ax.set_ylim(0.03, 8e4)
+        ax.set_yticks([0.1, 1, 10, 100, 1000, 10000])
+        ax.grid(axis="y", color=GRID, lw=0.4, zorder=0)
+        ax.set_ylabel(rf"\textbf{{{ALGO[algo]}}}: time (s)")
+        ax.tick_params(axis="x", length=0)
+        for i in range(1, len(datasets)):
+            ax.axvline(i - 0.5, color=GRID, lw=0.4, zorder=0)
+    names = {"ecbdl_15m": "ECBDL'14\n15M rows", "sorel_4m": "SOREL\n4M rows"}
+    axes[1].set_xticks(x, [tex(names.get(d, DATA[d][0])) for d in datasets], fontsize=6.2)
+    axes[1].set_xlim(-0.5, len(datasets) - 0.5)
+    h, l = axes[0].get_legend_handles_labels()
+    fig.legend(h, l, loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.885), fontsize=5.8,
+               handlelength=1.0, columnspacing=0.8, handletextpad=0.3)
+    save(fig, "bars")
+
 
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["ladder", "scaling", "profile", "depth"]
+    which = sys.argv[1:] or ["ladder", "scaling", "profile", "depth", "bars"]
     for name in which:
         globals()[name]()
