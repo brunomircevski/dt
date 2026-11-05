@@ -15,7 +15,7 @@
 # cpu: Serial-Simple (--simple), Serial-Opt (--serial) and Parallel on all cores.
 # all: all five on one node with readable CPU (RAPL) and GPU power (ampere), so
 #      that every implementation gets the same CPU/GPU split:
-#   sbatch -p ampere -w ampere --exclusive -t 9:00:00 -J pwr-all \
+#   sbatch -p ampere -w ampere --exclusive -c 48 -t 9:00:00 -J pwr-all \
 #     --export=ALL,TARGET=30,REPS=5,REPS_BY="simple=1 serial=3" \
 #     -o bench/results/power-ampere/ampere/job.log bench/power/power_bench.sh all bench/results/power-ampere/ampere
 #

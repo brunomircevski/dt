@@ -1,0 +1,21 @@
+CART on bench/data/ecbdl_15m/train.csv (backend cuda)
+  rows 15000000 train, 631 features, 2 classes
+  pruning off
+  repeat 1/5: train 5005.4 ms, unix 1793873088.772702 1793873093.830948
+  repeat 2/5: train 7145.2 ms, unix 1793873093.830996 1793873101.069222
+  repeat 3/5: train 7137.7 ms, unix 1793873101.069245 1793873108.292313
+  repeat 4/5: train 7089.3 ms, unix 1793873108.292334 1793873115.433273
+  repeat 5/5: train 7166.5 ms, unix 1793873115.433295 1793873122.747759
+Tree:
+  nodes 1863, leaves 932, depth 10
+  train accuracy 97.9198%
+Timings:
+  load                 31626.6 ms
+  gpu setup             4000.3 ms
+  presort                  0.0 ms
+  build                 3166.2 ms
+  prune                    0.0 ms
+  train total           7166.5 ms
+  evaluate               632.6 ms
+Memory:
+  peak after training 37734732 KiB

@@ -97,6 +97,7 @@ class Job:
         self.node = folder.name
         self.samples = read_csv(folder / "samples.csv")
         self.t = self.samples["t"]
+        self.t_read = self.read_times()
         self.events = read_markers(folder / "markers.txt")
         self.machine = (folder / "machine.txt").read_text()
         self.has_psu = "sys_W" in self.samples
@@ -105,6 +106,21 @@ class Job:
         self.idle_windows = self.find_idle()
         self.lag = self.measure_lag() if self.has_psu else 0.0
         self.idle = {k: self.mean_power(k, self.idle_windows) for k in self.sources()}
+
+    def read_times(self):
+        """When each sample's counters were read. pwrlog.py stamps `t` before its
+        reads, and an NVML call can block for ~2 s (on ampere, every time a GPU
+        tree ends): the counters are then read ~2 s after `t`, and a window ending
+        just before that sample would get ~2 s of extra GPU energy. Newer files
+        have `t_end`, the time after the reads. For older ones, a sample followed
+        by a gap of more than 0.3 s was read just before the next sample (once
+        the reads return, pwrlog.py takes the next sample at once: its loop
+        takes ~0.03 s)."""
+        if "t_end" in self.samples:
+            return self.samples["t_end"]
+        t = self.t
+        return [t[i + 1] - 0.02 if i + 1 < len(t) and t[i + 1] - t[i] > 0.3 else t[i]
+                for i in range(len(t))]
 
     def read_rapl(self):
         path = self.folder / "perf_rapl.csv"
@@ -169,7 +185,7 @@ class Job:
             return self.held_integral(self.samples["sys_W"], a + self.lag, b + self.lag)
         if source.startswith("gpu"):
             col = self.samples["gpu%s_mJ" % source[3:]]
-            return (self.interpolate(col, b) - self.interpolate(col, a)) / 1000
+            return (self.interpolate(col, b, self.t_read) - self.interpolate(col, a, self.t_read)) / 1000
         total = 0.0
         for t, joules, dur in self.rapl[int(source[3:])]:
             overlap = min(b, t) - max(a, t - dur)
@@ -186,8 +202,7 @@ class Job:
                 total += values[i] * (hi - lo)
         return total
 
-    def interpolate(self, col, x):
-        t = self.t
+    def interpolate(self, col, x, t):
         lo, hi = 0, len(t) - 1
         while hi - lo > 1:
             mid = (lo + hi) // 2

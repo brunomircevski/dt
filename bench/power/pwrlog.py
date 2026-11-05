@@ -14,6 +14,9 @@ Columns:
              mordor3; on ampere bench/power/power_bench.sh reads RAPL with perf)
   gpu<i>_W   NVML board power of GPU i
   gpu<i>_mJ  NVML total-energy counter of GPU i (millijoules since driver load)
+  t_end      Unix time after the last read of the sample. NVML calls can block
+             for ~2 s (on ampere, each time a GPU tree ends), so a counter may be
+             read up to 2 s after `t`: analyze.py times the counters with t_end
 """
 import ctypes
 import glob
@@ -85,9 +88,11 @@ except OSError:
 
 signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
 signal.signal(signal.SIGINT, lambda *a: sys.exit(0))
-print(",".join(cols), file=out, flush=True)
+print(",".join(cols + ["t_end"]), file=out, flush=True)
 nxt = time.time()
 while True:
-    print(",".join(["%.3f" % time.time()] + [str(r()) for r in readers]), file=out, flush=True)
+    t = time.time()
+    values = [str(r()) for r in readers]
+    print(",".join(["%.3f" % t] + values + ["%.3f" % time.time()]), file=out, flush=True)
     nxt += dt
     time.sleep(max(0.0, nxt - time.time()))
