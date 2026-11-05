@@ -45,3 +45,6 @@ __pycache__
 /bench/cluster/*.log
 /bench/cluster/plans/
 *.nsys-rep
+
+# Reference PDFs (kept locally, listed in refs/REFERENCES.md)
+/refs/*.pdf
