@@ -259,12 +259,6 @@ wins for which data shape (rows, features, classes).}
 \plan{Thread scaling 1--48 on epyc1 and dell1 (memory bandwidth bound); growth
 with the number of rows (subsamples of one dataset).}
 
-\begin{figure}
-\includegraphics[width=\textwidth]{cluster-cpu-scaling/chart.png}
-\caption{Temporary: thread scaling on HIGGS and MNIST8M (cluster-cpu-scaling).}
-\label{fig:scaling}
-\end{figure}
-
 \subsection{Profiling}
 \plan{Where the time goes: presort, split search, partition, CPU--GPU
 transfer; GPU share of the hybrid; achieved bandwidth against peak.}
