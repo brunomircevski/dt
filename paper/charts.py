@@ -558,7 +558,7 @@ def bars():
         for i in range(1, len(datasets)):
             ax.axvline(i - 0.5, color=GRID, lw=0.4, zorder=0)
     names = {"ecbdl_15m": "ECBDL'14\n15M rows", "sorel_4m": "SOREL\n4M rows"}
-    axes[1].set_xticks(x, [tex(names.get(d, DATA[d][0])) for d in datasets], fontsize=6.2)
+    axes[1].set_xticks(x, [tex(names.get(d, DATA[d][0])) for d in datasets], fontsize=5.4)
     axes[1].set_xlim(-0.5, len(datasets) - 0.5)
     h, l = axes[0].get_legend_handles_labels()
     fig.legend(h, l, loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.885), fontsize=5.8,
