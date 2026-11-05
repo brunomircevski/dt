@@ -62,7 +62,7 @@ INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 # Implementation colours (reference palette slots, as in bench/chart.py), and a
 # marker each so the charts survive grayscale printing.
 STYLE = {
-    "simple":  ("Serial-Simple", "#a3a29d", "v"),
+    "simple":  ("Serial-Simple", "#d6455a", "v"),
     "serial":  ("Serial-Opt", "#7f4fc9", "s"),
     "socket":  ("Multicore 24T", "#6fa8e8", "D"),
     "cpu":     ("Multicore", "#2a78d6", "D"),
@@ -526,14 +526,14 @@ def profile():
 # ---------------------------------------------------------------- 8. bars
 def bars():
     """Grouped bars, log scale: this work's five implementations on every dataset (CPU on
-    epyc1, GPU on the H100), value above each bar, N/A where there is no run."""
+    epyc1, GPU on the H100), value above each bar, no bar where there is no run."""
     datasets = ["susy", "higgs", "mnist8m", "ecbdl", "ecbdl_15m", "sorel", "sorel_4m"]
     impls = [("simple", "epyc"), ("serial", "epyc"), ("cpu", "epyc"), ("gpuonly", "hopper"),
              ("cuda", "hopper")]
     labels = {"simple": "Serial-Simple, 1 thread", "serial": "Serial-Opt, 1 thread",
               "cpu": "Multicore, 48 threads", "gpuonly": "GPU, H100", "cuda": "Hybrid, H100"}
     n = len(impls)
-    w = 0.85 / n
+    w = 0.72 / n
     x = np.arange(len(datasets))
     fig, axes = plt.subplots(2, 1, figsize=(FULL, 3.6), sharex=True, gridspec_kw={"hspace": 0.12})
     for ax, algo in zip(axes, ["cart", "c45"]):
@@ -543,8 +543,6 @@ def bars():
                 xi = x[i] + (j - (n - 1) / 2) * w
                 r = ours(ds, mode, node, algo)
                 if not r:
-                    ax.text(xi, 0.042, "N/A", rotation=90, ha="center", va="bottom", fontsize=4.6,
-                            color=MUTED)
                     continue
                 t = r["time_mean"]
                 ax.bar(xi, t, w * 0.9, color=c, ec=INK, lw=0.3, zorder=2,
