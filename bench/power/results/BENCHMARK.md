@@ -9,12 +9,13 @@ with this folder).
 
 **See also [../results-ampere/BENCHMARK.md](../results-ampere/BENCHMARK.md):** all
 five implementations on ampere alone (job 99, 2026-11-05), with the same
-sensors and a CPU/GPU split for every implementation.
+sensors for every implementation.
 
-**Corrected 2026-11-05:** the ampere numbers (GPU, Hybrid) were about 0.4 kJ
-per tree too high, because the sampler's NVML reads can block for 2 s right
-after a GPU tree, and the counters were then read about 2 s after their
-timestamp. The folder is reanalysed with the fixed analyze.py (see the
+**Corrected 2026-11-05:** the ampere numbers (GPU, Hybrid) are reanalysed with
+the fixed analyze.py, with two changes. They count only the GPU the run used,
+plus both CPU packages. And the GPU energy no longer includes about 2 s of
+extra energy per tree: the sampler's NVML reads can block for 2 s right after a
+GPU tree, and the counter was then read about 2 s after its timestamp (see the
 "sampler bug" section of the ampere-only write-up). The dell and epyc numbers
 did not change.
 
@@ -35,7 +36,7 @@ No sudo was available, so each node gives only the sensors a user can read
 |---|---|---|---|
 | dell4 | Dell PowerEdge R660, 2× Xeon Gold 6542Y | whole server at the PSU (ACPI `power_meter`) | about every 2 s |
 | epyc1 | Dell PowerEdge R6725, 2× EPYC 9255 | whole server at the PSU (ACPI `power_meter`) | about every 6 s |
-| ampere | Supermicro AS-4124GS-TNR, 2× EPYC 7402, 4× A100 | CPU packages (RAPL via `perf`) + every GPU (NVML energy counter) | 0.1 s |
+| ampere | Supermicro AS-4124GS-TNR, 2× EPYC 7402, A100 80 GB | both CPU packages (RAPL via `perf`) + the GPU the run used (NVML energy counter) | 0.1 s |
 
 The ampere numbers do **not** include RAM, fans, the board, disks or PSU
 losses, while the dell and epyc numbers include everything. So you can compare
@@ -46,7 +47,7 @@ out the constant part on both kinds of node.
 Node conditions: CPU frequency governors as the admins left them (dell4
 `intel_pstate powersave`, epyc1 `amd-pstate-epp performance`, ampere
 `acpi-cpufreq ondemand`). Mean idle power: dell4 159 W, epyc1 110 W, and
-ampere 313 W (CPU packages 59 + 59 W, GPUs 55 + 53 + 42 + 45 W).
+ampere 172 W (CPU packages 59 + 59 W, GPU 54.5 W).
 
 ## Protocol
 
@@ -99,8 +100,8 @@ spread between the 3 runs is at most 1.4% on dell and epyc. On ampere it is
 | Serial-Simple | dell | 3 × 1 | 2,556 s ± 0.3% | 307 W | 149 W | 313 W | 786 kJ ± 0.2% | 380 kJ |
 | Serial-Opt | dell | 3 × 1 | 356 s ± 1.1% | 308 W | 150 W | 367 W | 110 kJ ± 1.1% | 53.3 kJ |
 | Parallel | dell | 3 × 9 | 12.2 s ± 0.2% | 680 W | 521 W | 724 W | 8.46 kJ ± 1.4% | 6.48 kJ |
-| GPU | ampere¹ | 3 × 1st of 17 | 5.00 s ± 0.6% | 496 W | 184 W | 602 W | 2.53 kJ ± 0.8% | 937 J |
-| Hybrid | ampere¹ | 3 × 1st of 18 | 5.08 s ± 0.1% | 502 W | 190 W | 656 W | 2.71 kJ ± 0.2% | 1.03 kJ |
+| GPU | ampere¹ | 3 × 1st of 17 | 5.00 s ± 0.6% | 356 W | 183 W | 462 W | 1.81 kJ ± 0.6% | 935 J |
+| Hybrid | ampere¹ | 3 × 1st of 18 | 5.08 s ± 0.1% | 362 W | 190 W | 516 W | 1.95 kJ ± 0.4% | 1.03 kJ |
 
 ### C4.5 (gain ratio)
 
@@ -112,28 +113,28 @@ spread between the 3 runs is at most 1.4% on dell and epyc. On ampere it is
 | Serial-Simple | dell | 3 × 1 | 2,815 s ± 0.1% | 307 W | 149 W | 338 W | 866 kJ ± 0.2% | 419 kJ |
 | Serial-Opt | dell | 3 × 1 | 436 s ± 1.0% | 309 W | 150 W | 313 W | 135 kJ ± 0.8% | 65.6 kJ |
 | Parallel | dell | 3 × 7 | 15.4 s ± 0.1% | 666 W | 508 W | 745 W | 10.4 kJ ± 1.4% | 7.93 kJ |
-| GPU | ampere¹ | 3 × 1st of 17 | 5.04 s ± 0.5% | 492 W | 180 W | 601 W | 2.52 kJ ± 1.5% | 922 J |
-| Hybrid | ampere¹ | 3 × 1st of 18 | 5.10 s ± 0.4% | 503 W | 191 W | 645 W | 2.73 kJ ± 0.4% | 1.04 kJ |
+| GPU | ampere¹ | 3 × 1st of 17 | 5.04 s ± 0.5% | 352 W | 180 W | 461 W | 1.80 kJ ± 1.5% | 923 J |
+| Hybrid | ampere¹ | 3 × 1st of 18 | 5.10 s ± 0.4% | 362 W | 190 W | 505 W | 1.97 kJ ± 0.2% | 1.03 kJ |
 
-¹ ampere = both CPU packages + all four GPUs, without the rest of the server.
+¹ ampere = both CPU packages + the GPU the run used, without the rest of the server.
 
 ### Energy split on ampere (per tree)
 
-| Implementation | Algorithm | CPU socket 0 | CPU socket 1 | GPU 0 (in use) | GPUs 1–3 (unused) |
-|---|---|---|---|---|---|
-| GPU | CART | 395 J | 305 J | 1.11 kJ | 717 J |
-| Hybrid | CART | 493 J | 323 J | 1.14 kJ | 756 J |
-| GPU | C4.5 | 397 J | 307 J | 1.10 kJ | 717 J |
-| Hybrid | C4.5 | 494 J | 325 J | 1.15 kJ | 765 J |
+| Implementation | Algorithm | CPU socket 0 | CPU socket 1 | GPU |
+|---|---|---|---|---|
+| GPU | CART | 395 J | 305 J | 1.11 kJ |
+| Hybrid | CART | 493 J | 323 J | 1.14 kJ |
+| GPU | C4.5 | 397 J | 307 J | 1.10 kJ |
+| Hybrid | C4.5 | 494 J | 325 J | 1.15 kJ |
 
 ### Later trees in the same process (ampere)
 
 | Implementation | Algorithm | First tree | Later trees (mean) |
 |---|---|---|---|
-| GPU | CART | 5.00 s, 2.53 kJ | 7.11 s, 3.22 kJ |
-| GPU | C4.5 | 5.04 s, 2.52 kJ | 7.14 s, 3.24 kJ |
-| Hybrid | CART | 5.08 s, 2.71 kJ | 6.93 s, 3.33 kJ |
-| Hybrid | C4.5 | 5.10 s, 2.73 kJ | 6.95 s, 3.35 kJ |
+| GPU | CART | 5.00 s, 1.81 kJ | 7.11 s, 2.21 kJ |
+| GPU | C4.5 | 5.04 s, 1.80 kJ | 7.14 s, 2.22 kJ |
+| Hybrid | CART | 5.08 s, 1.95 kJ | 6.93 s, 2.31 kJ |
+| Hybrid | C4.5 | 5.10 s, 1.97 kJ | 6.95 s, 2.33 kJ |
 
 The full tables are in [summary.md](summary.md) and [summary.csv](summary.csv),
 and every single run is in [runs.csv](runs.csv).
@@ -148,16 +149,15 @@ One stacked bar per implementation and node, CART on the left and C4.5 on the
 right. Each component is split into its idle part (lighter) and the part above
 idle (full colour). The dotted line shows the peak power in the window.
 - **dell, epyc:** one component, the whole server.
-- **ampere:** CPU socket 0, CPU socket 1, the GPU in use and the three unused
-  GPUs.
+- **ampere:** CPU socket 0, CPU socket 1 and the GPU.
 
 What it shows:
 - One busy core adds about 150 W on both CPU nodes, whether it runs
   Serial-Simple or Serial-Opt. The two serial implementations draw the same
   power, so their energy differs only by their time.
 - Parallel draws about 600 W (epyc) and 670–680 W (dell).
-- On ampere, about 310 W is idle draw. The GPU in use rises from about 55 W to
-  about 210–220 W. Hybrid's CPU socket 0 draws about 15 W more on average than
+- On ampere, 172 W is idle draw. The GPU rises from about 55 W to about
+  210–220 W. Hybrid's CPU socket 0 draws about 15 W more on average than
   with GPU-only (about 100 J more per tree).
 
 ### Energy per tree — [chart-energy.png](chart-energy.png)
@@ -173,9 +173,8 @@ as the darker inner bar.
   node.
 - epyc's Parallel uses 2.2× less energy than dell's: 1.9× faster, at 13% lower
   power.
-- GPU and Hybrid on ampere use 2.5–2.7 kJ, less than epyc's Parallel even
-  though they include four GPUs. Above idle, the GPU uses 0.94 kJ against epyc's
-  3.1 kJ (CART). This is the fairest comparison, but remember that ampere
+- GPU and Hybrid on ampere use 1.8–2.0 kJ, against epyc's Parallel 3.8 kJ
+  (CART). Above idle, the GPU uses 0.94 kJ against epyc's 3.1 kJ. This is the fairest comparison, but remember that ampere
   leaves out RAM and the rest of the board.
 
 ### Where the energy goes — [chart-energy-split.png](chart-energy-split.png)
@@ -187,9 +186,8 @@ separately.
 - **dell, epyc:** a single PSU bar. For the serial runs, about half is idle
   draw. For Parallel, it is 19–24%.
 - **ampere:**
-  - The three unused GPUs take about 28% of the measured energy.
-  - The GPU in use takes about 42–44%.
-  - The two CPU packages take about 28% with GPU-only and 30% with Hybrid.
+  - The GPU takes about 61% (GPU-only) and 58% (Hybrid) of the measured energy.
+  - The two CPU packages take the rest, 39% and 42%, most of it idle draw.
 
 ### Training time — [chart-time.png](chart-time.png)
 
@@ -219,7 +217,7 @@ time. The serial runs lie between the 200 W and 500 W lines (at 260–310 W), so
 fast implementations move to a higher power line, but they finish so much
 sooner that their energy is 1–2 orders of magnitude lower. On linear axes, the distances are real: going
 from Serial-Simple to Serial-Opt saves far more joules than any later step,
-while the inset shows that the GPU's advantage over epyc's Parallel is about 1 kJ. The ideal is down and
+while the inset shows that the GPU's advantage over epyc's Parallel is about 2 kJ. The ideal is down and
 to the left: GPU and Hybrid sit lowest and furthest left, and the two Parallel
 points come next.
 
@@ -232,15 +230,14 @@ end, with the measured trees shaded. The thin grey line (right axis) is the
 node's CPU utilisation.
 - On the PSU nodes, the PSU line is already shifted by the meter's delay, and
   you can see the CSV load (all cores busy) before training.
-- On ampere, every tree is a burst on GPU 0 (up to about 350 W) with CPU
-  socket 0 following it; only the first tree (shaded) is measured. The three
-  unused GPUs stay flat at 42–55 W each.
+- On ampere, every tree is a burst on the GPU (up to about 350 W) with CPU
+  socket 0 following it; only the first tree (shaded) is measured.
 
 ## Conclusions
 
 1. **Faster means less energy.** No implementation trades a little more time
    for much less power. Every speed-up lowered the energy per tree, from 866 kJ
-   (Serial-Simple, dell, C4.5) to 2.52 kJ (GPU, ampere): about 340× less.
+   (Serial-Simple, dell, C4.5) to 1.80 kJ (GPU, ampere): about 480× less.
 2. **Serial runs pay mainly for idle and time.** A single busy core adds only
    about 150 W to a 110–160 W idle server. Serial-Opt's 6–10× speed-up
    therefore saves the same factor in energy.
@@ -248,11 +245,8 @@ node's CPU utilisation.
    power than Serial-Opt and runs 29–36× faster, so it uses 13–15.5× less
    energy.
 4. **GPU vs Hybrid.** Hybrid's CPU work raises socket 0's power without making
-   the tree faster at this size (5.08 s against 5.00 s), so Hybrid uses 7–8%
+   the tree faster at this size (5.08 s against 5.00 s), so Hybrid uses 8–9%
    more energy than GPU-only.
-5. **Unused GPUs are not free.** They take about 0.72 kJ per tree on ampere,
-   two thirds of what the GPU doing the work uses. A server with one GPU would
-   use about 28% less energy for the same job.
 
 ## Limitations
 

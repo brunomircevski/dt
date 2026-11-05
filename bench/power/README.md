@@ -13,8 +13,8 @@ and hopper were busy). It also holds a plan for the paper's energy measurements.
 - **`results/BENCHMARK.md`: the results** (ECBDL'14 15M, depth 10, jobs 84–86):
   time, power and energy per tree on ampere, dell4 and epyc1, with charts.
 - **`results-ampere/BENCHMARK.md`: all five implementations on ampere** (job 99,
-  2026-11-05): the same node and sensors for every implementation, with energy
-  above idle split into CPU (RAPL) and GPU (NVML), time and peak power.
+  2026-11-05): the same node and sensors for every implementation; one chart
+  per algorithm with energy, power (CPU and GPU parts) and time.
 - `ADMIN-REQUEST.md`: what the admins need to set up so that users can read
   CPU and PSU power.
 
@@ -103,7 +103,7 @@ power is out of scope (only the Intel dell nodes have a sensor for it).
    nodes, use the ACPI meter. On ampere, use IPMI once item 2 is granted. Until
    then, report ampere as the sum GPU (NVML) + CPU (RAPL).
 2. **Components:** CPU packages (RAPL), DRAM (RAPL; Intel/dell only), GPU
-   (NVML energy counter, the GPU in use, idle GPUs listed separately), and
+   (NVML energy counter, only the GPU the run uses, and only in GPU runs), and
    "rest" = node − the sum. On AMD, "rest" includes DRAM.
 3. Both **total** energy and energy **above idle**. Idle is measured in the same
    job for 30 s just before the run. Total is the honest "energy to solution".

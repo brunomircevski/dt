@@ -47,7 +47,7 @@ IMPL_ORDER = list(IMPLS)
 ALGOS = {"cart": "CART (gini)", "c45": "C4.5 (gain ratio)"}
 NODE_ORDER = ["epyc", "dell", "ampere"]
 NODE_HW = {"epyc": "epyc1: 2× EPYC 9255", "dell": "dell4: 2× Xeon Gold 6542Y",
-           "ampere": "ampere: A100 80 GB + 2× EPYC 7402 (GPUs + CPU packages, no PSU)"}
+           "ampere": "ampere: A100 80 GB + 2× EPYC 7402 (CPU packages + GPU, no PSU)"}
 IMPL_COLORS = {"simple": "#d14f8e", "serial": "#2a78d6", "parallel": "#eb6834",
                "cuda": "#1baf7a", "gpu_only": "#eda100", "gpuonly": "#eda100"}
 NODE_COLORS = {"epyc": "#8e5bd0", "dell": "#2a78d6", "ampere": "#1baf7a"}
@@ -56,8 +56,12 @@ MARKERS = {"simple": "s", "serial": "D", "parallel": "o", "gpuonly": "^", "cuda"
 COMPONENTS = {"psu": ("Whole server (PSU)", "#5b6770"),
               "cpu0": ("CPU socket 0 (RAPL)", "#2a78d6"),
               "cpu1": ("CPU socket 1 (RAPL)", "#8e5bd0"),
-              "gpu_used": ("GPU 0, in use (NVML)", "#1baf7a"),
-              "gpu_idle": ("GPUs 1–3, unused (NVML)", "#a08a2c")}
+              "gpu": ("GPU (NVML)", "#1baf7a")}
+# The implementations that use a GPU, and the GPU they run on (power_bench.sh:
+# GPU 0 with the CPUs of its NUMA node). Only that GPU is counted, and only in
+# their runs: the CPU implementations count the CPU packages alone.
+GPU_IMPLS = {"cuda", "gpuonly"}
+USED_GPU = 0
 IDLE_SKIP = 5.0
 
 
@@ -219,7 +223,7 @@ class Job:
             return float("nan")
         return sum(self.energy(source, a, b) for a, b in windows) / sum(b - a for a, b in windows)
 
-    def peak(self, a, b):
+    def peak(self, a, b, gpu=False):
         """Highest sampled total power in [a, b]: PSU, or GPUs + CPU sockets."""
         if self.has_psu:
             # Skip the first 10 s of a long window: the meter's first reading
@@ -232,9 +236,10 @@ class Job:
         rapl = [([t for t, _, d in v if d > 0], [j / d for _, j, d in v if d > 0])
                 for v in self.rapl.values()]
         # widen by one sample period so that a window shorter than it still has samples
-        for i in range(bisect.bisect_left(self.t, a - 0.1), bisect.bisect_right(self.t, b + 0.1)):
+        pad = 0.1 if b - a < 0.5 else 0.0
+        for i in range(bisect.bisect_left(self.t, a - pad), bisect.bisect_right(self.t, b + pad)):
             t = self.t[i]
-            power = sum(self.samples["gpu%d_W" % g][i] for g in self.gpus)
+            power = self.samples["gpu%d_W" % USED_GPU][i] if gpu and self.gpus else 0.0
             for ends, watts in rapl:
                 if ends:
                     power += watts[min(bisect.bisect_left(ends, t), len(ends) - 1)]
@@ -242,16 +247,16 @@ class Job:
         return best
 
 
-def components(job, per_source):
-    """Map source values to chart components."""
+def components(job, per_source, impl):
+    """Map source values to chart components: the PSU, or the CPU packages plus,
+    for the GPU implementations, the GPU they ran on."""
     out = {}
     if job.has_psu:
         out["psu"] = per_source["psu"]
     for k in sorted(job.rapl):
         out["cpu%d" % k] = per_source["cpu%d" % k]
-    if job.gpus:
-        out["gpu_used"] = per_source["gpu0"]
-        out["gpu_idle"] = sum(per_source["gpu%d" % g] for g in job.gpus if g != 0)
+    if job.gpus and impl in GPU_IMPLS:
+        out["gpu"] = per_source["gpu%d" % USED_GPU]
     return out
 
 
@@ -277,11 +282,12 @@ def analyse(job):
         span = b - a
         energy = {s: job.energy(s, a, b) / k for s in job.sources()}
         idle = {s: job.idle[s] * span / k for s in job.sources()}
-        comp_e = components(job, energy)
-        comp_idle = components(job, idle)
+        comp_e = components(job, energy, attrs["impl"])
+        comp_idle = components(job, idle, attrs["impl"])
         total = sum(comp_e.values())
         sa, sb = steady[0][0], steady[-1][1]
-        steady_e = sum(job.energy(s, sa, sb) for s in job.sources()) / len(steady)
+        steady_e = sum(components(job, {s: job.energy(s, sa, sb) for s in job.sources()},
+                                  attrs["impl"]).values()) / len(steady)
         rows.append({
             "node": job.node, "impl": attrs["impl"], "algo": attrs["algo"],
             "rep": int(run.split("-")[0][3:]), "repeat": k, "trees_in_process": len(tree["windows"]),
@@ -291,7 +297,7 @@ def analyse(job):
             "depth": tree["depth"], "energy_J": total,
             "above_idle_J": total - sum(comp_idle.values()),
             "power_W": total / (span / k), "idle_W": sum(comp_idle.values()) / (span / k),
-            "peak_W": job.peak(a, b), "lag_s": job.lag,
+            "peak_W": job.peak(a, b, attrs["impl"] in GPU_IMPLS), "lag_s": job.lag,
             **{f"E_{c}": v for c, v in comp_e.items()},
             **{f"Eidle_{c}": v for c, v in comp_idle.items()},
             "_window": (a, b, start, end),
@@ -437,7 +443,7 @@ def chart_power(folder, summary):
                 plt.Line2D([], [], color=INK, ls=":", label="highest sample (peak)")]
     fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=8.5)
     fig.suptitle("ECBDL'14 15M: mean power while training one tree (Dell nodes: whole server at the PSU; "
-                 "ampere: GPUs + CPU packages, no PSU reading)", fontsize=11, color=INK, x=0.01, ha="left")
+                 "ampere: CPU packages + the GPU in use, no PSU reading)", fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0.08, 1, 0.95))
     fig.savefig(folder / "chart-power.png", dpi=150)
     plt.close(fig)
@@ -466,7 +472,7 @@ def chart_energy(folder, summary):
                         Patch(facecolor="#888", label="above idle power (label in brackets)")],
                loc="lower center", ncol=2, frameon=False, fontsize=8.5)
     fig.suptitle("ECBDL'14 15M: energy to train one tree (mean of the runs; whisker ± 1 sd; "
-                 "ampere = GPUs + CPU packages)", fontsize=11, color=INK, x=0.01, ha="left")
+                 "ampere = CPU packages + the GPU in use)", fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0.06, 1, 0.95))
     fig.savefig(folder / "chart-energy.png", dpi=150)
     plt.close(fig)
@@ -599,11 +605,12 @@ def chart_scatter(folder, summary):
 
 def chart_cpu_gpu(folder, summary):
     """Nodes with CPU (RAPL) and GPU (NVML) sensors but no PSU: one chart per
-    algorithm with three bars per implementation: energy above idle per tree
-    (CPU + GPU, log), mean power while training (CPU + GPU, idle part lighter,
-    peak marked) and time per tree (log), each bar on its own axis."""
-    from matplotlib.patches import Patch
+    algorithm. Each implementation gets three bars on log axes: energy per tree,
+    mean power while training and time per tree. Energy and power are stacked
+    CPU idle, GPU idle, CPU above idle, GPU above idle; the GPU is counted only
+    for the GPU implementations, and only the GPU they ran on."""
     from matplotlib.colors import to_rgba
+    from matplotlib.ticker import FuncFormatter
     cases = [s for s in summary if "E_cpu0" in s and "E_psu" not in s]
     nodes = sorted({s["node"] for s in cases})
     if not cases or len({s["impl"] for s in cases}) < 3:
@@ -611,102 +618,109 @@ def chart_cpu_gpu(folder, summary):
     for old in folder.glob("chart-cpu-gpu-*.png"):
         old.unlink()
     CPU, GPU, TIME = "#2a78d6", "#1baf7a", "#3d3c3a"
-    cpus, gpus = ("cpu0", "cpu1"), ("gpu_used", "gpu_idle")
+    cpus = ("cpu0", "cpu1")
 
-    def above(s, comps):
-        return sum(s.get(f"E_{c}", 0) - s.get(f"Eidle_{c}", 0) for c in comps)
+    def parts(s, key):
+        """[cpu idle, gpu idle, cpu above idle, gpu above idle] of E_ (J) or P_ (W)."""
+        div = s["span_s"] if key == "P" else 1.0
+        ci = sum(s[f"Eidle_{c}"] for c in cpus) / div
+        ct = sum(s[f"E_{c}"] for c in cpus) / div
+        gi = s.get("Eidle_gpu", 0.0) / div
+        gt = s.get("E_gpu", 0.0) / div
+        return [ci, gi, max(ct - ci, 0.0), max(gt - gi, 0.0)]
 
-    def watts(s, comps, key):
-        return sum(s.get(f"{key}_{c}", 0) for c in comps) / s["span_s"]
+    colors = [to_rgba(CPU, 0.35), to_rgba(GPU, 0.35), CPU, GPU]
 
-    def light(c):
-        return to_rgba(c, 0.32)
+    def stack(ax, x, vals, floor):
+        """Stack on a log axis: each part's height is its share of the bar."""
+        total = sum(vals)
+        cum = 0.0
+        for v, col in zip(vals, colors):
+            if v <= 0:
+                continue
+            lo = floor * (total / floor) ** (cum / total)
+            cum += v
+            hi = floor * (total / floor) ** (cum / total)
+            ax.bar(x, hi - lo, bottom=lo, width=w, color=col, edgecolor="white", lw=0.4)
+        return total
 
-    w = 0.25
+    def plain(v, _):
+        return f"{v:,.0f}" if v >= 1 else f"{v:g}"
+
+    w = 0.26
     for node in nodes:
         for algo in [a for a in ALGOS if any(s["node"] == node and s["algo"] == a for s in cases)]:
             ss = sorted([s for s in cases if s["node"] == node and s["algo"] == algo],
                         key=lambda s: IMPL_ORDER.index(s["impl"]))
             x = list(range(len(ss)))
-            fig, ax_e = plt.subplots(figsize=(13, 6.2))
+            fig, ax_e = plt.subplots(figsize=(13, 6.6))
             ax_p = ax_e.twinx()
             ax_t = ax_e.twinx()
-            ax_t.spines["right"].set_position(("axes", 1.09))
+            ax_t.spines["right"].set_position(("axes", 1.08))
 
-            # energy above idle, CPU + GPU (log)
-            cpu = [max(above(s, cpus), 0) for s in ss]
-            gpu = [max(above(s, gpus), 0) for s in ss]
-            tot = [c + g for c, g in zip(cpu, gpu)]
-            floor = min(tot) / 6
-            xe = [i - w for i in x]
-            # on a log axis, draw the CPU/GPU boundary so that each part's height is
-            # its share of the bar (a plain stack would hide a 10% CPU part)
-            cut = [floor * (T / floor) ** (c / T) if T else floor for c, T in zip(cpu, tot)]
-            ax_e.bar(xe, [k - floor for k in cut], bottom=floor, width=w, color=CPU)
-            ax_e.bar(xe, [T - k for T, k in zip(tot, cut)], bottom=cut, width=w, color=GPU)
+            # energy per tree (J, log)
+            E = [parts(s, "E") for s in ss]
+            fe = min(sum(v) for v in E) / 8
+            for i, (s, v) in enumerate(zip(ss, E)):
+                tot = stack(ax_e, i - w, v, fe)
+                ax_e.text(i - w, tot * 1.12, f"{fmt_j(tot)}\nabove idle\n{fmt_j(v[2] + v[3])}",
+                          ha="center", va="bottom", fontsize=7, color=INK)
             ax_e.set_yscale("log")
-            ax_e.set_ylim(floor, max(tot) * 6)
-            for i, (c, g) in enumerate(zip(cpu, gpu)):
-                lab = f"{fmt_j(c + g)}\nCPU {fmt_j(c)}\nGPU {fmt_j(g)}" if g > 0 else f"{fmt_j(c)}\nCPU only"
-                ax_e.text(xe[i], (c + g) * 1.12, lab,
-                          ha="center", va="bottom", fontsize=7, color=INK)
+            ax_e.set_ylim(fe, max(sum(v) for v in E) * 12)
 
-            # mean power while training, CPU + GPU, idle part lighter (linear)
-            xp = x
-            for i, s in enumerate(ss):
-                ci, ca = watts(s, cpus, "Eidle"), watts(s, cpus, "E")
-                gi, ga = watts(s, gpus, "Eidle"), watts(s, gpus, "E")
-                ax_p.bar(xp[i], ci, width=w, color=light(CPU), edgecolor=CPU, lw=0.6)
-                ax_p.bar(xp[i], max(ca - ci, 0), bottom=ci, width=w, color=CPU, hatch="///",
-                         edgecolor="white", lw=0)
-                ax_p.bar(xp[i], gi, bottom=ca, width=w, color=light(GPU), edgecolor=GPU, lw=0.6)
-                ax_p.bar(xp[i], max(ga - gi, 0), bottom=ca + gi, width=w, color=GPU, hatch="///",
-                         edgecolor="white", lw=0)
-                ax_p.plot([xp[i] - w / 2, xp[i] + w / 2], [s["peak_W"]] * 2, color=INK, lw=1.4, ls=":")
-                top = max(ca + ga, s["peak_W"])
-                ax_p.text(xp[i], top + 8, f"{ca + ga:.0f} W\nCPU {ca:.0f}\nGPU {ga:.0f}\npeak {s['peak_W']:.0f}",
+            # mean power while training (W, log)
+            P = [parts(s, "P") for s in ss]
+            fp = 20.0
+            for i, (s, v) in enumerate(zip(ss, P)):
+                tot = stack(ax_p, i, v, fp)
+                ax_p.plot([i - w / 2, i + w / 2], [s["peak_W"]] * 2, color=INK, lw=1.3, ls=":")
+                lab = f"{tot:.0f} W\nCPU {v[0] + v[2]:.0f}"
+                if s["impl"] in GPU_IMPLS:
+                    lab += f"\nGPU {v[1] + v[3]:.0f}"
+                ax_p.text(i, max(tot, s["peak_W"]) * 1.08, lab + f"\npeak {s['peak_W']:.0f}",
                           ha="center", va="bottom", fontsize=7, color=INK)
-            ax_p.set_ylim(0, max(s["peak_W"] for s in ss) * 1.55)
+            ax_p.set_yscale("log")
+            ax_p.set_ylim(fp, 6000)
 
-            # time per tree (log)
+            # time per tree (s, log)
             t = [s["train_s"] for s in ss]
-            xt = [i + w for i in x]
-            ax_t.bar(xt, t, width=w, color=TIME, yerr=[s["train_s_sd"] for s in ss],
-                     error_kw={"lw": 0.8, "capsize": 2, "ecolor": MUTED})
-            ax_t.set_yscale("log")
-            ax_t.set_ylim(min(t) / 6, max(t) * 6)
+            ft = min(t) / 8
+            ax_t.bar([i + w for i in x], [v - ft for v in t], bottom=ft, width=w, color=TIME)
             for i, v in enumerate(t):
-                ax_t.text(xt[i], v * 1.12, fmt_s(v), ha="center", va="bottom", fontsize=7, color=INK)
+                ax_t.text(i + w, v * 1.12, fmt_s(v), ha="center", va="bottom", fontsize=7, color=INK)
+            ax_t.set_yscale("log")
+            ax_t.set_ylim(ft, max(t) * 12)
 
-            ax_e.set_ylabel("energy above idle per tree (J, log)", color=INK)
-            ax_p.set_ylabel("mean power while training (W)", color=INK)
-            ax_t.set_ylabel("training time per tree (s, log)", color=TIME)
-            ax_e.set_xticks(x)
-            ax_e.set_xticklabels([IMPLS[s["impl"]] for s in ss], fontsize=10)
-            ax_e.set_xlim(-0.6, len(ss) - 0.4)
-            for xi in x:
-                for dx, lab in ((-w, "energy"), (0, "power"), (w, "time")):
-                    ax_t.annotate(lab, (xi + dx, 0), xycoords=("data", "axes fraction"),
-                                  xytext=(0, 3), textcoords="offset points", ha="center",
-                                  va="bottom", fontsize=6.5, rotation=90,
-                                  color=INK if lab == "power" else "white")
-            ax_e.grid(axis="y", color=GRID, which="major")
-            ax_e.set_axisbelow(True)
+            ax_e.set_ylabel("ENERGY per tree (J, log scale) — left bar", color=INK)
+            ax_p.set_ylabel("mean POWER while training (W, log scale) — middle bar", color=INK)
+            ax_t.set_ylabel("TIME per tree (s, log scale) — right bar", color=INK)
             for a in (ax_e, ax_p, ax_t):
+                a.yaxis.set_major_formatter(FuncFormatter(plain))
                 a.spines["top"].set_visible(False)
                 a.tick_params(colors=INK, labelsize=8)
-            handles = [Patch(color=CPU, label="CPU sockets 0 + 1 (RAPL)"),
-                       Patch(color=GPU, label="GPUs 0–3 (NVML)"),
-                       Patch(color="none", label="energy: CPU/GPU split drawn by share"),
-                       Patch(facecolor=light(MUTED), edgecolor=MUTED, label="power: idle part (lighter)"),
-                       Patch(facecolor=MUTED, hatch="///", edgecolor="white", label="power: above idle (hatched)"),
-                       plt.Line2D([], [], color=INK, ls=":", label="power: peak sample"),
+            ax_e.grid(axis="y", color=GRID, which="major")
+            ax_e.set_axisbelow(True)
+            # two-level x labels: what each bar is, then the implementation
+            ax_e.set_xticks([i + d for i in x for d in (-w, 0, w)])
+            ax_e.set_xticklabels(["energy", "power", "time"] * len(x), fontsize=7.5, color=MUTED)
+            ax_e.set_xlim(-0.6, len(ss) - 0.4)
+            for i, s in enumerate(ss):
+                ax_e.text(i, -0.075, IMPLS[s["impl"]], transform=ax_e.get_xaxis_transform(),
+                          ha="center", va="top", fontsize=10.5, color=INK, fontweight="bold")
+            handles = [Patch(color=colors[0], label="CPU packages, idle part"),
+                       Patch(color=colors[1], label="GPU, idle part"),
+                       Patch(color=colors[2], label="CPU packages, above idle"),
+                       Patch(color=colors[3], label="GPU, above idle"),
+                       plt.Line2D([], [], color=INK, ls=":", label="peak power (highest sample)"),
                        Patch(color=TIME, label="time per tree")]
-            ax_e.legend(handles=handles, fontsize=8, frameon=False, loc="upper right", ncol=3)
+            ax_e.legend(handles=handles, fontsize=8, frameon=False, loc="upper right", ncol=3,
+                        title="stack order bottom to top; on the log axes each part's height is its "
+                              "share of the bar", title_fontsize=7.5)
             n = ", ".join(f"{IMPLS[s['impl']]} {s['runs']}×" for s in ss)
-            ax_e.set_title(f"{ALGOS[algo]} · ECBDL'14 15M on {NODE_HW.get(node, node)}: one tree, depth ≤ 10\n"
-                           f"energy above idle | mean power while training | time, per implementation "
-                           f"(means of {n})", fontsize=10, color=INK, loc="left")
+            ax_e.set_title(f"{ALGOS[algo]}: energy, power and time to train one tree on ECBDL'14 15M "
+                           f"(depth ≤ 10), ampere: A100 80 GB + 2× EPYC 7402\nMeasured: both CPU packages (RAPL) "
+                           f"+ the GPU (NVML; GPU and Hybrid runs only). No PSU, RAM or fans.\nMeans of {n}",
+                           fontsize=10, color=INK, loc="left")
             fig.tight_layout()
             fig.savefig(folder / f"chart-cpu-gpu-{node}-{algo}.png", dpi=150)
             plt.close(fig)
@@ -736,10 +750,9 @@ def chart_traces(folder, jobs, rows):
         if job.has_psu:
             ax.plot([job.t[i] - start - job.lag for i in idx], [job.samples["sys_W"][i] for i in idx],
                     color=COMPONENTS["psu"][1], lw=1.2, drawstyle="steps-post", label="PSU (shifted by delay)")
-        for g in job.gpus:
-            ax.plot(x, [job.samples["gpu%d_W" % g][i] for i in idx], lw=1 if g == 0 else 0.6,
-                    color=COMPONENTS["gpu_used" if g == 0 else "gpu_idle"][1],
-                    label="GPU 0" if g == 0 else ("GPUs 1–3" if g == 1 else None))
+        if job.gpus and key[1] in GPU_IMPLS:
+            ax.plot(x, [job.samples["gpu%d_W" % USED_GPU][i] for i in idx], lw=1,
+                    color=COMPONENTS["gpu"][1], label="GPU")
         for k, series in sorted(job.rapl.items()):
             pts = [(t - start, j / d) for t, j, d in series if lo <= t <= hi and d > 0]
             ax.plot([p[0] for p in pts], [p[1] for p in pts], lw=0.7, color=COMPONENTS["cpu%d" % k][1],
@@ -758,8 +771,7 @@ def chart_traces(folder, jobs, rows):
         ax.grid(color=GRID, lw=0.5)
         style(ax)
     handles = [plt.Line2D([], [], color=COMPONENTS["psu"][1], label="whole server, PSU (shifted back by the meter delay)"),
-               plt.Line2D([], [], color=COMPONENTS["gpu_used"][1], label="GPU 0 (in use)"),
-               plt.Line2D([], [], color=COMPONENTS["gpu_idle"][1], label="GPUs 1–3 (each)"),
+               plt.Line2D([], [], color=COMPONENTS["gpu"][1], label="GPU (NVML; GPU runs only)"),
                plt.Line2D([], [], color=COMPONENTS["cpu0"][1], label="CPU socket 0 (RAPL)"),
                plt.Line2D([], [], color=COMPONENTS["cpu1"][1], label="CPU socket 1 (RAPL)"),
                plt.Line2D([], [], color=MUTED, lw=0.5, label="CPU busy % (right axis)"),
