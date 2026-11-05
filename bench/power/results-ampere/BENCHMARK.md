@@ -143,25 +143,33 @@ and every run is in [runs.csv](runs.csv).
 
 ## Charts
 
-### CPU and GPU energy, time and peak power — [chart-cpu-gpu-ampere.png](chart-cpu-gpu-ampere.png)
+### Energy, power and time in one chart — [CART](chart-cpu-gpu-ampere-cart.png), [C4.5](chart-cpu-gpu-ampere-c45.png)
 
-![CPU/GPU energy, time, peak power](chart-cpu-gpu-ampere.png)
+![CART: energy, power, time](chart-cpu-gpu-ampere-cart.png)
 
-The summary chart: one row per algorithm, three columns.
+![C4.5: energy, power, time](chart-cpu-gpu-ampere-c45.png)
 
-- **Energy above idle per tree** (log scale), stacked CPU (sockets 0 + 1, RAPL)
-  and GPU (all four, NVML). The label gives the total and the GPU's share.
-  - The GPU part of the CPU implementations is shown as 0. It is slightly
-    negative: during the long CPU runs, GPU 0 cools down and draws about 2 W
-    less than in the idle windows, which follow GPU runs. That is why the
-    chart's Serial-Simple bar (CPU only, 35.6 kJ CART) is higher than the
+The summary charts, one per algorithm. Each implementation has three bars,
+each on its own axis:
+
+- **Energy above idle per tree** (left axis, log): CPU (sockets 0 + 1, RAPL) in
+  blue, GPU (all four, NVML) in green. On a log axis, a plain stack would hide
+  a 10% part, so the boundary is drawn so that each colour's height is its
+  share of the bar. The label gives both parts in joules.
+  - On GPU and Hybrid, the CPU takes 11% (101 J) and 18% (183 J) of the energy
+    above idle (CART).
+  - For the CPU implementations the GPU part is shown as 0 ("CPU only"). It is
+    slightly negative: during the long CPU runs, GPU 0 cools down and draws
+    about 2 W less than in the idle windows, which follow GPU runs. That is why
+    the chart's Serial-Simple bar (CPU only, 35.6 kJ CART) is higher than the
     table's 23.5 kJ, which adds the negative GPU part.
-  - On GPU and Hybrid, the GPUs take 89% and 82% of the energy above idle.
-    The rest is the CPU socket that feeds the GPU, and with Hybrid it also
-    trains the small nodes.
-- **Time per tree** (log scale).
-- **Peak power** of CPUs + GPUs. The grey part is the idle level (314 W), and
-  the label shows the peak and how far it is above idle.
+- **Mean power while training** (middle axis, linear): CPU and GPU, each split
+  into its idle part (lighter) and the part above idle (hatched). The dotted
+  line is the highest sample (peak). This bar shows the **CPU power during the
+  GPU runs**: 138 W with GPU-only (118 W idle + 20 W) and 152 W with Hybrid
+  (+34 W), against 307 W with Parallel. The GPUs draw 348–358 W there (196 W
+  idle).
+- **Time per tree** (right axis, log), dark grey.
 
 ### Mean power while training — [chart-power.png](chart-power.png)
 
