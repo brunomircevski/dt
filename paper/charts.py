@@ -627,8 +627,8 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
     """Time, power and total energy of one tree, one row per implementation x node (CPU
     implementations on the CPU nodes, GPU ones on the GPU nodes), four aligned panels: time
     per tree (log); mean power of the whole server (linear; the lighter part is the idle
-    server's power); mean power of the CPU packages + the GPU in use while training
-    (linear; solid CPU, hatched GPU; no idle split); total energy per tree at the PSU (log;
+    server's power); mean power of the CPU packages (blue) + the GPU in use (green) while
+    training (linear; no idle split); total energy per tree at the PSU (log;
     idle included). The number at the end of each bar is its total."""
     from matplotlib.colors import to_rgba
     rows = power_rows()
@@ -637,6 +637,9 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
     fig, axes = plt.subplots(1, 4, figsize=(FULL, 2.2), sharey=True,
                              gridspec_kw={"wspace": 0.16, "width_ratios": [1, 1, 0.95, 0.9]})
     ax_t, ax_p, ax_c, ax_e = axes
+    # CPU+GPU panel: blue for the CPU packages, green for the GPU, a shade per implementation
+    cpu_c = {"simple": "#6aa3e6", "serial": "#4f91e0", "cpu": "#2a78d6", "gpuonly": "#2367bd", "cuda": "#1d5ea8"}
+    gpu_c = {"gpuonly": "#3fc28f", "cuda": "#13935f"}
     y = np.arange(len(cases))[::-1].astype(float)
     hgt, fs = 0.62, 4.9
     for yi, (k, node) in zip(y, cases):
@@ -652,9 +655,9 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
         ax_p.text(p + 15, yi, rf"{p:.0f}\,W", va="center", fontsize=fs)
         cpu = r["P_cpu0"] + r["P_cpu1"]
         gpu = r["P_gpu"] if k in ("gpuonly", "cuda") else 0.0
-        ax_c.barh(yi, cpu, height=hgt, color=c, lw=0)
+        ax_c.barh(yi, cpu, height=hgt, color=cpu_c[k], lw=0)
         if gpu:
-            ax_c.barh(yi, gpu, left=cpu, height=hgt, color="white", ec=c, lw=0.4, hatch="//////")
+            ax_c.barh(yi, gpu, left=cpu, height=hgt, color=gpu_c[k], lw=0)
         ax_c.text(cpu + gpu + 12, yi, rf"{cpu + gpu:.0f}\,W", va="center", fontsize=fs)
         ax_e.barh(yi, e - 1e3, left=1e3, height=hgt, color=c, lw=0)
         ax_e.text(e * 1.2, yi, kj(e), va="center", fontsize=fs)
@@ -684,10 +687,10 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
         if cases[i][0] != cases[i - 1][0]:
             for ax in axes:
                 ax.axhline(y[i] + 0.5, color=GRID, lw=0.5)
-    h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="server power: idle part"),
-         plt.Rectangle((0, 0), 1, 1, fc="white", ec="#777", lw=0.4, hatch="//////",
-                       label="CPU + GPU power: GPU part (solid: CPU packages)")]
-    fig.legend(handles=h, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.05), fontsize=6)
+    h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="idle server"),
+         plt.Rectangle((0, 0), 1, 1, color="#2a78d6", label="CPU"),
+         plt.Rectangle((0, 0), 1, 1, color="#3fc28f", label="GPU")]
+    fig.legend(handles=h, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.05), fontsize=6)
     save(fig, "energy")
 
 if __name__ == "__main__":
