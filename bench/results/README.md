@@ -31,7 +31,7 @@ Times are ./tree's training time (presort, build, pruning; not reading the data)
 | [`cluster-susy`](cluster-susy/BENCHMARK.md) | 4.5M / UCI's 500,000 | Both GPUs 82–119 ms, 2.2–2.9× epyc; one socket 1.1–1.25× two. `--serial` 2.8–4.4 s, `--simple` 71–81 s. Test acc CART 79.0%, C4.5 78.6%. |
 | [`cluster-ecbdl`](cluster-ecbdl/BENCHMARK.md) | 32.0M (CPU nodes) and the first 15M (every node) / the competition's 2.9M | 15M: H100 2.97–2.99 s, 2.1–2.6× epyc, VRAM 73.3 GiB. Full: epyc 13.5–17.6 s, dell 21.1–27.9 s, 238 GiB RAM; `--serial` 503–980 s, `--simple` 5,857–7,089 s. Test acc 98.3% is the majority class's. |
 | [`cluster-mnist8m`](cluster-mnist8m/BENCHMARK.md) | 8.1M (784 features, 10 classes) / MNIST's 10,000 | H100 3.6–3.7 s, epyc 5.6–5.9 s, one socket 1.6–1.9× both. `--serial` 209–315 s, `--simple` 1,875–2,159 s. Test acc CART 84.5%, C4.5 74.7%. |
-| [`cluster-sorel`](cluster-sorel/BENCHMARK.md) | 12.7M (2381 features; CPU nodes) and the first 4M (GPUs and epyc) / 4.2M | Full: CART epyc 21.8 s, dell 32.5 s (343 GiB RAM); C4.5 epyc 28.8 s, dell 44.3 s (352 GiB); `--serial` 878–1,825 s, `--simple` 12,501–13,355 s. 4M: A100 4.8–6.6 s, 1.2–1.4× epyc (6.4–7.9 s), VRAM 76 GiB; hopper queued. Test acc CART 92.7%, C4.5 78.1%. |
+| [`cluster-sorel`](cluster-sorel/BENCHMARK.md) | 12.7M (2381 features; CPU nodes) and the first 4M (GPUs and epyc) / 4.2M | Full: CART epyc 21.8 s, dell 32.5 s (343 GiB RAM); C4.5 epyc 28.8 s, dell 44.3 s (352 GiB); `--serial` 878–1,825 s, `--simple` 12,501–13,355 s. 4M: A100 4.8–6.6 s, 1.2–1.4× epyc (6.4–7.9 s), VRAM 76 GiB; H100 2.9–4.3 s, 1.8–2.2× epyc. Test acc CART 92.7%, C4.5 78.1%. |
 
 **./tree on its own:**
 
