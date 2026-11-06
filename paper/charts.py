@@ -557,7 +557,7 @@ def bars():
         ax.tick_params(axis="x", length=0)
         for i in range(1, len(datasets)):
             ax.axvline(i - 0.5, color=GRID, lw=0.4, zorder=0)
-    names = {"ecbdl_15m": "ECBDL'14\n15M rows", "sorel_4m": "SOREL\n4M rows"}
+    names = {"ecbdl_15m": "ECBDL'14\n15M samples", "sorel_4m": "SOREL\n4M samples"}
     axes[1].set_xticks(x, [tex(names.get(d, DATA[d][0])) for d in datasets], fontsize=5.4)
     axes[1].set_xlim(-0.5, len(datasets) - 0.5)
     h, l = axes[0].get_legend_handles_labels()
