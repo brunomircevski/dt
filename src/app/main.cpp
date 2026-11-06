@@ -14,6 +14,8 @@
 #include <future>
 #include <iomanip>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -60,6 +62,18 @@ std::string pruningDescription(const dt::Options &options) {
 
 int main(int argc, char *argv[]) {
   using namespace dt;
+  // --repeat N > 1: the child that trains the last tree also evaluates and
+  // prints it, then leaves with _exit (no destructors: the parent's pool
+  // threads do not exist in it).
+  bool lastChild = false;
+  auto finish = [&lastChild](int status) {
+    if (lastChild) {
+      std::cout.flush();
+      std::cerr.flush();
+      _exit(status);
+    }
+    return status;
+  };
   try {
     Options options; // defaults: see options.h
     if (!applyCommandLine(argc, argv, options)) {
@@ -82,7 +96,9 @@ int main(int argc, char *argv[]) {
 
     // The calling thread works too, so threads - 1 workers. Loading and
     // evaluation always use it; training only with --parallel / --cuda.
-    ThreadPool pool(threadCount(options) - 1);
+    // (On the heap: the child of --repeat's last tree leaks it, see below.)
+    auto poolOwner = std::make_unique<ThreadPool>(threadCount(options) - 1);
+    ThreadPool &pool = *poolOwner;
 
     double loadSeconds = 0.0;
     Dataset data;
@@ -131,14 +147,15 @@ int main(int argc, char *argv[]) {
                 << std::setprecision(1) << done.total() * 1000.0 << " ms, unix "
                 << std::setprecision(6) << start << " " << done.endUnix << std::endl;
     };
-    // --repeat N > 1: trees 1..N-1 each in a forked child that trains one
-    // tree and exits, so none of them inherits what an earlier tree left
-    // behind (on the GPU: after the first tree in a process, the setup took
-    // up to 40% longer). A child gets what a single run has when its timer
-    // starts: the loaded data (shared with this process), its own threads
-    // (fork copies only the calling one) and, with --cuda, the CUDA context
-    // and the staging buffers. The last tree is trained below, here, after
-    // this process's own gpuPrepare().
+    // --repeat N > 1: every tree in a forked child, so none of them inherits
+    // what an earlier tree left behind (on the GPU, a later tree in the same
+    // process took up to 40% longer to set up, and so did a tree trained by
+    // this process after forking). A child gets what a single run has when
+    // its timer starts: the loaded data (shared with this process), its own
+    // threads (fork copies only the calling one) and, with --cuda, the CUDA
+    // context and the staging buffers. Trees 1..N-1 are trained in this loop;
+    // the child of tree N goes on below like a single run (evaluation, output)
+    // while this process waits for it and exits with its status.
     for (std::size_t run = 1; forks && run < options.repeat; ++run) {
       std::cout.flush();
       std::fflush(nullptr);
@@ -171,8 +188,30 @@ int main(int argc, char *argv[]) {
         throw std::runtime_error("--repeat: tree " + std::to_string(run) + " failed");
       }
     }
-    if (forks && options.backend == Backend::Cuda) {
-      gpuPrepare(threadCount(options));
+    std::optional<ThreadPool> childPool;
+    ThreadPool *work = &pool; // training and evaluation
+    if (forks) {
+      std::cout.flush();
+      std::fflush(nullptr);
+      const pid_t child = fork();
+      if (child < 0) {
+        throw std::runtime_error("--repeat: fork failed");
+      }
+      if (child > 0) {
+        int status = 0;
+        if (waitpid(child, &status, 0) != child || !WIFEXITED(status)) {
+          throw std::runtime_error("--repeat: tree " + std::to_string(options.repeat) + " failed");
+        }
+        return WEXITSTATUS(status);
+      }
+      lastChild = true;
+      // Its threads do not exist here: destroying it would wait for them.
+      static_cast<void>(poolOwner.release());
+      childPool.emplace(threadCount(options) - 1);
+      work = &*childPool;
+      if (options.backend == Backend::Cuda) {
+        gpuPrepare(threadCount(options));
+      }
     }
     TrainTimings timings;
     const bool profile = !options.profilePath.empty();
@@ -182,7 +221,7 @@ int main(int argc, char *argv[]) {
     Tree tree;
     {
       const double start = unixNow();
-      tree = trainTree(train, options, &pool, timings);
+      tree = trainTree(train, options, work, timings);
       if (options.repeat > 0) {
         printWindow(options.repeat, timings, start);
       }
@@ -198,9 +237,9 @@ int main(int argc, char *argv[]) {
     {
       ScopedTimer timer(evalSeconds);
       NvtxRange range("accuracy");
-      trainAccuracy = tree.accuracy(train, &pool);
+      trainAccuracy = tree.accuracy(train, work);
       if (test.rowCount > 0) {
-        testAccuracy = tree.accuracy(test, &pool);
+        testAccuracy = tree.accuracy(test, work);
       }
     }
 
@@ -270,7 +309,7 @@ int main(int argc, char *argv[]) {
     }
   } catch (const std::exception &exception) {
     std::cerr << "Error: " << exception.what() << '\n';
-    return 1;
+    return finish(1);
   }
-  return 0;
+  return finish(0);
 }

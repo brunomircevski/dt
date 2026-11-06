@@ -11,7 +11,7 @@ else from perf.
 
 Per run (one ./tree process with --repeat K), over its K training windows,
 summed and divided by K (energy and time per tree). Since 2026-11-07 ./tree
-trains every tree but the last in a forked child process, so each window is a
+trains every tree in a forked child process, so each window is a
 fresh process's only tree (before, the trees after the first one in a process
 were up to 40% slower on the GPU), and a window ends when training ends,
 before the grower frees its memory. The gaps between windows (fork, CUDA

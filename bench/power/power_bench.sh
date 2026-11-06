@@ -38,8 +38,8 @@
 # with STEP > 0, STEP seconds of every core busy and IDLE seconds of idle again;
 # then REPS rounds of every case (round-robin), each process preceded by PRE
 # seconds of idle; then IDLE seconds of idle again. ./tree --repeat K trains
-# every tree as a fresh process's only tree (each one but the last in a forked
-# child, since 2026-11-07) and prints its training window as Unix times;
+# every tree as a fresh process's only tree (each one in a forked child, since
+# 2026-11-07) and prints its training window as Unix times;
 # bench/power/analyze.py integrates the samples over those windows.
 #
 # Environment: DATA (CSV), REPS (3), REPS_BY (per-implementation rounds,
