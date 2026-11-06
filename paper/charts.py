@@ -623,16 +623,16 @@ def joule_axis(ax, axis="y"):
     a.set_minor_formatter(NullFormatter())
 
 
-def energy(algo="c45", cpu_node="epyc", gpu_node="hopper"):
+def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper")):
     """Time, mean power and total energy of one tree, one row per implementation x node
-    (CPU implementations on epyc, GPU ones on hopper), three aligned panels: time per tree (log), mean power of the whole
+    (CPU implementations on the CPU nodes, GPU ones on the GPU nodes), three aligned panels: time per tree (log), mean power of the whole
     server (linear; the lighter part is the idle server's power) and total energy per tree
     (log; idle included). The number at the end of each bar is its total."""
     from matplotlib.colors import to_rgba
     rows = power_rows()
     cases = [(k, n) for k, n in p_cases(rows)
-             if n == (gpu_node if k in ("gpuonly", "cuda") else cpu_node)]
-    fig, axes = plt.subplots(1, 3, figsize=(FULL, 1.35), sharey=True,
+             if n in (gpu_nodes if k in ("gpuonly", "cuda") else cpu_nodes)]
+    fig, axes = plt.subplots(1, 3, figsize=(FULL, 2.2), sharey=True,
                              gridspec_kw={"wspace": 0.1, "width_ratios": [1, 1, 1.1]})
     y = np.arange(len(cases))[::-1].astype(float)
     hgt, fs = 0.62, 5.2
@@ -666,7 +666,7 @@ def energy(algo="c45", cpu_node="epyc", gpu_node="hopper"):
         ax.set_axisbelow(True)
         ax.tick_params(axis="y", length=0)
         ax.tick_params(axis="x", labelsize=5.6)
-    names = {"epyc": "epyc", "hopper": "hopper"}
+    names = {n: n for _, n in P_NODES}
     axes[0].set_yticks(y, [f"{STYLE[k][0]}, {P_GPU[n] if k in ('gpuonly', 'cuda') else names[n]}"
                            for k, n in cases], fontsize=6.2)
     for i in range(1, len(cases)):
@@ -675,7 +675,7 @@ def energy(algo="c45", cpu_node="epyc", gpu_node="hopper"):
                 ax.axhline(y[i] + 0.5, color=GRID, lw=0.5)
     h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="power of the idle server"),
          plt.Rectangle((0, 0), 1, 1, color="#777", label="power added by the run")]
-    fig.legend(handles=h, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.16), fontsize=6)
+    fig.legend(handles=h, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.05), fontsize=6)
     save(fig, "energy")
 
 if __name__ == "__main__":
