@@ -2,7 +2,7 @@
 
 ![ampere](chart-ampere.png)
 
-hopper: queued (job in `hopper.log`), chart `chart-hopper.png` once it ran.
+![hopper](chart-hopper.png)
 
 **What.** ./tree `--cuda` (hybrid: a node with fewer rows than
 `--gpu-min-rows` is copied to the host and its subtree grown by the CPU
@@ -16,7 +16,10 @@ both algorithms agree on. 3 runs a case. The trees are the same in both modes
 
 **Where.** ampere: A100 80 GB PCIe (GPU 0), the 24 CPUs of its socket and
 `numactl --membind=0` (job.sh's choice: the GPU's NUMA node), the whole node
-(`--exclusive`). ./tree fef9ac0, 2026-11-03.
+(`--exclusive`). ./tree fef9ac0, 2026-11-03. hopper: H100 PCIe (GPU 2), the
+16 CPUs of its socket (16–31) and `--membind 1`, the whole node, 2026-11-06
+(job 60); the same build (`src/` of fef9ac0, run from a checkout at c992b84,
+for sm_80 and sm_90).
 
 ## Results (ampere)
 
@@ -51,6 +54,40 @@ Times are hybrid / GPU only.
   background zeroing of its host arena costs nothing here (unlike sorel_4m's
   C4.5). Build at no depth limit: airline CART 4.17 s hybrid, 24.5 s GPU
   only; MNIST8M CART 17.5 s, 28.9 s.
+
+## Results (hopper)
+
+Mean training time of 3 runs, as for ampere; the spread is at most 2% on
+MNIST8M and up to depth 20 on airline, 3–5% on airline from depth 25. Hybrid
+/ GPU only, GPU only / hybrid in brackets.
+
+| Depth | airline CART | airline C4.5 | MNIST8M CART | MNIST8M C4.5 |
+|---|---|---|---|---|
+| 5 | 0.32 / 0.32 s (1.00×) | 0.33 / 0.32 s (0.98×) | 1.90 / 1.89 s (0.99×) | 2.01 / 2.00 s (1.00×) |
+| 10 | 0.50 / 0.49 s (0.99×) | 0.51 / 0.51 s (0.99×) | 3.58 / 3.56 s (0.99×) | 3.66 / 3.71 s (1.01×) |
+| 15 | 0.69 / 0.70 s (1.01×) | 0.72 / 0.73 s (1.00×) | 5.68 / 6.61 s (1.17×) | 5.38 / 5.93 s (1.10×) |
+| 20 | 1.18 / 1.34 s (1.14×) | 1.07 / 1.21 s (1.14×) | 7.77 / 11.6 s (1.49×) | 6.91 / 8.91 s (1.29×) |
+| 25 | 1.95 / 4.58 s (2.35×) | 1.66 / 2.86 s (1.72×) | 9.38 / 14.7 s (1.56×) | 8.45 / 12.3 s (1.45×) |
+| 30 | 2.87 / 10.6 s (3.70×) | 2.31 / 6.14 s (2.66×) | 10.5 / 16.6 s (1.58×) | 9.67 / 15.3 s (1.59×) |
+| none | 4.40 / 21.9 s (4.97×) | 3.92 / 15.7 s (3.99×) | 14.6 / 23.8 s (1.63×) | 18.0 / 28.4 s (1.57×) |
+
+The trees are the same as ampere's (node counts in both charts).
+
+**hopper against ampere.**
+- **The same picture:** equal to depth 15 on airline (0.98–1.01×) and to
+  depth 10 on MNIST8M, then the hybrid wins by about as much as on ampere
+  (airline 3.7× / 2.7× at depth 30, MNIST8M 1.45–1.63× from depth 25).
+- **The H100 does not widen the gap.** Where the GPU does all the work
+  (depth ≤ 15) the H100 is 1.4–1.7× the A100 (airline depth 5 0.32 s against
+  0.55 s; MNIST8M 1.90 s against 3.26 s), GPU setup included (airline 0.17 s
+  against 0.32 s, MNIST8M 0.50 s against 1.27 s). GPU only at no limit gains
+  less, 1.1–1.3× (airline CART 21.9 s against 24.8 s), as its long tail of
+  levels of a few nodes is launch and synchronisation bound.
+- **The hybrid at no limit on airline is CPU bound:** 4.40 s against
+  ampere's 4.49 s (C4.5 3.92 s against 4.15 s), with 16 threads against 24,
+  so its lead shrinks a little (5.0× / 4.0× against 5.5× / 4.4×). On MNIST8M
+  the H100 also speeds up the hybrid (14.6 s against 18.8 s, 1.29×) and the
+  ratio stays at 1.6×.
 
 ## Who is working (MNIST8M, ampere, profiled)
 
@@ -154,6 +191,25 @@ airline's defaults are 2,048 (CART) and 4,096 (C4.5), MNIST8M's 1,024 and
 784 features a node's CPU work is heavier per row, so MNIST8M wants more of
 the GPU (8,192); airline, 13 features, the opposite (512).
 
+hopper's sweep (`sweep/hopper-<dataset>.json`, made by
+`hybrid_vs_gpu_only.sh` with job.sh, 3 runs a value, not interleaved):
+
+| airline | default | **256** | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32768 |
+|---|---|---|---|---|---|---|---|---|---|
+| CART (s) | 4.62 | **4.39** | 4.46 | 4.49 | 4.64 | 4.79 | 5.01 | 5.43 | 5.94 |
+| C4.5 (s) | 4.46 | **3.94** | 3.90 | 4.01 | 4.19 | 4.47 | 4.89 | 5.34 | 6.09 |
+
+| MNIST8M | default | 256 | 512 | 1024 | 2048 | 4096 | **8192** | 16384 | 32768 |
+|---|---|---|---|---|---|---|---|---|---|
+| CART (s) | 16.6 | 18.7 | 17.4 | 16.6 | 16.0 | 15.5 | **14.5** | 17.0 | 23.7 |
+| C4.5 (s) | 19.6 | 23.5 | 22.1 | 20.6 | 19.6 | 18.9 | **17.9** | 17.7 | 23.2 |
+
+MNIST8M takes 8,192 as on ampere. airline takes 256, the smallest value tried,
+but 256 and 512 are within 0.3% of each other on the score (CART faster at
+256, C4.5 at 512), so the minimum is flat there; on ampere 128 was 19–35%
+slower than 256. The tuned value is 5–12% faster than the default on airline
+and 9–13% on MNIST8M.
+
 **Datasets.** Picked from a screen at no depth limit, one run each
 (`sweep/ampere-screen.csv`), GPU only / hybrid, CART and C4.5: airline 5.4× /
 4.1×, HIGGS 3.0× / 2.8×, SUSY 3.0× / 1.1×, ECBDL'14 15M 1.5× / 1.3×, MNIST8M
@@ -181,7 +237,7 @@ sbatch -J dt-hvg-hopper -p hopper -w hopper --exclusive -t 8:00:00 -o bench/resu
     --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)" bench/cluster/hybrid_vs_gpu_only.sh hopper
 ```
 
-Chart:
+Charts (`--node hopper` for hopper's):
 
 ```bash
 bench/.venv/bin/python bench/hybrid_chart.py bench/results/hybrid-vs-gpu-only --node ampere --datasets airline,mnist8m

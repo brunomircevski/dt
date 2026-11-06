@@ -1,0 +1,91 @@
+## cuda-hopper-mnist8m
+
+**cuda-hopper-mnist8m**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor schedutil, turbo on, ./tree c992b84, CPUs in order of use 16-31, 3 run(s) per case, warm-up 50000 rows
+
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 648 MiB
+
+### mnist8m (8,100,000 train / 10,000 test rows, 784 features, 10 classes)
+
+**CART, grown to pure leaves, no pruning, no depth limit** (`cart_full_nodepth`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 14.6 s | 14.6 s–14.6 s |  | 71.71 GiB (+ GPU 48.91 GiB) | 71.08 GiB | 301,939 | 150,970 | 115 | 100.00% |  |
+
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 3.58 s | 3.58 s–3.58 s |  | 71.69 GiB (+ GPU 48.88 GiB) | 71.05 GiB | 2,047 | 1,024 | 10 | 80.77% |  |
+
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 3.66 s | 3.66 s–3.66 s |  | 71.67 GiB (+ GPU 48.88 GiB) | 71.04 GiB | 1,453 | 727 | 10 | 70.96% |  |
+
+**C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows** (`c45_unpruned`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 18 s | 18 s–18.1 s |  | 71.71 GiB (+ GPU 48.88 GiB) | 71.07 GiB | 218,325 | 109,163 | 147 | 99.61% |  |
+
+**CART, grown to depth 5, no pruning** (`cart_depth5`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 1.9 s | 1.9 s–1.9 s |  | 71.66 GiB (+ GPU 48.85 GiB) | 71.03 GiB | 63 | 32 | 5 | 57.28% |  |
+
+**C4.5, grown to depth 5, unpruned (only C4.5's collapse of useless splits)** (`c45_depth5_unpruned`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 2.01 s | 2.01 s–2.01 s |  | 71.67 GiB (+ GPU 48.85 GiB) | 71.03 GiB | 61 | 31 | 5 | 44.80% |  |
+
+**CART, grown to depth 15, no pruning** (`cart_depth15`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 5.68 s | 5.67 s–5.68 s |  | 71.70 GiB (+ GPU 48.91 GiB) | 71.06 GiB | 44,359 | 22,180 | 15 | 92.45% |  |
+
+**C4.5, grown to depth 15, unpruned (only C4.5's collapse of useless splits)** (`c45_depth15_unpruned`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 5.39 s | 5.35 s–5.39 s |  | 71.68 GiB (+ GPU 48.88 GiB) | 71.05 GiB | 12,313 | 6,157 | 15 | 82.42% |  |
+
+**CART, grown to depth 20, no pruning** (`cart_depth20`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 7.78 s | 7.76 s–7.78 s |  | 71.70 GiB (+ GPU 48.91 GiB) | 71.07 GiB | 168,241 | 84,121 | 20 | 97.59% |  |
+
+**C4.5, grown to depth 20, unpruned (only C4.5's collapse of useless splits)** (`c45_depth20_unpruned`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 6.92 s | 6.88 s–6.92 s |  | 71.69 GiB (+ GPU 48.88 GiB) | 71.05 GiB | 42,915 | 21,458 | 20 | 89.16% |  |
+
+**CART, grown to depth 25, no pruning** (`cart_depth25`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 9.38 s | 9.38 s–9.38 s |  | 71.70 GiB (+ GPU 48.91 GiB) | 71.07 GiB | 231,991 | 115,996 | 25 | 98.95% |  |
+
+**C4.5, grown to depth 25, unpruned (only C4.5's collapse of useless splits)** (`c45_depth25_unpruned`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 8.44 s | 8.44 s–8.46 s |  | 71.69 GiB (+ GPU 48.88 GiB) | 71.06 GiB | 84,917 | 42,459 | 25 | 93.54% |  |
+
+**CART, grown to depth 30, no pruning** (`cart_depth30`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 10.5 s | 10.5 s–10.5 s |  | 71.71 GiB (+ GPU 48.91 GiB) | 71.07 GiB | 257,021 | 128,511 | 30 | 99.42% |  |
+
+**C4.5, grown to depth 30, unpruned (only C4.5's collapse of useless splits)** (`c45_depth30_unpruned`), 16 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree CUDA | 9.68 s | 9.65 s–9.68 s |  | 71.69 GiB (+ GPU 48.88 GiB) | 71.06 GiB | 123,289 | 61,645 | 30 | 96.11% |  |

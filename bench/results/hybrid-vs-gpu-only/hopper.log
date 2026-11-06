@@ -1,0 +1,25 @@
+2026-11-06 10:05:20  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mrdefault
+2026-11-06 10:07:39  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mr256 (--gpu-min-rows 256)
+2026-11-06 10:09:54  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mr512 (--gpu-min-rows 512)
+2026-11-06 10:12:10  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mr1024 (--gpu-min-rows 1024)
+2026-11-06 10:14:25  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mr2048 (--gpu-min-rows 2048)
+2026-11-06 10:16:40  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mr4096 (--gpu-min-rows 4096)
+2026-11-06 10:18:57  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mr8192 (--gpu-min-rows 8192)
+2026-11-06 10:21:16  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mr16384 (--gpu-min-rows 16384)
+2026-11-06 10:23:36  hybrid-vs-gpu-only/sweep/cuda-hopper-airline-mr32768 (--gpu-min-rows 32768)
+2026-11-06 10:26:01  airline: --gpu-min-rows 256
+2026-11-06 10:26:01  hybrid-vs-gpu-only/cuda-hopper-airline (--gpu-min-rows 256)
+2026-11-06 10:33:36  hybrid-vs-gpu-only/gpuonly-hopper-airline
+2026-11-06 10:43:15  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mrdefault
+2026-11-06 10:51:34  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr256 (--gpu-min-rows 256)
+2026-11-06 11:00:06  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr512 (--gpu-min-rows 512)
+2026-11-06 11:08:27  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr1024 (--gpu-min-rows 1024)
+2026-11-06 11:16:56  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr2048 (--gpu-min-rows 2048)
+2026-11-06 11:25:37  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr4096 (--gpu-min-rows 4096)
+2026-11-06 11:33:41  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr8192 (--gpu-min-rows 8192)
+2026-11-06 11:41:45  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr16384 (--gpu-min-rows 16384)
+2026-11-06 11:50:06  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr32768 (--gpu-min-rows 32768)
+2026-11-06 11:58:55  mnist8m: --gpu-min-rows 8192
+2026-11-06 11:58:55  hybrid-vs-gpu-only/cuda-hopper-mnist8m (--gpu-min-rows 8192)
+2026-11-06 12:22:09  hybrid-vs-gpu-only/gpuonly-hopper-mnist8m
+2026-11-06 12:48:09  done
