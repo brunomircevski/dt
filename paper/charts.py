@@ -640,8 +640,11 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
     ax_t, ax_p, ax_c, ax_e = axes
     # CPU+GPU panel: bars in the implementation's colour; on the GPU runs the CPU packages'
     # part (the start of the bar) carries blue stripes
-    CPU_BLUE = "#2a78d6"
-    plt.rcParams["hatch.linewidth"] = 0.9  # read when the bars are made
+    # stripes as wide as the gaps between them (about half the area), a blue that stands
+    # out from each green: dark on the light green, light on the dark green
+    STRIPE = {"gpuonly": "#1a4d99", "cuda": "#8cc4ff"}
+    HATCH = "/////"  # about 5 pt apart along the bar in the PDF
+    plt.rcParams["hatch.linewidth"] = 1.8  # about half the gap; read when the bars are made
     y = np.arange(len(cases))[::-1].astype(float)
     hgt, fs = 0.62, 4.9
     for yi, (k, node) in zip(y, cases):
@@ -658,7 +661,7 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
         cpu = r["P_cpu0"] + r["P_cpu1"]
         gpu = r["P_gpu"] if k in ("gpuonly", "cuda") else 0.0
         if gpu:
-            ax_c.barh(yi, cpu, height=hgt, fc=c, ec=CPU_BLUE, lw=0, hatch="/////")
+            ax_c.barh(yi, cpu, height=hgt, fc=c, ec=STRIPE[k], lw=0, hatch=HATCH)
             ax_c.barh(yi, gpu, left=cpu, height=hgt, color=c, lw=0)
         else:
             ax_c.barh(yi, cpu, height=hgt, color=c, lw=0)
@@ -692,7 +695,7 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
             for ax in axes:
                 ax.axhline(y[i] + 0.5, color=GRID, lw=0.5)
     h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="idle server"),
-         plt.Rectangle((0, 0), 1, 1, fc=STYLE["gpuonly"][1], ec=CPU_BLUE, lw=0, hatch="/////",
+         plt.Rectangle((0, 0), 1, 1, fc=STYLE["gpuonly"][1], ec=STRIPE["gpuonly"], lw=0, hatch=HATCH,
                        label="CPU part of a GPU run")]
     fig.legend(handles=h, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.06), fontsize=6,
                handlelength=2.4, handleheight=1.2)
