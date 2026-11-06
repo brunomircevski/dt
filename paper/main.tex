@@ -56,13 +56,13 @@ heterogeneous CPU-GPU architectures.
 pruning), C4.5~\cite{quinlan1993c45} (gain ratio, MDL threshold cost,
 error-based pruning). Only what is needed to read Sect.~\ref{sec:impl}.}
 
-\subsection{Scalable and Parallel Decision Tree Induction}
+\subsection{Parallel Decision Tree Induction}
 
-\subsubsection{Parallel Induction on Multicore CPUs}
+\subsubsection{Multicore CPU}
 
-\subsubsection{GPU-Accelerated Decision Tree Induction}
+\subsubsection{GPU-based}
 
-\section{Our Implementation and Optimizations}
+\section{Our Approach}
 \label{sec:impl}
 
 \subsection{Serial Simple}
@@ -118,19 +118,19 @@ CUDA 12.9, NVIDIA driver 615.71.}
 
 \begin{table}
 \caption{Hardware. Every node has two sockets with SMT disabled; CPU, cores and L3
-are per socket. Clock is base/max turbo in GHz. One GPU (PCIe) is used per run.}
+are per socket. Clock is base/max turbo in GHz. One GPU is used per run.}
 \label{tab:hardware}
 \centering
 \small
 \setlength{\tabcolsep}{5pt}
 \begin{tabular}{@{}llrrrll@{}}
 \toprule
-Node & CPU (per socket) & Cores & Clock & L3 & RAM & GPU \\
+Node & CPU & Cores & Clock & L3 & RAM & GPU \\
 \midrule
 hopper & Xeon Gold 6444Y & 16 & 3.6/4.0 & 45\,MB  & 1\,TB DDR5-4800   & H100 80\,GB \\
 ampere & EPYC 7402       & 24 & 2.8/3.35& 128\,MB & 1\,TB DDR4-3200   & A100 80\,GB \\
-epyc1  & EPYC 9255       & 24 & 3.25/4.3& 128\,MB & 512\,GB DDR5-6400 & -- \\
-dell1  & Xeon Gold 6542Y & 24 & 2.9/4.1 & 60\,MB  & 1\,TB DDR5-5200   & -- \\
+epyc  & EPYC 9255       & 24 & 3.25/4.3& 128\,MB & 512\,GB DDR5-6400 & -- \\
+dell  & Xeon Gold 6542Y & 24 & 2.9/4.1 & 60\,MB  & 1\,TB DDR5-5200   & -- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -230,33 +230,14 @@ SOREL-20M & \cell{\est{60\,000}}{30\,000--120\,000} & \cell{\est{12\,000}}{5\,00
 \plan{./tree's backends against scikit-learn (CART) and Weka J48 (C4.5):
 time, memory, test accuracy, same trees.}
 
-\begin{figure}
-\includegraphics[width=\textwidth]{cluster-cpu-vs-others/chart.png}
-\caption{Temporary: ./tree against scikit-learn and Weka J48 (cluster-cpu-vs-others).}
-\label{fig:cpu-vs-others}
-\end{figure}
-
 \subsection{Comparison with GPU Libraries}
 \plan{Against cuML and XGBoost: one tree, and per tree of a 10-tree forest;
 accuracy of exact versus binned trees; VRAM.}
-
-\begin{figure}
-\includegraphics[width=0.49\textwidth]{cluster-gpu-vs-others/chart-higgs.png}\hfill
-\includegraphics[width=0.49\textwidth]{cluster-gpu-vs-others/chart-ecbdl_15m.png}
-\caption{Temporary: ./tree against cuML and XGBoost on HIGGS (left) and ECBDL'14 15M (right) (cluster-gpu-vs-others).}
-\label{fig:gpu-vs-others}
-\end{figure}
 
 \subsection{Performance Across Hardware}
 \plan{All ./tree backends on the four nodes, per dataset: serial, one and two
 sockets, H100 and A100 hybrid and GPU-based. CPU against GPU; which hardware
 wins for which data shape (samples, features, classes).}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{cluster-higgs/chart.png}
-\caption{Temporary: ./tree's backends on HIGGS on every node (cluster-higgs).}
-\label{fig:hardware-higgs}
-\end{figure}
 
 \subsection{Scalability}
 \plan{Thread scaling 1--48 on epyc1 and dell1 (memory bandwidth bound); growth
