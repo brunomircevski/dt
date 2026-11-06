@@ -258,6 +258,18 @@ each. The CPU implementations run on a CPU node, the GPU ones on a GPU node,
 so the totals compare servers, not only processors. Discuss energy per tree:
 a fast run at high power can still use the least energy.}
 
+\begin{figure}
+\includegraphics[width=\textwidth]{test-energy.pdf}
+\caption{Time, mean power and total energy to train one C4.5 tree on ECBDL'14
+15M (depth $\le$ 10, unpruned), the whole server measured at the PSU. The CPU
+implementations ran on epyc and on hopper, the GPU implementations on hopper's
+H100 (with the 16 CPU cores of its NUMA node). Lighter part of a power bar:
+the idle server (epyc 124\,W, hopper 401\,W, which includes three more H100s
+that stay idle). Total energy includes the idle power; energy = mean power
+$\times$ time.}
+\label{fig:energy}
+\end{figure}
+
 \begin{table}
 \caption{Energy of one tree on ECBDL'14 15M (depth $\le$ 10, no pruning):
 mean training time $t$, mean power $P$ of the whole server above idle, and energy
@@ -328,84 +340,6 @@ Implementation & Node & $t$ (s) & $P$ (W) & $E$ (kJ) & $t$ (s) & $P$ (W) & $E$ (
 \section{Conclusion}
 \label{sec:conclusion}
 
-%% ------------------------------------------------------------------------
-%% TEMPORARY: power chart candidates. Keep one, remove the rest.
-%% Figures: paper/figs/test-power-*.pdf, made by paper/charts.py (power_scatter,
-%% power_bars, power_split, power_triptych) from bench/power/results-*/.
-%% ------------------------------------------------------------------------
-\clearpage
-\section{TEMPORARY: Power Chart Candidates}
-\label{sec:power-tests}
-
-Four candidates for the one energy figure of Sect.~\ref{sec:results}, all drawn
-from the same data. The data: ECBDL'14 15M, depth $\le$ 10, unpruned, CART and
-C4.5. \ImplSerialBase{}, \ImplSerialOpt{} and \ImplParallel{} ran on all four
-nodes, and \ImplGpu{} and \ImplHybrid{} on ampere (A100) and hopper (H100). Each
-case was measured at the PSU (the whole server), on the CPU packages (RAPL) and,
-for the GPU runs, on the GPU it used (NVML).
-
-\begin{itemize}
-\item \textbf{A, scatter} (Fig.~\ref{fig:power-scatter}): time against energy,
-  with lines of constant power. It shows that energy follows time: every run
-  draws 250\,W--1\,kW, while times differ by up to 1,800$\times$. All 32 cases fit in a
-  small figure, but the exact values cannot be read off it.
-\item \textbf{B, bars} (Fig.~\ref{fig:power-bars}): energy per tree with its
-  value on every bar, and the part the idle server would use in the same time.
-  It is the most familiar format, and it shows how much of a serial run is idle
-  cost. It takes the most space.
-\item \textbf{C, split} (Fig.~\ref{fig:power-split}): where the energy goes
-  (CPU packages, GPU, rest of the server; idle and above idle), with the total
-  at the right. It is the only chart that shows the components. It shows ratios
-  only: the totals are numbers, not lengths.
-\item \textbf{D, triptych} (Fig.~\ref{fig:power-triptych}): time, mean power
-  and energy side by side for every case, so $E = P \cdot t$ can be read row by
-  row. It shows the most data and every value, but it is the densest.
-\end{itemize}
-
-\noindent My pick: \textbf{D} if the paper has room for one large figure,
-because it replaces Table~\ref{tab:energy}; \textbf{A} for a small figure next
-to that table.
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-power-scatter.pdf}
-\caption{A. Time and energy to train one tree on ECBDL'14 15M (depth $\le$ 10,
-unpruned), whole server measured at the PSU, log scales. Colour:
-implementation; shape: node. Dotted lines: constant mean power ($E = P \cdot t$).
-Down and to the left is better.}
-\label{fig:power-scatter}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-power-bars.pdf}
-\caption{B. Energy to train one tree on ECBDL'14 15M (depth $\le$ 10, unpruned),
-whole server measured at the PSU, log scale. The lighter part is what the idle
-server uses in the same time, the darker part what the run adds. The GPU
-implementations ran on ampere (A100) and hopper (H100); both servers hold
-three more GPUs, which stay idle and are counted.}
-\label{fig:power-bars}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-power-split.pdf}
-\caption{C. Where the energy of one tree goes (ECBDL'14 15M, depth $\le$ 10,
-unpruned): CPU packages (RAPL), the GPU in use (NVML) and the rest of the
-server (PSU minus both; memory, fans, disks, the three idle GPUs on ampere and
-hopper, PSU losses). Lighter: the idle part of each. Right: the total energy
-per tree at the PSU.}
-\label{fig:power-split}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-power-triptych.pdf}
-\caption{D. Time, mean power and energy of one tree on ECBDL'14 15M (depth
-$\le$ 10, unpruned), whole server measured at the PSU. Solid bars: CART;
-hatched: C4.5. Dashed line: the server's idle power. Energy = mean power
-$\times$ time.}
-\label{fig:power-triptych}
-\end{figure}
-
-\clearpage
-%% ------------------------------------------------------------ end TEMPORARY
 \bibliographystyle{splncs04}
 \bibliography{references}
 %
