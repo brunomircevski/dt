@@ -178,18 +178,24 @@ The data and measurements are those of the other benchmarks
 | Backend | Command | Threads |
 |---|---|---|
 | Parallel (epyc1, dell1) | `./tree_cpu --parallel --threads N` | N = every CPU (48) |
-| CUDA (hopper, ampere) | `./tree --cuda --threads N` | one GPU, plus N CPU threads of its socket (hopper 16, ampere 24) for the small subtrees and pruning |
+| CUDA (hopper, ampere) | `./tree --cuda --threads N` | one GPU, plus N CPU threads on both sockets (hopper 32, ampere 48) for the small subtrees and pruning |
 
 - **Whole nodes.** SLURM on mordor3 hands out cores only: it tracks no GPUs
   (no GRES) and no memory. Every job therefore takes its node with
   `--exclusive`, so no other job shares its cores, memory bandwidth or GPUs.
   `run.log` records the load average and the GPU processes at the start.
-- **One GPU, on its own socket.** job.sh takes the NUMA node with a GPU and
-  the most free memory, the first GPU on it (`CUDA_DEVICE_ORDER=PCI_BUS_ID`,
-  `CUDA_VISIBLE_DEVICES`), that node's CPUs and `numactl --membind`: hopper
-  GPU 2 on node 1 (CPUs 16–31; another user's /dev/shm fills node 0), ampere
-  GPU 0 on node 0 (CPUs 0–23), an A100 80 GB. `run.py` samples that GPU's
-  memory (`gpu_index` in `machine.json`). The other GPUs sit idle.
+- **One GPU, every CPU.** job.sh takes the NUMA node with a GPU and the most
+  free memory and the first GPU on it (`CUDA_DEVICE_ORDER=PCI_BUS_ID`,
+  `CUDA_VISIBLE_DEVICES`): hopper GPU 2 on node 1 (another user's /dev/shm
+  fills node 0), ampere GPU 0 on node 0, an A100 80 GB. The threads take that
+  node's CPUs first, then the other socket's (hopper 16–31, 0–15; ampere
+  0–23, 24–47), and the memory is not bound: binding it to the GPU's node was
+  slower in every deep case. On ampere, CUDA hybrid at no depth limit was
+  1.2–1.5× faster on both sockets than on the GPU's (HIGGS, SUSY, airline
+  CART), and within ±6% at depth 10 (2026-11-06). `run.py` samples that
+  GPU's memory (`gpu_index` in `machine.json`). The other GPUs sit idle.
+  The depth-10 test-set runs (ec77727) predate this and ran on the GPU's
+  socket only (`machine.json` and `run.log` record the CPUs).
 - **CPU governors are as the admins set them.** epyc1 `performance`, dell1
   `powersave` (intel_pstate, which still boosts), hopper
   `schedutil`, ampere `ondemand`. A user can't change them; `machine.json`

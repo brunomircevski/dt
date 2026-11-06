@@ -10,10 +10,11 @@
 # 4 up to the node's CPU count (scaling.sh). timeout: seconds per ./tree process
 # (default 3600). RUN_EXTRA (environment): more run.py arguments, e.g.
 # --profile (profile.sh). ACCURACY (environment, submit.sh -e): run.py's
-# --test-accuracy instead of the default --train-accuracy-only. NUMA_NODE (environment, submit.sh -n): the threads,
-# the memory (numactl --membind) and the GPU all on that NUMA node (one
-# socket): its CPUs in their order, and the first GPU attached to it instead of
-# GPU 0. CUDA runs always get one (below); CPU runs only when it is given.
+# --test-accuracy instead of the default --train-accuracy-only. NUMA_NODE (environment, submit.sh -n): the GPU
+# is the first one attached to that NUMA node instead of GPU 0. CUDA runs
+# always get one (below) and use every CPU of the node, that node's first,
+# with the memory placed where it is first touched; CPU runs only when it is
+# given, and then the threads and the memory (numactl --membind) stay on it.
 # SOCKET (environment, submit.sh's socket-* runs): every CPU of that socket
 # ("auto": the one with the most free memory) and the memory of its NUMA nodes
 # only, for the parallel backend on one CPU of a two-socket node.
@@ -36,10 +37,12 @@ echo "log: $OUT/run.log, job $SLURM_JOB_ID on $(hostname), started $(date '+%F %
 # through --exclusive, and ./tree uses GPU 0 in nvidia-smi's (PCI) order (with
 # NUMA_NODE the first on that node), the GPU whose memory run.py samples.
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0
-# CUDA runs stay on one socket, the GPU's: without NUMA_NODE they take the NUMA
-# node of a GPU with the most free memory (hopper: node 1, node 0's memory was
-# taken in 2026-10). Only the parallel CPU backend uses both sockets.
-if [ -z "${NUMA_NODE:-}" ] && [[ "$IMPLS" == *tree_cuda* || "$IMPLS" == *tree_gpu_only* ]]; then
+# CUDA runs use both sockets: their GPU is on the NUMA node of a GPU with the
+# most free memory (hopper: node 1, node 0's memory was taken in 2026-10), its
+# CPUs come first and the rest follow (on ampere, CUDA hybrid at no depth limit
+# was up to 1.5x faster on both sockets than on the GPU's; 2026-11-06).
+CUDA=; [[ "$IMPLS" == *tree_cuda* || "$IMPLS" == *tree_gpu_only* ]] && CUDA=1
+if [ -z "${NUMA_NODE:-}" ] && [ -n "$CUDA" ]; then
   NUMA_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
     while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
     while read -r node; do
@@ -66,7 +69,7 @@ fi
 MEMBIND=()
 [ -z "${SOCKET:-}" ] || MEMBIND=(--membind "$SOCKET_NODES")
 if [ -n "${NUMA_NODE:-}" ]; then
-  MEMBIND=(--membind "$NUMA_NODE")
+  [ -n "$CUDA" ] || MEMBIND=(--membind "$NUMA_NODE")
   # nvidia-smi's bus id (00000000:2A:00.0) ends in the sysfs one (0000:2a:00.0).
   gpu="$(nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader | tr A-Z a-z |
     while IFS=', ' read -r index bus; do
@@ -79,6 +82,11 @@ export NVCC=/usr/local/cuda/bin/nvcc LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_L
 export PYTHONUNBUFFERED=1
 CPUS="0-$(($(nproc) - 1))"  # every CPU of the node
 [ -z "${NUMA_NODE:-}" ] || CPUS="$(cat "/sys/devices/system/node/node$NUMA_NODE/cpulist")"
+if [ -n "$CUDA" ]; then  # the GPU's node first, then every other node's CPUs
+  CPUS="$CPUS$(for n in /sys/devices/system/node/node[0-9]*; do
+    [ "${n##*node}" = "$NUMA_NODE" ] || printf ,%s "$(cat "$n/cpulist")"
+  done)"
+fi
 [ -z "${SOCKET:-}" ] ||
   CPUS="$(lscpu -p=CPU,SOCKET | grep -v '^#' | awk -F, -v s="$SOCKET" '$2 == s { print $1 }' | paste -sd,)"
 [ "$THREADS" != scaling ] || THREADS="1,2,4,$(seq -s, 8 4 "$(nproc)")"
@@ -89,7 +97,8 @@ governors="$(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/nu
 echo "CPU governor: ${governors:-unknown}"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "free memory per NUMA node: $(numactl -H | awk '/ free:/ { printf "%snode %s %d GiB", (n++ ? ", " : ""), $2, $4 / 1024 }')"
-[ -z "${NUMA_NODE:-}" ] || echo "NUMA node $NUMA_NODE: CPUs $CPUS, memory bound to it, GPU $CUDA_VISIBLE_DEVICES"
+if [ -n "$CUDA" ]; then echo "GPU $CUDA_VISIBLE_DEVICES on NUMA node $NUMA_NODE; CPUs $CPUS (both sockets), memory first-touch"
+elif [ -n "${NUMA_NODE:-}" ]; then echo "NUMA node $NUMA_NODE: CPUs $CPUS, memory bound to it"; fi
 [ -z "${SOCKET:-}" ] || echo "socket $SOCKET: CPUs $CPUS, memory bound to its NUMA nodes $SOCKET_NODES"
 echo "CPU order (the threads take them from the first): CPU, NUMA node, socket, core"
 lscpu -e=CPU,NODE,SOCKET,CORE | awk 'NR > 1 { printf "%s%s:%s/%s/%s", (NR > 2 ? " " : ""), $1, $2, $3, $4 } END { print "" }'

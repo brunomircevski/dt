@@ -2,7 +2,7 @@
 # The hybrid-vs-gpu-only benchmark on one GPU node, as one SLURM job: for each
 # dataset, first a sweep of the hybrid's --gpu-min-rows (no depth limit, CART
 # and C4.5 unpruned), then the depth runs, hybrid at the sweep's fastest value
-# and GPU only, each through job.sh (the same GPU, NUMA node and threads).
+# and GPU only, each through job.sh (the same GPU and threads, every CPU of the node).
 # Submit it from the repository root:
 #
 #   sbatch -p hopper -w hopper --exclusive -t 8:00:00 -o bench/results/hybrid-vs-gpu-only/hopper.log \

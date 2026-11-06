@@ -68,12 +68,12 @@
 # -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
 # C4.5 has none); -o: the directory under bench/results/; -a: start only after
 # that job (e.g. prepare.sh) ended well; -e: test accuracy too (run.py
-# --test-accuracy: the test rows predicted from each dumped tree); -n: threads, memory and GPU on that
-# NUMA node (job.sh NUMA_NODE). The CUDA runs (cuda-*, gpuonly-*) stay on one
-# socket, their GPU's, without it too: job.sh takes the NUMA node of a GPU
-# with the most free memory (hopper: node 1, as another user's /dev/shm filled
-# node 0 in 2026-10). Only the parallel CPU runs use both sockets, and the
-# socket-* runs measure the parallel backend on one of them.
+# --test-accuracy: the test rows predicted from each dumped tree); -n: the NUMA node of the GPU, or of
+# the threads and memory of a CPU run (job.sh NUMA_NODE). The CUDA runs
+# (cuda-*, gpuonly-*) use every CPU of the node, their GPU's node first; without
+# -n job.sh takes the GPU on the NUMA node with the most free memory (hopper:
+# node 1, as another user's /dev/shm filled node 0 in 2026-10). The socket-*
+# runs measure the parallel backend on one socket.
 
 set -euo pipefail
 RUNS=1

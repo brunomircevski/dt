@@ -15,8 +15,8 @@
 #
 # -p: run.py's protocols (default cart_alpha_nodepth,cart_full_nodepth,c45);
 # -o: the directory under bench/results/ (default cluster-<dataset>-profile, ecbdl_15m: cluster-ecbdl-profile);
-# -n: threads, memory and GPU on that NUMA node (submit.sh -n); the CUDA runs
-# take their GPU's NUMA node (one socket) without it too.
+# -n: the GPU's NUMA node, or the threads' and memory's of a CPU run
+# (submit.sh -n); the CUDA runs use both sockets either way.
 
 set -euo pipefail
 RUNS=1
