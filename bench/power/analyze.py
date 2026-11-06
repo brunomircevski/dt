@@ -3,18 +3,26 @@
 
   bench/.venv/bin/python bench/power/analyze.py bench/results/power  # every job folder in it
 
-Every job folder (ampere/, dell/, epyc/) holds markers.txt, samples.csv
+Every job folder (ampere/, dell/, epyc/, hopper/) holds markers.txt, samples.csv
 (pwrlog.py), perf_rapl.csv (ampere: RAPL per socket through perf) and out/<run>.txt
-(./tree's output with --repeat K training windows).
+(./tree's output with --repeat K training windows). RAPL comes from the sampled
+powercap counters when samples.csv has them (ampere and hopper since 2026-11-06),
+else from perf.
 
 Per run (one process), over the span from the first tree's start to the last
 tree's end, divided by the number of trees (energy and time per tree); with
 K >= 3 trees the first one is left out (it is slower: CUDA context, first
 allocations):
-  - PSU (whole server, Dell nodes): the ACPI meter's readings held until the
-    next one, shifted back by the meter's delay. The delay is measured per job:
-    the median time from a process's start to the reading half-way up its
-    first step (the CSV load lifts power from idle within a fraction of a second).
+  - PSU (whole server): the ACPI meter (Dell nodes, hopper) or /run/power/psu_W
+    (ampere: the BMC's reading). The readings are held until the next one and
+    shifted back by the meter's delay. The delay is measured per job: from the
+    all-core step (power_bench.sh STEP) when there is one, else the median time
+    from a process's start to the reading half-way up its first step (the CSV
+    load lifts power from idle within a fraction of a second). A slow meter
+    (ampere's BMC takes a point reading about every 59 s) gets the mean of the
+    readings it took inside the window, times the window's length.
+    With CPU and GPU readings too, the PSU part not explained by them is the
+    component "rest" (memory, fans, disks, network, the other GPUs, PSU losses).
   - GPU i: the NVML energy counter, interpolated at the span's ends.
   - CPU socket s: RAPL package energy from perf's 100 ms intervals, the part of
     each interval inside the span.
@@ -45,24 +53,31 @@ IMPLS = {"simple": "Serial-Simple", "serial": "Serial-Opt", "parallel": "Paralle
          "gpuonly": "GPU", "cuda": "Hybrid"}
 IMPL_ORDER = list(IMPLS)
 ALGOS = {"cart": "CART (gini)", "c45": "C4.5 (gain ratio)"}
-NODE_ORDER = ["epyc", "dell", "ampere"]
+NODE_ORDER = ["epyc", "dell", "ampere", "hopper"]
 NODE_HW = {"epyc": "epyc1: 2× EPYC 9255", "dell": "dell4: 2× Xeon Gold 6542Y",
-           "ampere": "ampere: A100 80 GB + 2× EPYC 7402 (CPU packages + GPU, no PSU)"}
+           "ampere": "ampere: A100 80 GB + 2× EPYC 7402",
+           "hopper": "hopper: H100 PCIe + 2× Xeon Gold 6444Y"}
 IMPL_COLORS = {"simple": "#d14f8e", "serial": "#2a78d6", "parallel": "#eb6834",
                "cuda": "#1baf7a", "gpu_only": "#eda100", "gpuonly": "#eda100"}
-NODE_COLORS = {"epyc": "#8e5bd0", "dell": "#2a78d6", "ampere": "#1baf7a"}
+NODE_COLORS = {"epyc": "#8e5bd0", "dell": "#2a78d6", "ampere": "#1baf7a", "hopper": "#eb6834"}
 MARKERS = {"simple": "s", "serial": "D", "parallel": "o", "gpuonly": "^", "cuda": "v"}
 # Power components, bottom to top of a stacked bar.
+# "psu" alone when the PSU is the only reading (Dell nodes); with CPU and GPU
+# readings too, the PSU is split into cpu0 + cpu1 + gpu + rest.
 COMPONENTS = {"psu": ("Whole server (PSU)", "#5b6770"),
               "cpu0": ("CPU socket 0 (RAPL)", "#2a78d6"),
               "cpu1": ("CPU socket 1 (RAPL)", "#8e5bd0"),
-              "gpu": ("GPU (NVML)", "#1baf7a")}
-# The implementations that use a GPU, and the GPU they run on (power_bench.sh:
-# GPU 0 with the CPUs of its NUMA node). Only that GPU is counted, and only in
-# their runs: the CPU implementations count the CPU packages alone.
+              "gpu": ("GPU (NVML)", "#1baf7a"),
+              "rest": ("Rest of the server (PSU − CPU − GPU)", "#8a8780")}
+# The implementations that use a GPU. They run on one GPU with the CPUs of its
+# NUMA node (power_bench.sh: GPU 0 unless machine.txt says "used_gpu N"). Only
+# that GPU is counted, and only in their runs: the CPU implementations count the
+# CPU packages alone.
 GPU_IMPLS = {"cuda", "gpuonly"}
-USED_GPU = 0
 IDLE_SKIP = 5.0
+# s: a PSU meter refreshing less often than this is "slow" (ampere's BMC, 59 s
+# point readings); epyc's ACPI meter (2 s averages, refreshed every 4-10 s) is not
+SLOW_METER = 20.0
 
 
 def read_csv(path):
@@ -104,11 +119,18 @@ class Job:
         self.t_read = self.read_times()
         self.events = read_markers(folder / "markers.txt")
         self.machine = (folder / "machine.txt").read_text()
-        self.has_psu = "sys_W" in self.samples
+        m = re.search(r"^used_gpu (\d+)", self.machine, re.M)
+        self.used_gpu = int(m.group(1)) if m else 0
+        self.psu_col = next((c for c in ("sys_W", "psu_W") if c in self.samples
+                             and any(not math.isnan(v) for v in self.samples[c])), None)
+        self.has_psu = self.psu_col is not None
         self.gpus = sorted(int(c[3:-3]) for c in self.samples if re.fullmatch(r"gpu\d+_mJ", c))
-        self.rapl = self.read_rapl()
+        self.rapl = self.read_powercap() or self.read_rapl()
         self.idle_windows = self.find_idle()
-        self.lag = self.measure_lag() if self.has_psu else 0.0
+        self.psu_period = self.measure_period() if self.has_psu else 0.0
+        self.slow = self.psu_period > SLOW_METER
+        self.refreshes = self.find_refreshes() if self.slow else []
+        self.lag = self.measure_lag() if self.has_psu and not self.slow else 0.0
         self.idle = {k: self.mean_power(k, self.idle_windows) for k in self.sources()}
 
     def read_times(self):
@@ -125,6 +147,25 @@ class Job:
         t = self.t
         return [t[i + 1] - 0.02 if i + 1 < len(t) and t[i + 1] - t[i] > 0.3 else t[i]
                 for i in range(len(t))]
+
+    def read_powercap(self):
+        """RAPL package energy per socket from the sampled powercap counters:
+        {socket: [(read time, joules since the previous sample, seconds)]}, the
+        format of read_rapl. A counter wraps at its max_energy_range_uj."""
+        ranges = dict(re.findall(r"^rapl_max (\S+) \S+ (\d+)", self.machine, re.M))
+        out = {}
+        for col in self.samples:
+            m = re.fullmatch(r"rapl_(intel-rapl:\d+)_package-(\d+)_uJ", col)
+            if not m:
+                continue
+            wrap = int(ranges.get(m.group(1), 2 ** 32))
+            uj, t = self.samples[col], self.t_read
+            series = []
+            for i in range(1, len(uj)):
+                d = uj[i] - uj[i - 1]
+                series.append((t[i], (d + wrap if d < 0 else d) / 1e6, t[i] - t[i - 1]))
+            out[int(m.group(2))] = series
+        return out
 
     def read_rapl(self):
         path = self.folder / "perf_rapl.csv"
@@ -144,7 +185,7 @@ class Job:
     def find_idle(self):
         starts = {kind: t for t, kind, *_ in self.events}
         windows = []
-        for a, b in (("idle_start", "idle_end"), ("idle2_start", "idle2_end")):
+        for a, b in (("idle_start", "idle_end"), ("step_end", "step_idle_end"), ("idle2_start", "idle2_end")):
             if a in starts and b in starts:
                 windows.append((starts[a] + IDLE_SKIP, starts[b]))
         return windows
@@ -164,14 +205,73 @@ class Job:
                 out.append((run, attrs, s, t, attrs.get("rc", "0")))
         return out
 
+    def psu_readings(self):
+        return [(t, v) for t, v in zip(self.t, self.samples[self.psu_col]) if not math.isnan(v)]
+
+    def measure_period(self):
+        """Median time between changes of the PSU reading: the meter's refresh
+        period, or longer where consecutive refreshes give the same value."""
+        r = self.psu_readings()
+        changes = [r[i][0] for i in range(1, len(r)) if r[i][1] != r[i - 1][1]]
+        gaps = [b - a for a, b in zip(changes, changes[1:])]
+        return statistics.median(gaps) if gaps else 0.0
+
+    def find_refreshes(self):
+        """A slow meter's refreshes, [(time, watts)]. ampere's BMC takes a point
+        reading about every 59 s (a 90 s all-core step shows full power 42 s in,
+        and idle again 11 s after its end), and /run/power/psu_W shows it within
+        a second. A refresh that repeats the previous value leaves no change in
+        the file, so the refreshes between two changes are spread evenly at the
+        refresh period."""
+        r = self.psu_readings()
+        ch = [r[0]] + [r[i] for i in range(1, len(r)) if r[i][1] != r[i - 1][1]]
+        gaps = [b[0] - a[0] for a, b in zip(ch[1:], ch[2:])]
+        med = statistics.median(gaps)
+        period = statistics.median([g for g in gaps if g < 1.5 * med])
+        out = []
+        t = ch[1][0] - period  # ch[1] is the first change, a refresh; ch[0] only the first sample
+        while t >= r[0][0]:
+            out.append((t, ch[0][1]))
+            t -= period
+        out.reverse()
+        for (t0, v), (t1, _) in zip(ch[1:], ch[2:]):
+            n = max(1, round((t1 - t0) / period))
+            out += [(t0 + j * (t1 - t0) / n, v) for j in range(n)]
+        t, v = ch[-1]
+        while t <= r[-1][0]:
+            out.append((t, v))
+            t += period
+        self.psu_period = period
+        return out
+
+    def refreshes_in(self, a, b):
+        return [v for t, v in self.refreshes if a <= t <= b]
+
+    def changes(self, a, b):
+        """Readings that stand for [a, b]: a slow meter's refreshes in it, or the
+        number of times a fast meter's reading changed."""
+        if self.slow:
+            return len(self.refreshes_in(a, b))
+        r = [v for t, v in self.psu_readings() if a <= t <= b]
+        return sum(1 for x, y in zip(r, r[1:]) if x != y)
+
     def measure_lag(self):
-        """Median delay from a process's start to the PSU reading half-way up its step."""
-        idle = statistics.mean(self.values_between("sys_W", *self.idle_windows[0])) \
-            if self.idle_windows else min(self.samples["sys_W"])
+        """Delay from a load step to the PSU reading half-way up the step: the
+        all-core step when the job has one, else the median over the processes."""
+        col = self.psu_col
+        idle = statistics.mean(self.values_between(col, *self.idle_windows[0])) \
+            if self.idle_windows else min(self.samples[col])
+        marks = {kind: t for t, kind, *_ in self.events}
+        if "step_start" in marks and "step_end" in marks:
+            s0, s1 = marks["step_start"], marks["step_end"]
+            top = statistics.median(self.values_between(col, (s0 + s1) / 2, s1))
+            if top - idle >= 30:
+                return next(t for t, v in self.psu_readings() if t >= s0 and v >= idle + 0.5 * (top - idle)) - s0
+        reach = max(20.0, 3 * self.psu_period)
         lags = []
         for _, _, start, end, _ in self.processes():
-            after = [(t, v) for t, v in zip(self.t, self.samples["sys_W"]) if start <= t <= start + 20]
-            if not after or end - start < 15:
+            after = [(t, v) for t, v in self.psu_readings() if start <= t <= start + reach]
+            if not after or end - start < reach - 5:
                 continue
             top = max(v for _, v in after)
             if top - idle < 30:
@@ -181,12 +281,24 @@ class Job:
         return statistics.median(lags) if lags else 2.0
 
     def values_between(self, col, a, b):
-        return [v for t, v in zip(self.t, self.samples[col]) if a <= t <= b]
+        return [v for t, v in zip(self.t, self.samples[col]) if a <= t <= b and not math.isnan(v)]
+
+    def psu_window(self, a, b):
+        """The meter-time span that stands for [a, b]: shifted by the meter's
+        delay (a slow meter's refreshes are point readings: no shift), and
+        clipped to the samples."""
+        return max(a + self.lag, self.t[0]), min(b + self.lag, self.t[-1])
 
     def energy(self, source, a, b):
         """Joules of `source` from a to b (Unix times)."""
         if source == "psu":
-            return self.held_integral(self.samples["sys_W"], a + self.lag, b + self.lag)
+            lo, hi = self.psu_window(a, b)
+            if self.slow:  # mean of the point readings in the window x its length
+                vals = self.refreshes_in(lo, hi)
+                if vals:
+                    return statistics.mean(vals) * (b - a)
+                # shorter than a refresh period (test runs): the reading held over it
+            return self.held_integral(self.samples[self.psu_col], lo, hi) / (hi - lo) * (b - a)
         if source.startswith("gpu"):
             col = self.samples["gpu%s_mJ" % source[3:]]
             return (self.interpolate(col, b, self.t_read) - self.interpolate(col, a, self.t_read)) / 1000
@@ -199,11 +311,13 @@ class Job:
 
     def held_integral(self, values, a, b):
         """Integral of the readings, each held until the next sample, from a to b."""
-        total = 0.0
+        total, last = 0.0, float("nan")
         for i in range(len(self.t) - 1):
+            if not math.isnan(values[i]):
+                last = values[i]
             lo, hi = max(a, self.t[i]), min(b, self.t[i + 1])
             if hi > lo:
-                total += values[i] * (hi - lo)
+                total += last * (hi - lo)
         return total
 
     def interpolate(self, col, x, t):
@@ -223,14 +337,28 @@ class Job:
             return float("nan")
         return sum(self.energy(source, a, b) for a, b in windows) / sum(b - a for a, b in windows)
 
-    def peak(self, a, b, gpu=False):
-        """Highest sampled total power in [a, b]: PSU, or GPUs + CPU sockets."""
-        if self.has_psu:
-            # Skip the first 10 s of a long window: the meter's first reading
-            # there still averages over the end of the (all-core) CSV load.
-            skip = 10.0 if b - a > 60 else 0.0
-            vals = self.values_between("sys_W", a + self.lag + skip, b + self.lag)
+    def peak_psu(self, a, b):
+        # Skip the first 10 s of a long window: the meter's first reading there
+        # still averages over the end of the (all-core) CSV load.
+        lo, hi = self.psu_window(a, b)
+        if self.slow:
+            vals = self.refreshes_in(lo, hi)
             return max(vals) if vals else float("nan")
+        if b - a > 60:  # and the last 5 s: evaluation starts on every core at the window's end
+            lo, hi = lo + 10.0, hi - 5.0
+        vals = self.values_between(self.psu_col, lo, hi)
+        return max(vals) if vals else float("nan")
+
+    def peak_gpu(self, a, b):
+        i0, i1 = bisect.bisect_left(self.t, a), bisect.bisect_right(self.t, b)
+        vals = self.samples["gpu%d_W" % self.used_gpu][i0:i1]
+        return max(vals) if vals else float("nan")
+
+    def peak(self, a, b, gpu=False, cpu_only=False):
+        """Highest sampled total power in [a, b]: PSU, or GPU + CPU sockets
+        (cpu_only: the CPU sockets alone)."""
+        if self.has_psu and not cpu_only:
+            return self.peak_psu(a, b)
         best = 0.0
         # per socket: interval ends and watts; a sample at t falls in the first interval ending >= t
         rapl = [([t for t, _, d in v if d > 0], [j / d for _, j, d in v if d > 0])
@@ -239,7 +367,7 @@ class Job:
         pad = 0.1 if b - a < 0.5 else 0.0
         for i in range(bisect.bisect_left(self.t, a - pad), bisect.bisect_right(self.t, b + pad)):
             t = self.t[i]
-            power = self.samples["gpu%d_W" % USED_GPU][i] if gpu and self.gpus else 0.0
+            power = self.samples["gpu%d_W" % self.used_gpu][i] if gpu and self.gpus and not cpu_only else 0.0
             for ends, watts in rapl:
                 if ends:
                     power += watts[min(bisect.bisect_left(ends, t), len(ends) - 1)]
@@ -248,15 +376,19 @@ class Job:
 
 
 def components(job, per_source, impl):
-    """Map source values to chart components: the PSU, or the CPU packages plus,
-    for the GPU implementations, the GPU they ran on."""
+    """Map source values to chart components: the CPU packages plus, for the GPU
+    implementations, the GPU they ran on; with a PSU reading also the rest of the
+    PSU's power ("rest"), or the PSU alone when there are no CPU readings."""
     out = {}
-    if job.has_psu:
-        out["psu"] = per_source["psu"]
     for k in sorted(job.rapl):
         out["cpu%d" % k] = per_source["cpu%d" % k]
     if job.gpus and impl in GPU_IMPLS:
-        out["gpu"] = per_source["gpu%d" % USED_GPU]
+        out["gpu"] = per_source["gpu%d" % job.used_gpu]
+    if job.has_psu:
+        if out:
+            out["rest"] = per_source["psu"] - sum(out.values())
+        else:
+            out["psu"] = per_source["psu"]
     return out
 
 
@@ -298,6 +430,13 @@ def analyse(job):
             "above_idle_J": total - sum(comp_idle.values()),
             "power_W": total / (span / k), "idle_W": sum(comp_idle.values()) / (span / k),
             "peak_W": job.peak(a, b, attrs["impl"] in GPU_IMPLS), "lag_s": job.lag,
+            "peak_cpu_W": job.peak(a, b, cpu_only=True) if job.rapl else float("nan"),
+            "peak_gpu_W": job.peak_gpu(a, b) if job.gpus and attrs["impl"] in GPU_IMPLS else float("nan"),
+            "peak_psu_W": job.peak_psu(a, b) if job.has_psu else float("nan"),
+            "psu_J": energy["psu"] if job.has_psu else float("nan"),
+            "psu_idle_J": idle["psu"] if job.has_psu else float("nan"),
+            "psu_changes": job.changes(*job.psu_window(a, b)) if job.has_psu else 0,
+            "psu_period_s": job.psu_period,
             **{f"E_{c}": v for c, v in comp_e.items()},
             **{f"Eidle_{c}": v for c, v in comp_idle.items()},
             "_window": (a, b, start, end),
@@ -321,8 +460,11 @@ def summarise(rows):
         s = {"node": node, "impl": impl, "algo": algo, "runs": len(rs), "repeat": rs[0]["repeat"],
              "nodes": sorted({r["nodes"] for r in rs}), "lag_s": rs[0]["lag_s"]}
         s["trees_in_process"] = rs[0]["trees_in_process"]
+        s["psu_changes_min"] = min(r["psu_changes"] for r in rs)
+        s["psu_period_s"] = rs[0]["psu_period_s"]
         for key in ("train_s", "load_s", "energy_J", "above_idle_J", "power_W", "idle_W", "peak_W",
-                    "steady_train_s", "steady_energy_J", "span_s"):
+                    "steady_train_s", "steady_energy_J", "span_s", "peak_cpu_W", "peak_gpu_W",
+                    "peak_psu_W", "psu_J", "psu_idle_J"):
             s[key], s[key + "_sd"] = mean_sd([r[key] for r in rs])
         for c in COMPONENTS:
             if f"E_{c}" in rs[0]:
@@ -398,6 +540,14 @@ def write_tables(folder, rows, summary):
     (folder / "summary.md").write_text("\n".join(lines))
 
 
+def unit_ticks(ax, axis, unit):
+    """Tick labels with their unit ("100 W", "10 kJ", "50 %")."""
+    from matplotlib.ticker import FuncFormatter
+    sep = "" if unit == "%" else " "
+    f = FuncFormatter(lambda v, _: f"{v:,g}{sep}{unit}")
+    (ax.yaxis if axis == "y" else ax.xaxis).set_major_formatter(f)
+
+
 def style(ax):
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
@@ -430,20 +580,19 @@ def chart_power(folder, summary):
                 ax.bar(i, max(total - idle, 0), bottom=bottom + min(idle, total), color=color,
                        width=0.7, edgecolor="white", linewidth=0.5)
                 bottom += total
-            ax.text(i, max(bottom, s["peak_W"]) + 6, f"{s['power_W']:.0f} W\n(+{s['power_W'] - s['idle_W']:.0f})",
-                    ha="center", va="bottom", fontsize=8, color=INK)
-            ax.plot([i - 0.38, i + 0.38], [s["peak_W"]] * 2, color=INK, lw=1, ls=":")
+            ax.text(i, bottom + 6, f"{s['power_W']:.0f} W", ha="center", va="bottom", fontsize=8, color=INK)
         ax.set_xticks(range(len(cases)), [label(s).replace(" · ", "\n") for s in cases], fontsize=8)
         ax.set_title(title, fontsize=11, color=INK, loc="left")
         ax.grid(axis="y", color=GRID)
         style(ax)
     axes[0].set_ylabel("mean power while training (W)", color=INK)
+    for ax in axes:
+        unit_ticks(ax, "y", "W")
     handles = [Patch(color=COMPONENTS[c][1], label=COMPONENTS[c][0]) for c in COMPONENTS if c in used]
-    handles += [Patch(facecolor="#999", alpha=0.38, label="lighter part: idle power of that component"),
-                plt.Line2D([], [], color=INK, ls=":", label="highest sample (peak)")]
+    handles += [Patch(facecolor="#999", alpha=0.38, label="lighter part: idle power of that component")]
     fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=8.5)
-    fig.suptitle("ECBDL'14 15M: mean power while training one tree (Dell nodes: whole server at the PSU; "
-                 "ampere: CPU packages + the GPU in use, no PSU reading)", fontsize=11, color=INK, x=0.01, ha="left")
+    fig.suptitle("ECBDL'14 15M: mean power while training one tree (with a PSU reading: the whole server; "
+                 "without one: CPU packages + the GPU in use)", fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0.08, 1, 0.95))
     fig.savefig(folder / "chart-power.png", dpi=150)
     plt.close(fig)
@@ -459,20 +608,24 @@ def chart_energy(folder, summary):
             ax.bar(i, s["energy_J"] / 1e3, color=color, alpha=0.45, width=0.75)
             ax.bar(i, max(s["above_idle_J"], 1) / 1e3, color=color, width=0.4)
             ax.errorbar(i, s["energy_J"] / 1e3, yerr=s["energy_J_sd"] / 1e3, color=INK, capsize=2, lw=0.8)
-            ax.text(i, s["energy_J"] / 1e3 * 1.15, f"{fmt_j(s['energy_J'])}\n({fmt_j(s['above_idle_J'])})",
-                    ha="center", va="bottom", fontsize=7.5, color=INK)
+            ax.text(i, s["energy_J"] / 1e3 * 1.15, fmt_j(s["energy_J"]), ha="center", va="bottom", fontsize=7.5,
+                    color=INK)
+            ax.text(i, max(s["above_idle_J"], 1) / 1e3 * 1.06, fmt_j(s["above_idle_J"]), ha="center", va="bottom",
+                    fontsize=7, color=INK)
         ax.set_yscale("log")
         ax.set_xticks(range(len(cases)), [label(s).replace(" · ", "\n") for s in cases], fontsize=8)
         ax.set_title(title, fontsize=11, color=INK, loc="left")
         ax.grid(axis="y", color=GRID, which="both")
         style(ax)
     axes[0].set_ylabel("energy per tree (kJ, log scale)", color=INK)
+    for ax in axes:
+        unit_ticks(ax, "y", "kJ")
     axes[0].set_ylim(top=axes[0].get_ylim()[1] * 4)
-    fig.legend(handles=[Patch(facecolor="#888", alpha=0.45, label="total energy while training (label: total)"),
-                        Patch(facecolor="#888", label="above idle power (label in brackets)")],
+    fig.legend(handles=[Patch(facecolor="#888", alpha=0.45, label="wide bar: total energy while training"),
+                        Patch(facecolor="#888", label="narrow bar: above idle, what the run adds to the idle server")],
                loc="lower center", ncol=2, frameon=False, fontsize=8.5)
     fig.suptitle("ECBDL'14 15M: energy to train one tree (mean of the runs; whisker ± 1 sd; "
-                 "ampere = CPU packages + the GPU in use)", fontsize=11, color=INK, x=0.01, ha="left")
+                 "with a PSU reading: whole server; without: CPU packages + the GPU in use)", fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0.06, 1, 0.95))
     fig.savefig(folder / "chart-energy.png", dpi=150)
     plt.close(fig)
@@ -505,6 +658,7 @@ def chart_energy_split(folder, summary):
         ax.invert_yaxis()
         ax.set_xlim(0, 100)
         ax.set_xlabel("share of the energy per tree (%)", color=INK)
+        unit_ticks(ax, "x", "%")
         ax.set_title(title, fontsize=11, color=INK, loc="left")
         style(ax)
     handles = [Patch(color=COMPONENTS[c][1], label=COMPONENTS[c][0]) for c in COMPONENTS if c in used]
@@ -529,6 +683,7 @@ def chart_time(folder, summary):
         ax.invert_yaxis()
         ax.set_xlim(right=ax.get_xlim()[1] * 12)
         ax.set_xlabel("training time per tree (s, log scale)", color=INK)
+        unit_ticks(ax, "x", "s")
         ax.set_title(title, fontsize=11, color=INK, loc="left")
         ax.grid(axis="x", color=GRID, which="both")
         style(ax)
@@ -585,6 +740,9 @@ def chart_scatter(folder, summary):
     ins.set_zorder(5)
     draw(ins, fx, fy, 50)
     ins.tick_params(labelsize=7)
+    for a in (ax, ins):
+        unit_ticks(a, "x", "s")
+        unit_ticks(a, "y", "kJ")
     ins.set_title("zoom: Parallel, GPU, Hybrid", fontsize=8, color=MUTED, loc="left")
     ax.indicate_inset_zoom(ins, edgecolor=MUTED, alpha=0.6)
     handles = [plt.Line2D([], [], marker=MARKERS[i], ls="", color=INK, label=IMPLS[i])
@@ -604,123 +762,201 @@ def chart_scatter(folder, summary):
 
 
 def chart_cpu_gpu(folder, summary):
-    """Nodes with CPU (RAPL) and GPU (NVML) sensors but no PSU: one chart per
-    algorithm. Each implementation gets three bars on log axes: energy per tree,
-    mean power while training and time per tree. Energy and power are stacked
-    CPU idle, GPU idle, CPU above idle, GPU above idle; the GPU is counted only
-    for the GPU implementations, and only the GPU they ran on."""
+    """Nodes with CPU (RAPL) and GPU (NVML) sensors: one chart per node and
+    algorithm. Each implementation gets up to six thin bars on three log axes:
+    energy per tree (CPU + GPU, stacked; and the PSU, the whole server), mean
+    power while training (CPU, GPU and PSU, one bar each) and time per tree.
+    Every bar's lighter bottom part ends at the idle value (power: the node's
+    idle power, the same for every run; energy: idle power x time), the darker
+    top part is what the run adds above idle.
+    The GPU is counted only for the GPU implementations, and only the GPU they
+    ran on. The PSU bars appear when the job had a PSU reading."""
     from matplotlib.colors import to_rgba
     from matplotlib.ticker import FuncFormatter
-    cases = [s for s in summary if "E_cpu0" in s and "E_psu" not in s]
+    cases = [s for s in summary if "E_cpu0" in s]
     nodes = sorted({s["node"] for s in cases})
     if not cases or len({s["impl"] for s in cases}) < 3:
         return
     for old in folder.glob("chart-cpu-gpu-*.png"):
         old.unlink()
-    CPU, GPU, TIME = "#2a78d6", "#1baf7a", "#3d3c3a"
-    cpus = ("cpu0", "cpu1")
+    CPU, GPU, PSU, TIME = "#2a78d6", "#1baf7a", "#8e5bd0", "#3d3c3a"
+    cpus = [c for c in ("cpu0", "cpu1") if f"E_{c}" in cases[0]]
+    light = lambda c: to_rgba(c, 0.35)  # noqa: E731
 
-    def parts(s, key):
-        """[cpu idle, gpu idle, cpu above idle, gpu above idle] of E_ (J) or P_ (W)."""
-        div = s["span_s"] if key == "P" else 1.0
-        ci = sum(s[f"Eidle_{c}"] for c in cpus) / div
-        ct = sum(s[f"E_{c}"] for c in cpus) / div
-        gi = s.get("Eidle_gpu", 0.0) / div
-        gt = s.get("E_gpu", 0.0) / div
-        return [ci, gi, max(ct - ci, 0.0), max(gt - gi, 0.0)]
+    def finite(v):
+        return v is not None and not math.isnan(v)
 
-    colors = [to_rgba(CPU, 0.35), to_rgba(GPU, 0.35), CPU, GPU]
+    def cpu(s, div):  # (idle, above idle)
+        i = sum(s[f"Eidle_{c}"] for c in cpus) / div
+        return i, max(sum(s[f"E_{c}"] for c in cpus) / div - i, 0.0)
 
-    def stack(ax, x, vals, floor):
-        """Stack on a log axis: each part's height is its share of the bar."""
-        total = sum(vals)
+    def gpu(s, div):
+        i = s.get("Eidle_gpu", 0.0) / div
+        return i, max(s.get("E_gpu", 0.0) / div - i, 0.0)
+
+    def psu(s, div):
+        i = s["psu_idle_J"] / div
+        return i, max(s["psu_J"] / div - i, 0.0)
+
+    def stack(ax, x, parts, floor):
+        """parts: [(value, color)] bottom to top, each drawn at its real value on
+        the axis: the first part from the floor up to its value, the next from
+        there up to the sum, and so on. So the idle part of every power bar of a
+        node ends at the same height: the node's idle power."""
+        total = sum(v for v, _ in parts)
         cum = 0.0
-        for v, col in zip(vals, colors):
+        for v, col in parts:
             if v <= 0:
                 continue
-            lo = floor * (total / floor) ** (cum / total)
+            lo = max(cum, floor)
             cum += v
-            hi = floor * (total / floor) ** (cum / total)
-            ax.bar(x, hi - lo, bottom=lo, width=w, color=col, edgecolor="white", lw=0.4)
+            if cum > lo:
+                ax.bar(x, cum - lo, bottom=lo, width=W, color=col, edgecolor="white", lw=0.3)
         return total
 
-    def plain(v, _):
-        return f"{v:,.0f}" if v >= 1 else f"{v:g}"
+    def joules(v, _):
+        return fmt_j(v)
 
-    w = 0.26
+    def watts(v, _):
+        return f"{v:,.0f} W"
+
+    def seconds(v, _):
+        return f"{v:,.0f} s" if v >= 1 else f"{v:g} s"
+
+    def short_j(v):
+        return fmt_j(v).replace(" ", "\u2009")
+
+    def short_w(v):
+        return f"{v:,.0f}\u2009W"
+
+    def numbers(ax, x, idle, total, fmt, floor):
+        """The bar's value right above it; the idle value inside the light
+        part, just under the line where the light and dark parts meet."""
+        ax.text(x, total * 1.06, fmt(total), ha="center", va="bottom", fontsize=fs, color=INK)
+        if idle > floor * 1.6:
+            ax.text(x, idle / 1.06, fmt(idle), ha="center", va="top", fontsize=fs, color=INK)
+
+    W = 0.066  # bar width
+    NAMES = {"e_cpu": "CPU", "e_gpu": "GPU", "e_psu": "PSU", "p_cpu": "CPU", "p_gpu": "GPU", "p_psu": "PSU",
+             "t": "time"}
+    fs = 6.3
     for node in nodes:
         for algo in [a for a in ALGOS if any(s["node"] == node and s["algo"] == a for s in cases)]:
             ss = sorted([s for s in cases if s["node"] == node and s["algo"] == algo],
                         key=lambda s: IMPL_ORDER.index(s["impl"]))
-            x = list(range(len(ss)))
-            fig, ax_e = plt.subplots(figsize=(13, 6.6))
+            has_psu = all(finite(s.get("psu_J")) for s in ss)
+            has_gpu = any("E_gpu" in s for s in ss)
+            # one bar per sensor and quantity: energy (CPU, GPU, PSU), power (CPU, GPU, PSU), time;
+            # an implementation that does not use the GPU gets no GPU bars (and no space for them)
+            def sensors_of(s):
+                used_gpu = has_gpu and s["impl"] in GPU_IMPLS
+                return ["cpu"] + (["gpu"] if used_gpu else []) + (["psu"] if has_psu else [])
+
+            def layout(s):
+                sens = sensors_of(s)
+                groups = [[f"e_{x}" for x in sens], [f"p_{x}" for x in sens], ["t"]]
+                off, x0 = {}, 0.0
+                for g in groups:
+                    for k in g:
+                        off[k] = x0
+                        x0 += 0.088
+                    x0 += 0.04
+                mid = (x0 - 0.04 - 0.088) / 2
+                return groups, {k: v - mid for k, v in off.items()}
+
+            lay = [layout(s) for s in ss]
+            fig, ax_e = plt.subplots(figsize=(22 if has_gpu else 15, 7.6))
             ax_p = ax_e.twinx()
             ax_t = ax_e.twinx()
-            ax_t.spines["right"].set_position(("axes", 1.08))
+            ax_t.spines["right"].set_position(("axes", 1.055 if has_gpu else 1.085))
+            parts_of = {"cpu": (cpu, CPU), "gpu": (gpu, GPU), "psu": (psu, PSU)}
 
-            # energy per tree (J, log)
-            E = [parts(s, "E") for s in ss]
-            fe = min(sum(v) for v in E) / 8
-            for i, (s, v) in enumerate(zip(ss, E)):
-                tot = stack(ax_e, i - w, v, fe)
-                ax_e.text(i - w, tot * 1.12, f"{fmt_j(tot)}\nabove idle\n{fmt_j(v[2] + v[3])}",
-                          ha="center", va="bottom", fontsize=7, color=INK)
+            def bars_of(s, div):
+                """[(sensor, (idle, above idle), color)]"""
+                return [(x, parts_of[x][0](s, div), parts_of[x][1]) for x in sensors_of(s)]
+
+            # energy per tree (log): one bar per sensor
+            tops = [sum(v) for s in ss for _, v, _ in bars_of(s, 1.0) if sum(v) > 0]
+            fe = min(tops) / 8
+            for i, s in enumerate(ss):
+                for x, v, color in bars_of(s, 1.0):
+                    pos = i + lay[i][1][f"e_{x}"]
+                    tot = stack(ax_e, pos, [(v[0], light(color)), (v[1], color)], fe)
+                    numbers(ax_e, pos, v[0], tot, short_j, fe)
             ax_e.set_yscale("log")
-            ax_e.set_ylim(fe, max(sum(v) for v in E) * 12)
+            ax_e.set_ylim(fe, max(tops) * 25)
 
-            # mean power while training (W, log)
-            P = [parts(s, "P") for s in ss]
+            # mean power while training (W, log): CPU, GPU and PSU bars
             fp = 20.0
-            for i, (s, v) in enumerate(zip(ss, P)):
-                tot = stack(ax_p, i, v, fp)
-                ax_p.plot([i - w / 2, i + w / 2], [s["peak_W"]] * 2, color=INK, lw=1.3, ls=":")
-                lab = f"{tot:.0f} W\nCPU {v[0] + v[2]:.0f}"
-                if s["impl"] in GPU_IMPLS:
-                    lab += f"\nGPU {v[1] + v[3]:.0f}"
-                ax_p.text(i, max(tot, s["peak_W"]) * 1.08, lab + f"\npeak {s['peak_W']:.0f}",
-                          ha="center", va="bottom", fontsize=7, color=INK)
+            pmax = 0.0
+            for i, s in enumerate(ss):
+                for x, parts, color in bars_of(s, s["span_s"]):
+                    pos = i + lay[i][1][f"p_{x}"]
+                    tot = stack(ax_p, pos, [(parts[0], light(color)), (parts[1], color)], fp)
+                    pmax = max(pmax, tot)
+                    numbers(ax_p, pos, parts[0], tot, short_w, fp)
             ax_p.set_yscale("log")
-            ax_p.set_ylim(fp, 6000)
+            ax_p.set_ylim(fp, max(pmax * 25, 3000))
 
             # time per tree (s, log)
             t = [s["train_s"] for s in ss]
             ft = min(t) / 8
-            ax_t.bar([i + w for i in x], [v - ft for v in t], bottom=ft, width=w, color=TIME)
+            ax_t.bar([i + lay[i][1]["t"] for i in range(len(ss))], [v - ft for v in t], bottom=ft, width=W,
+                     color=TIME)
             for i, v in enumerate(t):
-                ax_t.text(i + w, v * 1.12, fmt_s(v), ha="center", va="bottom", fontsize=7, color=INK)
+                ax_t.text(i + lay[i][1]["t"], v * 1.1, fmt_s(v).replace(" ", " "), ha="center", va="bottom",
+                          fontsize=fs, color=INK)
             ax_t.set_yscale("log")
-            ax_t.set_ylim(ft, max(t) * 12)
+            ax_t.set_ylim(ft, max(t) * 25)
 
-            ax_e.set_ylabel("ENERGY per tree (J, log scale) — left bar", color=INK)
-            ax_p.set_ylabel("mean POWER while training (W, log scale) — middle bar", color=INK)
-            ax_t.set_ylabel("TIME per tree (s, log scale) — right bar", color=INK)
-            for a in (ax_e, ax_p, ax_t):
-                a.yaxis.set_major_formatter(FuncFormatter(plain))
+            ax_e.set_ylabel("ENERGY per tree (log scale): left bars", color=INK)
+            ax_p.set_ylabel("mean POWER while training (log scale): middle bars", color=INK)
+            ax_t.set_ylabel("TIME per tree (log scale): right bar", color=INK)
+            for a, f in ((ax_e, joules), (ax_p, watts), (ax_t, seconds)):
+                a.yaxis.set_major_formatter(FuncFormatter(f))
                 a.spines["top"].set_visible(False)
                 a.tick_params(colors=INK, labelsize=8)
             ax_e.grid(axis="y", color=GRID, which="major")
             ax_e.set_axisbelow(True)
             # two-level x labels: what each bar is, then the implementation
-            ax_e.set_xticks([i + d for i in x for d in (-w, 0, w)])
-            ax_e.set_xticklabels(["energy", "power", "time"] * len(x), fontsize=7.5, color=MUTED)
-            ax_e.set_xlim(-0.6, len(ss) - 0.4)
+            ax_e.set_xticks([i + v for i in range(len(ss)) for v in lay[i][1].values()])
+            ax_e.set_xticklabels([NAMES[k] for i in range(len(ss)) for k in lay[i][1]], fontsize=6.5, color=MUTED)
+            ax_e.tick_params(axis="x", length=2)
+            ax_e.set_xlim(-0.55, len(ss) - 0.45)
             for i, s in enumerate(ss):
-                ax_e.text(i, -0.075, IMPLS[s["impl"]], transform=ax_e.get_xaxis_transform(),
+                groups, off = lay[i]
+                for g, name in zip(groups[:2], ("energy", "power")):
+                    ax_e.text(i + (off[g[0]] + off[g[-1]]) / 2, -0.045, name, transform=ax_e.get_xaxis_transform(),
+                              ha="center", va="top", fontsize=7, color=MUTED)
+                ax_e.text(i, -0.08, IMPLS[s["impl"]], transform=ax_e.get_xaxis_transform(),
                           ha="center", va="top", fontsize=10.5, color=INK, fontweight="bold")
-            handles = [Patch(color=colors[0], label="CPU packages, idle part"),
-                       Patch(color=colors[1], label="GPU, idle part"),
-                       Patch(color=colors[2], label="CPU packages, above idle"),
-                       Patch(color=colors[3], label="GPU, above idle"),
-                       plt.Line2D([], [], color=INK, ls=":", label="peak power (highest sample)"),
-                       Patch(color=TIME, label="time per tree")]
+            handles = [Patch(color=CPU, label="CPU packages (RAPL)")]
+            if has_gpu:
+                handles.append(Patch(color=GPU, label="GPU in use (NVML; GPU and Hybrid only)"))
+            if has_psu:
+                handles.append(Patch(color=PSU, label="whole server at the PSU"))
+            handles += [Patch(color=light("#777"), label="light part: idle (number under its top edge)"),
+                        Patch(color="#777", label="dark part: what the run adds above idle"),
+                        Patch(color=TIME, label="time per tree")]
             ax_e.legend(handles=handles, fontsize=8, frameon=False, loc="upper right", ncol=3,
-                        title="stack order bottom to top; on the log axes each part's height is its "
-                              "share of the bar", title_fontsize=7.5)
-            n = ", ".join(f"{IMPLS[s['impl']]} {s['runs']}×" for s in ss)
+                        title="Number above a bar: its mean value. Idle energy = idle power × time.",
+                        title_fontsize=8)
+            n = ", ".join(f"{IMPLS[s['impl']]} {s['runs']}×{s['repeat']}" for s in ss)
+            hw = NODE_HW.get(node, node)
+            what = ("both CPU packages (RAPL) and the whole server at the PSU (no GPU)" if has_psu and not has_gpu
+                    else "both CPU packages (RAPL), the GPU in use (NVML; GPU and Hybrid only) and the whole server "
+                    "at the PSU" if has_psu else "both CPU packages (RAPL) + the GPU in use (NVML; GPU and Hybrid "
+                    "runs only). No PSU, RAM or fans")
+            psu_note = ""
+            if has_psu:
+                period = ss[0]["psu_period_s"]
+                psu_note = (f" PSU reading refreshed every ~{period:.0f} s; "
+                            f"≥ {min(s['psu_changes_min'] for s in ss)} {'readings' if period > SLOW_METER else 'changes'} "
+                            f"in every measured window.")
             ax_e.set_title(f"{ALGOS[algo]}: energy, power and time to train one tree on ECBDL'14 15M "
-                           f"(depth ≤ 10), ampere: A100 80 GB + 2× EPYC 7402\nMeasured: both CPU packages (RAPL) "
-                           f"+ the GPU (NVML; GPU and Hybrid runs only). No PSU, RAM or fans.\nMeans of {n}",
-                           fontsize=10, color=INK, loc="left")
+                           f"(depth ≤ 10), {hw}\nMeasured: {what}.{psu_note}\n"
+                           f"Means of runs × trees: {n} (the first tree of a process with ≥ 3 trees is "
+                           f"left out)", fontsize=9.5, color=INK, loc="left")
             fig.tight_layout()
             fig.savefig(folder / f"chart-cpu-gpu-{node}-{algo}.png", dpi=150)
             plt.close(fig)
@@ -748,10 +984,10 @@ def chart_traces(folder, jobs, rows):
         idx = [i for i, t in enumerate(job.t) if lo <= t <= hi]
         x = [job.t[i] - start for i in idx]
         if job.has_psu:
-            ax.plot([job.t[i] - start - job.lag for i in idx], [job.samples["sys_W"][i] for i in idx],
+            ax.plot([job.t[i] - start - job.lag for i in idx], [job.samples[job.psu_col][i] for i in idx],
                     color=COMPONENTS["psu"][1], lw=1.2, drawstyle="steps-post", label="PSU (shifted by delay)")
         if job.gpus and key[1] in GPU_IMPLS:
-            ax.plot(x, [job.samples["gpu%d_W" % USED_GPU][i] for i in idx], lw=1,
+            ax.plot(x, [job.samples["gpu%d_W" % job.used_gpu][i] for i in idx], lw=1,
                     color=COMPONENTS["gpu"][1], label="GPU")
         for k, series in sorted(job.rapl.items()):
             pts = [(t - start, j / d) for t, j, d in series if lo <= t <= hi and d > 0]
@@ -761,6 +997,9 @@ def chart_traces(folder, jobs, rows):
         busy = ax.twinx()
         busy.plot(x, [job.samples["cpu_busy"][i] * 100 for i in idx], color=MUTED, lw=0.5, alpha=0.6)
         busy.set_ylim(0, 105)
+        unit_ticks(busy, "y", "%")
+        unit_ticks(ax, "y", "W")
+        unit_ticks(ax, "x", "s")
         busy.tick_params(labelsize=6.5, colors=MUTED)
         busy.spines["top"].set_visible(False)
         ax.set_title(f"{IMPLS[key[1]]}, {key[2].upper().replace('C45', 'C4.5')} · {key[0]}  "

@@ -19,19 +19,34 @@
 #     --export=ALL,TARGET=30,REPS=5,REPS_BY="simple=1 serial=3" \
 #     -o bench/results/power-ampere/ampere/job.log bench/power/power_bench.sh all bench/results/power-ampere/ampere
 #
+# PSU readings (2026-11-06): ampere and hopper publish the BMC's reading in
+# /run/power/psu_W, and their RAPL counters are readable. ampere's BMC refreshes
+# its value only about once a minute, so give it long windows: TARGET=720 (>= 10
+# refreshes per measured window), IDLE=900 and STEP=600 (an all-core busy step
+# that shows the meter's delay and refresh period):
+#   sbatch -p ampere -w ampere --exclusive -c 48 -t 12:00:00 -J pwr-psu-ampere \
+#     --export=ALL,TARGET=720,IDLE=900,STEP=600,REPS=2,REPS_BY="simple=1 serial=1",REPEAT_BY="serial=2" \
+#     -o bench/results/power-psu/ampere/job.log bench/power/power_bench.sh all bench/results/power-psu/ampere
+#   sbatch -p hopper -w hopper --exclusive -c 32 -t 10:00:00 -J pwr-psu-hopper \
+#     --export=ALL,GPU=2,GPU_CPUS=16-31,GPU_MEM=1,GPU_THREADS=16,TARGET=120,IDLE=300,STEP=300,REPS=3,REPS_BY="simple=1 serial=1" \
+#     -o bench/results/power-psu/hopper/job.log bench/power/power_bench.sh all bench/results/power-psu/hopper
+#
 # The run: a warm-up run of each fast backend (Parallel, Hybrid, GPU) per
 # algorithm (two trees), which also picks its repeat count K = ceil(TARGET /
-# the second tree's training time),
-# so that its training window lasts >= TARGET seconds (the PSU meter averages
-# over 2-6 s); then IDLE seconds of idle; then REPS rounds of every case
-# (round-robin), each process preceded by PRE seconds of idle; then IDLE seconds
-# of idle again. ./tree --repeat K prints every tree's training window as Unix
+# the second tree's training time) + 1, so that the trees after the first one
+# (the measured ones) last >= TARGET seconds; then IDLE seconds of idle; then,
+# with STEP > 0, STEP seconds of every core busy and IDLE seconds of idle again;
+# then REPS rounds of every case (round-robin), each process preceded by PRE
+# seconds of idle; then IDLE seconds of idle again. ./tree --repeat K prints every tree's training window as Unix
 # times; bench/power/analyze.py integrates the samples over those windows.
 #
 # Environment: DATA (CSV), REPS (3), REPS_BY (per-implementation rounds,
-# e.g. "simple=1 serial=3"; the rest run REPS rounds), TARGET (120), IDLE (60),
-# PRE (20), ALGOS ("cart c45"), IMPLS (gpu: "cuda gpuonly", cpu: "simple serial
-# parallel", all: all five).
+# e.g. "simple=1 serial=3"; the rest run REPS rounds), REPEAT_BY (trees per
+# process for the slow backends, e.g. "serial=2"; default 1), TARGET (120),
+# IDLE (60), STEP (0), PRE (20), ALGOS ("cart c45"), IMPLS (gpu: "cuda gpuonly",
+# cpu: "simple serial parallel", all: all five); GPU (0), GPU_CPUS (0-23),
+# GPU_MEM (0) and GPU_THREADS (24): the GPU the GPU backends use, and the CPUs
+# and memory node of its NUMA node.
 set -uo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 KIND=$1
@@ -41,6 +56,11 @@ REPS=${REPS:-3}
 TARGET=${TARGET:-120}
 IDLE=${IDLE:-60}
 PRE=${PRE:-20}
+STEP=${STEP:-0}
+GPU=${GPU:-0}
+GPU_CPUS=${GPU_CPUS:-0-23}
+GPU_MEM=${GPU_MEM:-0}
+GPU_THREADS=${GPU_THREADS:-24}
 ALGOS=${ALGOS:-cart c45}
 PROTOCOL=(--no-prune -d 10)
 mkdir -p "$OUT/out"
@@ -63,8 +83,8 @@ done
 
 command_of() { # impl -> the command line before the algorithm flags
   case $1 in
-    cuda) echo "env CUDA_VISIBLE_DEVICES=0 numactl --membind=0 taskset -c 0-23 ./tree --cuda --threads 24" ;;
-    gpuonly) echo "env CUDA_VISIBLE_DEVICES=0 numactl --membind=0 taskset -c 0-23 ./tree --cuda --gpu-only --threads 24" ;;
+    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --cuda --threads $GPU_THREADS" ;;
+    gpuonly) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --cuda --gpu-only --threads $GPU_THREADS" ;;
     # --threads 0: loading and evaluation use every core; training is one thread
     simple) echo "./tree_cpu --simple --threads 0" ;;
     serial) echo "./tree_cpu --serial --threads 0" ;;
@@ -75,7 +95,8 @@ command_of() { # impl -> the command line before the algorithm flags
 {
   echo "job ${SLURM_JOB_ID:-none} on $(hostname), $(date -Is), kind $KIND"
   echo "commit ${TREE_GIT_DESCRIBE:-$(git describe --always --dirty 2>/dev/null)}"
-  echo "data $DATA, reps $REPS ${REPS_BY:-}, target $TARGET s, idle $IDLE s, pre $PRE s, algos $ALGOS, impls $IMPLS"
+  echo "data $DATA, reps $REPS ${REPS_BY:-}, repeat ${REPEAT_BY:-}, target $TARGET s, idle $IDLE s, step $STEP s, pre $PRE s, algos $ALGOS, impls $IMPLS"
+  echo "used_gpu $GPU (cpus $GPU_CPUS, memory node $GPU_MEM, $GPU_THREADS threads)"
   echo "protocol ${PROTOCOL[*]}"
   echo "kernel $(uname -r)"
   echo "dmi $(cat /sys/class/dmi/id/sys_vendor) $(cat /sys/class/dmi/id/product_name)"
@@ -86,6 +107,10 @@ command_of() { # impl -> the command line before the algorithm flags
   for h in /sys/class/hwmon/hwmon*; do
     [ "$(cat "$h/name")" = power_meter ] && for f in "$h"/power1_*; do echo "$(basename "$f") $(cat "$f")"; done
   done
+  for z in /sys/class/powercap/intel-rapl:*; do
+    [ -r "$z/energy_uj" ] && echo "rapl_max $(basename "$z") $(cat "$z/name") $(cat "$z/max_energy_range_uj")"
+  done
+  [ -r /run/power/psu_W ] && echo "psu_file $(cat /run/power/psu_W)"
   free -g | head -2
   command -v nvidia-smi > /dev/null && nvidia-smi --query-gpu=index,name,power.limit,driver_version --format=csv
 } > "$OUT/machine.txt" 2>&1
@@ -115,17 +140,18 @@ run() { # id impl algo repeat
   mark "end $id rc=$?"
 }
 
-declare -A REPEAT
+declare -A REPEAT SLOW_REPEAT
+for kv in ${REPEAT_BY:-}; do SLOW_REPEAT[${kv%%=*}]=${kv#*=}; done
 mark job_start
 for algo in $ALGOS; do
   for impl in $IMPLS; do
-    REPEAT[$impl-$algo]=1
+    REPEAT[$impl-$algo]=${SLOW_REPEAT[$impl]:-1}
     case " $FAST " in *" $impl "*) ;; *) continue ;; esac
     # two trees: the first one in a process is slower (CUDA context, allocations)
     run "warmup-$impl-$algo" "$impl" "$algo" 2
     ms=$(sed -n 's/^  repeat 2\/2: train \([0-9.]*\) ms.*/\1/p' "$OUT/out/warmup-$impl-$algo.txt")
     if [ -n "$ms" ]; then
-      REPEAT[$impl-$algo]=$(python3 -c "import math; print(max(1, math.ceil($TARGET / ($ms / 1000))))")
+      REPEAT[$impl-$algo]=$(python3 -c "import math; print(max(2, math.ceil($TARGET / ($ms / 1000))) + 1)")
     fi
     echo "repeat $impl $algo ${REPEAT[$impl-$algo]} (warm-up train $ms ms)" >> "$OUT/machine.txt"
   done
@@ -135,6 +161,15 @@ sleep "$PRE"
 mark idle_start
 sleep "$IDLE"
 mark idle_end
+if [ "$STEP" -gt 0 ]; then
+  mark step_start
+  BUSY=()
+  for _ in $(seq "$(nproc)"); do timeout "$STEP" sh -c 'while :; do :; done' & BUSY+=($!); done
+  wait "${BUSY[@]}"  # not a bare wait: the sampler runs in the background too
+  mark step_end
+  sleep "$IDLE"
+  mark step_idle_end
+fi
 for rep in $(seq 1 "$MAXREP"); do
   for algo in $ALGOS; do
     for impl in $IMPLS; do

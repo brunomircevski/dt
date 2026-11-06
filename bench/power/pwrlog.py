@@ -10,8 +10,12 @@ Columns:
   sys_W      ACPI power meter (hwmon "power_meter", the Dell nodes): the whole
              server's PSU input power as the iDRAC reports it, a 2 s average,
              refreshed every ~2 s (dell) or 4-6 s (epyc)
-  rapl_*_uJ  RAPL energy counters, only where they are readable (root-only on
-             mordor3; on ampere bench/power/power_bench.sh reads RAPL with perf)
+  psu_W      /run/power/psu_W (ampere, hopper: an admin service writes the BMC's
+             DCMI reading there every second; on ampere the BMC refreshes the
+             value only about once a minute)
+  rapl_*_uJ  RAPL energy counters, where they are readable (since 2026-11-06 on
+             ampere and hopper; they wrap at max_energy_range_uj, which
+             power_bench.sh writes to machine.txt)
   gpu<i>_W   NVML board power of GPU i
   gpu<i>_mJ  NVML total-energy counter of GPU i (millijoules since driver load)
   t_end      Unix time after the last read of the sample. NVML calls can block
@@ -54,6 +58,19 @@ for h in glob.glob("/sys/class/hwmon/hwmon*"):
         p = h + "/power1_average"
         cols.append("sys_W")
         readers.append(lambda p=p: int(open(p).read()) / 1e6)
+PSU_FILE = "/run/power/psu_W"
+
+
+def psu():
+    try:
+        return float(open(PSU_FILE).read().split()[1])
+    except (OSError, IndexError, ValueError):  # mid-update or the service is down
+        return float("nan")
+
+
+if os.path.exists(PSU_FILE):
+    cols.append("psu_W")
+    readers.append(psu)
 for d in sorted(glob.glob("/sys/class/powercap/intel-rapl:*")):
     f = d + "/energy_uj"
     try:

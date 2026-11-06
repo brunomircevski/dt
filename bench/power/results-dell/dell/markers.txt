@@ -1,0 +1,69 @@
+1793961915.735732 job_start
+1793961915.740788 start warmup-parallel-cart impl=parallel algo=cart repeat=2
+1793961969.086360 end warmup-parallel-cart rc=0
+1793961969.115221 start warmup-parallel-c45 impl=parallel algo=c45 repeat=2
+1793962040.832867 end warmup-parallel-c45 rc=0
+1793962060.861076 idle_start
+1793962360.868798 idle_end
+1793962360.875300 step_start
+1793962660.893970 step_end
+1793962960.900202 step_idle_end
+1793962980.910111 start rep1-simple-cart impl=simple algo=cart repeat=1
+1793965599.865365 end rep1-simple-cart rc=0
+1793965619.873965 start rep1-serial-cart impl=serial algo=cart repeat=1
+1793966010.031490 end rep1-serial-cart rc=0
+1793966030.038515 start rep1-parallel-cart impl=parallel algo=cart repeat=11
+1793966195.185557 end rep1-parallel-cart rc=0
+1793966215.193656 start rep1-simple-c45 impl=simple algo=c45 repeat=1
+1793969101.559133 end rep1-simple-c45 rc=0
+1793969121.568889 start rep1-serial-c45 impl=serial algo=c45 repeat=1
+1793969585.828339 end rep1-serial-c45 rc=0
+1793969605.836284 start rep1-parallel-c45 impl=parallel algo=c45 repeat=9
+1793969782.487561 end rep1-parallel-c45 rc=0
+1793969802.495464 start rep2-serial-cart impl=serial algo=cart repeat=1
+1793970192.859764 end rep2-serial-cart rc=0
+1793970212.868076 start rep2-parallel-cart impl=parallel algo=cart repeat=11
+1793970380.876930 end rep2-parallel-cart rc=0
+1793970400.885378 start rep2-serial-c45 impl=serial algo=c45 repeat=1
+1793970860.813244 end rep2-serial-c45 rc=0
+1793970880.821087 start rep2-parallel-c45 impl=parallel algo=c45 repeat=9
+1793971048.190144 end rep2-parallel-c45 rc=0
+1793971068.198724 start rep3-serial-cart impl=serial algo=cart repeat=1
+1793971454.125073 end rep3-serial-cart rc=0
+1793971474.131094 start rep3-parallel-cart impl=parallel algo=cart repeat=11
+1793971663.636819 end rep3-parallel-cart rc=0
+1793971683.645233 start rep3-serial-c45 impl=serial algo=c45 repeat=1
+1793972166.221617 end rep3-serial-c45 rc=0
+1793972186.229577 start rep3-parallel-c45 impl=parallel algo=c45 repeat=9
+1793972354.486966 end rep3-parallel-c45 rc=0
+1793972374.494704 start rep4-parallel-cart impl=parallel algo=cart repeat=11
+1793972540.074561 end rep4-parallel-cart rc=0
+1793972560.083258 start rep4-parallel-c45 impl=parallel algo=c45 repeat=9
+1793972729.984148 end rep4-parallel-c45 rc=0
+1793972749.991909 start rep5-parallel-cart impl=parallel algo=cart repeat=11
+1793972915.568300 end rep5-parallel-cart rc=0
+1793972935.575846 start rep5-parallel-c45 impl=parallel algo=c45 repeat=9
+1793973104.355410 end rep5-parallel-c45 rc=0
+1793973124.363015 start rep6-parallel-cart impl=parallel algo=cart repeat=11
+1793973289.353719 end rep6-parallel-cart rc=0
+1793973309.360840 start rep6-parallel-c45 impl=parallel algo=c45 repeat=9
+1793973477.488206 end rep6-parallel-c45 rc=0
+1793973497.493744 start rep7-parallel-cart impl=parallel algo=cart repeat=11
+1793973662.953979 end rep7-parallel-cart rc=0
+1793973682.961704 start rep7-parallel-c45 impl=parallel algo=c45 repeat=9
+1793973869.946121 end rep7-parallel-c45 rc=0
+1793973889.953475 start rep8-parallel-cart impl=parallel algo=cart repeat=11
+1793974062.112720 end rep8-parallel-cart rc=0
+1793974082.120041 start rep8-parallel-c45 impl=parallel algo=c45 repeat=9
+1793974251.542038 end rep8-parallel-c45 rc=0
+1793974271.548364 start rep9-parallel-cart impl=parallel algo=cart repeat=11
+1793974436.325512 end rep9-parallel-cart rc=0
+1793974456.333762 start rep9-parallel-c45 impl=parallel algo=c45 repeat=9
+1793974624.391576 end rep9-parallel-c45 rc=0
+1793974644.398493 start rep10-parallel-cart impl=parallel algo=cart repeat=11
+1793974809.610841 end rep10-parallel-cart rc=0
+1793974829.618938 start rep10-parallel-c45 impl=parallel algo=c45 repeat=9
+1793974997.845050 end rep10-parallel-c45 rc=0
+1793975017.850753 idle2_start
+1793975317.859497 idle2_end
+1793975317.866292 job_end

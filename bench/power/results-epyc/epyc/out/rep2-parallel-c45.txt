@@ -1,0 +1,32 @@
+C4.5 on bench/data/ecbdl_15m/train.csv (backend parallel)
+  rows 15000000 train, 631 features, 2 classes
+  pruning off
+  repeat 1/17: train 7768.3 ms, unix 1793969628.136141 1793969636.015959
+  repeat 2/17: train 7784.5 ms, unix 1793969636.015999 1793969643.911244
+  repeat 3/17: train 7792.6 ms, unix 1793969643.911264 1793969651.815445
+  repeat 4/17: train 7786.1 ms, unix 1793969651.815467 1793969659.713116
+  repeat 5/17: train 7775.2 ms, unix 1793969659.713142 1793969667.601137
+  repeat 6/17: train 7757.6 ms, unix 1793969667.601160 1793969675.473331
+  repeat 7/17: train 7842.1 ms, unix 1793969675.473353 1793969683.431361
+  repeat 8/17: train 7792.3 ms, unix 1793969683.431388 1793969691.338224
+  repeat 9/17: train 7803.5 ms, unix 1793969691.338245 1793969699.258386
+  repeat 10/17: train 7763.2 ms, unix 1793969699.258405 1793969707.133521
+  repeat 11/17: train 7781.4 ms, unix 1793969707.133544 1793969715.030891
+  repeat 12/17: train 7789.2 ms, unix 1793969715.030909 1793969722.933430
+  repeat 13/17: train 7781.1 ms, unix 1793969722.933450 1793969730.831357
+  repeat 14/17: train 7802.8 ms, unix 1793969730.831373 1793969738.747420
+  repeat 15/17: train 7820.1 ms, unix 1793969738.747437 1793969746.679116
+  repeat 16/17: train 7809.7 ms, unix 1793969746.679134 1793969754.605803
+  repeat 17/17: train 7780.2 ms, unix 1793969754.605827 1793969762.503166
+Tree:
+  nodes 725, leaves 363, depth 10
+  train accuracy 97.9154%
+Timings:
+  load                 35188.4 ms
+  presort               1520.9 ms
+  build                 6258.9 ms
+  prune                    0.4 ms
+  train total           7780.2 ms
+  evaluate               269.4 ms
+Memory:
+  peak after training 116870848 KiB

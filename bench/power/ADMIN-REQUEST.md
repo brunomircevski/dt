@@ -1,3 +1,4 @@
+# ALREADY DONE
 # Request: read-only access to CPU and PSU power sensors on mordor3
 
 For a research paper we measure the energy used by our programs. This needs

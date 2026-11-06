@@ -15,6 +15,12 @@ and hopper were busy). It also holds a plan for the paper's energy measurements.
 - **`results-ampere/BENCHMARK.md`: all five implementations on ampere** (job 99,
   2026-11-05): the same node and sensors for every implementation; one chart
   per algorithm with energy, power (CPU and GPU parts) and time.
+- **`results-epyc/BENCHMARK.md` and `results-dell/BENCHMARK.md`: the three CPU
+  implementations with CPU packages (RAPL) and PSU together** (jobs 144 and
+  148, 2026-11-06, after the admins opened RAPL to users): Serial-Simple 1×,
+  Serial-Opt 3×, Parallel 10×.
+- **`results-hopper/BENCHMARK.md`: all five implementations on hopper with CPU
+  packages, the GPU in use and the PSU together** (job 137, 2026-11-06).
 - `ADMIN-REQUEST.md`: what the admins need to set up so that users can read
   CPU and PSU power.
 

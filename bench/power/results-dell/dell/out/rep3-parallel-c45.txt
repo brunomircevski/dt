@@ -1,0 +1,24 @@
+C4.5 on bench/data/ecbdl_15m/train.csv (backend parallel)
+  rows 15000000 train, 631 features, 2 classes
+  pruning off
+  repeat 1/9: train 15978.6 ms, unix 1793972212.895302 1793972229.105263
+  repeat 2/9: train 15867.2 ms, unix 1793972229.105301 1793972245.202027
+  repeat 3/9: train 15328.3 ms, unix 1793972245.202046 1793972260.760308
+  repeat 4/9: train 15204.6 ms, unix 1793972260.760355 1793972276.195964
+  repeat 5/9: train 15639.7 ms, unix 1793972276.195982 1793972292.065256
+  repeat 6/9: train 15075.1 ms, unix 1793972292.065279 1793972307.371132
+  repeat 7/9: train 15238.7 ms, unix 1793972307.371150 1793972322.839958
+  repeat 8/9: train 15115.9 ms, unix 1793972322.839976 1793972338.187913
+  repeat 9/9: train 15422.8 ms, unix 1793972338.187930 1793972353.842429
+Tree:
+  nodes 725, leaves 363, depth 10
+  train accuracy 97.9154%
+Timings:
+  load                 26654.3 ms
+  presort               4631.2 ms
+  build                10790.9 ms
+  prune                    0.6 ms
+  train total          15422.8 ms
+  evaluate               526.5 ms
+Memory:
+  peak after training 116866736 KiB

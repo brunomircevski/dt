@@ -1,0 +1,31 @@
+job 144 on epyc1, 2026-11-06T11:43:14+01:00, kind cpu
+commit ebbea719-dirty
+data bench/data/ecbdl_15m/train.csv, reps 10 simple=1 serial=3, repeat , target 120 s, idle 300 s, step 300 s, pre 20 s, algos cart c45, impls simple serial parallel
+used_gpu 0 (cpus 0-23, memory node 0, 24 threads)
+protocol --no-prune -d 10
+kernel 7.0.0-42-generic
+dmi Dell Inc. PowerEdge R6725
+Model name:                              AMD EPYC 9255 24-Core Processor
+Core(s) per socket:                      24
+Socket(s):                               2
+NUMA node(s):                            2
+governor amd-pstate-epp performance
+cpus available 48
+perf_event_paranoid 4
+power1_accuracy 90.0%
+power1_average 109000000
+power1_average_interval 2000
+power1_average_interval_max 604800000
+power1_average_interval_min 2000
+power1_is_battery 0
+power1_model_number PowerEdge
+power1_oem_info ___DELL
+power1_serial_number 
+rapl_max intel-rapl:0 package-0 65532610987
+rapl_max intel-rapl:0:0 core 65532610987
+rapl_max intel-rapl:1 package-1 65532610987
+rapl_max intel-rapl:1:0 core 65532610987
+               total        used        free      shared  buff/cache   available
+Mem:             503           3         501           0           0         499
+repeat parallel cart 21 (warm-up train 6308.2 ms)
+repeat parallel c45 17 (warm-up train 7792.5 ms)
