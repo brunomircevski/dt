@@ -19,6 +19,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -156,7 +157,13 @@ int main(int argc, char *argv[]) {
     // context and the staging buffers. Trees 1..N-1 are trained in this loop;
     // the child of tree N goes on below like a single run (evaluation, output)
     // while this process waits for it and exits with its status.
+    auto pause = [&options] {
+      if (options.repeatPause > 0.0) {
+        std::this_thread::sleep_for(std::chrono::duration<double>(options.repeatPause));
+      }
+    };
     for (std::size_t run = 1; forks && run < options.repeat; ++run) {
+      pause();
       std::cout.flush();
       std::fflush(nullptr);
       const pid_t child = fork();
@@ -191,6 +198,7 @@ int main(int argc, char *argv[]) {
     std::optional<ThreadPool> childPool;
     ThreadPool *work = &pool; // training and evaluation
     if (forks) {
+      pause();
       std::cout.flush();
       std::fflush(nullptr);
       const pid_t child = fork();

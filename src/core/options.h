@@ -107,6 +107,10 @@ struct Options {
   // child process, so each one starts as a fresh process's only tree would
   // (bench/power); the last one is the one evaluated and dumped.
   std::size_t repeat = 0;
+  // --repeat-pause: seconds of idle before each --repeat tree (in the parent,
+  // before it forks the tree's child), so that the machine is as idle as
+  // before a single run's tree, which follows the CSV load.
+  double repeatPause = 0.0;
 
   std::string dumpPath;   // write the tree as text to a file
   // Write where the training time goes, as JSON (src/core/trace.h).
