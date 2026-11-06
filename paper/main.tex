@@ -12,10 +12,10 @@
 \graphicspath{{../bench/results/}{figs/}}
 \newcommand{\plan}[1]{{\color{blue}\itshape[#1]}}
 % Names of this work's implementations in the paper (one place to rename).
-\newcommand{\ImplSerialBase}{Serial-Simple}
-\newcommand{\ImplSerialOpt}{Serial-Opt}
-\newcommand{\ImplParallel}{Multicore}
-\newcommand{\ImplGpu}{GPU}
+\newcommand{\ImplSerialBase}{Serial Simple}
+\newcommand{\ImplSerialOpt}{Serial Optimized}
+\newcommand{\ImplParallel}{Multicore CPU}
+\newcommand{\ImplGpu}{GPU-Based}
 \newcommand{\ImplHybrid}{Hybrid}
 % Time-table cell: mean over the run range; \est marks a rough estimate.
 \newcommand{\cell}[2]{\begin{tabular}[t]{@{}r@{}}#1\\[-2pt]{\tiny #2}\end{tabular}}
@@ -249,7 +249,7 @@ accuracy of exact versus binned trees; VRAM.}
 
 \subsection{Performance Across Hardware}
 \plan{All ./tree backends on the four nodes, per dataset: serial, one and two
-sockets, H100 and A100 hybrid and GPU only. CPU against GPU; which hardware
+sockets, H100 and A100 hybrid and GPU-based. CPU against GPU; which hardware
 wins for which data shape (samples, features, classes).}
 
 \begin{figure}

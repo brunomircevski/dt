@@ -62,11 +62,11 @@ INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 # Implementation colours (reference palette slots, as in bench/chart.py), and a
 # marker each so the charts survive grayscale printing.
 STYLE = {
-    "simple":  ("Serial-Simple", "#d6455a", "v"),
-    "serial":  ("Serial-Opt", "#7f4fc9", "s"),
-    "socket":  ("Multicore 24T", "#6fa8e8", "D"),
-    "cpu":     ("Multicore", "#2a78d6", "D"),
-    "gpuonly": ("GPU", "#1baf7a", "^"),
+    "simple":  ("Serial Simple", "#d6455a", "v"),
+    "serial":  ("Serial Optimized", "#7f4fc9", "s"),
+    "socket":  ("Multicore CPU 24T", "#6fa8e8", "D"),
+    "cpu":     ("Multicore CPU", "#2a78d6", "D"),
+    "gpuonly": ("GPU-Based", "#1baf7a", "^"),
     "cuda":    ("Hybrid", "#008300", "o"),
     "sklearn": ("scikit-learn", "#eb6834", "o"),
     "j48":     ("Weka J48", "#eda100", "s"),
@@ -186,7 +186,7 @@ def save(fig, name):
 def ladder():
     datasets = ["susy", "higgs", "ecbdl_15m", "mnist8m", "sorel_4m"]
     stages = [("simple", "epyc"), ("serial", "epyc"), ("cpu", "epyc"), ("gpuonly", "hopper"), ("cuda", "hopper")]
-    names = ["Serial-\nSimple", "Serial-\nOpt", "Multi-\ncore", "GPU\nonly", "Hybrid"]
+    names = ["Serial\nSimple", "Serial\nOptimized", "Multicore\nCPU", "GPU-\nBased", "Hybrid"]
     n = len(stages)
     shades = ["#2a78d6", "#eb6834", "#1baf7a", "#7f4fc9", "#eda100"]
     marks = ["o", "s", "D", "^", "v"]
@@ -281,7 +281,7 @@ def dots():
 # ---------------------------------------------------------------- 3. heatmap
 def heatmap():
     rows = ["susy", "higgs", "mnist8m", "ecbdl_15m", "ecbdl", "sorel_4m", "sorel"]
-    cols = [("serial", "1 thread\nEPYC"), ("cpu", "2 sockets\nEPYC"), ("gpuonly", "GPU only\nH100"),
+    cols = [("serial", "1 thread\nEPYC"), ("cpu", "2 sockets\nEPYC"), ("gpuonly", "GPU-Based\nH100"),
             ("cuda", "Hybrid\nH100")]
     cmap = LinearSegmentedColormap.from_list("slow", ["#1a6a3a", "#7cc49a", "#f4f1e6", "#eda100", "#b23a12"])
     cmap.set_bad("#f3f2ee")
@@ -390,7 +390,7 @@ def depth():
             th = np.array([hy[p]["time_mean"] for p in proto[algo]])
             tg = np.array([go[p]["time_mean"] for p in proto[algo]])
             ax.bar(x - w / 2, th, w, color=c_hy, lw=0, label="Hybrid", zorder=2)
-            ax.bar(x + w / 2, tg, w, color=c_go, lw=0, label="GPU only", zorder=2)
+            ax.bar(x + w / 2, tg, w, color=c_go, lw=0, label="GPU-Based", zorder=2)
             for i in range(len(x)):
                 r = tg[i] / th[i]
                 ax.text(x[i], max(th[i], tg[i]) + 0.02 * top, f"{r:.1f}" + r"$\times$",
@@ -474,7 +474,7 @@ def profile():
     import profile_share_chart as P
     datasets = ["higgs", "airline", "ecbdl_15m", "chess_1b"]
     labels = {"higgs": "HIGGS", "airline": "Airline", "ecbdl_15m": "ECBDL", "chess_1b": "Chess"}
-    modes = [("cpu-epyc", "EPYC"), ("cpu-dell", "Xeon"), ("gpuonly-hopper", "GPU"),
+    modes = [("cpu-epyc", "EPYC"), ("cpu-dell", "Xeon"), ("gpuonly-hopper", "GPU-Based"),
              ("cuda-hopper", "Hybrid")]
     cases = P.load(RES / "cluster-profiling", datasets)
     fig, axes = plt.subplots(1, 2, figsize=(FULL, 2.25), sharey=True)
@@ -530,8 +530,8 @@ def bars():
     datasets = ["susy", "higgs", "mnist8m", "ecbdl", "ecbdl_15m", "sorel", "sorel_4m"]
     impls = [("simple", "epyc"), ("serial", "epyc"), ("cpu", "epyc"), ("gpuonly", "hopper"),
              ("cuda", "hopper")]
-    labels = {"simple": "Serial-Simple, 1 thread", "serial": "Serial-Opt, 1 thread",
-              "cpu": "Multicore, 48 threads", "gpuonly": "GPU, H100", "cuda": "Hybrid, H100"}
+    labels = {"simple": "Serial Simple, 1 thread", "serial": "Serial Optimized, 1 thread",
+              "cpu": "Multicore CPU, 48 threads", "gpuonly": "GPU-Based, H100", "cuda": "Hybrid, H100"}
     n = len(impls)
     w = 0.72 / n
     x = np.arange(len(datasets))
