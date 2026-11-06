@@ -14,8 +14,6 @@
 
 namespace dt {
 
-class SliceWorker;
-
 struct GrowTimings {
   double prepareSeconds = 0.0; // presorting / selecting the rows' sorted columns
   double buildSeconds = 0.0;   // growing the tree
@@ -46,11 +44,6 @@ public:
                            std::uint32_t * /*slotCounts*/) {
     return false;
   }
-
-  // After a grow on all rows (C4.5 with pruning): where subtree raising's
-  // big row slices go (see algo/c45_pruning.h), or null. The grower keeps
-  // it; it is used until the next grow().
-  virtual SliceWorker *sliceWorker() { return nullptr; }
 
   // Memory the grower only uses inside grow(): the caller may use it until
   // the next grow() (it is already mapped, so no page faults). At least

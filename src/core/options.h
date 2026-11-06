@@ -55,18 +55,12 @@ struct C45Options {
 struct ParallelOptions {
   int threads = 0; // 0 = every CPU the process may run on (threadCount())
   // Nodes with at least this many rows build their left child as a pool task.
-  std::size_t nodeTaskRows = 4096;
+  static constexpr std::size_t nodeTaskRows = 4096;
   // Nodes with at least this many rows scan / partition features in parallel.
   // Below it, waking the other threads costs more than they save: at 4096,
   // a 48-core server spent a third of the build in the kernel (futex). 16K-64K
   // were best on 10.5M and 115M rows.
-  std::size_t featureParallelRows = 32768;
-  // Column slots beyond one per feature (CpuGrower; see Columns). 0 = auto:
-  // features - 1, at most the threads, so that every thread can move a column
-  // of a big node at once. Fewer save memory (a slot is 8 bytes per row) and
-  // cost time: on 48 cores, 8 slots made HIGGS CART 35% slower, 2 twice as
-  // slow. The serial build uses 1 (it moves one column at a time anyway).
-  std::size_t spareSlots = 0;
+  static constexpr std::size_t featureParallelRows = 32768;
 };
 
 struct GpuOptions {
@@ -91,17 +85,7 @@ struct GpuOptions {
   // for them (C4.5's pruning allocates it when it needs it). With --threads 1
   // the CPU side is one thread (the staged copies too).
   bool only = false;
-  // C4.5's pruning: subtree raising routes and counts slices of at least
-  // pruneRows rows on the GPU (the CPU makes every decision); 0: none
-  // (--gpu-prune: 1, every slice). Off by default, with --gpu-only too: the
-  // CPU was faster on every dataset tried, at every threshold (see
-  // bench/results/cluster-gpu-prune), the GPU's per-call cost and the upload
-  // of the columns (ECBDL: 2.5 s) outweigh its speed.
-  std::size_t pruneRows = 0;
   GpuSweep sweep = GpuSweep::Auto;
-  // Print per-level and per-kernel GPU times. Synchronises after every
-  // kernel, so it slows the build down.
-  bool profile = false;
 };
 
 struct Options {
@@ -117,9 +101,6 @@ struct Options {
   std::size_t testLast = 0;
   // Seeds the random choices: the holdout split and CART's CV folds. Same seed = same choices on every machine and backend.
   std::uint64_t seed = 1;
-  // Stress tests: duplicate the loaded rows in memory (slightly rescaled) to
-  // get a bigger dataset without a bigger CSV. 1 = no duplication.
-  std::size_t multiplier = 1;
   // Energy benchmarks: train this many trees on the loaded data, one after
   // another, and print each one's training window as Unix times (0 = one
   // tree, no windows printed). Every tree but the last is trained in a forked
@@ -128,7 +109,6 @@ struct Options {
   // evaluated and dumped.
   std::size_t repeat = 0;
 
-  bool printTree = false; // print the tree as text to stdout
   std::string dumpPath;   // write the tree as text to a file
   // Write where the training time goes, as JSON (src/core/trace.h).
   std::string profilePath;

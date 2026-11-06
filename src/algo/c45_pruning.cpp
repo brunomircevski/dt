@@ -1,6 +1,5 @@
 #include "algo/c45_pruning.h"
 
-#include "core/profile.h"
 #include "core/trace.h"
 #include "core/thread_pool.h"
 
@@ -9,16 +8,11 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <memory>
-#include <mutex>
-#include <optional>
 #include <span>
 #include <stdexcept>
-#include <string_view>
 #include <vector>
 
 namespace dt {
@@ -28,26 +22,9 @@ namespace {
 constexpr double kEpsilon = 1e-3; // C4.5's Epsilon (defns.i)
 constexpr std::uint32_t kNoOwner = std::numeric_limits<std::uint32_t>::max();
 
-// DT_PROFILE=1: the time of each step, printed after the pruning.
-ProfileCounter pCollapse("c45 collapse");
-ProfileCounter pThresholds("c45 thresholds");
-ProfileCounter pSetup("prune setup (hops)");
-ProfileCounter pArrangeWhole("prune arrange whole");
-ProfileCounter pArrangeElsewhere("  arranged by the grower");
-ProfileCounter pRouteWhole("  route whole");
-ProfileCounter pSortWhole("  sort whole");
-ProfileCounter pTranspose("  transpose");
-ProfileCounter pCountsWhole("  counts whole");
-ProfileCounter pRecursion("prune recursion (wall)");
-ProfileCounter pRouteBig("  route >= 1M rows");
-ProfileCounter pExtraBig("  extra counts >= 1M rows");
-ProfileCounter pCompact("prune compact");
-ProfileCounter pDummy(nullptr); // never printed; no NVTX range (1.5M calls on airline)
-
 // --profile: the work of subtree raising by the size of its row slice (log2
 // of the rows): calls, rows and thread-seconds, written as the table
-// "prune_slices" (kind 0: errorsWithExtraRows, 1: arrange after raising; 2
-// and 3: the same on the SliceWorker).
+// "prune_slices" (kind 0: errorsWithExtraRows, 1: arrange after raising).
 class SliceHistogram {
 public:
   static constexpr int kBuckets = 33;
@@ -184,9 +161,7 @@ private:
 //    only subtree raising needs to send rows through another subtree.
 // Wide rows (c45PruneUsesRowMajor) are not copied: the dataset's columns are
 // read through the training row of every position (rowOf_), and reordering
-// moves only those. A SliceWorker takes the big slices of subtree raising
-// (given by their rows in rowOf_, also kept for it with the row-major copy).
-// Rows are therefore known by their position in this order. Pruned nodes are
+// moves only those. Rows are therefore known by their position in this order. Pruned nodes are
 // only marked (leaf / raised); Tree::compact() removes what is no longer
 // reachable at the end.
 class C45Pruner {
@@ -195,13 +170,12 @@ public:
   // without the row-major copy).
   C45Pruner(Tree &tree, const Dataset &train, float *rowMajor, float *spare,
             double confidenceFactor, ThreadPool *pool, RowLeaves *leafOfRow,
-            const RowArranger &arranger, SliceWorker *worker)
+            const RowArranger &arranger)
       : tree_(tree), train_(train), data_(rowMajor), spare_(spare), givenLeaves_(leafOfRow),
         arranger_(arranger),
-        worker_(worker && worker->minRows() <= train.rowCount ? worker : nullptr),
         features_(train.featureCount()), classCount_(train.classCount()),
         estimator_(confidenceFactor), pool_(pool), rowMajor_(rowMajor != nullptr),
-        keepRows_(!rowMajor_ || worker_), labels_(train.labels),
+        keepRows_(!rowMajor_), labels_(train.labels),
         errors_(tree.nodes.size(), 0.0), leafSlot_(tree.nodes.size(), 0),
         fresh_(tree.nodes.size(), 0), hops_(tree.nodes.size()) {
     if (pool_ && train.rowCount >= kParallelRows) { // see errorsWithExtraRowsInParallel()
@@ -210,7 +184,6 @@ public:
     }
     trace::Phase phase("prune setup");
     trace::Doing doing(trace::Work::PruneOther);
-    ProfileScope scope(pSetup);
     constexpr std::size_t kChunk = 4096;
     parallelFor(pool_, (hops_.size() + kChunk - 1) / kChunk, [&](std::size_t chunk) {
       const std::size_t end = std::min(hops_.size(), (chunk + 1) * kChunk);
@@ -224,46 +197,26 @@ public:
     {
       trace::Phase phase("prune arrange rows");
       trace::Doing doing(trace::Work::PruneArrange);
-      ProfileScope scope(pArrangeWhole);
       arrange(0, 0, train_.rowCount);
-    }
-    if (worker_) {
-      trace::Phase phase("prune worker start");
-      trace::Doing doing(trace::Work::PruneOther);
-      if (!worker_->start(hops_)) {
-        worker_ = nullptr;
-      }
     }
     {
       trace::Phase phase("prune subtrees");
       trace::Doing doing(trace::Work::Prune);
-      ProfileScope scope(pRecursion);
       if (pool_) {
         pruneAsync(0, 0, train_.rowCount, [](double) {});
         pool_->waitIdle();
       } else {
         prune(0, 0, train_.rowCount);
       }
-      if (worker_) {
-        worker_->finish();
-      }
     }
     {
       trace::Phase phase("prune compact");
       trace::Doing doing(trace::Work::PruneOther);
-      ProfileScope scope(pCompact);
       tree_.compact(pool_);
-    }
-    for (ProfileCounter *counter :
-         {&pCollapse, &pThresholds, &pSetup, &pArrangeWhole, &pArrangeElsewhere, &pRouteWhole, &pSortWhole,
-          &pTranspose, &pCountsWhole, &pRecursion, &pRouteBig, &pExtraBig, &pCompact}) {
-      counter->print();
     }
     if (trace::on()) {
       extraSlices_.report(0);
       raiseSlices_.report(1);
-      workerExtraSlices_.report(2);
-      workerRaiseSlices_.report(3);
     }
   }
 
@@ -273,7 +226,15 @@ private:
 
   const float *features(std::size_t position) const { return data_ + position * features_; }
 
-  using Hop = PruneHop;
+  // A node reduced to what routing needs: 16 bytes, four per cache line. The
+  // threshold is the largest float at or below the node's, which sends every
+  // float value the same way (value > threshold: right); a leaf leads back to
+  // itself.
+  struct Hop {
+    float threshold;
+    std::uint32_t feature;
+    std::uint32_t next[2]; // left, right
+  };
 
   Hop hopOf(std::uint32_t id) const {
     const Node &node = tree_.nodes[id];
@@ -287,30 +248,8 @@ private:
     return {threshold, static_cast<std::uint32_t>(node.feature), {node.left, node.right}};
   }
 
-  // hops_[id] after the node changed; the worker gets it before its next call.
-  void updateHop(std::uint32_t id) {
-    if (!worker_) {
-      hops_[id] = hopOf(id);
-      return;
-    }
-    const Hop hop = hopOf(id);
-    std::lock_guard lock(hopMutex_);
-    hops_[id] = hop;
-    changedHops_.push_back(id);
-  }
-
-  // Whether the worker takes a slice of `count` rows (with the changed hops).
-  bool onWorker(std::size_t count) {
-    if (!worker_ || count < worker_->minRows()) {
-      return false;
-    }
-    std::lock_guard lock(hopMutex_);
-    if (!changedHops_.empty()) {
-      worker_->updateHops(changedHops_, hops_);
-      changedHops_.clear();
-    }
-    return true;
-  }
+  // hops_[id] after the node changed.
+  void updateHop(std::uint32_t id) { hops_[id] = hopOf(id); }
 
   // The leaf of `root`'s subtree that each of the rows at [begin, begin +
   // count) reaches, read from the row-major copy or (Columns) from the
@@ -446,8 +385,7 @@ private:
       slotOf = slotOfGivenId;
     }
     bool done = false;
-    if (given && arranger_ && !checkLeaves()) {
-      ProfileScope scope(pArrangeElsewhere);
+    if (given && arranger_) {
       if (keepRows_) {
         rowOf_.resize(train_.rowCount);
       }
@@ -459,7 +397,6 @@ private:
       sortByLeaf(root, begin, count, whole, slotOf, leaves.size(), leafCounts);
     }
 
-    ProfileScope countScope(whole ? pCountsWhole : pDummy);
     constexpr std::size_t kChunk = 4096;
     parallelFor(whole ? pool_ : nullptr, (leaves.size() + kChunk - 1) / kChunk,
                 [&](std::size_t chunk) {
@@ -518,31 +455,17 @@ private:
     std::span<std::uint32_t> leafOfRow;
     if (whole && givenLeaves_ && !givenLeaves_->empty()) {
       leafOfRow = givenLeaves_->ids; // the grower's
-      if (checkLeaves()) {
-        route(root, begin, count, routed);
-        for (std::size_t row = 0; row < count; ++row) {
-          if (routed[row] != (*givenLeaves_)[row]) {
-            throw std::logic_error("C4.5 pruning: the grower's leaves of rows are wrong");
-          }
-        }
-        std::fprintf(stderr, "  leaves of rows checked\n");
-      }
     } else {
-      ProfileScope scope(whole ? pRouteWhole : pDummy);
       route(root, begin, count, routed);
       leafOfRow = routed;
     }
-    std::optional<ProfileScope> sortScope(std::in_place, whole ? pSortWhole : pDummy);
     std::vector<std::uint32_t> source(count);
     sortRows(begin, count, leafOfRow, slotOf, slots, leafCounts, source);
-    sortScope.reset();
     if (arranged_) {
       permute(begin, count, source, pool_ && count >= kParallelRows);
     } else if (!rowMajor_) {
-      ProfileScope scope(pTranspose);
       gatherRows(source);
     } else {
-      ProfileScope scope(pTranspose);
       transposeArranged(source);
     }
   }
@@ -595,14 +518,9 @@ private:
     const std::size_t otherCount = rightIsLargest ? leftCount : count - leftCount;
     std::vector<std::uint32_t> leafCounts(slots * classCount_, 0);
     std::vector<std::uint32_t> otherSource(otherCount);
-    if (onWorker(otherCount)) {
-      worker_->arrange(id, {rowOf_.data() + otherBegin, otherCount}, leaves, otherSource.data(),
-                       leafCounts.data());
-    } else {
-      std::vector<std::uint32_t> routed;
-      route(id, otherBegin, otherCount, routed);
-      sortRows(otherBegin, otherCount, routed, leafSlot_, slots, leafCounts, otherSource);
-    }
+    std::vector<std::uint32_t> routed;
+    route(id, otherBegin, otherCount, routed);
+    sortRows(otherBegin, otherCount, routed, leafSlot_, slots, leafCounts, otherSource);
     std::vector<std::uint32_t> source(count);
     const auto otherStart = static_cast<std::uint32_t>(otherBegin - begin);
     std::uint32_t largest = rightIsLargest ? static_cast<std::uint32_t>(leftCount) : 0;
@@ -993,9 +911,7 @@ private:
       tree_.nodes[id] = tree_.nodes[largest];
       updateHop(id);
       const std::size_t otherCount = rightIsLargest ? leftCount : count - leftCount;
-      SliceHistogram::Scope slice(
-          worker_ && otherCount >= worker_->minRows() ? workerRaiseSlices_ : raiseSlices_,
-          otherCount);
+      SliceHistogram::Scope slice(raiseSlices_, otherCount);
       arrangeRaised(id, begin, count, leftCount, rightIsLargest);
       return false;
     }
@@ -1013,23 +929,14 @@ private:
     if (count == 0) {
       return errors_[root];
     }
-    if (onWorker(count)) {
-      SliceHistogram::Scope slice(workerExtraSlices_, count);
-      return errorsWithExtraRowsOnWorker(root, begin, count);
-    }
     SliceHistogram::Scope slice(extraSlices_, count);
     // Per-thread buffers: this runs for every decision node.
     thread_local std::vector<std::uint32_t> arrival;
     thread_local std::vector<std::uint32_t> leaves;
     thread_local std::vector<std::uint32_t> extraCounts;
     thread_local std::vector<std::uint32_t> counts;
-    const bool big = count >= (std::size_t{1} << 20);
-    {
-      ProfileScope scope(big ? pRouteBig : pDummy);
-      route(root, begin, count, arrival);
-    }
+    route(root, begin, count, arrival);
     if (extraCounts_ && count >= kParallelRows) {
-      ProfileScope scope(big ? pExtraBig : pDummy);
       return errorsWithExtraRowsInParallel(root, begin, arrival);
     }
     // Class counts of the extra rows per reached leaf. A leaf's slot is kept
@@ -1155,55 +1062,18 @@ private:
     return errors;
   }
 
-  // The same on the worker: the leaves' changes summed in the order of their
-  // first rows, as above.
-  double errorsWithExtraRowsOnWorker(std::uint32_t root, std::size_t begin, std::size_t count) {
-    thread_local std::vector<std::uint32_t> reached;
-    thread_local std::vector<std::uint32_t> order;
-    thread_local std::vector<std::uint32_t> counts;
-    worker_->countReached(root, {rowOf_.data() + begin, count}, reached);
-    const std::size_t stride = 2 + classCount_;
-    order.resize(reached.size() / stride);
-    for (std::size_t entry = 0; entry < order.size(); ++entry) {
-      order[entry] = static_cast<std::uint32_t>(entry);
-    }
-    std::sort(order.begin(), order.end(), [&](std::uint32_t a, std::uint32_t b) {
-      return reached[a * stride + 1] < reached[b * stride + 1];
-    });
-    double errors = errors_[root];
-    counts.resize(classCount_);
-    for (const std::uint32_t entry : order) {
-      const std::uint32_t *at = reached.data() + entry * stride;
-      const std::uint32_t leaf = at[0];
-      const std::uint32_t *own = tree_.counts(leaf);
-      for (std::size_t k = 0; k < classCount_; ++k) {
-        counts[k] = own[k] + at[2 + k];
-      }
-      errors += estimator_.leafErrors(counts.data(), classCount_, tree_.nodes[leaf].label) -
-                (tree_.nodes[leaf].count > 0 ? errors_[leaf] : 0.0);
-    }
-    return errors;
-  }
-
-  // DT_CHECK_LEAVES=1: compare the grower's leaves of rows with routed ones.
-  static bool checkLeaves() {
-    const char *value = std::getenv("DT_CHECK_LEAVES");
-    return value && *value && *value != '0';
-  }
-
   Tree &tree_;
   const Dataset &train_;
   float *data_;  // row-major features, in the arranged order, or null
   float *spare_; // as large, for reordering, or null
   RowLeaves *givenLeaves_;               // the grower's leaf of every row, or null
   const RowArranger &arranger_;          // may do the first arrange() (with givenLeaves_)
-  SliceWorker *worker_;                  // big slices of subtree raising, or null
   std::size_t features_;
   std::size_t classCount_;
   ErrorEstimator estimator_;
   ThreadPool *pool_;
   bool rowMajor_;                       // data_ is used
-  bool keepRows_;                       // rowOf_ is used (no data_, or for worker_)
+  bool keepRows_;                       // rowOf_ is used (no data_)
   std::vector<std::uint32_t> rowOf_;    // the training row at every position
   std::vector<std::uint16_t> labels_;   // in the arranged order
   bool arranged_ = false;               // data_ written yet (by the first arrange())
@@ -1211,22 +1081,17 @@ private:
   std::vector<std::uint32_t> leafSlot_; // per leaf: scratch slot number
   std::vector<std::uint8_t> fresh_;     // per node: pruned, for its current rows
   std::vector<Hop> hops_;               // per node, kept in step with tree_.nodes
-  std::mutex hopMutex_;                 // with worker_: hops_ changes, changedHops_
-  std::vector<std::uint32_t> changedHops_; // not yet given to worker_
   // Parallel pool, many rows: per node, class counts of extra rows and 1 +
   // the first of them (see errorsWithExtraRowsInParallel), zero between calls.
   std::unique_ptr<std::uint32_t[]> extraCounts_;
   std::unique_ptr<std::uint32_t[]> firstExtra_;
   SliceHistogram extraSlices_; // --profile
   SliceHistogram raiseSlices_;
-  SliceHistogram workerExtraSlices_;
-  SliceHistogram workerRaiseSlices_;
 };
 
 } // namespace
 
 void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool, RowLeaves *leafOfRow) {
-  ProfileScope scope(pCollapse);
   // Bottom-up: a node's children are settled before it.
   const std::size_t nodeCount = tree.nodes.size();
   std::vector<double> subtreeErrors(nodeCount);
@@ -1277,7 +1142,6 @@ void c45CollapseUselessSplits(Tree &tree, ThreadPool *pool, RowLeaves *leafOfRow
 }
 
 void c45UseTrainingValueThresholds(Tree &tree, const DistinctValues &distinct, ThreadPool *pool) {
-  ProfileScope scope(pThresholds);
   constexpr std::size_t kChunk = 4096;
   const std::size_t chunks = (tree.nodes.size() + kChunk - 1) / kChunk;
   parallelFor(pool, chunks, [&](std::size_t chunk) {
@@ -1306,16 +1170,12 @@ void c45UseTrainingValueThresholds(Tree &tree, const DistinctValues &distinct, T
 bool c45PruneUsesRowMajor(std::size_t featureCount) {
   // 32 features: two cache lines. HIGGS (28) pruned in 0.41 s row by row,
   // 0.78 s through the columns (A100 node).
-  if (const char *layout = std::getenv("DT_PRUNE_LAYOUT"); layout && *layout) {
-    return std::string_view(layout) == "rows";
-  }
   return featureCount < 32;
 }
 
 void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFactor,
                          ThreadPool *pool, std::span<std::byte> workspace,
-                         RowLeaves *leafOfRow, const RowArranger &arranger,
-                         SliceWorker *worker) {
+                         RowLeaves *leafOfRow, const RowArranger &arranger) {
   if (tree.nodes.empty()) {
     return;
   }
@@ -1344,8 +1204,7 @@ void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFact
   if (leafOfRow && !leafOfRow->empty() && leafOfRow->size() != train.rowCount) {
     throw std::logic_error("c45PessimisticPrune: a leaf per training row expected");
   }
-  C45Pruner(tree, train, rowMajor, spare, confidenceFactor, pool, leafOfRow, arranger, worker)
-      .run();
+  C45Pruner(tree, train, rowMajor, spare, confidenceFactor, pool, leafOfRow, arranger).run();
 }
 
 } // namespace dt

@@ -131,15 +131,13 @@ transposed to rows, their labels and the class counts of every leaf) runs on
 the GPU (`arrangeRows`): a stable radix sort by leaf and one gather kernel
 instead of two CPU passes over 115M rows.
 
-Subtree raising can also send its big row slices through the tree on the GPU
-(`--gpu-prune-rows N`, `--gpu-prune` for all of them): the CPU keeps every
-decision, the GPU only routes and counts (kernels `pruneCount`,
-`pruneGather`, `pruneArrange`, with the changed nodes sent before each call),
-so the tree is the same to the bit. It is off by default, with `--gpu-only`
-too: each call costs about 0.45 ms on the host side, the columns the tree uses
-have to be uploaded first unless the raw values were kept (ECBDL: 631
-columns, 2.5 s), and the CPU was faster on every dataset and threshold tried
-(measured in `cluster-gpu-prune`, a benchmark that was never committed).
+Sending subtree raising's big row slices through the tree on the GPU (the
+CPU keeping every decision, the GPU only routing and counting) was tried and
+removed in November 2026: each call cost about 0.45 ms on the host side, the
+columns the tree uses had to be uploaded first unless the raw values were kept
+(ECBDL: 631 columns, 2.5 s), and the CPU was faster on every dataset and
+threshold tried (`cluster-gpu-prune`, a benchmark that was never committed).
+It is in the git history before the commit that removed `--gpu-prune`.
 
 ### Inside the sweep (kernels 3a / 3c)
 
@@ -219,8 +217,9 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
   the process may run on. For comparing the GPU alone with the GPU + CPU split
   (the depth-19 cluster-gpu-vs-others run of 2026-10-20, in the git history
   before 325039f; the gpuonly-* runs of the cluster-* benchmarks).
-* `./tree --cuda --gpu-profile ...` prints per-level times, a per-kernel
-  profile and the setup phases (allocation, upload).
+* `./tree --cuda --profile FILE ...` records per-level rows, every kernel and
+  copy, and the setup phases (context, allocation, upload);
+  `bench/profile_chart.py` draws it.
 
 ### What did not help
 

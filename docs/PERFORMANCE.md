@@ -297,7 +297,8 @@ mordor3 nodes; before = 66bd66c.
   big node moves all its columns at once, one per thread, with the children's
   sweeps fused in: memory drops only where the features outnumber the threads
   (airline: 6%; ECBDL's 631 features on 48 threads need 678 slots instead of
-  1262). `--spare-slots N` trades speed for memory (CPU.md).
+  1262). (`--spare-slots N`, which traded speed for memory, was removed in
+  November 2026.)
 * The cluster benchmarks were rerun on cd18717 (2026-10-17,
   [bench/results/](../bench/results/README.md)): the same trees everywhere,
   times within a few percent of the previous runs. Full ECBDL'14 on the CPU
@@ -405,7 +406,7 @@ unchanged.
 
 `make NVTX=1` builds `./tree` with NVTX ranges around the phases (load,
 upload, presort, every GPU level, hand-off copies, CPU subtrees, merge,
-pruning steps, and every `DT_PROFILE` counter). Then, on a GPU node (not the
+pruning steps). Then, on a GPU node (not the
 login node):
 
 ```
@@ -461,7 +462,8 @@ CART is `--cart --alpha 1e-5`. What changed:
 - **`--gpu-min-rows` for CART:** rows / 8192, between 1024 and 2048 (airline:
   2048 instead of 4096). C4.5 keeps rows / 4096.
 - **`chooseC45`** looks up `log2` in a table and allocates nothing.
-- **`DT_PROFILE=1`** prints where C4.5 pruning spends its time.
+- **`DT_PROFILE=1`** printed where C4.5 pruning spends its time (removed in
+  November 2026: `--profile` records the same).
 
 The parallel CPU build is unchanged (its code is the same; epyc1's C4.5 build
 is 1% slower in every binary built after the pruning changes, which we put
@@ -502,6 +504,8 @@ One socket is no longer faster anywhere: hopper's unpruned CART takes
 6.13 s on one socket, 4.98 s on both. Other settings tried and left at their
 defaults (no consistent gain): `--task-rows` 16K-1G, `--feature-parallel-rows`
 8K and 128K on the CPU servers, `--gpu-min-rows` 1024 and 16384 on HIGGS.
+(`--task-rows` and `--feature-parallel-rows` were removed in November 2026;
+their defaults are fixed.)
 
 ## October 2026: tuning for many-core servers (mordor3 cluster)
 
@@ -578,7 +582,7 @@ Where it comes from (details in [CPU.md](CPU.md) and [CUDA.md](CUDA.md)):
   C4.5's sorted values copied into memory page-locked during setup.
 
 HIGGS CART on the laptop GPU is limited by the CPU threads finishing the small
-subtrees (`--gpu-profile` shows the wait), so part of the GPU's gain does not
+subtrees (the `wait cpu subtrees` phase of `--profile` shows it), so part of the GPU's gain does not
 show in its total. The second column copy of `--parallel` costs memory at
 low thread counts (HIGGS, 4 threads: +1.9 GB); at 20–28 threads it mostly
 replaces the presort's per-thread buffers (peak −1.2 to +0.5 GB above).

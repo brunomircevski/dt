@@ -163,8 +163,8 @@ One thread pool (`ThreadPool`), two kinds of work:
   goes. Their Gini sweeps (65536+ rows) divide instead of looking up `1/n` in
   the count tables, which are as large as the training set and cost more
   bandwidth than the entries when many threads read them.
-* **Nodes of 2^20+ rows with fewer free slots than threads** (`--parallel`
-  with `--spare-slots` below the default) are partitioned in blocks of 16K
+* **Nodes of 2^20+ rows with fewer free slots than threads** (`--parallel`)
+  are partitioned in blocks of 16K
   entries by all threads instead of a column per thread, so that the few
   slots do not idle the threads: a block counts its left rows, takes the count
   before it from the block before it (a chain) and writes. Their children are
@@ -192,7 +192,7 @@ tasks without deadlocks.
 
 The columns take `8 · (F + spare) · n` bytes: a slot per feature and `spare`
 more (see big nodes above). `--serial` has one spare slot. `--parallel` has
-`min(F − 1, threads)` (`--spare-slots N` to choose): a big node then moves all
+`min(F − 1, threads)`: a big node then moves all
 its columns at once, a column per thread, with the children's sweeps fused
 in. Fewer spare slots save `8 · n` bytes each but make big nodes wait: on
 epyc1 and dell1 (48 threads), 8 spare slots cut HIGGS from 5.7 to 4.1 GiB and
@@ -246,7 +246,7 @@ whole tree. The rows are grouped by leaf in preorder (a parallel LSD radix
 sort by leaf, in passes of at most 11 bits, 12 from 4M rows on, balanced so
 the passes have equal digits) — every subtree then owns one contiguous slice
 of rows — and only rows of raised subtrees are routed again.
-(`DT_CHECK_LEAVES=1` routes every row anyway and compares.) With fewer than 32
+With fewer than 32
 features the rows are kept in that order in a
 row-major copy (one row's values share a cache line), written straight from
 the columns into leaf order and kept in the grower's memory that is free by
@@ -281,5 +281,5 @@ errors a branch would make with its sibling's rows; for big siblings those
 rows are counted per leaf by all threads (each with a small cache of the
 leaves it touched, flushed to the shared counters on eviction and at the end,
 so they are rarely updated once per row), and the leaves' changes are summed in the order the serial loop
-sums them, so the result is the same to the bit. `DT_PROFILE=1` prints where
-the pruning time goes.
+sums them, so the result is the same to the bit. `--profile` records where
+the pruning time goes (its phases and the `prune_slices` table).

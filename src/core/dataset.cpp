@@ -364,36 +364,6 @@ Dataset loadDataset(const std::string &filePath, ThreadPool *pool) {
   return dataset;
 }
 
-void multiplyDataset(Dataset &dataset, std::size_t multiplier) {
-  if (multiplier <= 1) {
-    return;
-  }
-  const std::size_t oldRows = dataset.rowCount;
-  const std::size_t newRows = oldRows * multiplier;
-  if (newRows > 0xFFFFFFFFull) {
-    throw std::runtime_error("Datasets are limited to 2^32 - 1 rows");
-  }
-  Dataset::Values values(dataset.featureCount() * newRows);
-  for (std::size_t feature = 0; feature < dataset.featureCount(); ++feature) {
-    const float *source = dataset.column(feature);
-    float *target = values.data() + feature * newRows;
-    for (std::size_t copy = 0; copy < multiplier; ++copy) {
-      const float scale = 1.0f + static_cast<float>(copy) * 0.0001f;
-      for (std::size_t row = 0; row < oldRows; ++row) {
-        target[copy * oldRows + row] = source[row] * scale;
-      }
-    }
-  }
-  std::vector<std::uint16_t> labels(newRows);
-  for (std::size_t copy = 0; copy < multiplier; ++copy) {
-    std::copy(dataset.labels.begin(), dataset.labels.end(),
-              labels.begin() + static_cast<std::ptrdiff_t>(copy * oldRows));
-  }
-  dataset.values = std::move(values);
-  dataset.labels = std::move(labels);
-  dataset.rowCount = newRows;
-}
-
 namespace {
 
 // Copy the given rows (in order) into a new dataset with the same schema.

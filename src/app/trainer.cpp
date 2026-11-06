@@ -229,7 +229,7 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
                                                  ? grower->workspace()
                                                  : std::span<std::byte>{};
       c45PessimisticPrune(tree, train, options.c45.confidence, buildPool, workspace, &leafOfRow,
-                          arranger, grower->sliceWorker());
+                          arranger);
     }
     return tree;
   }

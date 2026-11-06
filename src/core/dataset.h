@@ -73,8 +73,6 @@ DistinctValues distinctValues(const Dataset &dataset);
 // Parsing runs on the pool (or on the calling thread if `pool` is null).
 Dataset loadDataset(const std::string &filePath, ThreadPool *pool);
 
-// Stress tests: append (multiplier - 1) slightly rescaled copies of every row.
-void multiplyDataset(Dataset &dataset, std::size_t multiplier);
 
 // Rows of each class among `rows` (every row if empty), counted on `pool`.
 std::vector<std::uint32_t> countClasses(const Dataset &dataset,

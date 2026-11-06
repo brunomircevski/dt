@@ -93,11 +93,9 @@ int main(int argc, char *argv[]) {
       NvtxRange range("load");
       data = loadDataset(options.datasetPath, &pool);
       if (options.testLast > 0) {
-        // The file's own last rows, before -m multiplies the training rows.
         splitTail(data, options.testLast, train, test, &pool);
         data = std::move(train);
       }
-      multiplyDataset(data, options.multiplier);
     }
 
     if (options.holdout > 0.0) {
@@ -262,9 +260,6 @@ int main(int argc, char *argv[]) {
                                     ", \"cross_validation\": " + number(timings.cvSeconds) +
                                     ", \"prune\": " + number(timings.pruneSeconds) + "}"},
                     {"peak_rss_train_kib", number(static_cast<double>(trainPeakKiB))}});
-    }
-    if (options.printTree) {
-      tree.print(std::cout);
     }
     if (!options.dumpPath.empty()) {
       std::ofstream output(options.dumpPath);

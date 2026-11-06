@@ -22,7 +22,7 @@ public:
       : train_(train), options_(options), pool_(pool), reusable_(reusable),
         rows_(train.rowCount), features_(train.featureCount()),
         codec_(makeEntryCodec(train.classCount(), train.rowCount)),
-        slots_(features_ + spareSlots(options, pool, features_)), scratch_(new Entry[rows_]),
+        slots_(features_ + spareSlots(pool, features_)), scratch_(new Entry[rows_]),
         goesLeft_(new std::uint8_t[rows_]) {
     // A slot per column and a few more (see Columns): serial and parallel
     // builds run the same algorithm, big nodes are partitioned out of place
@@ -85,13 +85,14 @@ public:
   }
 
 private:
-  // See ParallelOptions::spareSlots.
-  static std::size_t spareSlots(const Options &options, ThreadPool *pool, std::size_t features) {
+  // Column slots beyond one per feature (see Columns): features - 1, at most
+  // the threads, so that every thread can move a column of a big node at
+  // once. Fewer save memory (a slot is 8 bytes per row) and cost time: on 48
+  // cores, 8 slots made HIGGS CART 35% slower, 2 twice as slow. The serial
+  // build uses 1 (it moves one column at a time anyway).
+  static std::size_t spareSlots(ThreadPool *pool, std::size_t features) {
     if (!pool) {
       return 1;
-    }
-    if (options.parallel.spareSlots > 0) {
-      return options.parallel.spareSlots;
     }
     const std::size_t threads = pool->workerCount() + 1;
     return std::max<std::size_t>(1, std::min(features > 0 ? features - 1 : 0, threads));

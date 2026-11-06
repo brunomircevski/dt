@@ -122,8 +122,8 @@ tree has half the nodes or fewer). No public GPU C4.5 exists. Lead with CART.
    and asynchronous hand-off ring would need compile-time switches. Only the
    2026-10-28 changes were measured on one commit
    ([PERFORMANCE.md](PERFORMANCE.md#october-2026-four-cuda-changes-measured-on-one-commit-mordor3-cluster)).
-2. **Per-kernel and per-level profile:** `--gpu-profile` (it serializes the
-   kernels) and `nsys` (`make NVTX=1`); achieved bandwidth of
+2. **Per-kernel and per-level profile:** `--profile` (every kernel and copy,
+   one row per GPU level) and `nsys` (`make NVTX=1`); achieved bandwidth of
    `partitionKernel` and `tileExactKernel` against peak.
 3. **Fairness variants:** the libraries with data already on the GPU (CuPy,
    column-major) and with `np.asfortranarray` input; ./tree's build time

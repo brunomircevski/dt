@@ -88,11 +88,9 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--cv` with
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--holdout F` | 0 | Put a random fraction F of the rows aside, train on the rest and report the accuracy on the put-aside rows (`test accuracy`). Tested once, on one split. |
-| `--test-last N` | 0 | The last N rows of the file are the test set, the others the training set (both in file order): the published split of HIGGS and SUSY is `--test-last 500000` on `datasets/higgs.csv` and `datasets/supersymmetry.csv`. Taken before `-m`, which then multiplies only the training rows. Not with `--holdout`. |
+| `--test-last N` | 0 | The last N rows of the file are the test set, the others the training set (both in file order): the published split of HIGGS and SUSY is `--test-last 500000` on `datasets/higgs.csv` and `datasets/supersymmetry.csv`. Not with `--holdout`. |
 | `--seed N` | 1 | Random seed for the holdout split and for CART's CV folds. The same seed gives the same split and folds on every machine and backend; change it to see how much the result depends on the split. |
-| `-m N` | 1 | Duplicate the rows N times in memory (slightly rescaled) to stress-test with bigger data. |
 | `--repeat N` | 0 | Train N trees in a row on the data loaded once, printing each one's training time and Unix start and end (`repeat i/N: train X ms, unix START END`; the window ends when training ends, before the memory is freed). Every tree but the last is trained in a forked child process, so each one runs as a single run's tree would; the last tree, trained by ./tree itself, is evaluated. Not with `--profile`. For energy measurements ([bench/power](bench/power/README.md)). |
-| `--print` | off | Print the tree. |
 | `--dump FILE` | off | Write the tree as text. |
 | `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--cuda`). Its cost was within −1.5% to +2.0% of the run time (`bench/results/cluster-ecbdl-profile`, removed in 254d4e8); `bench/profile_chart.py` draws it. |
 
@@ -115,14 +113,9 @@ Subtree raising is always on, as in the original program.
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--task-rows N` | 4096 | `--parallel` / `--cuda` CPU side: nodes with at least N rows grow a child as a separate pool task. |
-| `--feature-parallel-rows N` | 32768 | Nodes with at least N rows scan and partition their features in parallel. |
 | `--gpu-min-rows N` | CART: rows / 8192, between 1024 and 2048; C4.5: rows / 4096, between 1024 and 4096 | `--cuda`: nodes with fewer rows are finished by the CPU pool while the GPU grows the big ones. |
 | `--gpu-only` | off | `--cuda`: grow every node on the GPU, with no hand-offs to the CPU (and no host arena for them). The CPU threads (`--threads`) still count the classes, stage the copies to and from the GPU and run C4.5's pruning. |
-| `--gpu-prune-rows N` | none | `--cuda`, C4.5: subtree raising routes and counts its slices of at least N rows on the GPU (the tree stays the same). Off by default: the CPU was faster on every dataset tried (docs/CUDA.md). |
-| `--gpu-prune` | off | `--cuda`, C4.5: every slice of subtree raising on the GPU (`--gpu-prune-rows 1`). |
 | `--gpu-sweep auto\|one-pass\|two-pass` | `auto` | `--cuda`: score every cut in double precision (`one-pass`), or filter in single precision first and use double precision only for the candidates (`two-pass`). `auto` picks one-pass on GPUs with fast double precision (A100, H100, B200…). |
-| `--gpu-profile` | off | Print per-level and per-kernel GPU times. Synchronises after every kernel, so it slows the build; do not use it for timing. |
 
 The best values depend on the hardware and the data (`docs/CPU.md`,
 `docs/CUDA.md` explain what each threshold does). The defaults were tuned on

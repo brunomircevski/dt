@@ -46,55 +46,6 @@ using RowArranger = std::function<bool(
 // instead of the whole row). Only the row-major copy needs the workspace.
 bool c45PruneUsesRowMajor(std::size_t featureCount);
 
-// A node reduced to what routing needs: 16 bytes, four per cache line. The
-// threshold is the largest float at or below the node's, which sends every
-// float value the same way (value > threshold: right); a leaf leads back to
-// itself.
-struct PruneHop {
-  float threshold;
-  std::uint32_t feature;
-  std::uint32_t next[2]; // left, right
-};
-
-// Subtree raising's work on big row slices, done elsewhere (the GPU), while
-// the pruning keeps every decision. A slice is given as the training rows at
-// its positions, in the pruning's order. Calls for disjoint subtrees may come
-// from several threads at once. Only integer counts come back, so the
-// pruning is the same to the last bit.
-class SliceWorker {
-public:
-  virtual ~SliceWorker() = default;
-
-  // Slices of fewer rows stay on the CPU.
-  virtual std::size_t minRows() const = 0;
-
-  // After the first arrangement (the RowArranger is done): every node's hop.
-  // False if the worker cannot be used.
-  virtual bool start(std::span<const PruneHop> hops) = 0;
-
-  // New hops of nodes `ids` (hops[id]), for every call that starts after this
-  // one.
-  virtual void updateHops(std::span<const std::uint32_t> ids, std::span<const PruneHop> hops) = 0;
-
-  // The rows sent through `root`'s subtree: for every leaf reached, in no
-  // particular order, 2 + classes numbers: the leaf, the index in `rows` of
-  // its first row and its class counts.
-  virtual void countReached(std::uint32_t root, std::span<const std::uint32_t> rows,
-                            std::vector<std::uint32_t> &reached) = 0;
-
-  // The rows sorted stably by the slot of the leaf they reach (the index of
-  // the leaf in `leaves`, which lists every leaf of `root`'s subtree):
-  // source[index] is the index in `rows` of the row that moves to `index`,
-  // and `slotCounts` (zero, leaves x classes) receives the class counts of
-  // every slot.
-  virtual void arrange(std::uint32_t root, std::span<const std::uint32_t> rows,
-                       std::span<const std::uint32_t> leaves, std::uint32_t *source,
-                       std::uint32_t *slotCounts) = 0;
-
-  // The pruning is done (--profile: its GPU spans are recorded).
-  virtual void finish() {}
-};
-
 // prune.c: error-based pruning. Each node's error is estimated with the upper
 // limit of a binomial confidence interval (confidence factor CF). A subtree is
 // replaced by a leaf, or by its most-used branch ("subtree raising"), when that
@@ -104,10 +55,8 @@ public:
 // the leaf of every training row, which saves sending them through the tree;
 // the pruning uses its ids up (as scratch); with it, `arranger` (optional) may
 // order the rows.
-// `worker` (optional) takes the big slices of subtree raising.
 void c45PessimisticPrune(Tree &tree, const Dataset &train, double confidenceFactor,
                          ThreadPool *pool, std::span<std::byte> workspace = {},
-                         RowLeaves *leafOfRow = nullptr, const RowArranger &arranger = {},
-                         SliceWorker *worker = nullptr);
+                         RowLeaves *leafOfRow = nullptr, const RowArranger &arranger = {});
 
 } // namespace dt

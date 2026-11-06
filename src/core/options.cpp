@@ -60,12 +60,10 @@ void printUsage(const char *program) {
       << "  --test-last N            the last N rows of the file are the test set\n"
       << "  --seed N                 random seed for the holdout split and CART's CV\n"
       << "                           folds (default 1)\n"
-      << "  -m N                     duplicate rows N times in memory (stress tests)\n"
       << "  --repeat N               train N trees in a row on the loaded data, each one\n"
       << "                           as a fresh process's only tree, and print each one's\n"
       << "                           time and Unix start/end (energy runs)\n"
       << "  --threads N              CPU threads (0 = every CPU it may run on)\n"
-      << "  --print                  print the tree\n"
       << "  --dump FILE              write the tree as text\n"
       << "\n"
       << "CART (default: cost-complexity pruning with a fixed alpha, one tree):\n"
@@ -76,15 +74,6 @@ void printUsage(const char *program) {
       << "C4.5 (default: error-based pruning with CF 0.25 and subtree raising):\n"
       << "  --cf X                   pruning confidence factor\n"
       << "\n"
-      << "Parallel and Cuda (CPU side):\n"
-      << "  --task-rows N            nodes with >= N rows grow a child as a pool task\n"
-      << "                           (default " << ParallelOptions{}.nodeTaskRows << ")\n"
-      << "  --spare-slots N          Parallel: column copies beyond one per feature; fewer\n"
-      << "                           use less memory (8 bytes per row each) but slow down\n"
-      << "                           big nodes (default: features - 1, at most threads)\n"
-      << "  --feature-parallel-rows N  nodes with >= N rows scan features in parallel\n"
-      << "                           (default " << ParallelOptions{}.featureParallelRows << ")\n"
-      << "\n"
       << "Cuda:\n"
       << "  --gpu-min-rows N         smaller nodes go to the CPU pool (default: training\n"
       << "                           rows / " << GpuOptions::kAutoMinRowsShare << ", between "
@@ -94,13 +83,8 @@ void printUsage(const char *program) {
       << GpuOptions::kAutoMaxMinRowsCart << ")\n"
       << "  --gpu-only               grow every node on the GPU, no hand-offs to the CPU\n"
       << "                           (the CPU threads still feed the GPU and prune)\n"
-      << "  --gpu-prune-rows N       C4.5: subtree raising sends slices of >= N rows\n"
-      << "                           through the tree on the GPU (default: none,\n"
-      << "                           the CPU is faster)\n"
-      << "  --gpu-prune              C4.5: every slice of subtree raising on the GPU\n"
       << "  --gpu-sweep MODE         auto | one-pass | two-pass (default auto: one-pass\n"
       << "                           on GPUs with fast double precision)\n"
-      << "  --gpu-profile            print per-level / per-kernel GPU times (slower)\n"
       << "\n"
       << "Profiling:\n"
       << "  --profile FILE           write where the training time goes as JSON: phases,\n"
@@ -180,10 +164,7 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
   for (const auto &group : {givenOf(given, {"--simple", "--serial", "--parallel", "--cuda"}),
                             givenOf(given, {"--cart", "--c45"}),
                             givenOf(given, {"--no-prune", "--cv", "--alpha"}),
-                            givenOf(given, {"--no-prune", "--cf"}),
-                            givenOf(given, {"--gpu-prune", "--gpu-prune-rows"}),
-                            givenOf(given, {"--no-prune", "--gpu-prune"}),
-                            givenOf(given, {"--no-prune", "--gpu-prune-rows"})}) {
+                            givenOf(given, {"--no-prune", "--cf"})}) {
     if (group.size() > 1) {
       throw std::runtime_error("Options " + group[0] + " and " + group[1] +
                                " contradict each other; give only one");
@@ -201,22 +182,12 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
            "is for CART (it chooses CART's alpha); C4.5 prunes with --cf");
   } else {
     refuse({"--cf"}, "is for C4.5; CART prunes with --alpha or --cv");
-    refuse({"--gpu-prune", "--gpu-prune-rows"}, "is for C4.5's pruning");
-  }
-  if (options.backend == Backend::Serial || options.backend == Backend::Simple) {
-    refuse({"--task-rows", "--feature-parallel-rows"},
-           std::string("is for --parallel and --cuda, not --") + backendName(options.backend));
   }
   if (options.backend != Backend::Cuda) {
-    refuse({"--gpu-min-rows", "--gpu-only", "--gpu-sweep", "--gpu-profile", "--gpu-prune-rows",
-            "--gpu-prune"},
-           "is for --cuda only");
+    refuse({"--gpu-min-rows", "--gpu-only", "--gpu-sweep"}, "is for --cuda only");
   }
   if (options.gpu.only) {
     refuse({"--gpu-min-rows"}, "contradicts --gpu-only (no node goes to the CPU)");
-  }
-  if (options.backend != Backend::Parallel) {
-    refuse({"--spare-slots"}, "is for --parallel only");
   }
 }
 
@@ -254,8 +225,6 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
     } else if (arg == "--no-prune") {
       options.cart.pruning = CartPruning::None;
       options.c45.prune = false;
-    } else if (arg == "-m") {
-      options.multiplier = parseCount(arg, args.value(arg));
     } else if (arg == "--repeat") {
       options.repeat = parseCount(arg, args.value(arg));
     } else if (arg == "--holdout") {
@@ -266,8 +235,6 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.seed = static_cast<std::uint64_t>(parseCount(arg, args.value(arg)));
     } else if (arg == "--threads") {
       options.parallel.threads = static_cast<int>(parseCount(arg, args.value(arg)));
-    } else if (arg == "--print") {
-      options.printTree = true;
     } else if (arg == "--dump") {
       options.dumpPath = args.value(arg);
     } else if (arg == "--profile") {
@@ -278,23 +245,11 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
     } else if (arg == "--cv") {
       options.cart.pruning = CartPruning::CrossValidation;
       options.cart.folds = static_cast<int>(parseCount(arg, args.value(arg)));
-    } else if (arg == "--task-rows") {
-      options.parallel.nodeTaskRows = parseCount(arg, args.value(arg));
-    } else if (arg == "--spare-slots") {
-      options.parallel.spareSlots = parseCount(arg, args.value(arg));
-    } else if (arg == "--feature-parallel-rows") {
-      options.parallel.featureParallelRows = parseCount(arg, args.value(arg));
-    } else if (arg == "--gpu-profile") {
-      options.gpu.profile = true;
     } else if (arg == "--cf") {
       options.c45.prune = true;
       options.c45.confidence = parseReal(arg, args.value(arg));
     } else if (arg == "--gpu-min-rows") {
       options.gpu.minRows = parseCount(arg, args.value(arg));
-    } else if (arg == "--gpu-prune-rows") {
-      options.gpu.pruneRows = parseCount(arg, args.value(arg));
-    } else if (arg == "--gpu-prune") {
-      options.gpu.pruneRows = 1;
     } else if (arg == "--gpu-only") {
       options.gpu.only = true;
     } else if (arg == "--gpu-sweep") {
@@ -319,9 +274,6 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
 }
 
 void validateOptions(const Options &options) {
-  if (options.multiplier < 1) {
-    throw std::runtime_error("-m must be at least 1");
-  }
   if (options.holdout < 0.0 || options.holdout >= 1.0) {
     throw std::runtime_error("--holdout must be in [0, 1)");
   }
