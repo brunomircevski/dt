@@ -9,6 +9,7 @@
 #include "core/tree.h"
 
 #include <chrono>
+#include <cstdio>
 #include <fstream>
 #include <future>
 #include <iomanip>
@@ -16,6 +17,9 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace {
 
@@ -68,8 +72,11 @@ int main(int argc, char *argv[]) {
               << " (backend " << backendName(options.backend) << ")\n";
 
     // CUDA context creation is slow; do it while the CSV is being parsed.
+    // Not with --repeat N > 1: the trees before the last one are trained in
+    // forked children, and a process may only fork before it uses CUDA.
+    const bool forks = options.repeat > 1;
     std::future<void> gpuReady;
-    if (options.backend == Backend::Cuda) {
+    if (options.backend == Backend::Cuda && !forks) {
       gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options));
     }
 
@@ -113,29 +120,73 @@ int main(int argc, char *argv[]) {
     if (gpuReady.valid()) {
       gpuReady.get();
     }
-    TrainTimings timings;
-    const bool profile = !options.profilePath.empty();
-    if (profile) {
-      trace::start();
-    }
     // --repeat: the windows let an outside power sampler integrate the
-    // energy of training only (bench/power).
+    // energy of training only (bench/power). A window runs from the start of
+    // trainTree() to the end of training, before the grower frees its memory.
     auto unixNow = [] {
       return std::chrono::duration<double>(
                  std::chrono::system_clock::now().time_since_epoch())
           .count();
     };
+    auto printWindow = [&](std::size_t run, const TrainTimings &done, double start) {
+      std::cout << "  repeat " << run << "/" << options.repeat << ": train " << std::fixed
+                << std::setprecision(1) << done.total() * 1000.0 << " ms, unix "
+                << std::setprecision(6) << start << " " << done.endUnix << std::endl;
+    };
+    // --repeat N > 1: trees 1..N-1 each in a forked child that trains one
+    // tree and exits, so none of them inherits what an earlier tree left
+    // behind (on the GPU: after the first tree in a process, the setup took
+    // up to 40% longer). A child gets what a single run has when its timer
+    // starts: the loaded data (shared with this process), its own threads
+    // (fork copies only the calling one) and, with --cuda, the CUDA context
+    // and the staging buffers. The last tree is trained below, here, after
+    // this process's own gpuPrepare().
+    for (std::size_t run = 1; forks && run < options.repeat; ++run) {
+      std::cout.flush();
+      std::fflush(nullptr);
+      const pid_t child = fork();
+      if (child < 0) {
+        throw std::runtime_error("--repeat: fork failed");
+      }
+      if (child == 0) {
+        int status = 0;
+        try {
+          ThreadPool childPool(threadCount(options) - 1);
+          if (options.backend == Backend::Cuda) {
+            gpuPrepare(threadCount(options));
+          }
+          TrainTimings childTimings;
+          const double start = unixNow();
+          trainTree(train, options, &childPool, childTimings, /*verbose=*/false);
+          printWindow(run, childTimings, start);
+        } catch (const std::exception &exception) {
+          std::cerr << "Error (--repeat tree " << run << "): " << exception.what() << '\n';
+          status = 1;
+        }
+        std::cout.flush();
+        std::cerr.flush();
+        _exit(status); // no destructors: the parent's pool threads do not exist here
+      }
+      int status = 0;
+      if (waitpid(child, &status, 0) != child || !WIFEXITED(status) ||
+          WEXITSTATUS(status) != 0) {
+        throw std::runtime_error("--repeat: tree " + std::to_string(run) + " failed");
+      }
+    }
+    if (forks && options.backend == Backend::Cuda) {
+      gpuPrepare(threadCount(options));
+    }
+    TrainTimings timings;
+    const bool profile = !options.profilePath.empty();
+    if (profile) {
+      trace::start();
+    }
     Tree tree;
-    const std::size_t repeats = options.repeat > 0 ? options.repeat : 1;
-    for (std::size_t run = 1; run <= repeats; ++run) {
-      timings = TrainTimings{};
+    {
       const double start = unixNow();
       tree = trainTree(train, options, &pool, timings);
-      const double end = unixNow();
       if (options.repeat > 0) {
-        std::cout << "  repeat " << run << "/" << repeats << ": train " << std::fixed
-                  << std::setprecision(1) << timings.total() * 1000.0 << " ms, unix "
-                  << std::setprecision(6) << start << " " << end << "\n";
+        printWindow(options.repeat, timings, start);
       }
     }
     if (profile) {

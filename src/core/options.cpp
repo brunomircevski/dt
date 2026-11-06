@@ -61,8 +61,9 @@ void printUsage(const char *program) {
       << "  --seed N                 random seed for the holdout split and CART's CV\n"
       << "                           folds (default 1)\n"
       << "  -m N                     duplicate rows N times in memory (stress tests)\n"
-      << "  --repeat N               train N trees in a row on the loaded data and print\n"
-      << "                           each one's time and Unix start/end (energy runs)\n"
+      << "  --repeat N               train N trees in a row on the loaded data, each one\n"
+      << "                           as a fresh process's only tree, and print each one's\n"
+      << "                           time and Unix start/end (energy runs)\n"
       << "  --threads N              CPU threads (0 = every CPU it may run on)\n"
       << "  --print                  print the tree\n"
       << "  --dump FILE              write the tree as text\n"
@@ -326,6 +327,9 @@ void validateOptions(const Options &options) {
   }
   if (options.testLast > 0 && options.holdout > 0.0) {
     throw std::runtime_error("--test-last and --holdout exclude each other");
+  }
+  if (options.repeat > 1 && !options.profilePath.empty()) {
+    throw std::runtime_error("--profile traces one tree: use it without --repeat");
   }
   if (options.algorithm == Algorithm::Cart) {
     const CartOptions &cart = options.cart;

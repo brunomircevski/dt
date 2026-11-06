@@ -13,6 +13,9 @@ struct TrainTimings {
   double buildSeconds = 0.0;    // growing the tree
   double cvSeconds = 0.0;       // CART: cross-validation (growing the fold trees)
   double pruneSeconds = 0.0;    // pruning
+  // Unix time when training ended: after the pruning, before the grower frees
+  // its memory (the end of --repeat's energy window).
+  double endUnix = 0.0;
 
   double total() const {
     return gpuSetupSeconds + presortSeconds + buildSeconds + cvSeconds + pruneSeconds;

@@ -9,6 +9,7 @@
 #include "core/trace.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -170,6 +171,15 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   struct TraceEnd {
     ~TraceEnd() { trace::stop(); }
   } traceEnd;
+  // Declared after the grower, so it runs before the grower frees its memory.
+  struct TrainEnd {
+    TrainTimings &timings;
+    ~TrainEnd() {
+      timings.endUnix =
+          std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch())
+              .count();
+    }
+  } trainEnd{timings};
   if (options.backend == Backend::Cuda) {
     if (!pool) {
       throw std::logic_error("The Cuda backend needs a thread pool");

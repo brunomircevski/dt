@@ -33,12 +33,14 @@
 #
 # The run: a warm-up run of each fast backend (Parallel, Hybrid, GPU) per
 # algorithm (two trees), which also picks its repeat count K = ceil(TARGET /
-# the second tree's training time) + 1, so that the trees after the first one
-# (the measured ones) last >= TARGET seconds; then IDLE seconds of idle; then,
+# the second tree's training time) + 1, so that the measured trees (all K)
+# last >= TARGET seconds; then IDLE seconds of idle; then,
 # with STEP > 0, STEP seconds of every core busy and IDLE seconds of idle again;
 # then REPS rounds of every case (round-robin), each process preceded by PRE
-# seconds of idle; then IDLE seconds of idle again. ./tree --repeat K prints every tree's training window as Unix
-# times; bench/power/analyze.py integrates the samples over those windows.
+# seconds of idle; then IDLE seconds of idle again. ./tree --repeat K trains
+# every tree as a fresh process's only tree (each one but the last in a forked
+# child, since 2026-11-07) and prints its training window as Unix times;
+# bench/power/analyze.py integrates the samples over those windows.
 #
 # Environment: DATA (CSV), REPS (3), REPS_BY (per-implementation rounds,
 # e.g. "simple=1 serial=3"; the rest run REPS rounds), REPEAT_BY (trees per
@@ -147,7 +149,7 @@ for algo in $ALGOS; do
   for impl in $IMPLS; do
     REPEAT[$impl-$algo]=${SLOW_REPEAT[$impl]:-1}
     case " $FAST " in *" $impl "*) ;; *) continue ;; esac
-    # two trees: the first one in a process is slower (CUDA context, allocations)
+    # two trees: the second one's time picks K (the data is in the page cache by then)
     run "warmup-$impl-$algo" "$impl" "$algo" 2
     ms=$(sed -n 's/^  repeat 2\/2: train \([0-9.]*\) ms.*/\1/p' "$OUT/out/warmup-$impl-$algo.txt")
     if [ -n "$ms" ]; then

@@ -9,10 +9,15 @@ Every job folder (ampere/, dell/, epyc/, hopper/) holds markers.txt, samples.csv
 powercap counters when samples.csv has them (ampere and hopper since 2026-11-06),
 else from perf.
 
-Per run (one process), over the span from the first tree's start to the last
-tree's end, divided by the number of trees (energy and time per tree); with
-K >= 3 trees the first one is left out (it is slower: CUDA context, first
-allocations):
+Per run (one ./tree process with --repeat K), over its K training windows,
+summed and divided by K (energy and time per tree). Since 2026-11-07 ./tree
+trains every tree but the last in a forked child process, so each window is a
+fresh process's only tree (before, the trees after the first one in a process
+were up to 40% slower on the GPU), and a window ends when training ends,
+before the grower frees its memory. The gaps between windows (fork, CUDA
+context) are not counted. Every case's time per tree is checked against its
+first tree, its window length and the time benchmark (cluster-ecbdl); the
+check is printed and written at the end of summary.md:
   - PSU (whole server): the ACPI meter (Dell nodes, hopper) or /run/power/psu_W
     (ampere: the BMC's reading). The readings are held until the next one and
     shifted back by the meter's delay. The delay is measured per job: from the
@@ -295,7 +300,7 @@ class Job:
         """Joules of `source` from a to b (Unix times)."""
         if source == "psu":
             lo, hi = self.psu_window(a, b)
-            if self.slow:  # mean of the point readings in the window x its length
+            if self.slow:  # mean of the point readings in the window x its length (see energy_in)
                 vals = self.refreshes_in(lo, hi)
                 if vals:
                     return statistics.mean(vals) * (b - a)
@@ -310,6 +315,17 @@ class Job:
             if overlap > 0 and dur > 0:
                 total += joules * overlap / dur
         return total
+
+    def energy_in(self, source, windows):
+        """Joules of `source` summed over the windows [(a, b)]. A slow PSU meter
+        (point readings): the mean of the readings that fall in any of the
+        windows x their total length, since a short window holds a reading only
+        now and then."""
+        if source == "psu" and self.slow:
+            vals = [v for a, b in windows for v in self.refreshes_in(*self.psu_window(a, b))]
+            if vals:
+                return statistics.mean(vals) * sum(b - a for a, b in windows)
+        return sum(self.energy(source, a, b) for a, b in windows)
 
     def held_integral(self, values, a, b):
         """Integral of the readings, each held until the next sample, from a to b."""
@@ -403,25 +419,22 @@ def analyse(job):
         if rc != "0" or not tree["windows"]:
             print(f"  {job.node} {run}: failed (rc {rc}), skipped", file=sys.stderr)
             continue
-        # Which trees are measured. Dell nodes (PSU meter, 2-6 s readings): the
-        # steady state, every tree but the first (with K >= 3), whose window is
-        # >= 120 s. ampere (NVML and RAPL, 100 ms): the first tree, which is the
-        # tree the time benchmarks time; the later ones are slower on the GPU
-        # (their "gpu setup" uploads the data again without overlapping the
-        # load) and are reported as "steady_*".
-        steady = tree["windows"][1:] if len(tree["windows"]) >= 3 else tree["windows"]
-        windows = steady if job.has_psu else tree["windows"][:1]
+        # Every tree is measured: each one is a fresh process's only tree
+        # (./tree --repeat forks). first_tree_s and steady_train_s (trees
+        # 2..K) are kept for the time check.
+        windows = tree["windows"]
+        steady = windows[1:] if len(windows) >= 3 else windows
         k = len(windows)
+        spans = [(w[0], w[1]) for w in windows]
         a, b = windows[0][0], windows[-1][1]
-        span = b - a
-        energy = {s: job.energy(s, a, b) / k for s in job.sources()}
+        span = sum(w1 - w0 for w0, w1 in spans)  # training time only, gaps left out
+        energy = {s: job.energy_in(s, spans) / k for s in job.sources()}
         idle = {s: job.idle[s] * span / k for s in job.sources()}
         comp_e = components(job, energy, attrs["impl"])
         comp_idle = components(job, idle, attrs["impl"])
         total = sum(comp_e.values())
-        sa, sb = steady[0][0], steady[-1][1]
-        steady_e = sum(components(job, {s: job.energy(s, sa, sb) for s in job.sources()},
-                                  attrs["impl"]).values()) / len(steady)
+        steady_e = sum(components(job, {s: job.energy_in(s, [(w[0], w[1]) for w in steady])
+                                        for s in job.sources()}, attrs["impl"]).values()) / len(steady)
         rows.append({
             "node": job.node, "impl": attrs["impl"], "algo": attrs["algo"],
             "rep": int(run.split("-")[0][3:]), "repeat": k, "trees_in_process": len(tree["windows"]),
@@ -437,7 +450,7 @@ def analyse(job):
             "peak_psu_W": job.peak_psu(a, b) if job.has_psu else float("nan"),
             "psu_J": energy["psu"] if job.has_psu else float("nan"),
             "psu_idle_J": idle["psu"] if job.has_psu else float("nan"),
-            "psu_changes": job.changes(*job.psu_window(a, b)) if job.has_psu else 0,
+            "psu_changes": sum(job.changes(*job.psu_window(*w)) for w in spans) if job.has_psu else 0,
             "psu_period_s": job.psu_period,
             **{f"E_{c}": v for c, v in comp_e.items()},
             **{f"Eidle_{c}": v for c, v in comp_idle.items()},
@@ -465,7 +478,7 @@ def summarise(rows):
         s["psu_changes_min"] = min(r["psu_changes"] for r in rs)
         s["psu_period_s"] = rs[0]["psu_period_s"]
         for key in ("train_s", "load_s", "energy_J", "above_idle_J", "power_W", "idle_W", "peak_W",
-                    "steady_train_s", "steady_energy_J", "span_s", "peak_cpu_W", "peak_gpu_W",
+                    "steady_train_s", "steady_energy_J", "first_tree_s", "span_s", "peak_cpu_W", "peak_gpu_W",
                     "peak_psu_W", "psu_J", "psu_idle_J"):
             s[key], s[key + "_sd"] = mean_sd([r[key] for r in rs])
         for c in COMPONENTS:
@@ -495,8 +508,6 @@ def label(s):
 
 def trees(s):
     """Which trees were measured, for the tables."""
-    if s["repeat"] == 1 and s["trees_in_process"] > 1:
-        return f"{s['runs']} × 1st of {s['trees_in_process']}"
     return f"{s['runs']} × {s['repeat']}"
 
 
@@ -529,17 +540,62 @@ def write_tables(folder, rows, summary):
                 f"{fmt_j(s['energy_J'])} ± {s['energy_J_sd'] / s['energy_J'] * 100:.1f}% | "
                 f"{fmt_j(s['above_idle_J'])} | {split} |")
         lines.append("")
-    later = [s for s in summary if s["repeat"] == 1 and s["trees_in_process"] > 1]
-    if later:
-        lines += ["### Later trees in the same process (ampere)", "",
-                  "| Implementation | Algorithm | first tree: t, E | later trees: t, E (mean) |",
-                  "|---|---|---|---|"]
-        for s in later:
-            lines.append(f"| {IMPLS[s['impl']]} | {ALGOS[s['algo']].split(' (')[0]} | "
-                         f"{fmt_s(s['train_s'])}, {fmt_j(s['energy_J'])} | "
-                         f"{fmt_s(s['steady_train_s'])}, {fmt_j(s['steady_energy_J'])} |")
-        lines.append("")
+    lines += time_check(summary)
     (folder / "summary.md").write_text("\n".join(lines))
+
+
+# The time benchmark of the same cases: bench/results/cluster-ecbdl/<prefix>-<node>-ecbdl_15m.
+# dell is left out: the power runs are on dell4 (half the memory channels), the
+# time benchmark on dell1.
+TIME_BENCH = Path(__file__).resolve().parent.parent / "results" / "cluster-ecbdl"
+TIME_PREFIX = {"simple": "simple", "serial": "serial", "parallel": "cpu", "gpuonly": "gpuonly", "cuda": "cuda"}
+TIME_NODES = {"epyc", "ampere", "hopper"}
+TIME_TOLERANCE = 0.03
+
+
+def time_bench(node, impl, algo):
+    """Mean training time of the case in the time benchmark, or None."""
+    path = TIME_BENCH / f"{TIME_PREFIX[impl]}-{node}-ecbdl_15m" / "runs.csv"
+    if node not in TIME_NODES or not path.exists():
+        return None
+    protocol = "cart_depth10" if algo == "cart" else "c45_depth10_unpruned"
+    t = [float(r["train_seconds"]) for r in read_csv_rows(path)
+         if r["protocol"] == protocol and r.get("status", "ok") == "ok"]
+    return statistics.mean(t) if t else None
+
+
+def read_csv_rows(path):
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def time_check(summary):
+    """Markdown lines: each case's time per tree against its first tree, its
+    window length (the time the energy is integrated over) and the time
+    benchmark. Prints a warning for every difference above TIME_TOLERANCE."""
+    lines = ["### Time check", "",
+             f"Time per tree (./tree's train time) against: the first tree of each process, "
+             f"the training windows the energy is summed over, and the time benchmark "
+             f"(cluster-ecbdl, ecbdl_15m). Flagged (!) above {TIME_TOLERANCE:.0%}.", "",
+             "| Implementation | Node | Algorithm | t per tree | first tree | window | time benchmark |",
+             "|---|---|---|---|---|---|---|"]
+    for s in summary:
+        t = s["train_s"]
+        bench = time_bench(s["node"], s["impl"], s["algo"])
+        cells = []
+        for name, ref in (("first tree", s["first_tree_s"]), ("window", s["span_s"]), ("time benchmark", bench)):
+            if ref is None or math.isnan(ref):
+                cells.append("–")
+                continue
+            d = t / ref - 1
+            bad = abs(d) > TIME_TOLERANCE
+            cells.append(f"{fmt_s(ref)} ({d:+.1%}){' !' if bad else ''}")
+            if bad:
+                print(f"WARNING: {s['node']} {s['impl']} {s['algo']}: {fmt_s(t)} per tree, "
+                      f"{name} {fmt_s(ref)} ({d:+.1%})", file=sys.stderr)
+        lines.append(f"| {IMPLS[s['impl']]} | {s['node']} | {ALGOS[s['algo']].split(' (')[0]} | "
+                     f"{fmt_s(t)} | " + " | ".join(cells) + " |")
+    return lines + [""]
 
 
 def unit_ticks(ax, axis, unit):
@@ -957,8 +1013,8 @@ def chart_cpu_gpu(folder, summary):
                             f"in every measured window.")
             ax_e.set_title(f"{ALGOS[algo]}: energy, power and time to train one tree on ECBDL'14 15M "
                            f"(depth ≤ 10), {hw}\nMeasured: {what}.{psu_note}\n"
-                           f"Means of runs × trees: {n} (the first tree of a process with ≥ 3 trees is "
-                           f"left out)", fontsize=9.5, color=INK, loc="left")
+                           f"Means of runs × trees: {n} (every tree a fresh process's only tree)",
+                           fontsize=9.5, color=INK, loc="left")
             fig.tight_layout()
             fig.savefig(folder / f"chart-cpu-gpu-{node}-{algo}.png", dpi=150)
             plt.close(fig)
