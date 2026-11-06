@@ -624,57 +624,69 @@ def joule_axis(ax, axis="y"):
 
 
 def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper")):
-    """Time, mean power and total energy of one tree, one row per implementation x node
-    (CPU implementations on the CPU nodes, GPU ones on the GPU nodes), three aligned panels: time per tree (log), mean power of the whole
-    server (linear; the lighter part is the idle server's power) and total energy per tree
-    (log; idle included). The number at the end of each bar is its total."""
+    """Time, power and total energy of one tree, one row per implementation x node (CPU
+    implementations on the CPU nodes, GPU ones on the GPU nodes), four aligned panels: time
+    per tree (log); mean power of the whole server (linear; the lighter part is the idle
+    server's power); mean power of the CPU packages + the GPU in use while training
+    (linear; solid CPU, hatched GPU; no idle split); total energy per tree at the PSU (log;
+    idle included). The number at the end of each bar is its total."""
     from matplotlib.colors import to_rgba
     rows = power_rows()
     cases = [(k, n) for k, n in p_cases(rows)
              if n in (gpu_nodes if k in ("gpuonly", "cuda") else cpu_nodes)]
-    fig, axes = plt.subplots(1, 3, figsize=(FULL, 2.2), sharey=True,
-                             gridspec_kw={"wspace": 0.1, "width_ratios": [1, 1, 1.1]})
+    fig, axes = plt.subplots(1, 4, figsize=(FULL, 2.2), sharey=True,
+                             gridspec_kw={"wspace": 0.16, "width_ratios": [1, 1, 0.95, 0.9]})
+    ax_t, ax_p, ax_c, ax_e = axes
     y = np.arange(len(cases))[::-1].astype(float)
-    hgt, fs = 0.62, 5.2
+    hgt, fs = 0.62, 4.9
     for yi, (k, node) in zip(y, cases):
         r = rows[(k, node, algo)]
         c, lc = STYLE[k][1], to_rgba(STYLE[k][1], 0.35)
         t, p, e = r["train_s"], r["power_W"], r["psu_J"]
-        axes[0].barh(yi, t - 1, left=1, height=hgt, color=c, lw=0)
-        axes[0].text(t * 1.2, yi, (f"{t:,.0f}".replace(",", "{,}") if t >= 100 else tsec(t)) + r"\,s",
-                     va="center", fontsize=fs)
+        ax_t.barh(yi, t - 1, left=1, height=hgt, color=c, lw=0)
+        ax_t.text(t * 1.2, yi, (f"{t:,.0f}".replace(",", "{,}") if t >= 100 else tsec(t)) + r"\,s",
+                  va="center", fontsize=fs)
         idle_w = r["idle_W"]
-        axes[1].barh(yi, idle_w, height=hgt, color=lc, lw=0)
-        axes[1].barh(yi, p - idle_w, left=idle_w, height=hgt, color=c, lw=0)
-        axes[1].text(p + 15, yi, rf"{p:.0f}\,W", va="center", fontsize=fs)
-        axes[2].barh(yi, e - 1e3, left=1e3, height=hgt, color=c, lw=0)
-        axes[2].text(e * 1.2, yi, kj(e), va="center", fontsize=fs)
-    axes[0].set_xscale("log")
-    axes[0].set_xlim(1, 6e4)
-    axes[0].set_xticks([1, 10, 100, 1e3, 1e4], [r"1\,s", r"10\,s", r"100\,s", r"1k\,s", r"10k\,s"])
-    axes[0].xaxis.set_minor_formatter(NullFormatter())
-    axes[0].set_title("time per tree", loc="left", pad=3)
-    axes[1].set_xlim(0, 1100)
-    axes[1].set_xticks([0, 300, 600, 900], [r"0\,W", r"300\,W", r"600\,W", r"900\,W"])
-    axes[1].set_title("mean power", loc="left", pad=3)
-    joule_axis(axes[2], "x")
-    axes[2].set_xlim(1e3, 2e7)
-    axes[2].set_xticks([1e3, 1e4, 1e5, 1e6])
-    axes[2].set_title("total energy per tree", loc="left", pad=3)
+        ax_p.barh(yi, idle_w, height=hgt, color=lc, lw=0)
+        ax_p.barh(yi, p - idle_w, left=idle_w, height=hgt, color=c, lw=0)
+        ax_p.text(p + 15, yi, rf"{p:.0f}\,W", va="center", fontsize=fs)
+        cpu = r["P_cpu0"] + r["P_cpu1"]
+        gpu = r["P_gpu"] if k in ("gpuonly", "cuda") else 0.0
+        ax_c.barh(yi, cpu, height=hgt, color=c, lw=0)
+        if gpu:
+            ax_c.barh(yi, gpu, left=cpu, height=hgt, color="white", ec=c, lw=0.4, hatch="//////")
+        ax_c.text(cpu + gpu + 12, yi, rf"{cpu + gpu:.0f}\,W", va="center", fontsize=fs)
+        ax_e.barh(yi, e - 1e3, left=1e3, height=hgt, color=c, lw=0)
+        ax_e.text(e * 1.2, yi, kj(e), va="center", fontsize=fs)
+    ax_t.set_xscale("log")
+    ax_t.set_xlim(1, 8e4)
+    ax_t.set_xticks([1, 100, 1e4], [r"1\,s", r"100\,s", r"10k\,s"])
+    ax_t.xaxis.set_minor_formatter(NullFormatter())
+    ax_t.set_title("time per tree", loc="left", pad=3, fontsize=7)
+    ax_p.set_xlim(0, 1100)
+    ax_p.set_xticks([0, 400, 800], [r"0\,W", r"400\,W", r"800\,W"])
+    ax_p.set_title("server power", loc="left", pad=3, fontsize=7)
+    ax_c.set_xlim(0, 720)
+    ax_c.set_xticks([0, 400], [r"0\,W", r"400\,W"])
+    ax_c.set_title("CPU+GPU power", loc="left", pad=3, fontsize=7)
+    joule_axis(ax_e, "x")
+    ax_e.set_xlim(1e3, 1.5e7)
+    ax_e.set_xticks([1e3, 1e5, 1e7])
+    ax_e.set_title("total energy per tree", loc="left", pad=3, fontsize=7)
     for ax in axes:
         ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
         ax.set_axisbelow(True)
         ax.tick_params(axis="y", length=0)
-        ax.tick_params(axis="x", labelsize=5.6)
-    names = {n: n for _, n in P_NODES}
-    axes[0].set_yticks(y, [f"{STYLE[k][0]}, {P_GPU[n] if k in ('gpuonly', 'cuda') else names[n]}"
-                           for k, n in cases], fontsize=6.2)
+        ax.tick_params(axis="x", labelsize=5.2)
+    ax_t.set_yticks(y, [f"{STYLE[k][0]}, {P_GPU[n] if k in ('gpuonly', 'cuda') else n}"
+                        for k, n in cases], fontsize=6.2)
     for i in range(1, len(cases)):
         if cases[i][0] != cases[i - 1][0]:
             for ax in axes:
                 ax.axhline(y[i] + 0.5, color=GRID, lw=0.5)
-    h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="power of the idle server"),
-         plt.Rectangle((0, 0), 1, 1, color="#777", label="power added by the run")]
+    h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="server power: idle part"),
+         plt.Rectangle((0, 0), 1, 1, fc="white", ec="#777", lw=0.4, hatch="//////",
+                       label="CPU + GPU power: GPU part (solid: CPU packages)")]
     fig.legend(handles=h, loc="lower center", ncol=2, bbox_to_anchor=(0.5, -0.05), fontsize=6)
     save(fig, "energy")
 

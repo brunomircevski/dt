@@ -261,10 +261,12 @@ a fast run at high power can still use the least energy.}
 \begin{figure}
 \includegraphics[width=\textwidth]{test-energy.pdf}
 \caption{Time, mean power and total energy to train one C4.5 tree on ECBDL'14
-15M (depth $\le$ 10, unpruned), the whole server measured at the PSU. The CPU
+15M (depth $\le$ 10, unpruned). Server power and energy: the whole server,
+measured at the PSU. CPU+GPU power: both CPU packages (RAPL, solid) plus the
+GPU in use (NVML, hatched), mean over the training. The CPU
 implementations ran on epyc and dell, the GPU implementations on ampere's A100
 and hopper's H100 (with the CPU cores of the GPU's NUMA node: 24 on ampere, 16
-on hopper). Lighter part of a power bar: the idle server (epyc 124\,W, dell
+on hopper). Lighter part of a server power bar: the idle server (epyc 124\,W, dell
 154\,W, ampere 466\,W, hopper 401\,W; the GPU servers hold three more GPUs
 each, which stay idle). Total energy includes the idle power; energy = mean power
 $\times$ time.}
