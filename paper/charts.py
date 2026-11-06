@@ -18,6 +18,9 @@ Styles:
   pareto    time-accuracy-memory bubbles for one dataset: every implementation
   profile   100 % stacked bars: where the training time goes, per backend
   bars      grouped bars, log scale: the five implementations on every dataset
+  power-*   energy per tree on ECBDL'14 15M from bench/power/results-*/ (four
+            candidates: scatter, bars, split, triptych; run them by function name,
+            e.g. power_scatter)
 """
 
 import csv
@@ -564,6 +567,241 @@ def bars():
     fig.legend(h, l, loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.885), fontsize=5.8,
                handlelength=1.0, columnspacing=0.8, handletextpad=0.3)
     save(fig, "bars")
+
+
+# ---------------------------------------------------------------- power (energy per tree)
+# bench/power/results-<node>/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
+# energy at the PSU; components: CPU packages (RAPL), the GPU in use (NVML), the rest.
+POWER = ROOT / "bench" / "power"
+P_NODES = [("epyc1", "epyc"), ("dell4", "dell"), ("ampere", "ampere"), ("hopper", "hopper")]
+P_IMPLS = [("simple", "simple"), ("serial", "serial"), ("parallel", "cpu"), ("gpuonly", "gpuonly"),
+           ("cuda", "cuda")]  # (power_bench name, STYLE key)
+P_MARK = {"epyc": "o", "dell": "s", "ampere": "^", "hopper": "D"}
+P_GPU = {"ampere": "A100", "hopper": "H100"}
+
+
+def power_rows():
+    """{(STYLE key, node short name, algo): row with floats} from every power result."""
+    out = {}
+    for full, short in P_NODES:
+        f = POWER / f"results-{short}" / "summary.csv"
+        if not f.exists():
+            continue
+        for r in csv.DictReader(open(f)):
+            v = {}
+            for k, x in r.items():
+                try:
+                    v[k] = float(x)
+                except (TypeError, ValueError):
+                    v[k] = x
+            key = dict(P_IMPLS)[r["impl"]]
+            out[(key, short, r["algo"])] = v
+    return out
+
+
+def p_cases(rows):
+    """[(STYLE key, node)] in chart order: implementation, then node."""
+    return [(k, n) for _, k in P_IMPLS for _, n in P_NODES if (k, n, "cart") in rows]
+
+
+def kj(v):
+    """Energy in J -> TeX text."""
+    if v >= 1e6:
+        return rf"{v / 1e6:.2f}\,MJ"
+    if v >= 1e5:
+        return rf"{v / 1e3:.0f}\,kJ"
+    if v >= 1e4:
+        return rf"{v / 1e3:.1f}\,kJ"
+    return rf"{v / 1e3:.2f}\,kJ"
+
+
+def joule_axis(ax, axis="y"):
+    a = ax.yaxis if axis == "y" else ax.xaxis
+    (ax.set_yscale if axis == "y" else ax.set_xscale)("log")
+    names = {1e3: "1\\,kJ", 1e4: "10\\,kJ", 1e5: "100\\,kJ", 1e6: "1\\,MJ", 1e7: "10\\,MJ"}
+    a.set_major_locator(FixedLocator(list(names)))
+    a.set_major_formatter(FuncFormatter(lambda v, _: names.get(v, "")))
+    a.set_minor_formatter(NullFormatter())
+
+
+def power_scatter():
+    """A. Time against energy per tree, log-log, one point per implementation x node;
+    a node's implementations joined in order; dotted lines of constant mean power."""
+    rows = power_rows()
+    fig, axes = plt.subplots(1, 2, figsize=(FULL, 2.45), sharey=True)
+    for ax, algo in zip(axes, ["cart", "c45"]):
+        t = np.array([1, 2e4])
+        for w in (250, 500, 1000):
+            ax.plot(t, w * t, color=MUTED, lw=0.4, ls=(0, (1, 2)), zorder=1)
+            ax.text(50, 50 * w * 1.25, rf"{w}\,W" if w < 1000 else r"1\,kW", rotation=39,
+                    rotation_mode="anchor", fontsize=5.2, color=MUTED, ha="center", va="bottom")
+        for _, node in P_NODES:
+            pts = [(rows[(k, node, algo)]["train_s"], rows[(k, node, algo)]["psu_J"], k)
+                   for _, k in P_IMPLS if (k, node, algo) in rows]
+            for x, y, k in pts:
+                ax.plot(x, y, P_MARK[node], color=STYLE[k][1], mec=INK, mew=0.3, ms=4, zorder=3)
+        ax.set_xscale("log")
+        ax.set_xticks([10, 100, 1e3, 1e4], [r"10\,s", r"100\,s", r"1k\,s", r"10k\,s"])
+        ax.xaxis.set_minor_formatter(NullFormatter())
+        joule_axis(ax, "y")
+        ax.set_xlim(2, 2.5e4)
+        ax.set_ylim(1.5e3, 5e6)
+        ax.set_xlabel("time per tree")
+        ax.grid(color=GRID, lw=0.4, zorder=0)
+        ax.set_title(rf"\textbf{{{ALGO[algo]}}}", loc="left", pad=3)
+    axes[0].set_ylabel("energy per tree (whole server)")
+    h = [Line2D([], [], ls="", marker="o", color=STYLE[k][1], mec=INK, mew=0.3, label=STYLE[k][0])
+         for _, k in P_IMPLS]
+    h += [Line2D([], [], ls="", marker=P_MARK[n], color="white", mec=INK, mew=0.5,
+                 label=n + (f" ({P_GPU[n]})" if n in P_GPU else "")) for _, n in P_NODES]
+    fig.legend(handles=h, loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.17), fontsize=5.8,
+               handletextpad=0.2, columnspacing=0.9)
+    fig.subplots_adjust(wspace=0.06)
+    save(fig, "power-scatter")
+
+
+def power_bars():
+    """B. Energy per tree, log scale, one bar per implementation x node; the lighter part
+    is what the idle server uses in the same time, the darker part what the run adds."""
+    from matplotlib.colors import to_rgba
+    rows = power_rows()
+    cases = p_cases(rows)
+    x, pos, last = [], 0.0, None
+    for k, _ in cases:
+        if last is not None and k != last:
+            pos += 0.6
+        x.append(pos)
+        pos += 1
+        last = k
+    fig, axes = plt.subplots(2, 1, figsize=(FULL, 3.2), sharex=True, gridspec_kw={"hspace": 0.1})
+    floor = 3e2
+    for ax, algo in zip(axes, ["cart", "c45"]):
+        for xi, (k, node) in zip(x, cases):
+            r = rows[(k, node, algo)]
+            c = STYLE[k][1]
+            idle, tot = r["psu_idle_J"], r["psu_J"]
+            ax.bar(xi, idle - floor, 0.8, bottom=floor, color=to_rgba(c, 0.32), lw=0, zorder=2)
+            ax.bar(xi, tot - idle, 0.8, bottom=idle, color=c, lw=0, zorder=2)
+            ax.text(xi, tot * 1.15, kj(tot).replace(r"\,", "\n"), ha="center", va="bottom",
+                    fontsize=4.6, color=INK, linespacing=1.0)
+        joule_axis(ax, "y")
+        ax.set_ylim(floor, 5e7)
+        ax.grid(axis="y", color=GRID, lw=0.4, zorder=0)
+        ax.set_ylabel(rf"\textbf{{{ALGO[algo]}}}: energy per tree")
+        ax.tick_params(axis="x", length=0)
+    axes[1].set_xticks(x, [""] * len(x))
+    tr = axes[1].get_xaxis_transform()
+    for j, (xi, (k, n)) in enumerate(zip(x, cases)):  # node names, staggered so they do not touch
+        axes[1].text(xi, -0.04 if j % 2 == 0 else -0.12, P_GPU.get(n, n) if k in ("gpuonly", "cuda") else n,
+                     transform=tr, ha="center", va="top", fontsize=5)
+    groups = defaultdict(list)
+    for xi, (k, _) in zip(x, cases):
+        groups[k].append(xi)
+    for k, xs in groups.items():
+        axes[1].text(statistics.mean(xs), -0.24, STYLE[k][0], transform=axes[1].get_xaxis_transform(),
+                     ha="center", va="top", fontsize=6.5)
+    axes[1].set_xlim(-0.6, x[-1] + 0.6)
+    h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.32), label="idle server, same time"),
+         plt.Rectangle((0, 0), 1, 1, color="#777", label="what the run adds above idle")]
+    fig.legend(handles=h, loc="lower center", ncol=2, bbox_to_anchor=(0.5, 0.9), fontsize=6)
+    save(fig, "power-bars")
+
+
+def power_split():
+    """C. Where the energy goes: each case's energy as 100 %, split into CPU packages,
+    the GPU in use and the rest of the server, each idle (lighter) and above idle."""
+    from matplotlib.colors import to_rgba
+    rows = power_rows()
+    cases = p_cases(rows)
+    comp = [("CPU packages", "#2a78d6"), ("GPU in use", "#1baf7a"), ("rest of the server", "#8a8780")]
+    fig, axes = plt.subplots(1, 2, figsize=(FULL, 2.7), sharey=True, gridspec_kw={"wspace": 0.3})
+    y = np.arange(len(cases))[::-1]
+    for ax, algo in zip(axes, ["cart", "c45"]):
+        for yi, (k, node) in zip(y, cases):
+            r = rows[(k, node, algo)]
+            cpu = (r["Eidle_cpu0"] + r["Eidle_cpu1"], r["E_cpu0"] + r["E_cpu1"])
+            gpu = (r.get("Eidle_gpu") or 0.0, r.get("E_gpu") or 0.0)
+            gpu = tuple(0.0 if isinstance(v, str) or v != v else v for v in gpu)
+            rest = (r["Eidle_rest"], r["E_rest"])
+            tot = r["psu_J"]
+            left = 0.0
+            for (idle, e), (_, c) in zip((cpu, gpu, rest), comp):
+                i, a = min(idle, e) / tot * 100, max(e - idle, 0) / tot * 100
+                ax.barh(yi, i, 0.75, left=left, color=to_rgba(c, 0.35), lw=0)
+                ax.barh(yi, a, 0.75, left=left + i, color=c, lw=0)
+                left += i + a
+            ax.text(101.5, yi, kj(tot), va="center", ha="left", fontsize=5)
+        ax.set_xlim(0, 100)
+        ax.set_xticks([0, 25, 50, 75, 100], ["0", "25", "50", "75", r"100\,\%"])
+        ax.set_title(rf"\textbf{{{ALGO[algo]}}}", loc="left", pad=3)
+        ax.tick_params(axis="y", length=0)
+        for side in ("left",):
+            ax.spines[side].set_visible(False)
+    axes[0].set_yticks(y, [f"{STYLE[k][0]}, {P_GPU.get(n, n) if k in ('gpuonly', 'cuda') else n}"
+                           for k, n in cases], fontsize=5.6)
+    axes[0].set_xlabel("share of the energy per tree (total at the right)", x=1.1)
+    h = [plt.Rectangle((0, 0), 1, 1, color=c, label=n) for n, c in comp]
+    h += [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="lighter: idle part")]
+    fig.legend(handles=h, loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.12), fontsize=5.8)
+    save(fig, "power-split")
+
+
+def power_triptych():
+    """D. One row per implementation x node, three aligned panels: time per tree (log),
+    mean power of the whole server (linear; dashed tick: idle power) and energy per tree
+    (log). Upper bar CART, lower bar C4.5 (hatched)."""
+    rows = power_rows()
+    cases = p_cases(rows)
+    fig, axes = plt.subplots(1, 3, figsize=(FULL, 2.9), sharey=True,
+                             gridspec_kw={"wspace": 0.08, "width_ratios": [1, 1, 1.15]})
+    y = np.arange(len(cases))[::-1].astype(float)
+    hgt = 0.36
+    for yi, (k, node) in zip(y, cases):
+        c = STYLE[k][1]
+        for j, algo in enumerate(["cart", "c45"]):
+            r = rows[(k, node, algo)]
+            yy = yi + (0.19 if j == 0 else -0.19)
+            kw = dict(height=hgt, color=c, lw=0.3, ec=INK) if j == 0 else \
+                dict(height=hgt, color="white", lw=0.3, ec=c, hatch="//////")
+            axes[0].barh(yy, r["train_s"] - 1, left=1, **kw)
+            axes[1].barh(yy, r["power_W"], **kw)
+            axes[2].barh(yy, r["psu_J"] - 1e3, left=1e3, **kw)
+            axes[2].text(r["psu_J"] * 1.2, yy, kj(r["psu_J"]), va="center", fontsize=4.3)
+            ts = r["train_s"]
+            axes[0].text(ts * 1.2, yy, (f"{ts:,.0f}".replace(",", "{,}") if ts >= 100 else tsec(ts)) + r"\,s",
+                         va="center", fontsize=4.3)
+        idle = rows[(k, node, "cart")]["idle_W"]
+        axes[1].plot([idle, idle], [yi - 0.42, yi + 0.42], color=INK, lw=0.6, ls=(0, (2, 1)))
+        axes[1].text(rows[(k, node, "cart")]["power_W"] + 15, yi, rf"{rows[(k, node, 'cart')]['power_W']:.0f}\,W",
+                     va="center", fontsize=4.3)
+    axes[0].set_xscale("log")
+    axes[0].set_xlim(1, 6e4)
+    axes[0].set_xticks([1, 10, 100, 1e3, 1e4], [r"1\,s", r"10\,s", r"100\,s", r"1k\,s", r"10k\,s"])
+    axes[0].xaxis.set_minor_formatter(NullFormatter())
+    axes[0].set_title("time per tree", loc="left", pad=3)
+    axes[1].set_xlim(0, 1100)
+    axes[1].set_xticks([0, 300, 600, 900], [r"0\,W", r"300\,W", r"600\,W", r"900\,W"])
+    axes[1].set_title("mean power", loc="left", pad=3)
+    joule_axis(axes[2], "x")
+    axes[2].set_xlim(1e3, 3e7)
+    axes[2].set_xticks([1e3, 1e4, 1e5, 1e6])
+    axes[2].set_title("energy per tree", loc="left", pad=3)
+    for ax in axes:
+        ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis="y", length=0)
+        ax.tick_params(axis="x", labelsize=5.2)
+    axes[0].set_yticks(y, [f"{STYLE[k][0]}, {P_GPU.get(n, n) if k in ('gpuonly', 'cuda') else n}"
+                           for k, n in cases], fontsize=5.6)
+    for i in range(1, len(cases)):
+        if cases[i][0] != cases[i - 1][0]:
+            for ax in axes:
+                ax.axhline(y[i] + 0.5, color=GRID, lw=0.5)
+    h = [plt.Rectangle((0, 0), 1, 1, fc="#999", ec=INK, lw=0.3, label="CART"),
+         plt.Rectangle((0, 0), 1, 1, fc="white", ec="#999", lw=0.3, hatch="//////", label="C4.5"),
+         Line2D([], [], color=INK, lw=0.6, ls=(0, (2, 1)), label="idle power of the server")]
+    fig.legend(handles=h, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.05), fontsize=6)
+    save(fig, "power-triptych")
 
 
 if __name__ == "__main__":
