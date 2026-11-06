@@ -12,9 +12,10 @@ and hopper were busy). It also holds a plan for the paper's energy measurements.
   implementations (SLURM job per node, then the analysis and charts).
 - **`results/BENCHMARK.md`: the results** (ECBDL'14 15M, depth 10, jobs 84–86):
   time, power and energy per tree on ampere, dell4 and epyc1, with charts.
-- **`results-ampere/BENCHMARK.md`: all five implementations on ampere** (job 99,
-  2026-11-05): the same node and sensors for every implementation; one chart
-  per algorithm with energy, power (CPU and GPU parts) and time.
+- **`results-ampere/BENCHMARK.md`: all five implementations on ampere with CPU
+  packages, the GPU in use and the PSU together** (job 136, 2026-11-06; it
+  replaces job 99, which had no PSU). ampere's BMC gives a point reading every
+  ~59 s, so every measured window lasts ≥ 720 s and holds ≥ 12 readings.
 - **`results-epyc/BENCHMARK.md` and `results-dell/BENCHMARK.md`: the three CPU
   implementations with CPU packages (RAPL) and PSU together** (jobs 144 and
   148, 2026-11-06, after the admins opened RAPL to users): Serial-Simple 1×,

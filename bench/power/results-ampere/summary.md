@@ -2,29 +2,18 @@
 
 | Implementation | Node | runs × trees measured | t per tree | mean P | P above idle | peak P | E per tree | E above idle | split of E | 
 |---|---|---|---|---|---|---|---|---|---|
-| Serial-Simple | ampere | 1 × 1 | 4,941 s ± 0.0% | 125 W | 7 W | 153 W | 618 kJ ± 0.0% | 35.6 kJ | CPU socket 0 300 kJ, CPU socket 1 318 kJ |
-| Serial-Opt | ampere | 3 × 1 | 636 s ± 4.0% | 126 W | 9 W | 183 W | 80.4 kJ ± 5.0% | 5.45 kJ | CPU socket 0 40.1 kJ, CPU socket 1 40.3 kJ |
-| Parallel | ampere | 5 × 1st of 2 | 15.4 s ± 0.3% | 307 W | 189 W | 320 W | 4.82 kJ ± 0.2% | 2.97 kJ | CPU socket 0 2.4 kJ, CPU socket 1 2.42 kJ |
-| GPU | ampere | 5 × 1st of 5 | 5.01 s ± 0.3% | 354 W | 182 W | 462 W | 1.8 kJ ± 0.7% | 924 J | CPU socket 0 395 J, CPU socket 1 304 J, GPU 1.1 kJ |
-| Hybrid | ampere | 5 × 1st of 5 | 5.09 s ± 0.3% | 358 W | 186 W | 512 W | 1.94 kJ ± 0.4% | 1.01 kJ | CPU socket 0 497 J, CPU socket 1 325 J, GPU 1.12 kJ |
+| Serial-Simple | ampere | 1 × 1 | 4,931 s ± 0.0% | 480 W | 14 W | 491 W | 2.37 MJ ± 0.0% | 69 kJ | CPU socket 0 305 kJ, CPU socket 1 313 kJ, Rest of the server 1.75 MJ |
+| Serial-Opt | ampere | 1 × 2 | 623 s ± 0.0% | 478 W | 12 W | 487 W | 298 kJ ± 0.0% | 7.55 kJ | CPU socket 0 38 kJ, CPU socket 1 40.6 kJ, Rest of the server 220 kJ |
+| Parallel | ampere | 2 × 47 | 15.4 s ± 0.0% | 700 W | 234 W | 716 W | 11 kJ ± 0.6% | 3.67 kJ | CPU socket 0 2.42 kJ, CPU socket 1 2.44 kJ, Rest of the server 6.13 kJ |
+| GPU | ampere | 2 × 103 | 7.09 s ± 0.1% | 650 W | 184 W | 725 W | 4.67 kJ ± 0.7% | 1.32 kJ | CPU socket 0 498 J, CPU socket 1 408 J, GPU 1.32 kJ, Rest of the server 2.44 kJ |
+| Hybrid | ampere | 2 × 105 | 6.9 s ± 0.1% | 663 W | 197 W | 800 W | 4.8 kJ ± 5.0% | 1.43 kJ | CPU socket 0 585 J, CPU socket 1 415 J, GPU 1.32 kJ, Rest of the server 2.48 kJ |
 
 ### C4.5 (gain ratio), depth ≤ 10, no pruning
 
 | Implementation | Node | runs × trees measured | t per tree | mean P | P above idle | peak P | E per tree | E above idle | split of E | 
 |---|---|---|---|---|---|---|---|---|---|
-| Serial-Simple | ampere | 1 × 1 | 5,656 s ± 0.0% | 125 W | 7 W | 173 W | 706 kJ ± 0.0% | 39.2 kJ | CPU socket 0 366 kJ, CPU socket 1 339 kJ |
-| Serial-Opt | ampere | 3 × 1 | 717 s ± 0.3% | 125 W | 8 W | 157 W | 90 kJ ± 0.2% | 5.43 kJ | CPU socket 0 45.7 kJ, CPU socket 1 44.3 kJ |
-| Parallel | ampere | 5 × 1st of 2 | 27.7 s ± 0.3% | 293 W | 175 W | 320 W | 8.22 kJ ± 0.3% | 4.92 kJ | CPU socket 0 4.11 kJ, CPU socket 1 4.12 kJ |
-| GPU | ampere | 5 × 1st of 5 | 5.06 s ± 0.5% | 352 W | 180 W | 464 W | 1.81 kJ ± 1.5% | 926 J | CPU socket 0 400 J, CPU socket 1 308 J, GPU 1.1 kJ |
-| Hybrid | ampere | 5 × 1st of 5 | 5.12 s ± 0.3% | 358 W | 186 W | 521 W | 1.95 kJ ± 0.6% | 1.01 kJ | CPU socket 0 499 J, CPU socket 1 327 J, GPU 1.13 kJ |
-
-### Later trees in the same process (ampere)
-
-| Implementation | Algorithm | first tree: t, E | later trees: t, E (mean) |
-|---|---|---|---|
-| Parallel | CART | 15.4 s, 4.82 kJ | 15.4 s, 4.83 kJ |
-| Parallel | C4.5 | 27.7 s, 8.22 kJ | 27.9 s, 8.29 kJ |
-| GPU | CART | 5.01 s, 1.8 kJ | 7.13 s, 2.2 kJ |
-| GPU | C4.5 | 5.06 s, 1.81 kJ | 7.17 s, 2.22 kJ |
-| Hybrid | CART | 5.09 s, 1.94 kJ | 6.92 s, 2.28 kJ |
-| Hybrid | C4.5 | 5.12 s, 1.95 kJ | 6.95 s, 2.29 kJ |
+| Serial-Simple | ampere | 1 × 1 | 5,706 s ± 0.0% | 481 W | 15 W | 486 W | 2.75 MJ ± 0.0% | 85.1 kJ | CPU socket 0 370 kJ, CPU socket 1 343 kJ, Rest of the server 2.03 MJ |
+| Serial-Opt | ampere | 1 × 2 | 720 s ± 0.0% | 481 W | 15 W | 510 W | 347 kJ ± 0.0% | 10.7 kJ | CPU socket 0 43.8 kJ, CPU socket 1 46.9 kJ, Rest of the server 256 kJ |
+| Parallel | ampere | 2 × 26 | 28 s ± 0.1% | 692 W | 225 W | 731 W | 19.6 kJ ± 0.0% | 6.38 kJ | CPU socket 0 4.18 kJ, CPU socket 1 4.18 kJ, Rest of the server 11.2 kJ |
+| GPU | ampere | 2 × 102 | 7.12 s ± 0.1% | 638 W | 171 W | 718 W | 4.6 kJ ± 0.2% | 1.24 kJ | CPU socket 0 500 J, CPU socket 1 411 J, GPU 1.33 kJ, Rest of the server 2.36 kJ |
+| Hybrid | ampere | 2 × 105 | 6.93 s ± 0.3% | 649 W | 183 W | 790 W | 4.72 kJ ± 5.8% | 1.33 kJ | CPU socket 0 585 J, CPU socket 1 417 J, GPU 1.33 kJ, Rest of the server 2.39 kJ |

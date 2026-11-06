@@ -151,7 +151,9 @@ class Job:
     def read_powercap(self):
         """RAPL package energy per socket from the sampled powercap counters:
         {socket: [(read time, joules since the previous sample, seconds)]}, the
-        format of read_rapl. A counter wraps at its max_energy_range_uj."""
+        format of read_rapl. A counter wraps at its max_energy_range_uj.
+        pwrlog.py reads powercap right after `t`, before NVML (whose calls can
+        block for ~2 s), so these counters are timed with `t`, not t_end."""
         ranges = dict(re.findall(r"^rapl_max (\S+) \S+ (\d+)", self.machine, re.M))
         out = {}
         for col in self.samples:
@@ -159,7 +161,7 @@ class Job:
             if not m:
                 continue
             wrap = int(ranges.get(m.group(1), 2 ** 32))
-            uj, t = self.samples[col], self.t_read
+            uj, t = self.samples[col], self.t
             series = []
             for i in range(1, len(uj)):
                 d = uj[i] - uj[i - 1]

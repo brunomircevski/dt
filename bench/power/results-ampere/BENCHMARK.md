@@ -1,294 +1,167 @@
-# Power and energy of the five implementations, all on ampere
+# Power and energy of the five implementations on ampere
 
 This experiment measures the time and energy that ./tree's five implementations
 need to train one tree on ECBDL'14 15M (15 M rows, 631 features). Settings:
-depth ≤ 10, no pruning, CART (gini) and C4.5 (gain ratio). All five ran on **one
-node**, ampere, in one SLURM job (job 99, 2026-11-05, 09:20–14:23). ampere is the
-only mordor3 node where a user can read both CPU power (RAPL) and GPU power
-(NVML), so here every implementation is measured with the same sensors and the
-same idle reading. The first round
-([../results/BENCHMARK.md](../results/BENCHMARK.md)) ran the CPU
-implementations on dell4 and epyc1 instead, where only the PSU is readable.
+depth ≤ 10, no pruning, CART (gini) and C4.5 (gain ratio). All five ran in one
+SLURM job on ampere (job 136, 2026-11-06, 11:12–18:41).
 
-The user allowed this one job as an exception to the rule "no CPU benchmarks on
-ampere" (2026-11-05).
+Since 2026-11-06 a user can read ampere's CPU packages (RAPL) and its PSU
+([../ADMIN-REQUEST.md](../ADMIN-REQUEST.md)), and NVML gives the GPU. So every
+implementation is measured three ways at once: CPU packages, the GPU it used,
+and the whole server. This replaces the first ampere round (job 99,
+2026-11-05), which had no PSU reading and counted the GPU's first tree only;
+its files are in the git history before commit 0ff754a.
 
-| Implementation | Option | Resources | What is measured |
+| Implementation | Option | Resources | Runs × trees measured |
 |---|---|---|---|
-| Serial-Simple | `--simple` | 1 core | both CPU packages |
-| Serial-Opt | `--serial` | 1 core | both CPU packages |
-| Parallel ("Multicore" in the paper) | `--parallel` | all 48 cores (`-c 48`) | both CPU packages |
-| GPU | `--cuda --gpu-only` | the GPU (A100 80 GB) + the 24 cores of its NUMA node | both CPU packages + the GPU |
-| Hybrid | `--cuda` | same | both CPU packages + the GPU |
+| Serial-Simple | `--simple` | 1 core | 1 × 1 |
+| Serial-Opt | `--serial` | 1 core | 1 × 2 (two trees in one process) |
+| Parallel ("Multicore" in the paper) | `--parallel` | all 48 cores | 2 × 47 (CART), 2 × 26 (C4.5) |
+| GPU | `--cuda --gpu-only` | one A100 80 GB (GPU 0) + the 24 cores of its NUMA node (CPUs 0–23, memory node 0) | 2 × 103 (CART), 2 × 102 (C4.5) |
+| Hybrid | `--cuda` | same | 2 × 105 |
 
-Code: a clone of GitHub main at f941d7d9 (`src/` as on main that day), built on
-ampere on 2026-11-05 with `bench/cluster/build.sh`. Every run built the same
-tree: CART 1,863 nodes, C4.5 725 nodes, depth 10.
+Code: main at ebbea71, built on ampere on 2026-11-06 for sm_80 and sm_90
+(`~/dt/tree`, `~/dt/tree_cpu`). Every run built the same tree: CART 1,863
+nodes, C4.5 725 nodes, depth 10.
 
 ## What was measured
 
-| Node | Hardware | Sensors | Readout |
+| Sensor | What it covers | Readout | Refresh |
 |---|---|---|---|
-| ampere | Supermicro AS-4124GS-TNR, 2× EPYC 7402 (Zen 2, 24 cores each), A100 80 GB, 1 TB RAM | both CPU packages (RAPL `power/energy-pkg/` via `perf stat`) + the GPU the run used (NVML energy counter) | 0.1 s |
+| BMC PSU reading (`/run/power/psu_W`, the admins' IPMI DCMI poller) | whole server, PSU input | 0.1 s | **a point reading every ~59 s** |
+| RAPL `package-0`, `package-1` (powercap `energy_uj`) | each CPU socket, including the I/O die | 0.1 s | ~1 ms (hardware) |
+| NVML energy counter of GPU 0 | the GPU the run used; GPU and Hybrid runs only | 0.1 s | ~100 ms |
 
-- **CPU implementations:** the two CPU packages only. No GPU is counted, because
-  these runs do not use one.
-- **GPU and Hybrid:** the two CPU packages plus the GPU they ran on.
-- **Not measured:** RAM, fans, the board, disks and PSU losses, because ampere
-  has no PSU meter a user can read. On AMD, the package includes the I/O die,
-  which explains most of the 59 W idle per socket.
+"Rest of the server" in the charts = PSU − both CPU packages − the GPU counted:
+memory, fans, disks, network, the board, PSU losses and **the three other A100s,
+which stay idle** (141 W together). AMD has no DRAM sensor, so memory is not
+separated.
 
-CPU frequency governor: `acpi-cpufreq ondemand`, as the admins left it. Idle
-power (two 60 s windows, at the start and the end of the job): **CPU packages
-118 W** (59 + 59 W) and **GPU 54.5 W**. So the idle baseline is 118 W for the
-CPU implementations and 172 W for GPU and Hybrid.
+Supermicro AS-4124GS-TNR, 2× EPYC 7402 (Zen 2, 24 cores each), 4× A100 (two
+80 GB, two 40 GB), 1 TB RAM. CPU frequency governor: `acpi-cpufreq ondemand`.
+Idle power (mean of three windows: 900 s at the start, 900 s after the step
+load, 900 s at the end): **PSU 466 W**, CPU packages 118 W (59 + 59 W), GPU 0
+53 W.
+
+## How the slow PSU meter is handled
+
+ampere's BMC gives a point reading about once a minute, not an average, so a
+short run cannot be measured from it. The protocol makes every measured window
+long enough for **at least 10 readings**:
+
+- Parallel, GPU and Hybrid train K = ceil(720 s / t) + 1 trees in one process,
+  so trees 2..K last at least 720 s. Serial-Opt trains two trees (1,250 s and
+  1,440 s in all); Serial-Simple's one tree lasts 82–95 min.
+- The PSU energy of a window is the mean of the readings inside it × the
+  window's length. The readings are found as the times the value changes, so
+  a reading equal to the previous one is lost; on ampere this barely matters,
+  because the value moves by a few watts every time.
+- Every measured window has **at least 12 readings** (Parallel 12–13, GPU 12,
+  Hybrid 13, Serial-Opt 21–24, Serial-Simple 84–97).
+- No lag correction: a point reading has no averaging delay.
+
+The CPU packages and the GPU are counters, so they are exact over any window.
 
 ## Protocol
 
-[../power_bench.sh](../power_bench.sh) `all` with `TARGET=30 REPS=5
-REPS_BY="simple=1 serial=3"`. [../pwrlog.py](../pwrlog.py) samples NVML every
-0.1 s for the whole job, and `perf stat -I 100` does the same for RAPL.
+[../power_bench.sh](../power_bench.sh) `all` with `TARGET=720 IDLE=900
+STEP=600 REPS=2 REPS_BY="simple=1 serial=1" REPEAT_BY="serial=2"`.
+[../pwrlog.py](../pwrlog.py) samples every sensor every 0.1 s for the whole job.
 
-1. **Warm-up.** Parallel, GPU and Hybrid each train two trees per algorithm. The
-   second tree's time sets K, the number of trees per process, so that a
-   process trains for at least 30 s: K = 2 for Parallel and K = 5 for GPU and
-   Hybrid.
-2. **Idle.** 60 s at the start and 60 s at the end. The idle power is their
-   mean.
-3. **Runs.** Round-robin rounds over algorithm × implementation, with 20 s of
-   idle before each process. Serial-Simple ran once (82 min CART, 94 min
-   C4.5), Serial-Opt 3 times, and Parallel, GPU and Hybrid 5 times each.
-4. **Which tree counts.** Only the **first** tree of each process: that is the
-   tree the time benchmarks time. On the GPU, later trees in the same process
-   are slower (about 7 s instead of 5 s), because `gpu setup` uploads the data
-   again. They are listed separately below.
-5. **Integration** ([../analyze.py](../analyze.py)) over each tree's printed
-   window: the GPU's NVML energy counter is interpolated at the window's edges;
-   RAPL joules are weighted by how much of each `perf` interval falls inside the
-   window. The peak is the highest 0.1 s sample inside the window.
+1. **Warm-up.** Parallel, GPU and Hybrid train two trees per algorithm. The
+   second tree's time sets K: Parallel 48 (CART) and 27 (C4.5), GPU 104 and
+   103, Hybrid 106.
+2. **Idle, step, idle.** 900 s idle, 600 s with every core busy, 900 s idle.
+3. **Runs.** Round-robin over algorithm × implementation, 20 s of idle before
+   each process. Serial-Simple and Serial-Opt ran once, Parallel, GPU and
+   Hybrid twice.
+4. **Idle.** 900 s at the end.
 
-The spread between runs is 0.3–0.5% for time and 0.2–1.5% for energy on the fast
-implementations. For Serial-Opt CART it is 4% (617–665 s).
-
-### A sampler bug found and fixed in this run
-
-NVML calls sometimes block for about 2 s. On ampere this happens every time a
-GPU tree ends. pwrlog.py took the timestamp **before** its reads, so the
-counter of the sample taken right after a GPU tree was read about 2 s later
-than its timestamp. Every GPU window ends just before such a sample, so each
-GPU and Hybrid tree got about 2 s of extra GPU energy: the GPU's energy for a
-CART tree read 1.24 kJ instead of 1.10 kJ (+13%). The fix:
-
-- `analyze.py` now times the counters with a corrected read time: a sample
-  followed by a gap of more than 0.3 s was read just before the next sample.
-- `pwrlog.py` now also writes `t_end`, the time after the reads, which
-  analyze.py uses when it is there.
-
-With the fix, the energy spread between runs fell from 1.4–4.1% to 0.2–1.5%. The
-first round on ampere had the same error. It is reanalysed with the fix and
-corrected in [../results/BENCHMARK.md](../results/BENCHMARK.md). Both rounds now
-agree within 1% (GPU CART 1.81 kJ there, 1.80 kJ here). The dell and epyc PSU
-numbers did not change.
+Every number is per tree. For Parallel, GPU and Hybrid it is trees 2..K of each
+process (the first tree is left out); for Serial-Opt both trees of the process.
 
 ## Results
 
-`± x%` is the standard deviation over the runs, as a percentage of the mean.
-"Above idle" subtracts the idle power of the measured components over the same
-window. The full tables are in [summary.md](summary.md) and
-[summary.csv](summary.csv), and every run is in [runs.csv](runs.csv).
-
 ### CART (gini)
 
-| Implementation | Runs | Time per tree | Mean power | Above idle | Peak | Energy per tree | Energy above idle |
-|---|---|---|---|---|---|---|---|
-| Serial-Simple | 1 | 4,941 s | 125 W | 7 W | 153 W | 618 kJ | 35.6 kJ |
-| Serial-Opt | 3 | 636 s ± 4.0% | 126 W | 9 W | 183 W | 80.4 kJ ± 5.0% | 5.45 kJ |
-| Parallel | 5 | 15.4 s ± 0.3% | 307 W | 189 W | 320 W | 4.82 kJ ± 0.2% | 2.97 kJ |
-| GPU | 5 | 5.01 s ± 0.3% | 354 W | 182 W | 462 W | 1.80 kJ ± 0.7% | 924 J |
-| Hybrid | 5 | 5.09 s ± 0.3% | 358 W | 186 W | 512 W | 1.94 kJ ± 0.4% | 1.01 kJ |
+| Implementation | t per tree | PSU power (above idle) | CPU packages | GPU | PSU energy per tree | above idle | CPU packages | GPU | rest of the server |
+|---|---|---|---|---|---|---|---|---|---|
+| Serial-Simple | 4,931 s | 480 W (+14) | 125 W | – | 2.37 MJ | 69.0 kJ | 618 kJ | – | 1.75 MJ |
+| Serial-Opt | 623 s | 478 W (+12) | 126 W | – | 298 kJ | 7.55 kJ | 78.6 kJ | – | 220 kJ |
+| Parallel | 15.4 s ± 0.0% | 700 W (+234) | 310 W | – | 11.0 kJ ± 0.6% | 3.67 kJ | 4.86 kJ | – | 6.13 kJ |
+| GPU | 7.09 s ± 0.1% | 650 W (+184) | 126 W | 184 W | 4.67 kJ ± 0.7% | 1.32 kJ | 907 J | 1.32 kJ | 2.44 kJ |
+| Hybrid | 6.90 s ± 0.1% | 663 W (+197) | 138 W | 182 W | 4.80 kJ ± 5.0% | 1.43 kJ | 1.00 kJ | 1.32 kJ | 2.48 kJ |
 
 ### C4.5 (gain ratio)
 
-| Implementation | Runs | Time per tree | Mean power | Above idle | Peak | Energy per tree | Energy above idle |
-|---|---|---|---|---|---|---|---|
-| Serial-Simple | 1 | 5,656 s | 125 W | 7 W | 173 W | 706 kJ | 39.2 kJ |
-| Serial-Opt | 3 | 717 s ± 0.3% | 125 W | 8 W | 157 W | 90.0 kJ ± 0.2% | 5.43 kJ |
-| Parallel | 5 | 27.7 s ± 0.3% | 293 W | 175 W | 320 W | 8.22 kJ ± 0.3% | 4.92 kJ |
-| GPU | 5 | 5.06 s ± 0.5% | 352 W | 180 W | 464 W | 1.81 kJ ± 1.5% | 926 J |
-| Hybrid | 5 | 5.12 s ± 0.3% | 358 W | 186 W | 521 W | 1.95 kJ ± 0.6% | 1.01 kJ |
+| Implementation | t per tree | PSU power (above idle) | CPU packages | GPU | PSU energy per tree | above idle | CPU packages | GPU | rest of the server |
+|---|---|---|---|---|---|---|---|---|---|
+| Serial-Simple | 5,706 s | 481 W (+15) | 125 W | – | 2.75 MJ | 85.1 kJ | 713 kJ | – | 2.03 MJ |
+| Serial-Opt | 720 s | 481 W (+15) | 126 W | – | 347 kJ | 10.7 kJ | 90.6 kJ | – | 256 kJ |
+| Parallel | 28.0 s ± 0.1% | 692 W (+225) | 295 W | – | 19.6 kJ ± 0.0% | 6.38 kJ | 8.36 kJ | – | 11.2 kJ |
+| GPU | 7.12 s ± 0.1% | 638 W (+171) | 126 W | 184 W | 4.60 kJ ± 0.2% | 1.24 kJ | 911 J | 1.33 kJ | 2.36 kJ |
+| Hybrid | 6.93 s ± 0.3% | 649 W (+183) | 138 W | 183 W | 4.72 kJ ± 5.8% | 1.33 kJ | 1.00 kJ | 1.33 kJ | 2.39 kJ |
 
-### CPU and GPU parts of the GPU runs (per tree)
-
-| Implementation | Algorithm | CPU packages: mean power | CPU energy (above idle) | GPU: mean power | GPU energy (above idle) |
-|---|---|---|---|---|---|
-| GPU | CART | 138 W | 699 J (101 J) | 217 W | 1.10 kJ (823 J) |
-| Hybrid | CART | 152 W | 822 J (183 J) | 206 W | 1.12 kJ (823 J) |
-| GPU | C4.5 | 138 W | 708 J (102 J) | 215 W | 1.11 kJ (824 J) |
-| Hybrid | C4.5 | 152 W | 826 J (184 J) | 207 W | 1.13 kJ (829 J) |
-
-### Later trees in the same process
-
-| Implementation | Algorithm | First tree | Later trees (mean) |
-|---|---|---|---|
-| Parallel | CART | 15.4 s, 4.82 kJ | 15.4 s, 4.83 kJ |
-| Parallel | C4.5 | 27.7 s, 8.22 kJ | 27.9 s, 8.29 kJ |
-| GPU | CART | 5.01 s, 1.80 kJ | 7.13 s, 2.20 kJ |
-| GPU | C4.5 | 5.06 s, 1.81 kJ | 7.17 s, 2.22 kJ |
-| Hybrid | CART | 5.09 s, 1.94 kJ | 6.92 s, 2.28 kJ |
-| Hybrid | C4.5 | 5.12 s, 1.95 kJ | 6.95 s, 2.29 kJ |
+± is one standard deviation over the runs (none for the single serial runs).
+Full tables, with peaks and both sockets: [summary.md](summary.md),
+[summary.csv](summary.csv), every run in [runs.csv](runs.csv).
 
 ## Charts
 
-### Energy, power and time in one chart — [CART](chart-cpu-gpu-ampere-cart.png), [C4.5](chart-cpu-gpu-ampere-c45.png)
+- **Energy, power and time in one chart:** [CART](chart-cpu-gpu-ampere-cart.png),
+  [C4.5](chart-cpu-gpu-ampere-c45.png). Per implementation: energy per tree (CPU
+  packages, GPU, PSU), mean power (CPU packages, GPU, PSU) and time, one bar
+  each, on log axes. The light part of a bar ends at the idle value (power: the
+  node's idle power, the same for every run; energy: idle power × time).
+- [chart-power.png](chart-power.png): mean power, stacked socket 0, socket 1,
+  GPU, rest of the server.
+- [chart-energy.png](chart-energy.png), [chart-energy-split.png](chart-energy-split.png):
+  energy per tree, and the share of each component.
+- [chart-time.png](chart-time.png), [chart-time-energy.png](chart-time-energy.png):
+  time per tree, and time against energy.
+- [chart-traces.png](chart-traces.png): power over time of each case's first run.
 
-![CART: energy, power, time](chart-cpu-gpu-ampere-cart.png)
+![C4.5](chart-cpu-gpu-ampere-c45.png)
 
-![C4.5: energy, power, time](chart-cpu-gpu-ampere-c45.png)
+## Findings
 
-The summary charts, one per algorithm. Each implementation has three bars,
-labelled under the axis, and all three axes are log scale:
-
-- **energy** (left bar, left axis): energy per tree in J;
-- **power** (middle bar, first right axis): mean power while training in W.
-  The dotted line is the peak, the highest 0.1 s sample;
-- **time** (right bar, outer right axis): time per tree in s.
-
-The energy and power bars are stacked in the same order, from the bottom:
-1. CPU packages, idle part;
-2. GPU, idle part;
-3. CPU packages, above idle;
-4. GPU, above idle.
-
-The CPU implementations have no GPU parts. On a log axis, a plain stack would
-squash the upper parts, so each part's height is drawn as its share of the bar.
-The labels give the totals: energy and energy above idle; mean power, its CPU
-and GPU parts, and the peak.
-
-What it shows:
-- **The CPU on GPU runs:** the CPU packages draw 138 W with GPU-only (20 W above
-  idle) and 152 W with Hybrid (34 W above idle), against 293–307 W with
-  Parallel. The GPU draws 206–217 W, up from 54.5 W idle.
-- **Serial runs** add only 7–9 W to the CPU packages' 118 W idle draw: their
-  energy is mostly idle power × time.
-
-### Mean power while training — [chart-power.png](chart-power.png)
-
-![Mean power](chart-power.png)
-
-Mean power per component on a linear axis, each component's idle part lighter,
-the peak dotted. It shows the same numbers as the tables, with the two CPU
-sockets apart: Parallel loads both sockets equally (about 150 W each). On GPU
-and Hybrid, only socket 0 (the GPU's NUMA node) rises, to 78 W and 92 W.
-
-### Energy per tree — [chart-energy.png](chart-energy.png)
-
-![Energy per tree](chart-energy.png)
-
-Total energy (outer bar, ± sd) on a log scale, with the part above idle as the
-inner bar. Each step saves energy (CART / C4.5):
-- Serial-Simple → Serial-Opt: 7.7× / 7.8× less.
-- Serial-Opt → Parallel: 17× / 11× less.
-- Parallel → GPU: 2.7× / 4.5× less.
-- Overall, GPU trains a tree with 343× / 389× less energy than Serial-Simple.
-
-### Where the energy goes — [chart-energy-split.png](chart-energy-split.png)
-
-![Energy split](chart-energy-split.png)
-
-Each component's share of each run's energy, with the idle and above-idle
-parts shown separately. On GPU runs, the CPU packages take 39% (GPU-only) and
-42% (Hybrid) of the energy, most of it their idle draw.
-
-### Training time — [chart-time.png](chart-time.png)
-
-![Training time](chart-time.png)
-
-Time per tree on a log scale. Speed-ups on ampere (CART / C4.5):
-Serial-Simple → Serial-Opt 7.8× / 7.9×, Serial-Opt → Parallel 41× / 26×,
-Parallel → GPU 3.1× / 5.5×.
-
-### Time against energy — [chart-time-energy.png](chart-time-energy.png)
-
-![Time vs energy](chart-time-energy.png)
-
-Each case as a point on linear axes, with the fast implementations zoomed in
-the inset. Grey lines are constant mean power. The serial runs sit at 125 W,
-Parallel at about 300 W and GPU and Hybrid at about 355 W. Energy is almost
-proportional to time.
-
-### Power over time — [chart-traces.png](chart-traces.png)
-
-![Power traces](chart-traces.png)
-
-The first run of each case, from process start to end, with the measured tree
-shaded. The GPU line appears only on GPU and Hybrid runs. It shows the CSV load
-(both sockets at about 70 W), Parallel holding both sockets at 150–160 W, and
-the GPU's bursts of up to about 330 W with CPU socket 0 following it.
-
-## Conclusions
-
-1. **Faster always used less energy.** Every speed-up lowered the energy per
-   tree, from 706 kJ (Serial-Simple C4.5) to 1.81 kJ (GPU C4.5). Mean power only
-   rises from 125 W (serial) to 300 W (Parallel) and 355 W (GPU), while time
-   falls by up to 1,100×, so time decides the energy.
-2. **Serial runs pay mostly for idle.** One busy Zen 2 core adds 7–9 W to the
-   118 W the CPU packages draw idle.
-3. **GPU vs Parallel on one node.** The GPU is 3.1× (CART) and 5.5× (C4.5)
-   faster than Parallel on ampere's 48 Zen 2 cores, at 15–20% more power (CPU
-   packages + GPU against CPU packages alone). So it uses 2.7× / 4.5× less
-   energy, and 3.2× / 5.3× less above idle.
-4. **Hybrid costs 8% more energy than GPU-only.** Hybrid's CPU work raises the
-   CPU packages from 138 to 152 W, about 120 J more per tree, and it does not
-   make the tree faster at this size (5.09 s against 5.01 s).
-5. **The CPU is a large part of a GPU run.** The CPU packages take 39–42% of a
-   GPU tree's energy, mostly their idle draw.
-6. **ampere's CPUs are older.** ampere's 2019 Zen 2 CPUs are slower than the
-   CPU nodes of the first round, so its CPU numbers here are not the best CPU
-   result. The same tree takes:
-   - Parallel CART: 15.4 s, against 6.3 s on epyc1 and 12.2 s on dell4;
-   - Serial-Opt CART: 636 s, against 225 s and 356 s;
-   - Serial-Simple CART: 4,941 s, against 2,309 s and 2,556 s.
-
-## Limitations
-
-- **CPU packages and the GPU only.** No RAM, fans, board, disks or PSU losses:
-  the wall-plug energy is higher, and the missing part grows with time. So the
-  serial implementations are flattered the most, being the slowest. The admin
-  request ([../ADMIN-REQUEST.md](../ADMIN-REQUEST.md)) would add the IPMI PSU
-  reading.
-- **Different scopes.** The CPU implementations count no GPU, while GPU and
-  Hybrid count their GPU's 54.5 W of idle draw too. This adds about 0.28 kJ to
-  a GPU tree.
-- **Serial-Simple ran once** (82 + 94 min), so it has no spread.
-- **One dataset, depth 10, one node.** The GPU numbers are for the A100 80 GB.
-  Hopper's H100 was not measured, because its node has no readable CPU power.
-- **Governor `ondemand`.** It was left as the admins set it.
+- **GPU needs the least energy per tree:** 4.60–4.67 kJ at the PSU, 2.4× (CART)
+  and 4.3× (C4.5) less than Parallel, 64–75× less than Serial-Opt and 510–600×
+  less than Serial-Simple.
+- **Hybrid is 3% faster than GPU and uses about 3% more energy,** but the PSU
+  numbers of its two runs differ by 7% (CART 4.63 and 4.97 kJ), while their CPU
+  packages agree within 0.5%. The difference is in the rest of the server (fans
+  or the meter's point readings); two runs cannot tell which.
+- **The idle server dominates.** Idle is 466 W, so a serial run adds only
+  12–15 W (3%) to it, and even a GPU run only 171–184 W. In a GPU tree the GPU is
+  28% of the PSU energy, the CPU packages 19% and the rest of the server 52%;
+  the three idle A100s alone are about 1.0 kJ (21%).
+- **ampere is the weaker GPU host:** a GPU tree takes 7.1 s and 4.67 kJ here,
+  against 3.6 s and 2.64 kJ on hopper's H100
+  ([../results-hopper/BENCHMARK.md](../results-hopper/BENCHMARK.md)). Parallel
+  CART needs 11.0 kJ here, about as much as on hopper (11.2 kJ), against
+  8.55 kJ on dell4 and 3.88 kJ on epyc1.
+- **Agrees with job 99** on the parts that both measured: GPU CART later trees
+  2.20 kJ (CPU packages + GPU) there and 2.23 kJ here; Parallel CART CPU
+  packages 4.82 and 4.86 kJ.
 
 ## Reproduce
 
-From the repository root on the mordor3 login node (`./tree` built on ampere
-with `bench/cluster/build.sh`; data `bench/data/ecbdl_15m/train.csv`):
+On mordor3, from `~/dt`:
 
 ```bash
-mkdir -p bench/results/power-ampere/ampere
-sbatch -p ampere -w ampere --exclusive -c 48 -t 9:00:00 -J pwr-all \
-  --export=ALL,TARGET=30,REPS=5,REPS_BY="simple=1 serial=3" \
-  -o bench/results/power-ampere/ampere/job.log bench/power/power_bench.sh all bench/results/power-ampere/ampere
+sbatch -p ampere -w ampere --exclusive -c 48 -t 12:00:00 -J pwr-psu-ampere \
+  --export=ALL,TARGET=720,IDLE=900,STEP=600,REPS=2,REPS_BY="simple=1 serial=1",REPEAT_BY="serial=2" \
+  -o bench/results/power-psu-ampere/ampere/job.log bench/power/power_bench.sh all bench/results/power-psu-ampere/ampere
 ```
 
-`-c 48` matters: without it, `--exclusive` still gives the job 1 CPU, and
-Parallel would run on one core. The analysis runs on a compute node:
+Then, on the PC, after copying the job folder:
 
 ```bash
-srun -p epyc -w epyc2 -c 4 -t 0:20:00 bench/.venv/bin/python bench/power/analyze.py bench/results/power-ampere
+bench/.venv/bin/python bench/power/analyze.py bench/power/results-ampere
 ```
 
-`ampere/` holds:
-- `machine.txt`: node, commit and `cpus available 48`;
-- `markers.txt`: every phase as Unix times;
-- `samples.csv.gz`: NVML and CPU-busy samples every 0.1 s;
-- `perf_rapl.csv.gz`: `perf stat` energy per socket every 0.1 s;
-- `out/`: ./tree's output, with each tree's training window.
-
-`job.log` is empty. analyze.py counts only the GPU the run used (GPU 0, as
-`power_bench.sh` assigns it), and only for GPU and Hybrid.
+The raw files are in [ampere/](ampere/): `markers.txt`, `machine.txt`,
+`samples.csv.gz` (pwrlog.py, which also has the RAPL counters),
+`perf_rapl.csv.gz` (`perf stat` RAPL, logged too but not used) and `out/`
+(./tree's output per process). `job.log` is empty.
