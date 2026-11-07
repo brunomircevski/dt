@@ -6,7 +6,7 @@ depth ≤ 10, no pruning, CART (gini) and C4.5 (gain ratio). All five ran in one
 SLURM job on ampere (job 136, 2026-11-06, 11:12–18:41).
 
 Since 2026-11-06 a user can read ampere's CPU packages (RAPL) and its PSU
-([../ADMIN-REQUEST.md](../ADMIN-REQUEST.md)), and NVML gives the GPU. So every
+(set up by the cluster's admins), and NVML gives the GPU. So every
 implementation is measured three ways at once: CPU packages, the GPU it used,
 and the whole server. This replaces the first ampere round (job 99,
 2026-11-05), which had no PSU reading and counted the GPU's first tree only;

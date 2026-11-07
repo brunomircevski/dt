@@ -234,8 +234,8 @@ def build_command(case, kind, args, scratch, rep=0):
                                                        stdout).group(1)) / 1000,
                       # The phases of the training time (gpu setup: CUDA only).
                       **{f"{name.replace(' ', '_')}_seconds": float(ms) / 1000
-                         for name, ms in re.findall(r"^  (gpu setup|presort|build|"
-                                                    r"cross-validation|prune)\s+([\d.]+) ms$",
+                         for name, ms in re.findall(r"^  (gpu setup|presort|build|prune)"
+                                                    r"\s+([\d.]+) ms$",
                                                     stdout, re.M)},
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features),

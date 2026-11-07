@@ -251,8 +251,9 @@ node's CPU utilisation.
 ## Limitations
 
 - **ampere does not see the whole server.** There is no readable PSU sensor, so
-  RAM, fans, the board and PSU losses are missing. With the admin setup in
-  [../ADMIN-REQUEST.md](../ADMIN-REQUEST.md), the IPMI reading would add them.
+  RAM, fans, the board and PSU losses are missing. The admins have since
+  published the IPMI reading: [../results-ampere/BENCHMARK.md](../results-ampere/BENCHMARK.md)
+  includes the PSU.
 - **No component split on dell and epyc.** These nodes give no CPU or RAM split
   until RAPL becomes readable (also covered by the admin request).
 - **One dataset, depth 10.** Only ECBDL'14 15M was run, at depth 10.

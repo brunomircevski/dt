@@ -6,7 +6,7 @@ depth ≤ 10, no pruning, CART (gini) and C4.5 (gain ratio). All five ran in one
 SLURM job on hopper (job 137, 2026-11-06, 12:48–15:55).
 
 Since 2026-11-06 a user can read hopper's CPU packages (RAPL) and its PSU
-([../ADMIN-REQUEST.md](../ADMIN-REQUEST.md)), and NVML gives the GPU. So every
+(set up by the cluster's admins), and NVML gives the GPU. So every
 implementation is measured three ways at once: CPU packages, the GPU it used,
 and the whole server.
 

@@ -1,7 +1,9 @@
 # Growing a tree on the GPU
 
-File: `src/build/gpu_grower.cu` (the CPU side it hands work to is
-`src/build/cpu_builder.cpp`).
+Files: `src/build/gpu_grower.cu` (the grower: setup, levels, hand-offs),
+`src/build/gpu_kernels.cuh` (the kernels), `src/build/gpu_host.cuh` (device
+arrays, pinned staging, CPU pinning); the CPU side it hands work to is
+`src/build/cpu_builder.cpp`.
 
 Read [CPU.md](CPU.md) first: the GPU runs the same algorithm — presorted
 columns, one sweep per feature, stable partition — but organised so that
@@ -47,11 +49,11 @@ copies ping-ponged instead (and a third mirrored the host arena, see Memory).
    other socket ran at 21 GB/s up and 16 GB/s down instead of 25 and 24, and
    the upload went from 0.5 to 0.3 s. The staging buffers are allocated while
    the CSV loads. All device buffers are allocated once per run.
-2. Per grown tree: build `(value, packed row/class)` pairs of the selected
+2. Build `(value, packed row/class)` pairs of all
    rows and sort each feature with CUB's radix sort (stable, like the CPU's).
    The root's class counts come from a kernel in the same stream (a shared
    histogram per block), not from a pass over the labels on the host.
-   For a single tree (no cross-validation) each feature is presorted as soon
+   Each feature is presorted as soon
    as its raw values are uploaded: the copies run on a copy stream, and the
    presort waits only for the staging event of the chunk that completes the
    feature, so the upload and the presort overlap (ECBDL 0.5-0.6 s less on the
@@ -62,10 +64,6 @@ copies ping-ponged instead (and a third mirrored the host arena, see Memory).
    memory) and copies only those to the host for the thresholds, instead of
    all sorted values (as big as the columns), and the presort went from
    0.54 to 0.09 s on the H100 node.
-
-With cross-validation (CART `--cv K`) the raw values stay on the device in
-their own buffer, so each fold tree only uploads its row list and
-sorts on the device; nothing is reallocated or re-pinned between folds.
 
 The CUDA context itself is created on a background thread while the CSV is
 being parsed (`gpuPrepare`).
@@ -236,8 +234,7 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
 
 Device: one copy of the columns in `features + 1` slots (`8 × rows ×
 (features + 1)` bytes, 0.76 GB for 5M × 18), a 512 MB ring for the hand-offs to
-the CPU, with cross-validation also the raw values (`4 × rows × features`),
-with C4.5 pruning a copy of the raw values if it fits (for `arrangeRows`),
+the CPU, with C4.5 pruning a copy of the raw values if it fits (for `arrangeRows`),
 plus small per-level arrays (the largest: 3a's candidates, 8 × (16 + 4·K)
 bytes per tile with K the class count rounded up to 2, 4 or 8, e.g. 28 MB at
 HIGGS's root level). The builder checks free memory first and

@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -21,60 +20,6 @@ namespace {
 
 constexpr double kEpsilon = 1e-3; // C4.5's Epsilon (defns.i)
 constexpr std::uint32_t kNoOwner = std::numeric_limits<std::uint32_t>::max();
-
-// --profile: the work of subtree raising by the size of its row slice (log2
-// of the rows): calls, rows and thread-seconds, written as the table
-// "prune_slices" (kind 0: errorsWithExtraRows, 1: arrange after raising).
-class SliceHistogram {
-public:
-  static constexpr int kBuckets = 33;
-
-  // Times its scope when profiling, for `rows` rows.
-  class Scope {
-  public:
-    Scope(SliceHistogram &histogram, std::size_t rows)
-        : histogram_(trace::on() ? &histogram : nullptr), rows_(rows),
-          start_(histogram_ ? trace::now() : 0.0) {}
-    ~Scope() {
-      if (histogram_) {
-        histogram_->add(rows_, trace::now() - start_);
-      }
-    }
-    Scope(const Scope &) = delete;
-    Scope &operator=(const Scope &) = delete;
-
-  private:
-    SliceHistogram *histogram_;
-    std::size_t rows_;
-    double start_;
-  };
-
-  void add(std::size_t rows, double seconds) {
-    const int bucket = rows == 0 ? 0 : std::bit_width(rows) - 1;
-    calls_[bucket].fetch_add(1, std::memory_order_relaxed);
-    rows_[bucket].fetch_add(rows, std::memory_order_relaxed);
-    nanos_[bucket].fetch_add(static_cast<std::uint64_t>(seconds * 1e9), std::memory_order_relaxed);
-  }
-
-  void report(int kind) const {
-    for (int bucket = 0; bucket < kBuckets; ++bucket) {
-      const std::uint64_t calls = calls_[bucket].load(std::memory_order_relaxed);
-      if (calls > 0) {
-        trace::row("prune_slices",
-                   {{"kind", kind},
-                    {"log2_rows", bucket},
-                    {"calls", static_cast<double>(calls)},
-                    {"rows", static_cast<double>(rows_[bucket].load(std::memory_order_relaxed))},
-                    {"seconds", nanos_[bucket].load(std::memory_order_relaxed) * 1e-9}});
-      }
-    }
-  }
-
-private:
-  std::atomic<std::uint64_t> calls_[kBuckets] = {};
-  std::atomic<std::uint64_t> rows_[kBuckets] = {};
-  std::atomic<std::uint64_t> nanos_[kBuckets] = {};
-};
 
 // The nodes of `root`'s subtree in preorder, left branch first.
 void subtreePreorder(const Tree &tree, std::uint32_t root, std::vector<std::uint32_t> &out) {
@@ -214,10 +159,6 @@ public:
       trace::Doing doing(trace::Work::PruneOther);
       tree_.compact(pool_);
     }
-    if (trace::on()) {
-      extraSlices_.report(0);
-      raiseSlices_.report(1);
-    }
   }
 
 private:
@@ -261,7 +202,7 @@ private:
   template <bool Columns>
   void routeRange(std::uint32_t root, std::size_t begin, std::size_t count,
                   std::uint32_t *leaves) const {
-    constexpr std::size_t kLanes = 16; // 32 was no faster on the cluster nodes
+    constexpr std::size_t kLanes = 16; // 32 was no faster
     const Hop *hops = hops_.data();
     const std::size_t columnSize = train_.rowCount;
     const std::uint32_t *rowOf = Columns && arranged_ ? rowOf_.data() : nullptr;
@@ -910,8 +851,6 @@ private:
       // again with all of this node's cases.
       tree_.nodes[id] = tree_.nodes[largest];
       updateHop(id);
-      const std::size_t otherCount = rightIsLargest ? leftCount : count - leftCount;
-      SliceHistogram::Scope slice(raiseSlices_, otherCount);
       arrangeRaised(id, begin, count, leftCount, rightIsLargest);
       return false;
     }
@@ -929,7 +868,6 @@ private:
     if (count == 0) {
       return errors_[root];
     }
-    SliceHistogram::Scope slice(extraSlices_, count);
     // Per-thread buffers: this runs for every decision node.
     thread_local std::vector<std::uint32_t> arrival;
     thread_local std::vector<std::uint32_t> leaves;
@@ -1085,8 +1023,6 @@ private:
   // the first of them (see errorsWithExtraRowsInParallel), zero between calls.
   std::unique_ptr<std::uint32_t[]> extraCounts_;
   std::unique_ptr<std::uint32_t[]> firstExtra_;
-  SliceHistogram extraSlices_; // --profile
-  SliceHistogram raiseSlices_;
 };
 
 } // namespace
@@ -1169,7 +1105,7 @@ void c45UseTrainingValueThresholds(Tree &tree, const DistinctValues &distinct, T
 
 bool c45PruneUsesRowMajor(std::size_t featureCount) {
   // 32 features: two cache lines. HIGGS (28) pruned in 0.41 s row by row,
-  // 0.78 s through the columns (A100 node).
+  // 0.78 s through the columns (A100 server).
   return featureCount < 32;
 }
 

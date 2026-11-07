@@ -394,7 +394,7 @@ Dataset selectRows(const Dataset &dataset, const std::vector<std::uint32_t> &row
 // previous row's store whenever the labels repeat, and the chunks' counters
 // next to each other (8 bytes each for 2 classes) shared cache lines between
 // threads. At 1G rows (CUDA root) that took 0.96 / 1.21 s on one thread of
-// the H100 / A100 node and 0.45 / 1.97 s on four, now 0.35 / 0.50 s and
+// an H100 / A100 server and 0.45 / 1.97 s on four, now 0.35 / 0.50 s and
 // 0.10 / 0.13 s.
 template <typename Label>
 void countLabels(std::size_t begin, std::size_t end, std::size_t classes, Label label,
@@ -430,10 +430,9 @@ void countLabels(std::size_t begin, std::size_t end, std::size_t classes, Label 
 
 } // namespace
 
-std::vector<std::uint32_t> countClasses(const Dataset &dataset,
-                                        std::span<const std::uint32_t> rows, ThreadPool *pool) {
+std::vector<std::uint32_t> countClasses(const Dataset &dataset, ThreadPool *pool) {
   const std::size_t classes = dataset.classCount();
-  const std::size_t count = rows.empty() ? dataset.rowCount : rows.size();
+  const std::size_t count = dataset.rowCount;
   constexpr std::size_t kChunk = std::size_t{1} << 20;
   const std::size_t chunks = (count + kChunk - 1) / kChunk;
   std::vector<std::uint32_t> perChunk(chunks * classes, 0);
@@ -441,13 +440,8 @@ std::vector<std::uint32_t> countClasses(const Dataset &dataset,
     const std::size_t begin = chunk * kChunk;
     const std::size_t end = std::min(count, begin + kChunk);
     std::uint32_t *counts = perChunk.data() + chunk * classes;
-    if (rows.empty()) {
-      countLabels(begin, end, classes, [&](std::size_t index) { return dataset.labels[index]; },
-                  counts);
-    } else {
-      countLabels(begin, end, classes,
-                  [&](std::size_t index) { return dataset.labels[rows[index]]; }, counts);
-    }
+    countLabels(begin, end, classes, [&](std::size_t index) { return dataset.labels[index]; },
+                counts);
   });
   std::vector<std::uint32_t> total(classes, 0);
   for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
@@ -475,17 +469,14 @@ DistinctValues distinctValues(const Dataset &dataset) {
   return distinct;
 }
 
-std::mt19937_64 seededRandom(std::uint64_t seed, RandomStream stream) {
-  std::seed_seq seeds{static_cast<std::uint32_t>(seed), static_cast<std::uint32_t>(seed >> 32),
-                      static_cast<std::uint32_t>(stream)};
-  return std::mt19937_64(seeds);
-}
-
 void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t seed,
-                  RandomStream stream, Dataset &train, Dataset &test, ThreadPool *pool) {
+                  Dataset &train, Dataset &test, ThreadPool *pool) {
   std::vector<std::uint32_t> order(dataset.rowCount);
   std::iota(order.begin(), order.end(), 0u);
-  std::mt19937_64 random = seededRandom(seed, stream);
+  // The seed's two halves and a 1 (which keeps the splits of earlier versions).
+  std::seed_seq seeds{static_cast<std::uint32_t>(seed), static_cast<std::uint32_t>(seed >> 32),
+                      1u};
+  std::mt19937_64 random(seeds);
   std::shuffle(order.begin(), order.end(), random);
 
   const std::size_t testRows =
@@ -505,6 +496,37 @@ void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t see
   }
   train = selectRows(dataset, trainIndex, pool);
   test = selectRows(dataset, testIndex, pool);
+}
+
+std::size_t matchTrainingSchema(const Dataset &train, Dataset &test) {
+  if (test.featureNames != train.featureNames) {
+    throw std::runtime_error("The test set's columns differ from the training set's: both need "
+                             "the same header (features in the same order, label last)");
+  }
+  std::vector<std::string> names = train.classNames;
+  std::vector<std::uint16_t> idOf(test.classNames.size());
+  std::size_t unseenClasses = 0;
+  for (std::size_t id = 0; id < test.classNames.size(); ++id) {
+    const auto found = std::find(train.classNames.begin(), train.classNames.end(),
+                                 test.classNames[id]);
+    if (found == train.classNames.end()) {
+      if (names.size() >= 65535) {
+        throw std::runtime_error("Too many distinct class labels");
+      }
+      ++unseenClasses;
+      names.push_back(test.classNames[id]);
+      idOf[id] = static_cast<std::uint16_t>(names.size() - 1);
+    } else {
+      idOf[id] = static_cast<std::uint16_t>(found - train.classNames.begin());
+    }
+  }
+  std::size_t unseenRows = 0;
+  for (std::uint16_t &label : test.labels) {
+    label = idOf[label];
+    unseenRows += label >= train.classCount();
+  }
+  test.classNames = std::move(names);
+  return unseenClasses > 0 ? unseenRows : 0;
 }
 
 void splitTail(const Dataset &dataset, std::size_t testRows, Dataset &train, Dataset &test,

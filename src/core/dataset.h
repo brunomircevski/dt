@@ -4,8 +4,6 @@
 #include <cstdint>
 #include <memory>
 #include <new>
-#include <random>
-#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -74,20 +72,19 @@ DistinctValues distinctValues(const Dataset &dataset);
 Dataset loadDataset(const std::string &filePath, ThreadPool *pool);
 
 
-// Rows of each class among `rows` (every row if empty), counted on `pool`.
-std::vector<std::uint32_t> countClasses(const Dataset &dataset,
-                                        std::span<const std::uint32_t> rows, ThreadPool *pool);
+// Rows of each class, counted on `pool`.
+std::vector<std::uint32_t> countClasses(const Dataset &dataset, ThreadPool *pool);
 
-// Independent random streams derived from one --seed, so that e.g. changing
-// the CV folds does not change the holdout split.
-enum class RandomStream : std::uint32_t { Holdout = 1, CrossValidation = 2 };
-std::mt19937_64 seededRandom(std::uint64_t seed, RandomStream stream);
-
-// Shuffle the rows (same seed and stream = same split) and split off
+// Shuffle the rows (same seed = same split on every machine) and split off
 // `testFraction` of them as the test set.
 void splitHoldout(const Dataset &dataset, double testFraction, std::uint64_t seed,
-                  RandomStream stream, Dataset &train, Dataset &test,
-                  ThreadPool *pool = nullptr);
+                  Dataset &train, Dataset &test, ThreadPool *pool = nullptr);
+
+// Make `test` (loaded from another file) comparable with `train`: it must
+// have the same features, in the same order, and its labels are renumbered
+// to train's class ids. A class that only the test set has gets an id after
+// train's, which no tree predicts. Returns the test rows of such classes.
+std::size_t matchTrainingSchema(const Dataset &train, Dataset &test);
 
 // The last `testRows` rows are the test set, the others the training set (both
 // in file order): a published split such as HIGGS's and SUSY's.

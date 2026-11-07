@@ -578,7 +578,8 @@ kept.
   (`breiman1984cart`)
 * **PDF**: none (book).
 * **Our view**: Defines what `--cart` implements: Gini, binary splits,
-  cost-complexity pruning, cross-validated α (our `--cv`).
+  cost-complexity pruning (ours at a fixed α; the book also picks α by
+  cross-validation, which `./tree` leaves to the caller).
 * **Usefulness**: ★★★★★
 * **Use in paper**: Sect. 2.1, and the CV motivation (Breiman's K-fold CV
   needs K+1 trees).

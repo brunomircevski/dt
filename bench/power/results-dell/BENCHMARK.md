@@ -11,7 +11,7 @@ its own forked child, so each tree is the only tree of a fresh process, like a
 single run, and every tree is measured. The first round on dell4
 ([../results/BENCHMARK.md](../results/BENCHMARK.md), job 85) could read only
 the PSU; since 2026-11-06 the RAPL counters are readable by users
-([../ADMIN-REQUEST.md](../ADMIN-REQUEST.md)), so this run measures the CPU
+(set up by the cluster's admins), so this run measures the CPU
 packages and the whole server at the same time.
 
 | Implementation | Option | Resources | Runs × trees measured |

@@ -22,12 +22,10 @@ and hopper were busy). It also holds a plan for the paper's energy measurements.
   Serial-Opt 3×, Parallel 10×.
 - **`results-hopper/BENCHMARK.md`: all five implementations on hopper with CPU
   packages, the GPU in use and the PSU together** (job 137, 2026-11-06).
-- `ADMIN-REQUEST.md`: what the admins need to set up so that users can read
-  CPU and PSU power.
 
 ## What each node offers
 
-| Source | What it measures | ampere (Supermicro, 2× EPYC 7402, 4× A100) | epyc1/2 (Dell R6725, 2× EPYC 9255) | dell1–4 (Dell R660, 2× Xeon 6542Y) | User access now |
+| Source | What it measures | ampere (Supermicro, 2× EPYC 7402, 4× A100) | epyc1/2 (Dell R6725, 2× EPYC 9255) | dell1–4 (Dell R660, 2× Xeon 6542Y) | User access on 2026-11-04 (see Access below for today) |
 |---|---|---|---|---|---|
 | ACPI power meter (`hwmon power_meter`, which reads the iDRAC) | **Whole server, PSU input (AC) power** | not present | yes, but it changes only every **4–6 s** | yes, it changes every **2.1 s** | **yes**, nothing to install |
 | IPMI / BMC (`ipmitool dcmi power reading`, PSU sensors) | Whole server; per-PSU input on most BMCs | `/dev/ipmi0`, ipmitool installed | `/dev/ipmi0`, no ipmitool | `/dev/ipmi0`, no ipmitool | no: `/dev/ipmi0` is root-only (0600) |
@@ -92,14 +90,13 @@ Takeaways:
   experiment, a 7 s C4.5 run on epyc2 registered only +28 W, because the reading
   had not caught up. Every measured window must be long (see below).
 
-## What needs sudo (request for the admins)
+## Access
 
-[ADMIN-REQUEST.md](ADMIN-REQUEST.md) is the request to send: step-by-step
-commands that make CPU power (RAPL, all nodes) readable by users, and a small
-root service that publishes ampere's and hopper's PSU power (IPMI) in a
-world-readable file. Root is needed once, for the setup; measuring then needs
-no sudo. GPU power (NVML) and the Dell nodes' PSU power already work. RAM
-power is out of scope (only the Intel dell nodes have a sensor for it).
+Since 2026-11-06 a normal user can read every source above: the admins made
+the RAPL counters (CPU power, all nodes) readable and publish ampere's and
+hopper's PSU power (IPMI) in a world-readable file. GPU power (NVML) and the
+Dell nodes' PSU power needed nothing. RAM power is out of scope (only the
+Intel dell nodes have a sensor for it).
 
 ## Plan for the paper's measurements
 

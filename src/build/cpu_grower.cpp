@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <bit>
 #include <cstdlib>
-#include <cstring>
 #include <memory>
 #include <numeric>
 #include <optional>
@@ -18,33 +17,31 @@ namespace {
 
 class CpuGrower final : public Grower {
 public:
-  CpuGrower(const Dataset &train, const Options &options, ThreadPool *pool, bool reusable)
-      : train_(train), options_(options), pool_(pool), reusable_(reusable),
+  CpuGrower(const Dataset &train, const Options &options, ThreadPool *pool)
+      : train_(train), options_(options), pool_(pool),
         rows_(train.rowCount), features_(train.featureCount()),
         codec_(makeEntryCodec(train.classCount(), train.rowCount)),
-        slots_(features_ + spareSlots(pool, features_)), scratch_(new Entry[rows_]),
+        slots_(features_ + spareSlots(pool, features_)),
         goesLeft_(new std::uint8_t[rows_]) {
     // A slot per column and a few more (see Columns): serial and parallel
     // builds run the same algorithm, big nodes are partitioned out of place
     // in both, only on one thread or on many.
     work_.reset(new Entry[slots_ * rows_]);
-    if (reusable_) {
-      sorted_.reset(new Entry[features_ * rows_]);
-    }
     leftBits_.reset(new std::uint64_t[rows_ / 64 + 1]);
   }
 
-  Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows,
-            GrowTimings &timings, DistinctValues *distinct, RowLeaves *leafOfRow) override {
-    if (leafOfRow && !rows.empty()) {
-      throw std::logic_error("CpuGrower: leaves of rows only with all rows");
+  Tree grow(const SplitRules &rules, GrowTimings &timings, DistinctValues *distinct,
+            RowLeaves *leafOfRow) override {
+    if (presorted_) {
+      throw std::logic_error("CpuGrower: grows one tree");
     }
-    const std::size_t count = rows.empty() ? rows_ : rows.size();
+    presorted_ = true;
+    const std::size_t count = rows_;
     {
       ScopedTimer timer(timings.prepareSeconds);
       trace::Phase phase("presort");
       trace::Doing doing(trace::Work::Presort);
-      prepare(rows);
+      slotOf_ = presortColumns(train_, codec_, work_.get(), slots_, pool_);
       if (distinct) {
         distinctValues(count, *distinct);
       }
@@ -54,7 +51,7 @@ public:
     tree.classNames = train_.classNames;
     ScopedTimer timer(timings.buildSeconds);
     std::optional<trace::Phase> phase(std::in_place, "build");
-    const std::vector<std::uint32_t> counts = countClasses(train_, rows, pool_);
+    const std::vector<std::uint32_t> counts = countClasses(train_, pool_);
     NodeStore store(train_.classCount(), 2 * count);
     Subtree root;
     root.slots = std::make_shared<const SlotMap>(slotOf_);
@@ -69,7 +66,7 @@ public:
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
                            options_.parallel, countTables(),
                            leafOfRow ? leafOfRow->ids.data() : nullptr);
-    builder.grow(Columns{work_.get(), count, scratch_.get(), slots_, leftBits_.get()},
+    builder.grow(Columns{work_.get(), count, slots_, leftBits_.get()},
                  std::move(root));
     if (pool_) {
       pool_->waitIdle();
@@ -113,8 +110,9 @@ private:
   // Every feature's distinct values, from the sorted columns in work_ (stride
   // `count`, slots slotOf_): the last value of each run, in chunks on the pool.
   // Counted first and then written in place, so that nothing is allocated on
-  // the pool (growing thousands of vectors at once took SOREL's presort on
-  // epyc from 11 s to 34 s in some runs) and nothing is copied on one thread.
+  // the pool (growing thousands of vectors at once took SOREL's presort on a
+  // 48-core EPYC from 11 s to 34 s in some runs) and nothing is copied on one
+  // thread.
   // The resize leaves the values unset: zero-filling them on one thread took
   // 0.4 s or, in most runs of the same SOREL presort, 11.5 s.
   // Without a pool (--serial) one pass straight into distinct.values.
@@ -162,68 +160,17 @@ private:
     }
   }
 
-  // Fill work_ with the sorted columns of the selected rows (stride = their
-  // count; slotOf_ says where). Without reuse, presort straight into work_.
-  void prepare(std::span<const std::uint32_t> rows) {
-    if (!reusable_) {
-      if (used_ || !rows.empty()) {
-        throw std::logic_error("CpuGrower: not created for repeated use");
-      }
-      used_ = true;
-      slotOf_ = presortColumns(train_, codec_, work_.get(), slots_, pool_);
-      return;
-    }
-    if (!presorted_) { // in work_'s slots, then in feature order into sorted_
-      const SlotMap slots = presortColumns(train_, codec_, work_.get(), slots_, pool_);
-      parallelFor(pool_, features_, [&](std::size_t feature) {
-        std::memcpy(sorted_.get() + feature * rows_, work_.get() + slots[feature] * rows_,
-                    rows_ * sizeof(Entry));
-      });
-      presorted_ = true;
-    }
-    slotOf_.resize(features_);
-    std::iota(slotOf_.begin(), slotOf_.end(), 0u);
-    if (rows.empty()) {
-      parallelFor(pool_, features_, [&](std::size_t feature) {
-        std::memcpy(work_.get() + feature * rows_, sorted_.get() + feature * rows_,
-                    rows_ * sizeof(Entry));
-      });
-      return;
-    }
-    // Keep the selected rows of every sorted column: still sorted, and the
-    // row ids stay those of the full training set.
-    std::vector<std::uint8_t> keep(rows_, 0);
-    for (std::uint32_t row : rows) {
-      keep[row] = 1;
-    }
-    const std::size_t stride = rows.size();
-    parallelFor(pool_, features_, [&](std::size_t feature) {
-      const Entry *source = sorted_.get() + feature * rows_;
-      Entry *target = work_.get() + feature * stride;
-      std::size_t written = 0;
-      for (std::size_t index = 0; index < rows_; ++index) {
-        if (keep[codec_.row(source[index].packed)]) {
-          target[written++] = source[index];
-        }
-      }
-    });
-  }
-
   const Dataset &train_;
   const Options &options_;
   ThreadPool *pool_;
-  bool reusable_;
   bool presorted_ = false;
-  bool used_ = false;
   std::size_t rows_;
   std::size_t features_;
   EntryCodec codec_;
   std::size_t slots_; // features_ + spareSlots()
-  std::unique_ptr<Entry[]> sorted_; // presorted columns of all rows (reusable only)
   std::unique_ptr<Entry[]> work_;   // slots_ slots: the columns being partitioned
-  SlotMap slotOf_;                  // where in work_ the grow starts
+  SlotMap slotOf_;                  // where in work_ each feature's column starts
   std::unique_ptr<std::uint64_t[]> leftBits_; // Columns::leftBits
-  std::unique_ptr<Entry[]> scratch_;
   std::unique_ptr<std::uint8_t[]> goesLeft_;
   CountTable countXlog_; // see countTables()
   CountTable countInverse_;
@@ -232,8 +179,8 @@ private:
 } // namespace
 
 std::unique_ptr<Grower> makeCpuGrower(const Dataset &train, const Options &options,
-                                      ThreadPool *pool, bool reusable) {
-  return std::make_unique<CpuGrower>(train, options, pool, reusable);
+                                      ThreadPool *pool) {
+  return std::make_unique<CpuGrower>(train, options, pool);
 }
 
 } // namespace dt

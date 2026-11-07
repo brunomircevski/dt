@@ -10,9 +10,9 @@ threshold between two neighbouring values, and keep the best one. They differ in
 |------|------|
 | `src/algo/split_math.h` | Impurity, gain, tie rules. Compiled by both g++ and nvcc, so the CPU and the GPU score cuts with literally the same code. |
 | `src/algo/split_rules.cpp` | Stopping rules, minimum child size, how the winning feature is chosen (CART vs C4.5). |
-| `src/algo/cart_pruning.cpp` | CART cost-complexity pruning and its weakest-link sequence. |
+| `src/algo/cart_pruning.cpp` | CART cost-complexity pruning at a fixed `α`. |
 | `src/algo/c45_pruning.cpp` | C4.5 post-processing: collapse, training-value thresholds, error-based pruning. |
-| `src/app/trainer.cpp` | Puts it together; Breiman's cross-validation for CART's alpha. |
+| `src/app/trainer.cpp` | Puts it together: grow, then prune. |
 
 Not supported (on purpose): missing values (C4.5's fractional weights) and
 multi-way / subset splits on categorical features.
@@ -55,8 +55,8 @@ training misclassification rate and `|T|` its number of leaves. For a given
 `α`, `T(α)` is the smallest subtree minimising `R(T) + α|T|`
 (`cartCostComplexityPrune`, a bottom-up dynamic program).
 
-* By default `α` is fixed (`--alpha X`, default 0.00001), as in scikit-learn
-  and rpart: one tree, grown on all rows. `α` is a rate, so it does not
+* `α` is fixed (`--alpha X`, default 0.00001), as in scikit-learn and rpart:
+  one tree, grown on all training rows. `α` is a rate, so it does not
   depend on the dataset size. `--no-prune` keeps the maximal tree. The values
   are not interchangeable with theirs: scikit-learn's `ccp_alpha` weighs the
   leaves' Gini impurity instead of `R(T)`, and rpart's `cp` is `α / R(root)`.
@@ -66,19 +66,11 @@ training misclassification rate and `|T|` its number of leaves. For a given
   costs at least `2 α · n` (two leaves), so pruning would cut it back. The
   pruned tree is the same, but most of the maximal tree is never grown: on
   HIGGS (`-d 30`) 116 thousand nodes instead of 2.2 million, and 0.1 million
-  instead of 21.6 million on airline. `--cv` grows the maximal tree, since it
-  needs the whole pruning sequence.
-* `--cv K` chooses `α` by Breiman's K-fold cross-validation instead: the tree
-  is grown on all rows, a tree is grown on each of K folds' complement, and
-  each fold tree is measured on its fold along the full tree's weakest-link
-  sequence `α_1 = 0 < α_2 < …`, at the geometric midpoints `√(α_k α_{k+1})`.
-  The simplest tree within one standard error of the best is kept (1-SE
-  rule). The sequence is computed in one bottom-up pass by representing each
-  subtree's optimal cost as a concave piecewise-linear function of `α`
-  (`cartPruningSequence`). The fold trees are grown by the same backend as
-  the main tree, reusing its presorted columns (CPU) or device buffers (GPU).
-  Breiman's other estimate, a held-back test sample, is not offered: it grows
-  the tree on part of the rows only.
+  instead of 21.6 million on airline.
+* `α` is not chosen here. Breiman picks it by K-fold cross-validation (or on
+  a held-back sample); to do that, run `./tree` once per candidate `α` on each
+  fold (`--test FILE` or `--test-last N` give it the fold's held-out rows) and
+  keep the best. The benchmarks use one fixed `α` for every dataset.
 
 **Verified against** scikit-learn (`tools/compare_reference.py cart`): trees
 are identical except where two splits have exactly the same impurity decrease
@@ -86,8 +78,7 @@ are identical except where two splits have exactly the same impurity decrease
 feature index); the script recomputes both gains at every such node to prove it
 is a tie. An exhaustive search at every node of the grown tree (largest Gini
 decrease over all features and thresholds, lowest feature on ties) agrees on
-all 24,048 decision nodes of the full covertype tree, and every subtree of the
-pruning sequence matches a direct textbook weakest-link implementation.
+all 24,048 decision nodes of the full covertype tree.
 
 ---
 

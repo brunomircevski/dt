@@ -1,7 +1,9 @@
 # Growing a tree on the CPU
 
-Files: `src/build/cpu_builder.*` (the builder), `src/build/cpu_grower.cpp`
-(presort, cross-validation folds), `src/build/node_store.*`,
+Files: `src/build/cpu_builder.*` (the builder: split and partition),
+`src/build/cpu_sweep.*` (the sweep that finds a column's best cut),
+`src/build/presort.*` (the presort), `src/build/cpu_grower.cpp` (puts them
+together), `src/build/node_store.*`,
 `src/core/thread_pool.*`, `src/algo/split_math.h`, `src/algo/split_rules.cpp`.
 
 ## The expensive part
@@ -169,16 +171,6 @@ One thread pool (`ThreadPool`), two kinds of work:
   slots do not idle the threads: a block counts its left rows, takes the count
   before it from the block before it (a chain) and writes. Their children are
   not swept on the way.
-* **Huge nodes in place** (> 2^18 rows, when no slot is spare: the CUDA
-  backend's hand-offs) partition through the
-  node's own range of the shared scratch array. A column is partitioned in
-  place with a buffer for
-  the smaller child's rows only, so the range holds `count / (smaller + 1)`
-  buffers and as many columns are partitioned at once, one per thread: every
-  entry moves once, which matters because this part is bound by memory
-  bandwidth. Only a perfectly balanced split (one buffer) falls back to
-  column by column with all threads on blocks of the column (every entry
-  moves twice).
 * **Subtrees**: after a split of a node with ≥ `nodeTaskRows` = 4096 rows, the
   left child becomes a pool task, and the current thread continues with the
   right child (an explicit stack, no recursion). Nobody waits for a task; the
@@ -199,10 +191,9 @@ epyc1 and dell1 (48 threads), 8 spare slots cut HIGGS from 5.7 to 4.1 GiB and
 airline from 29.0 to 25.6 GiB, with HIGGS CART 33-35% slower (C4.5 5-8%,
 airline 0-7%); 2 spare slots halve the speed. The presort sorts into the
 slots too, a free slot as each sort's second buffer. Partitioning in place
-needs a buffer for the rows of one child: a node uses its own range of one
-shared `n`-entry scratch array, and per-thread buffers are capped at 2^18
-entries, so extra memory is about `8 · n` bytes plus 2 MB per thread, however
-many threads run. Until 2026-10-17 both backends kept a full second copy of
+(nodes below 2^15 rows, and the CUDA backend's hand-offs) needs a buffer for
+the rows of one child: a per-thread buffer as big as the largest such node.
+Until 2026-10-17 both backends kept a full second copy of
 the columns (`8 · 2F · n`): serial HIGGS now peaks at 3.6 GiB instead of 5.7. Before that, `--serial` partitioned every node in place, through a byte
 per row (`goesLeft`). On airline's 115M rows the serial build then used 1.7× the CPU
 time of a 2-thread parallel build on epyc1 (171 s against 103 s), probably
@@ -228,13 +219,6 @@ are first written by many threads at once and later read at random rows; with
 4 KiB pages that is a page fault per 4 KiB and a TLB miss on most reads. On
 the cluster this saved 0.2 s of a HIGGS run on the 48-core EPYC (1.5-2.1 s)
 and 0.3-0.5 s on the H100 node (CUDA, 1.4-2.4 s).
-
-## Cross-validation
-
-CART's K-fold cross-validation (`--cv K`) grows K more trees on (K-1)/K subsets. The
-grower keeps the presorted columns of the full training set; a fold's columns
-are obtained by filtering them (one pass, the order stays sorted) instead of
-copying the data and sorting again.
 
 ## Post-processing
 
@@ -282,4 +266,4 @@ rows are counted per leaf by all threads (each with a small cache of the
 leaves it touched, flushed to the shared counters on eviction and at the end,
 so they are rarely updated once per row), and the leaves' changes are summed in the order the serial loop
 sums them, so the result is the same to the bit. `--profile` records where
-the pruning time goes (its phases and the `prune_slices` table).
+the pruning time goes.

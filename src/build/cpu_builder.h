@@ -3,6 +3,7 @@
 #include "algo/split_math.h"
 #include "algo/split_rules.h"
 #include "build/node_store.h"
+#include "build/presort.h"
 #include "core/dataset.h"
 #include "core/options.h"
 #include "core/thread_pool.h"
@@ -21,9 +22,6 @@ namespace dt {
 // again own sorted ranges and nothing is ever sorted twice (the SLIQ/SPRINT
 // idea).
 //
-// `scratch` (stride entries) is partition workspace; a node only uses its own
-// range [begin, end) of it, so nodes can be split concurrently.
-//
 // With more slots than features (and `leftBits`), big nodes are partitioned
 // out of place: every column but the winner's (already in order) moves to a
 // slot that holds none of the node's columns, the free ones first, then the
@@ -41,25 +39,11 @@ namespace dt {
 struct Columns {
   Entry *data = nullptr;
   std::size_t stride = 0;
-  Entry *scratch = nullptr;
   std::size_t slots = 0; // slots in data (0: one per feature)
   std::uint64_t *leftBits = nullptr;
 
   Entry *slot(std::size_t index) const { return data + index * stride; }
 };
-
-// The slot of every feature's column (see Columns).
-using SlotMap = std::vector<std::uint32_t>;
-
-// Pick the packing of (row, class) into 32 bits for this dataset.
-EntryCodec makeEntryCodec(std::size_t classCount, std::size_t rowCount);
-
-// Sort every feature column by value (LSD radix sort, stable, so equal
-// values keep row order) into `slots` slots of rowCount entries at `data`
-// (at least featureCount + 1 of them): the sorts use the slots that hold no
-// sorted column as workspace. Returns the slot of every feature.
-SlotMap presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *data,
-                       std::size_t slots, ThreadPool *pool);
 
 // A node that still has to be split, and the features that can still split
 // it: a feature whose values are all equal in a node is dropped for the whole
@@ -187,8 +171,6 @@ private:
                          const std::uint64_t *leftBits) const;
   void partitionFeature(Entry *entries, std::uint32_t count, std::uint32_t leftCount,
                         Entry *buffer, Keep keep) const;
-  void partitionFeatureInBlocks(Entry *entries, std::uint32_t count, std::uint32_t leftCount,
-                                Entry *buffer) const;
 
   const SplitRules &rules_;
   EntryCodec codec_;

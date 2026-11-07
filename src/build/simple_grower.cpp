@@ -117,14 +117,11 @@ class SimpleGrower final : public Grower {
 public:
   explicit SimpleGrower(const Dataset &train) : train_(train) {}
 
-  Tree grow(const SplitRules &rules, std::span<const std::uint32_t> rows, GrowTimings &timings,
-            DistinctValues * /*distinct*/, RowLeaves * /*leafOfRow*/) override {
+  Tree grow(const SplitRules &rules, GrowTimings &timings, DistinctValues * /*distinct*/,
+            RowLeaves * /*leafOfRow*/) override {
     ScopedTimer timer(timings.buildSeconds);
-    std::vector<std::uint32_t> all(rows.begin(), rows.end());
-    if (all.empty()) {
-      all.resize(train_.rowCount);
-      std::iota(all.begin(), all.end(), 0u);
-    }
+    std::vector<std::uint32_t> all(train_.rowCount);
+    std::iota(all.begin(), all.end(), 0u);
     Tree tree;
     tree.featureNames = train_.featureNames;
     tree.classNames = train_.classNames;

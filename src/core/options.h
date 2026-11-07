@@ -21,14 +21,6 @@ enum class Backend {
   Cuda      // GPU for large nodes (breadth-first), CPU pool for small subtrees
 };
 
-// How CART gets the cost-complexity parameter alpha. A fixed alpha is the
-// default, as in scikit-learn (ccp_alpha) and rpart (cp): one tree, grown on
-// all rows, like C4.5.
-enum class CartPruning {
-  None,            // keep the maximal tree
-  Alpha,           // fixed alpha
-  CrossValidation  // K-fold CV over the pruning sequence (1-SE rule): K + 1 trees
-};
 
 // How the GPU scores cuts.
 enum class GpuSweep {
@@ -39,11 +31,11 @@ enum class GpuSweep {
 
 // CART always uses the Gini index, as in Breiman et al.
 struct CartOptions {
-  // Minimal cost-complexity pruning: the smallest subtree minimising
+  // Minimal cost-complexity pruning with a fixed alpha, as scikit-learn
+  // (ccp_alpha) and rpart (cp) do: the smallest subtree minimising
   // R(T) + alpha * |leaves(T)|, R(T) = training misclassification rate.
-  CartPruning pruning = CartPruning::Alpha;
-  double alpha = 0.00001; // CartPruning::Alpha
-  int folds = 10;        // CartPruning::CrossValidation
+  bool prune = true;
+  double alpha = 0.00001;
 };
 
 // Defaults match the original c4.5 program (-c 25, subtree raising).
@@ -65,16 +57,15 @@ struct ParallelOptions {
 
 struct GpuOptions {
   // Nodes with fewer rows are copied back and finished by the CPU pool while
-  // the GPU keeps working on the large nodes of the next level. 0 = auto:
-  // the training rows / kAutoMinRowsShare, between kAutoMinRows and
-  // kAutoMaxMinRows (CART: rows / kAutoMinRowsShareCart, between kAutoMinRows
-  // and kAutoMaxMinRowsCart).
+  // the GPU keeps working on the large nodes of the next level. 0 = auto
+  // (gpuMinRows()): the training rows / kAutoMinRowsShare, between
+  // kAutoMinRows and kAutoMaxMinRows (CART: rows / kAutoMinRowsShareCart,
+  // between kAutoMinRows and kAutoMaxMinRowsCart).
   // A GPU level costs about the same for a thousand mid-size nodes as for a
   // few big ones, so on bigger datasets the CPU takes over somewhat earlier,
   // but not much: measured on an H100 (32 CPU cores) and an A100 (48), C4.5
   // was best at about 2.5K rows on 10.5M rows and at 4K on 115M; CART, whose
-  // CPU subtrees are few, at 1-2.5K and 2K (16-64K before the CPU subtrees
-  // stopped waiting on the node store).
+  // CPU subtrees are few, at 1-2.5K and 2K.
   std::size_t minRows = 0;
   static constexpr std::size_t kAutoMinRows = 1024;
   static constexpr std::size_t kAutoMaxMinRows = 4096;
@@ -93,13 +84,16 @@ struct Options {
   Backend backend = Backend::Parallel;
   Algorithm algorithm = Algorithm::Cart;
 
-  // Fraction of rows held out as a test set (0 = train and evaluate on all
-  // rows). The split is a deterministic shuffle so runs are comparable.
-  double holdout = 0.0;
-  // The last N rows of the file are the test set (0 = off), e.g. HIGGS's and
-  // SUSY's published split (their last 500,000 rows). Not with holdout.
+  // The test set, at most one of these three (none: no test accuracy):
+  // a separate CSV with the same header as the training file,
+  std::string testPath;
+  // the last N rows of the training file (e.g. HIGGS's and SUSY's published
+  // split: their last 500,000 rows), or
   std::size_t testLast = 0;
-  // Seeds the random choices: the holdout split and CART's CV folds. Same seed = same choices on every machine and backend.
+  // a fraction of the rows, shuffled with `seed` (the same split on every run).
+  double holdout = 0.0;
+  // Seeds the holdout split: the same seed gives the same split on every
+  // machine and backend.
   std::uint64_t seed = 1;
   // Energy benchmarks: train this many trees on the loaded data, one after
   // another, and print each one's training window as Unix times (0 = one
@@ -110,7 +104,7 @@ struct Options {
   // --repeat-warmup: seconds that each --repeat tree's child keeps its threads
   // busy before its timer starts, as a single run's CSV load does before its
   // tree. Without it, a GPU tree that follows an idle CPU (the previous
-  // tree's GPU-only build) set up 10% (H100 node) to 40% (A100 node) slower:
+  // tree's GPU-only build) set up 10% (H100 server) to 40% (A100 server) slower:
   // the socket's idle power state slows its host-memory copies.
   double repeatWarmup = 0.0;
 
@@ -135,6 +129,10 @@ const char *algorithmName(Algorithm algorithm);
 
 // Threads to use (options.parallel.threads, or every CPU the process may run on).
 unsigned threadCount(const Options &options);
+
+// --cuda: nodes with fewer rows go to the CPU (options.gpu.minRows, or the
+// automatic value for this many training rows; 1 with --gpu-only).
+std::size_t gpuMinRows(const Options &options, std::size_t trainingRows);
 
 // Parse argv on top of `options`. Throws std::runtime_error on bad input.
 // Returns false if --help was requested.

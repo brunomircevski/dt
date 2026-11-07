@@ -42,7 +42,7 @@ SplitRules::SplitRules(const Options &options, std::size_t classCount, std::size
       log2Table_[count] = std::log2(static_cast<double>(count));
     }
   }
-  if (options.algorithm == Algorithm::Cart && options.cart.pruning == CartPruning::Alpha) {
+  if (options.algorithm == Algorithm::Cart && options.cart.prune) {
     // The same product as cartCostComplexityPrune()'s penalty per leaf.
     leafErrors_ = options.cart.alpha * static_cast<double>(rowCount);
   }

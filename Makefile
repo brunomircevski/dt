@@ -10,9 +10,9 @@ CUDA_LIB  ?= /opt/cuda/lib64
 #   make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90"
 CUDA_ARCH ?= -arch=native
 
-# Functions on 64 bytes, loops on 32: with the default 16 a change elsewhere in
+# Functions on 64 bytes, loops on 32: with the default 16, a change elsewhere in
 # a file moved C4.5's sweep (TwoClassSweep::advance) to another offset and made
-# epyc's ECBDL 15M C4.5 build 8% slower (2026-10-29, ~/dt-final5 on mordor3).
+# a C4.5 build on ECBDL'14 (15M rows, AMD EPYC) 8% slower.
 CXXFLAGS  := -std=c++20 -O3 -falign-functions=64 -falign-loops=32 -pthread -Wall -Wextra -Isrc -MMD -MP
 NVCCFLAGS := -std=c++20 -O3 $(CUDA_ARCH) -Isrc -MMD -MP -Xcompiler -Wall
 # NVTX=1: named ranges for Nsight Systems (src/core/nvtx.h; header-only, from the CUDA toolkit)

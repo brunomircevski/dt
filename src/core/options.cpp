@@ -44,6 +44,21 @@ unsigned threadCount(const Options &options) {
   return std::max(1u, std::thread::hardware_concurrency());
 }
 
+std::size_t gpuMinRows(const Options &options, std::size_t trainingRows) {
+  const GpuOptions &gpu = options.gpu;
+  if (gpu.only) {
+    return 1;
+  }
+  if (gpu.minRows > 0) {
+    return gpu.minRows;
+  }
+  return options.algorithm == Algorithm::Cart
+             ? std::clamp(trainingRows / GpuOptions::kAutoMinRowsShareCart,
+                          GpuOptions::kAutoMinRows, GpuOptions::kAutoMaxMinRowsCart)
+             : std::clamp(trainingRows / GpuOptions::kAutoMinRowsShare, GpuOptions::kAutoMinRows,
+                          GpuOptions::kAutoMaxMinRows);
+}
+
 void printUsage(const char *program) {
   std::cout
       << "Usage: " << program << " [options] [dataset.csv]\n"
@@ -56,10 +71,10 @@ void printUsage(const char *program) {
       << "  --min-leaf N             every child keeps at least N rows (default: 1 for\n"
       << "                           CART, 2 for C4.5)\n"
       << "  --no-prune               keep the unpruned tree (pruning is on by default)\n"
-      << "  --holdout F              hold out fraction F of rows as test set\n"
-      << "  --test-last N            the last N rows of the file are the test set\n"
-      << "  --seed N                 random seed for the holdout split and CART's CV\n"
-      << "                           folds (default 1)\n"
+      << "  --test FILE              test set: a CSV with the same header\n"
+      << "  --test-last N            test set: the last N rows of the training file\n"
+      << "  --holdout F              test set: a random fraction F of the rows\n"
+      << "  --seed N                 random seed for the holdout split (default 1)\n"
       << "  --repeat N               train N trees in a row on the loaded data, each one\n"
       << "                           as a fresh process's only tree, and print each one's\n"
       << "                           time and Unix start/end (energy runs)\n"
@@ -68,10 +83,8 @@ void printUsage(const char *program) {
       << "  --threads N              CPU threads (0 = every CPU it may run on)\n"
       << "  --dump FILE              write the tree as text\n"
       << "\n"
-      << "CART (default: cost-complexity pruning with a fixed alpha, one tree):\n"
+      << "CART (default: cost-complexity pruning with a fixed alpha):\n"
       << "  --alpha X                cost-complexity parameter (default 0.00001)\n"
-      << "  --cv K                   choose alpha by K-fold cross-validation instead\n"
-      << "                           (K + 1 trees)\n"
       << "\n"
       << "C4.5 (default: error-based pruning with CF 0.25 and subtree raising):\n"
       << "  --cf X                   pruning confidence factor\n"
@@ -165,7 +178,7 @@ std::vector<std::string> givenOf(const std::set<std::string> &given,
 void checkFlagCombination(const Options &options, const std::set<std::string> &given) {
   for (const auto &group : {givenOf(given, {"--simple", "--serial", "--parallel", "--cuda"}),
                             givenOf(given, {"--cart", "--c45"}),
-                            givenOf(given, {"--no-prune", "--cv", "--alpha"}),
+                            givenOf(given, {"--no-prune", "--alpha"}),
                             givenOf(given, {"--no-prune", "--cf"})}) {
     if (group.size() > 1) {
       throw std::runtime_error("Options " + group[0] + " and " + group[1] +
@@ -180,10 +193,9 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
     }
   };
   if (options.algorithm == Algorithm::C45) {
-    refuse({"--cv", "--alpha"},
-           "is for CART (it chooses CART's alpha); C4.5 prunes with --cf");
+    refuse({"--alpha"}, "is for CART; C4.5 prunes with --cf");
   } else {
-    refuse({"--cf"}, "is for C4.5; CART prunes with --alpha or --cv");
+    refuse({"--cf"}, "is for C4.5; CART prunes with --alpha");
   }
   if (options.backend != Backend::Cuda) {
     refuse({"--gpu-min-rows", "--gpu-only", "--gpu-sweep"}, "is for --cuda only");
@@ -225,7 +237,7 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
     } else if (arg == "--min-leaf") {
       options.minLeaf = static_cast<std::size_t>(parseInteger(arg, args.value(arg), 1));
     } else if (arg == "--no-prune") {
-      options.cart.pruning = CartPruning::None;
+      options.cart.prune = false;
       options.c45.prune = false;
     } else if (arg == "--repeat") {
       options.repeat = parseCount(arg, args.value(arg));
@@ -233,6 +245,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.repeatWarmup = parseReal(arg, args.value(arg));
     } else if (arg == "--holdout") {
       options.holdout = parseReal(arg, args.value(arg));
+    } else if (arg == "--test") {
+      options.testPath = args.value(arg);
     } else if (arg == "--test-last") {
       options.testLast = parseCount(arg, args.value(arg));
     } else if (arg == "--seed") {
@@ -244,11 +258,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
     } else if (arg == "--profile") {
       options.profilePath = args.value(arg);
     } else if (arg == "--alpha") {
-      options.cart.pruning = CartPruning::Alpha;
+      options.cart.prune = true;
       options.cart.alpha = parseReal(arg, args.value(arg));
-    } else if (arg == "--cv") {
-      options.cart.pruning = CartPruning::CrossValidation;
-      options.cart.folds = static_cast<int>(parseCount(arg, args.value(arg)));
     } else if (arg == "--cf") {
       options.c45.prune = true;
       options.c45.confidence = parseReal(arg, args.value(arg));
@@ -281,8 +292,8 @@ void validateOptions(const Options &options) {
   if (options.holdout < 0.0 || options.holdout >= 1.0) {
     throw std::runtime_error("--holdout must be in [0, 1)");
   }
-  if (options.testLast > 0 && options.holdout > 0.0) {
-    throw std::runtime_error("--test-last and --holdout exclude each other");
+  if ((!options.testPath.empty()) + (options.testLast > 0) + (options.holdout > 0.0) > 1) {
+    throw std::runtime_error("--test, --test-last and --holdout exclude each other");
   }
   if (options.repeatWarmup < 0.0) {
     throw std::runtime_error("--repeat-warmup must be >= 0");
@@ -291,12 +302,8 @@ void validateOptions(const Options &options) {
     throw std::runtime_error("--profile traces one tree: use it without --repeat");
   }
   if (options.algorithm == Algorithm::Cart) {
-    const CartOptions &cart = options.cart;
-    if (cart.pruning == CartPruning::Alpha && cart.alpha < 0.0) {
+    if (options.cart.prune && options.cart.alpha < 0.0) {
       throw std::runtime_error("CART: --alpha must be >= 0");
-    }
-    if (cart.pruning == CartPruning::CrossValidation && cart.folds < 2) {
-      throw std::runtime_error("CART: --cv needs at least 2 folds");
     }
   } else {
     if (options.c45.confidence <= 0.0 || options.c45.confidence >= 1.0) {

@@ -42,8 +42,6 @@ configs=("--cart --alpha 1e-4"
          "--cart --no-prune"
          "--cart --min-leaf 3 --no-prune"
          "--cart -d 8 --alpha 0.001"
-         "--cart --cv 5"
-         "--cart --cv 5 --holdout 0.3"
          "--c45"
          "--c45 --cf 0.1 --min-leaf 5"
          "--c45 --no-prune"
@@ -91,6 +89,30 @@ for dataset in "${datasets[@]}"; do
 done
 
 ((UPDATE)) && exit 0
+
+# A separate test file (--test) must give what --test-last gives on the same
+# rows: the same tree and the same test accuracy.
+for dataset in "${datasets[@]}"; do
+  base=$(basename "$dataset" .csv)
+  rows=$(($(awk 'END { print NR }' "$dataset") - 1)) # (the last line may lack its newline)
+  last=$((rows / 4))
+  head -n $((rows - last + 1)) "$dataset" > "$WORK/train.csv"
+  { head -n 1 "$dataset"; tail -n "$last" "$dataset"; } > "$WORK/test.csv"
+  for algorithm in --cart --c45; do
+    "$TREE_BIN" $algorithm --test-last "$last" "$dataset" --dump "$WORK/a.txt" |
+      grep 'test accuracy' > "$WORK/a.log"
+    "$TREE_BIN" $algorithm --test "$WORK/test.csv" "$WORK/train.csv" --dump "$WORK/b.txt" |
+      grep 'test accuracy' > "$WORK/b.log"
+    if cmp -s "$WORK/a.txt" "$WORK/b.txt" && cmp -s "$WORK/a.log" "$WORK/b.log"; then
+      result=ok
+    else
+      result=DIFFERENT
+      failures=$((failures + 1))
+    fi
+    printf '%-9s %-22s %-52s %s\n' "$result" "$base" "$algorithm --test FILE" "= --test-last $last"
+  done
+done
+
 if ((failures > 0)); then
   echo "$failures check(s) failed"
   exit 1

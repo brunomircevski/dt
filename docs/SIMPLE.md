@@ -1,8 +1,8 @@
 # `--simple` against `--serial`
 
 Files: `src/build/simple_grower.cpp` (`--simple`, about 150 lines) against
-`src/build/cpu_grower.cpp` + `src/build/cpu_builder.cpp` (`--serial`, about
-2,200 lines). Both score and choose cuts with the same code
+`src/build/cpu_grower.cpp`, `cpu_builder.*`, `cpu_sweep.*` and `presort.*`
+(`--serial`, about 2,300 lines). Both score and choose cuts with the same code
 (`src/algo/split_math.h`, `src/algo/split_rules.cpp`) and prune with the same
 code (`src/algo/cart_pruning.cpp`, `src/algo/c45_pruning.cpp`).
 
@@ -50,7 +50,7 @@ Notation: `N` training rows, `F` features, `K` classes, `n` rows of a node.
 | 19 | Allocation | heap vectors per node and feature | allocated once; `thread_local` buffers reused | no allocator in the hot loop |
 | 20 | Node storage | `push_back` in preorder | `NodeStore` chunks, renumbered in preorder at the end | no reallocation |
 | 21 | Recursion | recursive `growNode` | explicit stack | no stack overflow (Risk D) |
-| 22 | Footprint | row ids + one sorted copy per feature of the current node | (F+1)·8N columns, 8N scratch, N goes-left bytes, N/8 bitmap, 16N tables, 4N leaf ids | serial needs ~8F bytes per row more |
+| 22 | Footprint | row ids + one sorted copy per feature of the current node | (F+1)·8N columns, N goes-left bytes, N/8 bitmap, 16N tables, 4N leaf ids | serial needs ~8F bytes per row more |
 | **C4.5 post-processing** |||||
 | 23 | Distinct values | `distinctValues(train)`: copy and `std::sort` per feature, timed as pruning | read off the presorted columns, timed as presort | O(F·N log N) → O(F·N) |
 | 24 | Leaf of every row | pruning routes all N rows through the tree | recorded by the grower | one pass of N·depth gathers saved |
@@ -59,8 +59,7 @@ Notation: `N` training rows, `F` features, `K` classes, `n` rows of a node.
 | **Other** |||||
 | 27 | CART pruning | same | same | none |
 | 28 | Threads | one | one (no pool) | none |
-| 29 | CV folds | each fold sorts from scratch | filters the presorted columns | O(F·N log N) → O(F·N) per fold |
-| 30 | Root class counts | plain loop | 4-lane `countClasses` | negligible |
+| 29 | Root class counts | plain loop | 4-lane `countClasses` | negligible |
 
 ## Why the tree is the same
 
@@ -100,7 +99,7 @@ before").
 
 **B. Rounding bounds.** Items 4, 6, 7 and 9 rely on `margin`, the convexity
 slack and `maxGainStep` being true bounds. They are argued in the comments of
-`cpu_builder.cpp`, and trees match on every test and benchmark, but no test
+`cpu_sweep.h`, and trees match on every test and benchmark, but no test
 targets the bounds directly (e.g. adversarial near-ties in large nodes).
 
 **C. `tries` for CART (harmless).** Skipped blocks are not counted in CART's
@@ -115,6 +114,5 @@ frame size was not measured.
 `--multiply` only repeats the rows.
 
 **F. Timing attribution.** Item 23 puts the distinct-value sort into
-`--simple`'s prune time, and serial allocates an 8N scratch array it does not
-use (the pool branches need it). Neither changes a tree; both matter when
-build and prune times are reported apart.
+`--simple`'s prune time. It does not change a tree; it matters when build and
+prune times are reported apart.
