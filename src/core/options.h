@@ -107,10 +107,12 @@ struct Options {
   // child process, so each one starts as a fresh process's only tree would
   // (bench/power); the last one is the one evaluated and dumped.
   std::size_t repeat = 0;
-  // --repeat-pause: seconds of idle before each --repeat tree (in the parent,
-  // before it forks the tree's child), so that the machine is as idle as
-  // before a single run's tree, which follows the CSV load.
-  double repeatPause = 0.0;
+  // --repeat-warmup: seconds that each --repeat tree's child keeps its threads
+  // busy before its timer starts, as a single run's CSV load does before its
+  // tree. Without it, a GPU tree that follows an idle CPU (the previous
+  // tree's GPU-only build) set up 10% (H100 node) to 40% (A100 node) slower:
+  // the socket's idle power state slows its host-memory copies.
+  double repeatWarmup = 0.0;
 
   std::string dumpPath;   // write the tree as text to a file
   // Write where the training time goes, as JSON (src/core/trace.h).

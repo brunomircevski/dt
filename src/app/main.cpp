@@ -19,7 +19,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <thread>
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -157,13 +156,21 @@ int main(int argc, char *argv[]) {
     // context and the staging buffers. Trees 1..N-1 are trained in this loop;
     // the child of tree N goes on below like a single run (evaluation, output)
     // while this process waits for it and exits with its status.
-    auto pause = [&options] {
-      if (options.repeatPause > 0.0) {
-        std::this_thread::sleep_for(std::chrono::duration<double>(options.repeatPause));
+    // --repeat-warmup: every thread of the child's pool spins until the
+    // deadline, like a single run's CSV load right before its tree.
+    auto warmUp = [&options](ThreadPool &threads) {
+      if (options.repeatWarmup <= 0.0) {
+        return;
       }
+      const auto end = std::chrono::steady_clock::now() +
+                       std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                           std::chrono::duration<double>(options.repeatWarmup));
+      threads.parallelFor(threads.workerCount() + 1, [end](std::size_t) {
+        while (std::chrono::steady_clock::now() < end) {
+        }
+      });
     };
     for (std::size_t run = 1; forks && run < options.repeat; ++run) {
-      pause();
       std::cout.flush();
       std::fflush(nullptr);
       const pid_t child = fork();
@@ -177,6 +184,7 @@ int main(int argc, char *argv[]) {
           if (options.backend == Backend::Cuda) {
             gpuPrepare(threadCount(options));
           }
+          warmUp(childPool);
           TrainTimings childTimings;
           const double start = unixNow();
           trainTree(train, options, &childPool, childTimings, /*verbose=*/false);
@@ -198,7 +206,6 @@ int main(int argc, char *argv[]) {
     std::optional<ThreadPool> childPool;
     ThreadPool *work = &pool; // training and evaluation
     if (forks) {
-      pause();
       std::cout.flush();
       std::fflush(nullptr);
       const pid_t child = fork();
@@ -220,6 +227,7 @@ int main(int argc, char *argv[]) {
       if (options.backend == Backend::Cuda) {
         gpuPrepare(threadCount(options));
       }
+      warmUp(*childPool);
     }
     TrainTimings timings;
     const bool profile = !options.profilePath.empty();

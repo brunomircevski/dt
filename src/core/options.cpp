@@ -63,7 +63,8 @@ void printUsage(const char *program) {
       << "  --repeat N               train N trees in a row on the loaded data, each one\n"
       << "                           as a fresh process's only tree, and print each one's\n"
       << "                           time and Unix start/end (energy runs)\n"
-      << "  --repeat-pause S         with --repeat: S seconds of idle before each tree\n"
+      << "  --repeat-warmup S        with --repeat: keep the threads busy for S seconds\n"
+      << "                           before each tree (as the CSV load does)\n"
       << "  --threads N              CPU threads (0 = every CPU it may run on)\n"
       << "  --dump FILE              write the tree as text\n"
       << "\n"
@@ -228,8 +229,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.c45.prune = false;
     } else if (arg == "--repeat") {
       options.repeat = parseCount(arg, args.value(arg));
-    } else if (arg == "--repeat-pause") {
-      options.repeatPause = parseReal(arg, args.value(arg));
+    } else if (arg == "--repeat-warmup") {
+      options.repeatWarmup = parseReal(arg, args.value(arg));
     } else if (arg == "--holdout") {
       options.holdout = parseReal(arg, args.value(arg));
     } else if (arg == "--test-last") {
@@ -283,8 +284,8 @@ void validateOptions(const Options &options) {
   if (options.testLast > 0 && options.holdout > 0.0) {
     throw std::runtime_error("--test-last and --holdout exclude each other");
   }
-  if (options.repeatPause < 0.0) {
-    throw std::runtime_error("--repeat-pause must be >= 0");
+  if (options.repeatWarmup < 0.0) {
+    throw std::runtime_error("--repeat-warmup must be >= 0");
   }
   if (options.repeat > 1 && !options.profilePath.empty()) {
     throw std::runtime_error("--profile traces one tree: use it without --repeat");
