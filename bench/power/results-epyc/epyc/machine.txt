@@ -1,5 +1,5 @@
-job 144 on epyc1, 2026-11-06T11:43:14+01:00, kind cpu
-commit ebbea719-dirty
+job 217 on epyc1, 2026-11-07T10:21:09+01:00, kind cpu
+commit 9af61483
 data bench/data/ecbdl_15m/train.csv, reps 10 simple=1 serial=3, repeat , target 120 s, idle 300 s, step 300 s, pre 20 s, algos cart c45, impls simple serial parallel
 used_gpu 0 (cpus 0-23, memory node 0, 24 threads)
 protocol --no-prune -d 10
@@ -13,7 +13,7 @@ governor amd-pstate-epp performance
 cpus available 48
 perf_event_paranoid 4
 power1_accuracy 90.0%
-power1_average 109000000
+power1_average 110000000
 power1_average_interval 2000
 power1_average_interval_max 604800000
 power1_average_interval_min 2000
@@ -26,6 +26,6 @@ rapl_max intel-rapl:0:0 core 65532610987
 rapl_max intel-rapl:1 package-1 65532610987
 rapl_max intel-rapl:1:0 core 65532610987
                total        used        free      shared  buff/cache   available
-Mem:             503           3         501           0           0         499
-repeat parallel cart 21 (warm-up train 6308.2 ms)
-repeat parallel c45 17 (warm-up train 7792.5 ms)
+Mem:             503           3         500           0           0         499
+repeat parallel cart 20 (warm-up train 6425.3 ms)
+repeat parallel c45 16 (warm-up train 8066.6 ms)
