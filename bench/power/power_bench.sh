@@ -40,7 +40,10 @@
 # seconds of idle; then IDLE seconds of idle again. ./tree --repeat K trains
 # every tree as a fresh process's only tree (each one in a forked child, since
 # 2026-11-07) and prints its training window as Unix times;
-# bench/power/analyze.py integrates the samples over those windows.
+# bench/power/analyze.py integrates the samples over those windows. The GPU
+# implementations add --repeat-warmup WARMUP: each tree's child keeps its CPUs
+# busy for WARMUP seconds before its timer, as a single run's CSV load does
+# (without it, a GPU tree after an idle CPU set up 10-40% slower).
 #
 # Environment: DATA (CSV), REPS (3), REPS_BY (per-implementation rounds,
 # e.g. "simple=1 serial=3"; the rest run REPS rounds), REPEAT_BY (trees per
@@ -48,7 +51,8 @@
 # IDLE (60), STEP (0), PRE (20), ALGOS ("cart c45"), IMPLS (gpu: "cuda gpuonly",
 # cpu: "simple serial parallel", all: all five); GPU (0), GPU_CPUS (0-23),
 # GPU_MEM (0) and GPU_THREADS (24): the GPU the GPU backends use, and the CPUs
-# and memory node of its NUMA node.
+# and memory node of its NUMA node; WARMUP (2): seconds of --repeat-warmup for
+# the GPU implementations.
 set -uo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 KIND=$1
@@ -63,6 +67,7 @@ GPU=${GPU:-0}
 GPU_CPUS=${GPU_CPUS:-0-23}
 GPU_MEM=${GPU_MEM:-0}
 GPU_THREADS=${GPU_THREADS:-24}
+WARMUP=${WARMUP:-2}
 ALGOS=${ALGOS:-cart c45}
 PROTOCOL=(--no-prune -d 10)
 mkdir -p "$OUT/out"
@@ -85,8 +90,8 @@ done
 
 command_of() { # impl -> the command line before the algorithm flags
   case $1 in
-    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --cuda --threads $GPU_THREADS" ;;
-    gpuonly) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --cuda --gpu-only --threads $GPU_THREADS" ;;
+    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --cuda --threads $GPU_THREADS --repeat-warmup $WARMUP" ;;
+    gpuonly) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --cuda --gpu-only --threads $GPU_THREADS --repeat-warmup $WARMUP" ;;
     # --threads 0: loading and evaluation use every core; training is one thread
     simple) echo "./tree_cpu --simple --threads 0" ;;
     serial) echo "./tree_cpu --serial --threads 0" ;;
@@ -98,7 +103,7 @@ command_of() { # impl -> the command line before the algorithm flags
   echo "job ${SLURM_JOB_ID:-none} on $(hostname), $(date -Is), kind $KIND"
   echo "commit ${TREE_GIT_DESCRIBE:-$(git describe --always --dirty 2>/dev/null)}"
   echo "data $DATA, reps $REPS ${REPS_BY:-}, repeat ${REPEAT_BY:-}, target $TARGET s, idle $IDLE s, step $STEP s, pre $PRE s, algos $ALGOS, impls $IMPLS"
-  echo "used_gpu $GPU (cpus $GPU_CPUS, memory node $GPU_MEM, $GPU_THREADS threads)"
+  echo "used_gpu $GPU (cpus $GPU_CPUS, memory node $GPU_MEM, $GPU_THREADS threads, warm-up $WARMUP s)"
   echo "protocol ${PROTOCOL[*]}"
   echo "kernel $(uname -r)"
   echo "dmi $(cat /sys/class/dmi/id/sys_vendor) $(cat /sys/class/dmi/id/product_name)"
