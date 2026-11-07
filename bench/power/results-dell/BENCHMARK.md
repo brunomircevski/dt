@@ -3,11 +3,14 @@
 This experiment measures the time and energy that ./tree's three CPU
 implementations need to train one tree on ECBDL'14 15M (15 M rows, 631
 features). Settings: depth ≤ 10, no pruning, CART (gini) and C4.5 (gain ratio).
-It ran in one SLURM job on dell4 (job 148, 2026-11-06, 11:45–15:28).
+It ran in one SLURM job on dell4 (job 218, 2026-11-07, 10:21–14:07).
 
-It repeats the first round on dell4
-([../results/BENCHMARK.md](../results/BENCHMARK.md), job 85), which could read
-only the PSU. Since 2026-11-06 the RAPL counters are readable by users
+It replaces job 148 (2026-11-06), which trained a process's trees one after
+another in the same process. Since 2026-11-07, `--repeat` trains every tree in
+its own forked child, so each tree is the only tree of a fresh process, like a
+single run, and every tree is measured. The first round on dell4
+([../results/BENCHMARK.md](../results/BENCHMARK.md), job 85) could read only
+the PSU; since 2026-11-06 the RAPL counters are readable by users
 ([../ADMIN-REQUEST.md](../ADMIN-REQUEST.md)), so this run measures the CPU
 packages and the whole server at the same time.
 
@@ -15,10 +18,11 @@ packages and the whole server at the same time.
 |---|---|---|---|
 | Serial-Simple | `--simple` | 1 core | 1 × 1 |
 | Serial-Opt | `--serial` | 1 core | 3 × 1 |
-| Parallel ("Multicore" in the paper) | `--parallel` | all 48 cores | 10 × 10 (CART), 10 × 8 (C4.5) |
+| Parallel ("Multicore" in the paper) | `--parallel` | all 48 cores | 10 × 11 (CART), 10 × 9 (C4.5) |
 
-Code: main at ebbea71, built on ampere on 2026-11-06 (`~/dt/tree_cpu`). Every
-run built the same tree: CART 1,863 nodes, C4.5 725 nodes, depth 10.
+Code: main at b486bbb (forking `--repeat`), built on hopper on 2026-11-07
+(`~/dt/tree_cpu`; machine.txt says 9af6148, the checkout's label). Every run
+built the same tree: CART 1,863 nodes, C4.5 725 nodes, depth 10.
 
 ## What was measured
 
@@ -34,8 +38,8 @@ disks, network, the board and PSU losses.
 Dell PowerEdge R660, 2× Xeon Gold 6542Y (24 cores each), 512 GB RAM. CPU
 frequency governor: `intel_pstate powersave`. Idle power (mean of three
 windows: 300 s at the start, 300 s after the step load, 300 s at the end):
-**PSU 154 W**, CPU packages 68 W (37 + 31 W). The PSU meter lags the load by
-**4.1 s**, measured on a 300 s all-core step.
+**PSU 155 W**, CPU packages 68 W (37 + 31 W). The PSU meter lags the load by
+**2.6 s**, measured on a 300 s all-core step.
 
 ## Protocol
 
@@ -49,13 +53,30 @@ samples every sensor every 0.1 s for the whole job.
    meter's delay), 300 s idle.
 3. **Runs.** Round-robin over algorithm × implementation, 20 s of idle before
    each process. Serial-Simple ran once, Serial-Opt 3 times, Parallel 10 times.
+   A Parallel process loads the data once, then forks one child per tree.
 4. **Idle.** 300 s at the end.
 
-Every number is per tree. For Parallel it is trees 2..K of each process (the
-first tree is left out); the serial processes train one tree. The PSU energy is
-its readings held until the next one, shifted back by the meter's delay. Every
-measured window has at least 57 PSU changes (Parallel), 113 (Serial-Opt) and
-861 (Serial-Simple).
+Every number is per tree, over every tree. A tree's window runs from the start
+of its training to the end of pruning (before its memory is freed); the gaps
+between children (fork, thread start) are left out. The PSU energy is its
+readings held until the next one, shifted back by the meter's delay. Every
+measured case has at least 62 PSU changes (Parallel), 110 (Serial-Opt) and 810
+(Serial-Simple).
+
+## Time check
+
+The time benchmark ran on dell1, not dell4, and dell1's runs vary by 13–35%
+between batches, so the times here are not compared with it. Within this run,
+each Parallel process's first tree is 1–2% slower than its mean tree:
+
+| Implementation | Algorithm | t per tree | first tree |
+|---|---|---|---|
+| Serial-Simple | CART | 2,576 s | — |
+| Serial-Simple | C4.5 | 2,865 s | — |
+| Serial-Opt | CART | 359 s | — |
+| Serial-Opt | C4.5 | 441 s | — |
+| Parallel | CART | 12.6 s | 12.9 s |
+| Parallel | C4.5 | 15.9 s | 16.2 s |
 
 ## Results
 
@@ -63,17 +84,17 @@ measured window has at least 57 PSU changes (Parallel), 113 (Serial-Opt) and
 
 | Implementation | t per tree | PSU power (above idle) | CPU packages | PSU energy per tree | above idle | CPU packages | rest of the server |
 |---|---|---|---|---|---|---|---|
-| Serial-Simple | 2,591 s | 308 W (+153) | 197 W | 798 kJ | 398 kJ | 510 kJ | 288 kJ |
-| Serial-Opt | 358 s ± 0.4% | 309 W (+155) | 199 W | 111 kJ ± 0.8% | 55.5 kJ | 71.5 kJ | 39.4 kJ |
-| Parallel | 12.3 s ± 0.2% | 684 W (+529) | 481 W | 8.55 kJ ± 0.9% | 6.62 kJ | 6.01 kJ | 2.54 kJ |
+| Serial-Simple | 2,576 s | 307 W (+152) | 198 W | 792 kJ | 392 kJ | 509 kJ | 282 kJ |
+| Serial-Opt | 359 s ± 1.2% | 309 W (+153) | 199 W | 111 kJ ± 1.3% | 55.1 kJ | 71.4 kJ | 39.4 kJ |
+| Parallel | 12.6 s ± 0.7% | 676 W (+521) | 479 W | 8.54 kJ ± 1.5% | 6.58 kJ | 6.04 kJ | 2.49 kJ |
 
 ### C4.5 (gain ratio)
 
 | Implementation | t per tree | PSU power (above idle) | CPU packages | PSU energy per tree | above idle | CPU packages | rest of the server |
 |---|---|---|---|---|---|---|---|
-| Serial-Simple | 2,859 s | 308 W (+153) | 197 W | 879 kJ | 438 kJ | 563 kJ | 316 kJ |
-| Serial-Opt | 434 s ± 0.6% | 310 W (+156) | 198 W | 135 kJ ± 0.3% | 67.6 kJ | 85.9 kJ | 48.6 kJ |
-| Parallel | 15.4 s ± 0.6% | 666 W (+512) | 471 W | 10.4 kJ ± 1.9% | 8.0 kJ | 7.36 kJ | 3.05 kJ |
+| Serial-Simple | 2,865 s | 308 W (+153) | 197 W | 883 kJ | 438 kJ | 564 kJ | 318 kJ |
+| Serial-Opt | 441 s ± 0.2% | 309 W (+153) | 199 W | 136 kJ ± 0.3% | 67.6 kJ | 87.6 kJ | 48.4 kJ |
+| Parallel | 15.9 s ± 1.1% | 663 W (+508) | 469 W | 10.6 kJ ± 1.9% | 8.10 kJ | 7.47 kJ | 3.10 kJ |
 
 ± is one standard deviation over the runs. Full tables, with peaks and both
 sockets: [summary.md](summary.md), [summary.csv](summary.csv), every run in
@@ -97,18 +118,21 @@ sockets: [summary.md](summary.md), [summary.csv](summary.csv), every run in
 
 ## Findings
 
-- **Parallel needs the least energy per tree by far:** 8.55 kJ (CART) and
-  10.4 kJ (C4.5), 13× less than Serial-Opt and 85–93× less than Serial-Simple.
+- **Parallel needs the least energy per tree by far:** 8.54 kJ (CART) and
+  10.6 kJ (C4.5), 13× less than Serial-Opt and 83–93× less than Serial-Simple.
 - **The CPU packages are 64% of the server's energy** in the serial runs and
   70–71% in Parallel.
-- **One busy core raises the server by ~155 W**, the CPU packages by only
+- **One busy core raises the server by ~153 W**, the CPU packages by only
   ~130 W.
-- **dell4 needs 2.2× epyc1's energy per tree in Parallel** (8.55 vs 3.88 kJ
+- **dell4 needs 2.2× epyc1's energy per tree in Parallel** (8.54 vs 3.83 kJ
   CART, [../results-epyc/BENCHMARK.md](../results-epyc/BENCHMARK.md)): it is
-  2× slower and draws 13% more power. For the serial runs the gap is
-  1.3–1.8×.
-- **Agrees with round 1** (job 85, PSU only, 3 runs): per-tree energy within
-  1.5% (Parallel CART 8.55 vs 8.46 kJ, Serial-Simple CART 798 vs 786 kJ).
+  2× slower and draws 14% more power. For the serial runs the gap is
+  1.3–1.9×.
+- **Agrees with the earlier rounds:** per-tree energy within 2% of job 148
+  (Parallel CART 8.54 vs 8.55 kJ, Serial-Simple CART 792 vs 798 kJ) and of
+  round 1 (job 85, PSU only: 8.46 and 786 kJ). Parallel trees are 2–3% slower
+  than job 148's (12.6 vs 12.3 s), whose first tree of each process was left
+  out.
 
 ## Reproduce
 

@@ -1,24 +1,24 @@
 C4.5 on bench/data/ecbdl_15m/train.csv (backend parallel)
   rows 15000000 train, 631 features, 2 classes
   pruning off
-  repeat 1/9: train 15782.2 ms, unix 1793972962.317729 1793972978.330877
-  repeat 2/9: train 16111.8 ms, unix 1793972978.330907 1793972994.672470
-  repeat 3/9: train 15612.1 ms, unix 1793972994.672486 1793973010.513660
-  repeat 4/9: train 15338.4 ms, unix 1793973010.513697 1793973026.079148
-  repeat 5/9: train 15303.5 ms, unix 1793973026.079166 1793973041.611971
-  repeat 6/9: train 15032.1 ms, unix 1793973041.611985 1793973056.874437
-  repeat 7/9: train 15587.2 ms, unix 1793973056.874451 1793973072.691150
-  repeat 8/9: train 15177.2 ms, unix 1793973072.691358 1793973088.097289
-  repeat 9/9: train 15357.2 ms, unix 1793973088.097302 1793973103.682990
+  repeat 1/9: train 15979.5 ms, unix 1794054416.989030 1794054432.970169
+  repeat 2/9: train 15593.1 ms, unix 1794054433.228451 1794054448.822948
+  repeat 3/9: train 15940.2 ms, unix 1794054449.078812 1794054465.020342
+  repeat 4/9: train 15607.5 ms, unix 1794054465.279834 1794054480.888486
+  repeat 5/9: train 15629.4 ms, unix 1794054481.146081 1794054496.776925
+  repeat 6/9: train 15673.4 ms, unix 1794054497.035969 1794054512.711229
+  repeat 7/9: train 15565.0 ms, unix 1794054512.967857 1794054528.534440
+  repeat 8/9: train 15651.1 ms, unix 1794054528.793602 1794054544.446263
+  repeat 9/9: train 15446.3 ms, unix 1794054544.701683 1794054560.149328
 Tree:
   nodes 725, leaves 363, depth 10
   train accuracy 97.9154%
 Timings:
-  load                 26732.9 ms
-  presort               4525.1 ms
-  build                10831.5 ms
-  prune                    0.7 ms
-  train total          15357.2 ms
-  evaluate               554.5 ms
+  load                 26259.7 ms
+  presort               4675.1 ms
+  build                10770.6 ms
+  prune                    0.6 ms
+  train total          15446.3 ms
+  evaluate              1060.0 ms
 Memory:
-  peak after training 116867676 KiB
+  peak after training 116842496 KiB

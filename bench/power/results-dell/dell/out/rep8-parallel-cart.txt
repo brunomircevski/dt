@@ -1,26 +1,26 @@
 CART on bench/data/ecbdl_15m/train.csv (backend parallel)
   rows 15000000 train, 631 features, 2 classes
   pruning off
-  repeat 1/11: train 12758.4 ms, unix 1793973923.164904 1793973936.156401
-  repeat 2/11: train 12306.3 ms, unix 1793973936.156429 1793973948.692806
-  repeat 3/11: train 12484.4 ms, unix 1793973948.692819 1793973961.407965
-  repeat 4/11: train 12243.1 ms, unix 1793973961.407980 1793973973.880312
-  repeat 5/11: train 12352.9 ms, unix 1793973973.880332 1793973986.464191
-  repeat 6/11: train 12320.3 ms, unix 1793973986.464220 1793973999.013671
-  repeat 7/11: train 12088.2 ms, unix 1793973999.013686 1793974011.331508
-  repeat 8/11: train 12166.3 ms, unix 1793974011.331522 1793974023.728866
-  repeat 9/11: train 12291.6 ms, unix 1793974023.728880 1793974036.250083
-  repeat 10/11: train 12276.6 ms, unix 1793974036.250098 1793974048.756617
-  repeat 11/11: train 12445.5 ms, unix 1793974048.756646 1793974061.433614
+  repeat 1/11: train 12922.6 ms, unix 1794055384.707424 1794055397.631043
+  repeat 2/11: train 12602.6 ms, unix 1794055397.888881 1794055410.492529
+  repeat 3/11: train 12483.0 ms, unix 1794055410.748235 1794055423.232533
+  repeat 4/11: train 12547.5 ms, unix 1794055423.487318 1794055436.036928
+  repeat 5/11: train 12350.3 ms, unix 1794055436.292944 1794055448.645197
+  repeat 6/11: train 12566.3 ms, unix 1794055448.900856 1794055461.468272
+  repeat 7/11: train 12551.7 ms, unix 1794055461.725079 1794055474.277531
+  repeat 8/11: train 12457.3 ms, unix 1794055474.532470 1794055486.991529
+  repeat 9/11: train 12429.3 ms, unix 1794055487.244505 1794055499.674765
+  repeat 10/11: train 12643.1 ms, unix 1794055499.930133 1794055512.575223
+  repeat 11/11: train 12393.3 ms, unix 1794055512.831369 1794055525.225665
 Tree:
   nodes 1863, leaves 932, depth 10
   train accuracy 97.9198%
 Timings:
-  load                 33202.5 ms
-  presort               2591.1 ms
-  build                 9854.3 ms
+  load                 26518.4 ms
+  presort               2700.2 ms
+  build                 9693.1 ms
   prune                    0.0 ms
-  train total          12445.5 ms
-  evaluate               557.6 ms
+  train total          12393.3 ms
+  evaluate               968.9 ms
 Memory:
-  peak after training 116892300 KiB
+  peak after training 116848296 KiB
