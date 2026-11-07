@@ -1,0 +1,28 @@
+built /home/bmircevski/dt/tree_95b6d774_ampere
+2026-11-06 22:33:10  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mrdefault
+2026-11-06 22:35:28  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mr256 (--gpu-min-rows 256)
+2026-11-06 22:38:10  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mr512 (--gpu-min-rows 512)
+2026-11-06 22:40:23  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mr1024 (--gpu-min-rows 1024)
+2026-11-06 22:42:32  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mr2048 (--gpu-min-rows 2048)
+2026-11-06 22:44:50  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mr4096 (--gpu-min-rows 4096)
+2026-11-06 22:47:01  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mr8192 (--gpu-min-rows 8192)
+2026-11-06 22:49:21  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mr16384 (--gpu-min-rows 16384)
+2026-11-06 22:51:39  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-airline-mr32768 (--gpu-min-rows 32768)
+2026-11-06 22:54:06  airline: --gpu-min-rows 2048
+2026-11-06 22:54:06  hybrid-vs-gpu-only/both-sockets/cuda-ampere-airline (--gpu-min-rows 2048)
+2026-11-06 23:00:15  hybrid-vs-gpu-only/both-sockets/gpuonly-ampere-airline
+2026-11-06 23:08:54  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mrdefault
+2026-11-06 23:16:49  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr256 (--gpu-min-rows 256)
+2026-11-06 23:25:04  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr512 (--gpu-min-rows 512)
+2026-11-06 23:33:16  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr1024 (--gpu-min-rows 1024)
+2026-11-06 23:41:22  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr2048 (--gpu-min-rows 2048)
+2026-11-06 23:49:18  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr4096 (--gpu-min-rows 4096)
+2026-11-06 23:57:49  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr8192 (--gpu-min-rows 8192)
+2026-11-07 00:06:02  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr16384 (--gpu-min-rows 16384)
+2026-11-07 00:13:57  hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr32768 (--gpu-min-rows 32768)
+2026-11-07 00:22:04  mnist8m: --gpu-min-rows 16384
+2026-11-07 00:22:04  hybrid-vs-gpu-only/both-sockets/cuda-ampere-mnist8m (--gpu-min-rows 16384)
+2026-11-07 00:42:16  hybrid-vs-gpu-only/both-sockets/gpuonly-ampere-mnist8m
+2026-11-07 01:04:56  hybrid-vs-gpu-only/both-sockets/profile/cuda-ampere-mnist8m (--gpu-min-rows 16384 --profile)
+2026-11-07 01:23:08  hybrid-vs-gpu-only/both-sockets/profile/gpuonly-ampere-mnist8m (--profile)
+2026-11-07 01:44:21  done

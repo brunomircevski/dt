@@ -1,67 +1,52 @@
 {
- "min_rows": 512,
- "default": {
-  "cart": 2048,
-  "c45": 4096
- },
+ "min_rows": 2048,
  "times": {
   "default": {
-   "cart_full_nodepth": 4.6002,
-   "c45_unpruned": 4.5116
-  },
-  "128": {
-   "cart_full_nodepth": 5.4526,
-   "c45_unpruned": 5.5973
+   "cart_full_nodepth": 3.3734,
+   "c45_unpruned": 3.2098999999999998
   },
   "256": {
-   "cart_full_nodepth": 4.5802,
-   "c45_unpruned": 4.3971
+   "cart_full_nodepth": 7.365466666666666,
+   "c45_unpruned": 6.524933333333333
   },
   "512": {
-   "cart_full_nodepth": 4.4768,
-   "c45_unpruned": 4.1525
+   "cart_full_nodepth": 3.553933333333333,
+   "c45_unpruned": 3.9588333333333336
   },
   "1024": {
-   "cart_full_nodepth": 4.5005,
-   "c45_unpruned": 4.1573
+   "cart_full_nodepth": 3.3948,
+   "c45_unpruned": 3.2295000000000003
   },
   "2048": {
-   "cart_full_nodepth": 4.5938,
-   "c45_unpruned": 4.279
+   "cart_full_nodepth": 3.3236666666666665,
+   "c45_unpruned": 3.170166666666667
   },
   "4096": {
-   "cart_full_nodepth": 4.7637,
-   "c45_unpruned": 4.5085
+   "cart_full_nodepth": 3.4335666666666667,
+   "c45_unpruned": 3.2348666666666666
   },
   "8192": {
-   "cart_full_nodepth": 5.1066,
-   "c45_unpruned": 4.8986
+   "cart_full_nodepth": 3.6010666666666666,
+   "c45_unpruned": 3.4776
   },
   "16384": {
-   "cart_full_nodepth": 5.5762,
-   "c45_unpruned": 5.4947
+   "cart_full_nodepth": 3.8567,
+   "c45_unpruned": 3.8614333333333337
   },
   "32768": {
-   "cart_full_nodepth": 6.0596,
-   "c45_unpruned": 6.1453
-  },
-  "65536": {
-   "cart_full_nodepth": 7.5185,
-   "c45_unpruned": 8.0609
+   "cart_full_nodepth": 4.3209333333333335,
+   "c45_unpruned": 4.413233333333333
   }
  },
  "score": {
-  "default": 1.057,
-  "128": 1.283,
-  "256": 1.041,
-  "512": 1.0,
-  "1024": 1.0032,
-  "2048": 1.0283,
-  "4096": 1.0749,
-  "8192": 1.1602,
-  "16384": 1.2844,
-  "32768": 1.4167,
-  "65536": 1.8103
- },
- "source": "tune.sh, interleaved, numactl --membind=0 taskset -c 0-23 --threads 24; ampere-airline*.csv"
+  "default": 1.0137484547150883,
+  "256": 2.1371484850359193,
+  "512": 1.1590292907209152,
+  "1024": 1.020059110909572,
+  "2048": 1.0,
+  "4096": 1.0267374563459204,
+  "8192": 1.090219532654371,
+  "16384": 1.189214408921143,
+  "32768": 1.3460820623538876
+ }
 }

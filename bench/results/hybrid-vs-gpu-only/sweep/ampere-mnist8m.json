@@ -1,52 +1,52 @@
 {
- "min_rows": 8192,
- "default": {
-  "cart": 1024,
-  "c45": 1977
- },
+ "min_rows": 16384,
  "times": {
   "default": {
-   "cart_full_nodepth": 21.3623,
-   "c45_unpruned": 25.2787
+   "cart_full_nodepth": 21.012533333333334,
+   "c45_unpruned": 24.83053333333333
+  },
+  "256": {
+   "cart_full_nodepth": 23.164299999999997,
+   "c45_unpruned": 28.96523333333333
   },
   "512": {
-   "cart_full_nodepth": 22.2698,
-   "c45_unpruned": 27.6801
+   "cart_full_nodepth": 22.14356666666667,
+   "c45_unpruned": 27.335633333333334
   },
   "1024": {
-   "cart_full_nodepth": 21.1554,
-   "c45_unpruned": 26.2808
+   "cart_full_nodepth": 21.074833333333334,
+   "c45_unpruned": 26.018033333333335
   },
   "2048": {
-   "cart_full_nodepth": 20.4757,
-   "c45_unpruned": 25.4485
+   "cart_full_nodepth": 20.124666666666666,
+   "c45_unpruned": 24.800033333333335
   },
   "4096": {
-   "cart_full_nodepth": 19.9943,
-   "c45_unpruned": 24.2247
+   "cart_full_nodepth": 19.371066666666668,
+   "c45_unpruned": 23.718633333333333
   },
   "8192": {
-   "cart_full_nodepth": 18.9784,
-   "c45_unpruned": 23.3972
+   "cart_full_nodepth": 18.251166666666666,
+   "c45_unpruned": 22.485899999999997
   },
   "16384": {
-   "cart_full_nodepth": 20.5415,
-   "c45_unpruned": 22.6824
+   "cart_full_nodepth": 16.9692,
+   "c45_unpruned": 22.195166666666665
   },
   "32768": {
-   "cart_full_nodepth": 26.9973,
-   "c45_unpruned": 26.9277
+   "cart_full_nodepth": 20.377033333333333,
+   "c45_unpruned": 20.970933333333335
   }
  },
  "score": {
-  "default": 1.12,
-  "512": 1.1969,
-  "1024": 1.1367,
-  "2048": 1.1004,
-  "4096": 1.0608,
-  "8192": 1.0158,
-  "16384": 1.0412,
-  "32768": 1.3048
- },
- "source": "tune.sh, interleaved, numactl --membind=0 taskset -c 0-23 --threads 24; ampere-mnist8m*.csv"
+  "default": 1.2111600266674047,
+  "256": 1.3731438389703365,
+  "512": 1.3042140010366818,
+  "1024": 1.2413087037353387,
+  "2048": 1.184271706368172,
+  "4096": 1.136283463948703,
+  "8192": 1.0738939688219902,
+  "16384": 1.0291888137231213,
+  "32768": 1.1004123156463868
+ }
 }

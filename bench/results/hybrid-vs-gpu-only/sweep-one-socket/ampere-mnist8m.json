@@ -1,0 +1,52 @@
+{
+ "min_rows": 8192,
+ "default": {
+  "cart": 1024,
+  "c45": 1977
+ },
+ "times": {
+  "default": {
+   "cart_full_nodepth": 21.3623,
+   "c45_unpruned": 25.2787
+  },
+  "512": {
+   "cart_full_nodepth": 22.2698,
+   "c45_unpruned": 27.6801
+  },
+  "1024": {
+   "cart_full_nodepth": 21.1554,
+   "c45_unpruned": 26.2808
+  },
+  "2048": {
+   "cart_full_nodepth": 20.4757,
+   "c45_unpruned": 25.4485
+  },
+  "4096": {
+   "cart_full_nodepth": 19.9943,
+   "c45_unpruned": 24.2247
+  },
+  "8192": {
+   "cart_full_nodepth": 18.9784,
+   "c45_unpruned": 23.3972
+  },
+  "16384": {
+   "cart_full_nodepth": 20.5415,
+   "c45_unpruned": 22.6824
+  },
+  "32768": {
+   "cart_full_nodepth": 26.9973,
+   "c45_unpruned": 26.9277
+  }
+ },
+ "score": {
+  "default": 1.12,
+  "512": 1.1969,
+  "1024": 1.1367,
+  "2048": 1.1004,
+  "4096": 1.0608,
+  "8192": 1.0158,
+  "16384": 1.0412,
+  "32768": 1.3048
+ },
+ "source": "tune.sh, interleaved, numactl --membind=0 taskset -c 0-23 --threads 24; ampere-mnist8m*.csv"
+}

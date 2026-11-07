@@ -4,13 +4,13 @@
    "mnist8m",
    "cart_full_nodepth",
    "tree_cuda",
-   16
+   32
   ],
   [
    "mnist8m",
    "c45_unpruned",
    "tree_cuda",
-   16
+   32
   ]
  ],
  "protocols": {

@@ -1,0 +1,48 @@
+log: bench/results/hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr8192/run.log, job 174 on ampere, started 2026-11-06 23:57:49
+
+=== 23:57:49  1/3 machine check
+CPUs allocated: 48 (0-23,24-47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: ondemand 
+load average: 24.33 21.63 18.75
+free memory per NUMA node: node 0 496 GiB, node 1 436 GiB
+GPU 0 on NUMA node 0; CPUs 0-23,24-47 (both sockets), memory first-touch
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+GPU 0, NVIDIA A100 80GB PCIe, 0 MiB, 81920 MiB, 0 %, 300.00 W, P0
+GPU 1, NVIDIA A100 80GB PCIe, 0 MiB, 81920 MiB, 0 %, 300.00 W, P0
+GPU 2, NVIDIA A100-PCIE-40GB, 0 MiB, 40960 MiB, 0 %, 250.00 W, P0
+GPU 3, NVIDIA A100-PCIE-40GB, 0 MiB, 40960 MiB, 0 %, 250.00 W, P0
+code: 95b6d774 (from submit.sh: hopper has no git)
+runs per case: 3
+
+=== 23:57:49  2/3 benchmark: mnist8m, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 48), 3 run(s) per case
+2 cases, 9 processes:
+  mnist8m | cart_full_nodepth | tree_cuda | 48
+  mnist8m | c45_unpruned | tree_cuda | 48
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (232 s)
+2 cases x 3 run(s), then 1 footprint run(s) x 3: 9 processes. Time left is shown once every case has run once.
+[1/9] 00:01:43 run 1/3: CART ./tree CUDA, 48 threads, mnist8m ...
+    ok: train 18.25 s, peak 73,411 MiB, GPU 50,047 MiB, 301,939 nodes, depth 115, train acc 100.00% | process 0m42s, elapsed 0m42s
+[2/9] 00:02:25 run 1/3: C4.5 ./tree CUDA, 48 threads, mnist8m ...
+    ok: train 22.46 s, peak 73,421 MiB, GPU 50,015 MiB, 218,325 nodes, depth 147, train acc 99.61% | process 0m47s, elapsed 1m29s, about 2m58s left
+[3/9] 00:03:12 run 2/3: CART ./tree CUDA, 48 threads, mnist8m ...
+    ok: train 18.24 s, peak 73,414 MiB, GPU 50,047 MiB, 301,939 nodes, depth 115, train acc 100.00% | process 0m46s, elapsed 2m16s, about 2m18s left
+[4/9] 00:03:59 run 2/3: C4.5 ./tree CUDA, 48 threads, mnist8m ...
+    ok: train 22.48 s, peak 73,420 MiB, GPU 50,015 MiB, 218,325 nodes, depth 147, train acc 99.61% | process 0m42s, elapsed 2m58s, about 1m29s left
+[5/9] 00:04:41 run 3/3: C4.5 ./tree CUDA, 48 threads, mnist8m ...
+    ok: train 22.51 s, peak 73,417 MiB, GPU 50,015 MiB, 218,325 nodes, depth 147, train acc 99.61% | process 0m42s, elapsed 3m41s, about 0m44s left
+[6/9] 00:05:24 run 3/3: CART ./tree CUDA, 48 threads, mnist8m ...
+    ok: train 18.26 s, peak 73,422 MiB, GPU 50,047 MiB, 301,939 nodes, depth 115, train acc 100.00% | process 0m35s, elapsed 4m16s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[7/9] 00:05:59 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0334 s, peak 641 MiB, GPU 459 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 4m17s, about 0m00s left
+[8/9] 00:06:00 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0314 s, peak 641 MiB, GPU 459 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 4m17s, about 0m00s left
+[9/9] 00:06:01 footprint: CART ./tree CUDA, 1 thread, _baseline ...
+    ok: train 0.0316 s, peak 641 MiB, GPU 471 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 4m18s, about 0m00s left
+results: /home/bmircevski/dt/bench/results/hybrid-vs-gpu-only/both-sockets/sweep/cuda-ampere-mnist8m-mr8192/results.jsonl
+
+=== 00:06:01  3/3 tables and CSV files
+done 2026-11-07 00:06:02

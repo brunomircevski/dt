@@ -17,6 +17,7 @@ Writes <dir>/chart-<node>.png.
 
 import argparse
 import json
+import re
 import statistics
 from pathlib import Path
 
@@ -41,6 +42,11 @@ def protocol(algorithm, depth):
     return f"cart_depth{depth}" if algorithm == "cart" else f"c45_depth{depth}_unpruned"
 
 
+def min_rows(rows):
+    """The --gpu-min-rows values in these result rows' commands (empty: ./tree's default)."""
+    return sorted({int(m.group(1)) for r in rows if (m := re.search(r"--gpu-min-rows (\d+)", r.get("command", "")))})
+
+
 def tint(color, alpha):
     rgb = matplotlib.colors.to_rgb(color)
     return tuple(1 - (1 - c) * alpha for c in rgb)
@@ -59,6 +65,8 @@ def load(folder, node):
         entry = data.setdefault(dataset, {"machine": None, "rows": {}})
         if (run / "machine.json").exists():
             entry["machine"] = json.loads((run / "machine.json").read_text())
+        if (run / "machine-depth5-10.json").exists():  # depth 5 and 10 from an earlier job
+            entry["machine_shallow"] = json.loads((run / "machine-depth5-10.json").read_text())
         for line in results.read_text().splitlines():
             row = json.loads(line)
             if row.get("kind") == "run" and row.get("status") == "ok":
@@ -116,6 +124,10 @@ def panel(ax, dataset, entry, sweep):
     title = f"{NAMES.get(dataset, dataset)}: {shape}"
     if m:
         title += f"; hybrid at --gpu-min-rows {m['min_rows']:,}"
+        low = min_rows([r for (b, p), v in rows.items() if b == "cuda"
+                        for r in v if p in {protocol(a, d) for a in ALGORITHMS for d in DEPTHS[:2]}])
+        if low and low != [m["min_rows"]]:
+            title += f" (depth 5 and 10: {', '.join(f'{v:,}' for v in low)})"
     ax.text(0, 1.075, title, transform=ax.transAxes, fontsize=10.5, color=INK, va="bottom")
     times = m.get("times", {})
     chosen, default = times.get(str(m.get("min_rows"))), times.get("default")
@@ -150,9 +162,14 @@ def main():
     versions = machine.get("versions", {})
     gpus = (versions.get("gpu") or "GPU").splitlines()
     gpu = gpus[int(machine.get("gpu_index", 0))].split(",")[0]
-    threads = sorted({r["threads"] for r in rows})
     commit = versions.get("tree_git", "?")
-    date = min((r["time"][:10] for r in rows), default="?")
+    shallow = next((d["machine_shallow"] for d in data.values() if d.get("machine_shallow")), None)
+
+    def placement(depths):
+        some = [r for r in rows if any(r["protocol"] == protocol(a, d) for a in ALGORITHMS for d in depths)]
+        threads = sorted({r["threads"] for r in some})
+        dates = sorted({r["time"][:10] for r in some})
+        return f"{'/'.join(map(str, threads))} CPU threads", f"{dates[0]}" + (f" to {dates[-1]}" if len(dates) > 1 else "")
     fig.suptitle("./tree CUDA: hybrid (GPU + CPU) vs GPU only, by depth limit, no pruning",
                  x=0.06, y=0.99, ha="left", fontsize=13, color=INK)
     legend = [Patch(facecolor=tint(COLORS[c], LIGHT[a]), edgecolor=COLORS[c],
@@ -160,9 +177,16 @@ def main():
               for a in ALGORITHMS for c, label in BACKENDS.values()]
     fig.legend(handles=legend, loc="upper left", ncol=4, frameon=False, fontsize=8.5,
                bbox_to_anchor=(0.055, 0.965))
+    if shallow:  # depth 5 and 10 from the earlier one-socket job
+        deep, low = placement(DEPTHS[2:]), placement(DEPTHS[:2])
+        where = (f"{args.node} node: {gpu}. Depth 15 to no limit: {deep[0]} on both sockets (the GPU's first, "
+                 f"memory not bound), ./tree {commit}, {deep[1]}; depth 5 and 10: {low[0]} on the GPU's socket, "
+                 f"./tree {shallow.get('versions', {}).get('tree_git', '?')}, {low[1]}.")
+    else:
+        every = placement(DEPTHS)
+        where = f"{args.node} node: {gpu}, {every[0]} on both sockets, ./tree {commit}, {every[1]}."
     details = (
-        f"{args.node} node: {gpu}, {threads[0] if threads else '?'} CPU threads (the GPU's socket, memory bound "
-        f"to its NUMA node), ./tree {commit}, {date}. Runs per case: "
+        f"{where} Runs per case: "
         f"{'/'.join(map(str, reps))}; bar = mean training time (load excluded), whisker = fastest to slowest.\n"
         "Hybrid (--cuda): nodes with fewer rows than --gpu-min-rows are copied to the host and grown by the CPU "
         "threads while the GPU goes on with the next level. GPU only (--cuda --gpu-only): every node, down to the "

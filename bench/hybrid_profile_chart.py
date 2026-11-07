@@ -30,6 +30,7 @@ chart-profile-hybrid-{seconds,percent}-<node>-<dataset>.png) and prints a Markdo
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 import matplotlib
@@ -103,13 +104,16 @@ def split(trace):
 
 
 def load(folder, node, dataset):
-    """-> ({(mode, protocol): case}, machine): the average of each case's profiled runs."""
-    cases, machine = {}, None
+    """-> ({(mode, protocol): case}, machine, shallow): the average of each case's profiled
+    runs; shallow: machine-depth5-10.json (depth 5 and 10 from an earlier job) or None."""
+    cases, machine, shallow = {}, None, None
     for mode, _ in MODES:
         run = folder / "profile" / f"{mode}-{node}-{dataset}"
         if not (run / "results.jsonl").exists():
             continue
         machine = json.load(open(run / "machine.json"))
+        if (run / "machine-depth5-10.json").exists():
+            shallow = json.load(open(run / "machine-depth5-10.json"))
         plain = runs(folder / f"{mode}-{node}-{dataset}" / "results.jsonl")
         for proto, rows in runs(run / "results.jsonl").items():
             rows = [row for row in rows if "profile" in row]
@@ -121,7 +125,7 @@ def load(folder, node, dataset):
                 "row": mean_row(rows), "runs": len(rows), "parts": parts,
                 "cpu_thread_seconds": sum(s[1] for s in splits) / len(splits),
                 "plain": mean_row(plain[proto]) if proto in plain else None}
-    return cases, machine
+    return cases, machine, shallow
 
 
 def draw_segment(ax, x, width, bottom, share, key):
@@ -205,7 +209,7 @@ def panel(ax, cases, algorithm, title, modes, seconds, top):
     ax.set_title(title, loc="left", fontsize=13, fontweight="bold", color=INK, pad=18)
 
 
-def chart(cases, machine, node, dataset, min_rows, out, modes=MODES, seconds=False):
+def chart(cases, machine, shallow, node, dataset, out, modes=MODES, seconds=False):
     single = len(modes) == 1
     fig, axes = plt.subplots(len(ALGORITHMS), 1, figsize=(15, 13.5))
     top = max(case["row"]["train_seconds"] for (mode, _), case in cases.items()
@@ -216,6 +220,22 @@ def chart(cases, machine, node, dataset, min_rows, out, modes=MODES, seconds=Fal
     gpus = (versions.get("gpu") or "GPU").splitlines()
     gpu = gpus[int(machine.get("gpu_index", 0))].split(",")[0] if machine else "GPU"
     row = next(iter(cases.values()))["row"]
+    # One job, or depth 5 and 10 from an earlier one (load(): machine-depth5-10.json).
+    groups = [("depth 15 to no limit", DEPTHS[2:]), ("depth 5 and 10", DEPTHS[:2])] if shallow else [("", DEPTHS)]
+    parts = []
+    for label, depths in groups:
+        some = [c["row"] for (mode, p), c in cases.items()
+                if p in {protocol(a, d) for a, _ in ALGORITHMS for d in depths}]
+        hybrid = [c["row"] for (mode, p), c in cases.items()
+                  if mode == "cuda" and p in {protocol(a, d) for a, _ in ALGORITHMS for d in depths}]
+        threads = sorted({r["threads"] for r in some})
+        m = shallow if label == "depth 5 and 10" else machine
+        where = "the GPU's socket" if label == "depth 5 and 10" else "both sockets"
+        rows_used = sorted({v for r in hybrid for v in re.findall(r"--gpu-min-rows (\d+)", r.get("command", ""))}, key=int)
+        parts.append((f"{label}: " if label else "") + f"{'/'.join(map(str, threads))} CPU threads ({where}), ./tree "
+                     f"{(m or {}).get('versions', {}).get('tree_git', '?')}, {(m or {}).get('started', '?')[:10]}"
+                     + (f", hybrid at --gpu-min-rows {', '.join(f'{int(v):,}' for v in rows_used)}" if rows_used else ""))
+    placement = ";\n".join(parts)
     counts = sorted({c["runs"] for c in cases.values()})
     what = "CUDA hybrid" if single else "CUDA hybrid vs GPU only"
     fig.suptitle(f"Who is working: {what}, {NAMES.get(dataset, dataset)} on "
@@ -223,14 +243,11 @@ def chart(cases, machine, node, dataset, min_rows, out, modes=MODES, seconds=Fal
                  fontweight="bold", color=INK)
     fig.text(0.01, 0.958,
              f"{row.get('n_train_loaded', 0):,} rows × {row.get('n_features_loaded', 0):,} features · "
-             f"{gpu} + {row['threads']} CPU threads (the GPU's socket) · ./tree "
-             f"{versions.get('tree_git', '?')}, --profile, {'/'.join(map(str, counts))} runs per bar "
-             f"(averaged), {machine['started'][:10] if machine else '?'} · hybrid at --gpu-min-rows "
-             f"{min_rows:,}.\n" + ("Bar = training wall time (linear), total above; labels: seconds "
+             f"{gpu}, --profile, {'/'.join(map(str, counts))} runs per bar (averaged). CPU threads (each group):\n" + placement + ".\n" + ("Bar = training wall time (linear), total above; labels: seconds "
              "(and share) for segments taller than 4.5% of the axis." if seconds else
              "Bar = training wall time (100%), seconds above; labels: share (and seconds) for "
              "segments of 4.5% or more.") + " Under each bar: CPU threads' subtree work "
-             "in thread-seconds (24 threads × 1 s = 24 thr·s).",
+             "in thread-seconds (48 threads × 1 s = 48 thr·s).",
              fontsize=10, color=MUTED, va="top")
     handles = []
     for key, name, color in PARTS:
@@ -238,7 +255,7 @@ def chart(cases, machine, node, dataset, min_rows, out, modes=MODES, seconds=Fal
             handles.append(Patch(facecolor=color, hatch="//", edgecolor=CPU_GREEN, label=name))
         else:
             handles.append(Patch(facecolor=color, label=name))
-    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.005, 0.935), ncol=6,
+    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.005, 0.905), ncol=6,
                frameon=False, fontsize=10, handlelength=2, handleheight=1.2, columnspacing=1.4)
     fig.text(0.01, 0.012,
              "Each millisecond goes to one segment: setup if before growing; else GPU (alone, or + CPU "
@@ -249,7 +266,7 @@ def chart(cases, machine, node, dataset, min_rows, out, modes=MODES, seconds=Fal
              "are copied to the host and grown by the CPU threads while the GPU goes on with the "
              "next level." + ("" if single else " GPU only: every node on the GPU; the CPU only drives it."),
              fontsize=9.2, color=MUTED, va="bottom", linespacing=1.4)
-    fig.tight_layout(rect=(0, 0.07, 1, 0.92), h_pad=6)
+    fig.tight_layout(rect=(0, 0.07, 1, 0.89), h_pad=6)
     fig.savefig(out, dpi=150, facecolor="white")
     print(out)
 
@@ -282,16 +299,14 @@ def main():
     parser.add_argument("--hybrid-only", action="store_true", help="only the hybrid's bars")
     parser.add_argument("--seconds", action="store_true", help="bars in seconds (linear), not shares")
     args = parser.parse_args()
-    cases, machine = load(args.folder, args.node, args.dataset)
+    cases, machine, shallow = load(args.folder, args.node, args.dataset)
     if not cases:
         raise SystemExit(f"no profiled runs in {args.folder}/profile/*-{args.node}-{args.dataset}")
-    sweep = args.folder / "sweep" / f"{args.node}-{args.dataset}.json"
-    min_rows = json.loads(sweep.read_text())["min_rows"] if sweep.exists() else 0
     modes = [m for m in MODES if m[0] == "cuda"] if args.hybrid_only else MODES
     unit = "seconds" if args.seconds else "percent"
     name = (f"chart-profile-hybrid-{unit}-{args.node}-{args.dataset}.png" if args.hybrid_only else
             f"chart-profile{'-seconds' if args.seconds else ''}-{args.node}-{args.dataset}.png")
-    chart(cases, machine, args.node, args.dataset, min_rows, args.folder / name, modes, args.seconds)
+    chart(cases, machine, shallow, args.node, args.dataset, args.folder / name, modes, args.seconds)
     table(cases)
 
 

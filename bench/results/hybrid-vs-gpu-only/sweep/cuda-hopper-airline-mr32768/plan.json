@@ -4,13 +4,13 @@
    "airline",
    "cart_full_nodepth",
    "tree_cuda",
-   16
+   32
   ],
   [
    "airline",
    "c45_unpruned",
    "tree_cuda",
-   16
+   32
   ]
  ],
  "protocols": {

@@ -2,87 +2,63 @@
  "cases": [
   [
    "mnist8m",
-   "cart_depth5",
-   "tree_gpu_only",
-   16
-  ],
-  [
-   "mnist8m",
-   "cart_depth10",
-   "tree_gpu_only",
-   16
-  ],
-  [
-   "mnist8m",
    "cart_depth15",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "cart_depth20",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "cart_depth25",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "cart_depth30",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "cart_full_nodepth",
    "tree_gpu_only",
-   16
-  ],
-  [
-   "mnist8m",
-   "c45_depth5_unpruned",
-   "tree_gpu_only",
-   16
-  ],
-  [
-   "mnist8m",
-   "c45_depth10_unpruned",
-   "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "c45_depth15_unpruned",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "c45_depth20_unpruned",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "c45_depth25_unpruned",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "c45_depth30_unpruned",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "mnist8m",
    "c45_unpruned",
    "tree_gpu_only",
-   16
+   32
   ]
  ],
  "protocols": {

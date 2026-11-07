@@ -2,87 +2,63 @@
  "cases": [
   [
    "airline",
-   "cart_depth5",
-   "tree_cuda",
-   24
-  ],
-  [
-   "airline",
-   "cart_depth10",
-   "tree_cuda",
-   24
-  ],
-  [
-   "airline",
    "cart_depth15",
    "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "cart_depth20",
    "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "cart_depth25",
    "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "cart_depth30",
    "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "cart_full_nodepth",
    "tree_cuda",
-   24
-  ],
-  [
-   "airline",
-   "c45_depth5_unpruned",
-   "tree_cuda",
-   24
-  ],
-  [
-   "airline",
-   "c45_depth10_unpruned",
-   "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "c45_depth15_unpruned",
    "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "c45_depth20_unpruned",
    "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "c45_depth25_unpruned",
    "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "c45_depth30_unpruned",
    "tree_cuda",
-   24
+   48
   ],
   [
    "airline",
    "c45_unpruned",
    "tree_cuda",
-   24
+   48
   ]
  ],
  "protocols": {
