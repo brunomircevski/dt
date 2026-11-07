@@ -1,7 +1,7 @@
-job 136 on ampere, 2026-11-06T11:12:32+01:00, kind all
-commit ebbea719-dirty
+job 223 on ampere, 2026-11-07T11:31:21+01:00, kind all
+commit a2891e70
 data bench/data/ecbdl_15m/train.csv, reps 2 simple=1 serial=1, repeat serial=2, target 720 s, idle 900 s, step 600 s, pre 20 s, algos cart c45, impls simple serial parallel cuda gpuonly
-used_gpu 0 (cpus 0-23, memory node 0, 24 threads)
+used_gpu 0 (cpus 0-23, memory node 0, 24 threads, warm-up 2 s)
 protocol --no-prune -d 10
 kernel 7.0.0-38-generic
 dmi Supermicro AS -4124GS-TNR
@@ -16,17 +16,17 @@ rapl_max intel-rapl:0 package-0 65532610987
 rapl_max intel-rapl:0:0 core 65532610987
 rapl_max intel-rapl:1 package-1 65532610987
 rapl_max intel-rapl:1:0 core 65532610987
-psu_file 1793959952.228209788 400
+psu_file 1794047481.329438739 765
                total        used        free      shared  buff/cache   available
-Mem:            1007          11         933           0          67         995
+Mem:            1007          12         932           0          67         995
 index, name, power.limit [W], driver_version
 0, NVIDIA A100 80GB PCIe, 300.00 W, 615.71.09
 1, NVIDIA A100 80GB PCIe, 300.00 W, 615.71.09
 2, NVIDIA A100-PCIE-40GB, 250.00 W, 615.71.09
 3, NVIDIA A100-PCIE-40GB, 250.00 W, 615.71.09
-repeat parallel cart 48 (warm-up train 15373.7 ms)
-repeat cuda cart 106 (warm-up train 6884.9 ms)
-repeat gpuonly cart 104 (warm-up train 7042.6 ms)
-repeat parallel c45 27 (warm-up train 27950.0 ms)
-repeat cuda c45 106 (warm-up train 6892.2 ms)
-repeat gpuonly c45 103 (warm-up train 7115.9 ms)
+repeat parallel cart 47 (warm-up train 15652.7 ms)
+repeat cuda cart 144 (warm-up train 5054.0 ms)
+repeat gpuonly cart 144 (warm-up train 5049.7 ms)
+repeat parallel c45 27 (warm-up train 28270.4 ms)
+repeat cuda c45 141 (warm-up train 5146.2 ms)
+repeat gpuonly c45 143 (warm-up train 5086.4 ms)
