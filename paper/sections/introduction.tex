@@ -6,22 +6,24 @@ data mining~\cite{costa2023survey}. Their predictions are easy to inspect and
 explain, so they suit applications in which a model must be understood or
 audited. They are also the base learners of random forests and gradient
 boosting~\cite{chen2016xgboost,ke2017lightgbm}. CART~\cite{breiman1984cart}
-and C4.5~\cite{quinlan1993c45} remain canonical algorithms for inducing
-classification trees.
+and C4.5~\cite{quinlan1993c45} are two of the best-known algorithms for
+inducing classification trees.
 
 Growing a single tree is usually considered cheap. In practice, however, a
-tree is rarely trained only once. Model selection tries many values of
-hyperparameters such as the pruning strength, the depth limit or the minimum
-leaf size. With $k$-fold cross-validation, each configuration requires $k$
-trees. Meanwhile, datasets with tens of millions of samples or thousands of
-features appear routinely in public benchmarks. On such data, a
-straightforward sequential implementation can need minutes to hours per tree,
-and model selection pays this cost many times. Faster induction of a single
-tree therefore shortens the whole modeling process.
+tree is rarely trained only once. Tuning parameters such as the pruning
+strength, the depth limit or the minimum leaf size requires a tree for every
+candidate value, and $k$-fold cross-validation multiplies this number by $k$.
+At the same time, datasets with tens of millions of samples or thousands of
+features arise in areas such as particle physics~\cite{baldi2014higgs},
+bioinformatics~\cite{triguero2015ecbdl} and malware
+detection~\cite{harang2020sorel}. On such data, a straightforward sequential
+implementation can need minutes to hours per tree, and parameter tuning
+repeats this cost for every tree it trains. Faster induction of a single tree
+therefore shortens the whole modeling process.
 
-Modern servers offer many cores, several sockets, high-bandwidth memory and,
-increasingly, data-center GPUs. Tree induction maps awkwardly onto this
-hardware, for two reasons. First, the work per node shrinks with depth. Nodes
+Modern servers combine many cores on several sockets with high-bandwidth
+memory, and many are equipped with data-center GPUs. Using this hardware
+efficiently for tree induction is challenging, for two reasons. First, the work per node shrinks with depth. Nodes
 near the root hold most of the training set and provide enough work for
 thousands of GPU threads. The lower levels consist of many small nodes, for
 which kernel-launch, synchronization and transfer costs often dominate.
@@ -50,12 +52,7 @@ binning: every admissible cut between consecutive distinct feature values is
 evaluated. All implementations grow identical trees, which we checked node by
 node against each other and against scikit-learn for CART and Quinlan's
 original C4.5 program for C4.5. Performance comparisons among our
-implementations therefore hold the resulting tree fixed. The heterogeneous
-implementation assigns each node to a device by the number of training
-samples it contains. Large nodes go to the GPU, where there is enough parallel
-work to amortize kernel-launch and transfer costs. Small nodes go to the CPU
-cores. The CPU thus takes part in growing the tree rather than merely
-coordinating the GPU.
+implementations therefore hold the resulting tree fixed.
 
 We evaluate five implementations, from a straightforward sequential baseline
 to the heterogeneous one. The experiments use five public datasets with up to
@@ -65,10 +62,10 @@ generations of data-center GPUs.
 % epyc / H100) and bench/results/hybrid-vs-gpu-only (A100/H100, HIGGS, no depth
 % limit). Re-derive after the 10-run protocol lands; treat competitor cells
 % still marked \est{} as provisional.
-The optimized sequential implementation is 8--25$\times$ faster than the
-straightforward one. Using all cores of a two-socket server adds a further
-12--40$\times$, and the GPU up to 4$\times$ more, for nearly 1,600$\times$ in
-total. Our multicore implementation trains CART trees up to 360$\times$
+The optimized sequential implementation is up to 25$\times$ faster than the
+straightforward one. Using 48 cores of a two-socket server adds up to a
+further 40$\times$, and the GPU up to 4$\times$ more, for a total speed-up of
+up to 1,570$\times$. Our multicore implementation trains CART trees up to 360$\times$
 faster than scikit-learn~\cite{pedregosa2011sklearn} and C4.5 trees up to
 3,100$\times$ faster than Weka~\cite{hall2009weka}. On the GPU, these factors
 reach 1,400$\times$ and 8,100$\times$. For deep trees, the heterogeneous
