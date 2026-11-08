@@ -55,7 +55,7 @@ original C4.5 program for C4.5. Performance comparisons among our
 implementations therefore hold the resulting tree fixed.
 
 We evaluate five implementations, from a straightforward sequential baseline
-to the heterogeneous one. The experiments use five public datasets with up to
+to a hybrid one that uses the CPU and the GPU together. The experiments use five public datasets with up to
 32 million samples and 2,381 features, recent CPU servers, and two
 generations of data-center GPUs.
 % Numbers: Tables tab:time-cart and tab:time-c45 (depth <= 10, no pruning;
@@ -68,7 +68,7 @@ further 40$\times$, and the GPU up to 4$\times$ more, for a total speed-up of
 up to 1,570$\times$. Our multicore implementation trains CART trees up to 360$\times$
 faster than scikit-learn~\cite{pedregosa2011sklearn} and C4.5 trees up to
 3,100$\times$ faster than Weka~\cite{hall2009weka}. On the GPU, these factors
-reach 1,400$\times$ and 8,100$\times$. For deep trees, the heterogeneous
+reach 1,400$\times$ and 8,100$\times$. For deep trees, the hybrid CPU--GPU
 implementation is up to 4.9$\times$ faster than growing all nodes on the GPU.
 
 The main contributions of this paper are:
@@ -76,7 +76,7 @@ The main contributions of this paper are:
 \item exact parallel implementations of CART and C4.5 for multicore CPUs, GPUs
   and heterogeneous CPU--GPU systems, with identical trees across
   implementations;
-\item a heterogeneous scheme that assigns the nodes of a tree to devices by
+\item a hybrid CPU--GPU scheme that assigns the nodes of a tree to devices by
   size, so that the CPU and the GPU grow the tree concurrently;
 \item an experimental evaluation on large datasets and current hardware,
   covering training time, memory usage, scalability, the breakdown of
