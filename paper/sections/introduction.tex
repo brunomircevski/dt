@@ -6,61 +6,67 @@ data mining~\cite{costa2023survey}. Their predictions are easy to inspect and
 explain, so they suit applications in which a model must be understood or
 audited. They are also the base learners of random forests and gradient
 boosting~\cite{chen2016xgboost,ke2017lightgbm}. CART~\cite{breiman1984cart}
-and C4.5~\cite{quinlan1993c45} remain the reference algorithms for inducing
+and C4.5~\cite{quinlan1993c45} remain canonical algorithms for inducing
 classification trees.
 
 Growing a single tree is usually considered cheap. In practice, however, a
 tree is rarely trained only once. Model selection tries many values of
-parameters such as the pruning strength, the depth limit or the minimum leaf
-size. With $k$-fold cross-validation, each value requires $k$ trees.
-Meanwhile, datasets with tens of millions of samples and thousands of features
-are increasingly common. On such data, a sequential implementation needs
-minutes to hours per tree, and model selection pays this cost many times.
-Faster induction of a single tree therefore shortens the whole modelling
-process.
+hyperparameters such as the pruning strength, the depth limit or the minimum
+leaf size. With $k$-fold cross-validation, each configuration requires $k$
+trees. Meanwhile, datasets with tens of millions of samples or thousands of
+features appear routinely in public benchmarks. On such data, a
+straightforward sequential implementation can need minutes to hours per tree,
+and model selection pays this cost many times. Faster induction of a single
+tree therefore shortens the whole modeling process.
 
 Modern servers offer many cores, several sockets, high-bandwidth memory and,
-increasingly, data-center GPUs. Using them well for tree induction is not
-straightforward. Nodes near the root hold most of the training set, while the
-lower levels consist of many small nodes. Large nodes provide enough work for
-thousands of GPU threads. Small nodes do not, and for them the cost of
-launching GPU kernels and transferring data dominates. Moreover, split
-evaluation does little computation per value read, so it is limited mainly by
-memory bandwidth.
+increasingly, data-center GPUs. Tree induction maps awkwardly onto this
+hardware, for two reasons. First, the work per node shrinks with depth. Nodes
+near the root hold most of the training set and provide enough work for
+thousands of GPU threads. The lower levels consist of many small nodes, for
+which kernel-launch, synchronization and transfer costs often dominate.
+Second, split evaluation does little computation per value read, so it is
+often limited by memory bandwidth.
 
 Parallel decision tree induction has a long history. SLIQ~\cite{mehta1996sliq}
 and SPRINT~\cite{shafer1996sprint} introduced presorting to scale to large
 data. Later work targeted multicore processors~\cite{aldinucci2014fastflow}
 and distributed systems~\cite{abuzaid2016yggdrasil}. Several studies proposed
 GPU implementations~\cite{lo2014cudt,nasridinov2014gpu,strnad2016gpu}, but
-they were evaluated on GPUs of earlier generations. The most widely used GPU
-tree learners~\cite{chen2016xgboost,mitchell2017xgboostgpu,ke2017lightgbm,raschka2020cuml}
-first discretize feature values into a limited number of bins. This makes
-them fast, but their trees only approximate those of CART and C4.5. To the
-best of our knowledge, no publicly available implementation grows exact CART
-and C4.5 trees on multicore CPUs, GPUs and both together.
+they were evaluated on GPUs of earlier generations. Most current
+high-performance GPU tree
+learners~\cite{chen2016xgboost,ke2017lightgbm,raschka2020cuml} use
+histogram-based split finding: continuous values are assigned to a fixed
+number of bins before induction. This reduces the cost, but it does not
+generally select the same thresholds, or produce the same trees, as an
+exhaustive split search under the CART or C4.5 criteria. To the best of our
+knowledge, no publicly available implementation grows exact CART and C4.5
+trees on multicore CPUs, GPUs and both together.
 
 In this paper, we investigate parallel implementations of CART and C4.5 for
-multicore CPUs, CUDA-enabled GPUs and heterogeneous CPU--GPU systems. All of
-them follow the original algorithms exactly and consider every distinct
-feature value as a split threshold. They grow identical trees, which we
-verified against reference implementations of both algorithms. The reported
-speed-ups therefore do not change the resulting model. The heterogeneous
+multicore CPUs, CUDA-enabled GPUs and heterogeneous CPU--GPU systems. They
+perform an exact split search under the CART and C4.5 criteria, without
+binning: every admissible cut between consecutive distinct feature values is
+evaluated. All implementations grow identical trees, which we checked node by
+node against each other and against scikit-learn for CART and Quinlan's
+original C4.5 program for C4.5. Performance comparisons among our
+implementations therefore hold the resulting tree fixed. The heterogeneous
 implementation assigns each node to a device by the number of training
-samples it contains. Large nodes go to the GPU, which exploits its
-parallelism where most of the work is. Small nodes go to the CPU cores, which
-avoids the overhead of GPU execution for small workloads. The CPU thus does
-not only coordinate the GPU, but grows part of the tree at the same time.
+samples it contains. Large nodes go to the GPU, where there is enough parallel
+work to amortize kernel-launch and transfer costs. Small nodes go to the CPU
+cores. The CPU thus takes part in growing the tree rather than merely
+coordinating the GPU.
 
-We evaluate five implementations, from a textbook sequential baseline to the
-heterogeneous one. The experiments use five public datasets with up to 32
-million samples and 2,381 features, recent CPU servers, and two generations
-of data-center GPUs.
-% Headline numbers: Tables tab:time-cart and tab:time-c45 (depth <= 10, no
-% pruning; epyc1, H100) and bench/results/hybrid-vs-gpu-only (A100, HIGGS, no
-% depth limit). Update them when the tables are rerun.
+We evaluate five implementations, from a straightforward sequential baseline
+to the heterogeneous one. The experiments use five public datasets with up to
+32 million samples and 2,381 features, recent CPU servers, and two
+generations of data-center GPUs.
+% Numbers: Tables tab:time-cart and tab:time-c45 (depth <= 10, no pruning;
+% epyc / H100) and bench/results/hybrid-vs-gpu-only (A100/H100, HIGGS, no depth
+% limit). Re-derive after the 10-run protocol lands; treat competitor cells
+% still marked \est{} as provisional.
 The optimized sequential implementation is 8--25$\times$ faster than the
-textbook one. Using all cores of a two-socket server adds a further
+straightforward one. Using all cores of a two-socket server adds a further
 12--40$\times$, and the GPU up to 4$\times$ more, for nearly 1,600$\times$ in
 total. Our multicore implementation trains CART trees up to 360$\times$
 faster than scikit-learn~\cite{pedregosa2011sklearn} and C4.5 trees up to
@@ -71,13 +77,14 @@ implementation is up to 4.9$\times$ faster than growing all nodes on the GPU.
 The main contributions of this paper are:
 \begin{itemize}
 \item exact parallel implementations of CART and C4.5 for multicore CPUs, GPUs
-  and heterogeneous CPU--GPU systems, which grow identical, verified trees;
-\item a heterogeneous scheme in which the CPU and the GPU grow the tree
-  concurrently, with nodes assigned by size;
+  and heterogeneous CPU--GPU systems, with identical trees across
+  implementations;
+\item a heterogeneous scheme that assigns the nodes of a tree to devices by
+  size, so that the CPU and the GPU grow the tree concurrently;
 \item an experimental evaluation on large datasets and current hardware,
-  covering training time, memory usage, scalability, the breakdown of
-  training time and energy consumption;
-\item a comparison with established CPU and GPU implementations;
+  covering training time, memory usage, scalability and the breakdown of
+  training time, including a comparison with established CPU and GPU
+  implementations;
 \item an open-source release of the implementations and
   benchmarks.\footnote{\plan{Repository URL.}}
 \end{itemize}
