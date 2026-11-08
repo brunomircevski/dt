@@ -1,0 +1,25 @@
+2026-11-07 19:59:45  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mrdefault
+2026-11-07 20:00:27  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mr256 (--gpu-min-rows 256)
+2026-11-07 20:01:07  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mr512 (--gpu-min-rows 512)
+2026-11-07 20:01:46  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mr1024 (--gpu-min-rows 1024)
+2026-11-07 20:02:25  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mr2048 (--gpu-min-rows 2048)
+2026-11-07 20:03:05  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mr4096 (--gpu-min-rows 4096)
+2026-11-07 20:03:44  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mr8192 (--gpu-min-rows 8192)
+2026-11-07 20:04:25  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mr16384 (--gpu-min-rows 16384)
+2026-11-07 20:05:06  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-higgs-mr32768 (--gpu-min-rows 32768)
+2026-11-07 20:05:49  higgs: --gpu-min-rows 512
+2026-11-07 20:05:49  hybrid-vs-gpu-only/new-datasets/cuda-ampere-higgs (--gpu-min-rows 512)
+2026-11-07 20:08:32  hybrid-vs-gpu-only/new-datasets/gpuonly-ampere-higgs
+2026-11-07 20:11:51  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mrdefault
+2026-11-07 20:49:15  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mr256 (--gpu-min-rows 256)
+2026-11-07 21:27:02  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mr512 (--gpu-min-rows 512)
+2026-11-07 22:04:51  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mr1024 (--gpu-min-rows 1024)
+2026-11-07 22:43:19  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mr2048 (--gpu-min-rows 2048)
+2026-11-07 23:20:53  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mr4096 (--gpu-min-rows 4096)
+2026-11-08 00:00:16  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mr8192 (--gpu-min-rows 8192)
+2026-11-08 00:38:22  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mr16384 (--gpu-min-rows 16384)
+2026-11-08 01:14:35  hybrid-vs-gpu-only/new-datasets/sweep/cuda-ampere-sorel_4m-mr32768 (--gpu-min-rows 32768)
+2026-11-08 01:52:29  sorel_4m: --gpu-min-rows 16384
+2026-11-08 01:52:29  hybrid-vs-gpu-only/new-datasets/cuda-ampere-sorel_4m (--gpu-min-rows 16384)
+2026-11-08 02:59:23  hybrid-vs-gpu-only/new-datasets/gpuonly-ampere-sorel_4m
+2026-11-08 04:06:52  done

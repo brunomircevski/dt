@@ -23,7 +23,7 @@ set -uo pipefail
 NODE="$1"
 cd "$SLURM_SUBMIT_DIR"
 DIR="${DIR:-hybrid-vs-gpu-only}"
-DATASETS="${DATASETS:-airline mnist8m}"
+DATASETS="${DATASETS:-higgs mnist8m sorel_4m}"
 VALUES="${VALUES:-default 256 512 1024 2048 4096 8192 16384 32768}"
 RUNS="${RUNS:-3}" SWEEP_RUNS="${SWEEP_RUNS:-3}"
 PROTOCOLS="${PROTOCOLS:-cart_depth5,cart_depth10,cart_depth15,cart_depth20,cart_depth25,cart_depth30,cart_full_nodepth,c45_depth5_unpruned,c45_depth10_unpruned,c45_depth15_unpruned,c45_depth20_unpruned,c45_depth25_unpruned,c45_depth30_unpruned,c45_unpruned}"

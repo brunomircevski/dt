@@ -1,0 +1,11 @@
+2026-11-07 10:03:00  cuda-ampere-susy
+2026-11-07 10:03:13  gpuonly-ampere-susy
+2026-11-07 10:03:24  cuda-ampere-higgs
+2026-11-07 10:03:46  gpuonly-ampere-higgs
+2026-11-07 10:04:13  cuda-ampere-mnist8m
+2026-11-07 10:09:24  gpuonly-ampere-mnist8m
+2026-11-07 10:15:41  cuda-ampere-ecbdl_15m
+2026-11-07 10:25:04  gpuonly-ampere-ecbdl_15m
+2026-11-07 10:34:26  cuda-ampere-sorel_4m
+2026-11-07 11:02:59  gpuonly-ampere-sorel_4m
+2026-11-07 11:31:19  done

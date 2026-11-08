@@ -32,7 +32,7 @@ NAMES = {"susy": "SUSY", "higgs": "HIGGS", "covertype": "Covertype", "diabetes":
          "airline": "airline", "ecbdl": "ECBDL'14", "ecbdl_15m": "ECBDL'14 (15M sample)",
          "chess_1m": "chess 3×3 (1M)", "chess_10m": "chess 3×3 (10M)",
          "chess_100m": "chess 3×3 (100M)", "chess_1b": "chess 3×3 (1000M)",
-         "mnist8m": "MNIST8M", "sorel": "SOREL-20M"}
+         "mnist8m": "MNIST8M", "sorel": "SOREL-20M", "sorel_4m": "SOREL-20M (4M sample)"}
 GROUP = {"cart_alpha": "CART, fixed α", "cart_full": "CART, unpruned",
          "cart_depth12": "CART, depth 12", "cart_alpha_nodepth": "CART, fixed α, no depth limit", "c45": "C4.5, CF 0.25", "c45_unpruned": "C4.5, unpruned"}
 

@@ -380,11 +380,12 @@ def depth():
     proto = {"cart": [f"cart_depth{d}" for d in depths[:-1]] + ["cart_full_nodepth"],
              "c45": [f"c45_depth{d}_unpruned" for d in depths[:-1]] + ["c45_unpruned"]}
     c_hy, c_go = STYLE["cuda"][1], "#b9c2bc"
-    fig, axes = plt.subplots(2, 2, figsize=(FULL, 2.75), sharex=True,
+    sets = [("higgs", "HIGGS"), ("mnist8m", "MNIST8M"), ("sorel_4m", "SOREL 4M")]
+    fig, axes = plt.subplots(len(sets), 2, figsize=(FULL, 1.375 * len(sets)), sharex=True,
                              gridspec_kw={"hspace": 0.32, "wspace": 0.12})
     x = np.arange(len(depths))
     w = 0.38
-    for row, ds, name in [(0, "airline", "Airline"), (1, "mnist8m", "MNIST8M")]:
+    for row, (ds, name) in enumerate(sets):
         hy, go = summary(root / f"cuda-ampere-{ds}"), summary(root / f"gpuonly-ampere-{ds}")
         top = max(go[p]["time_mean"] for a in proto for p in proto[a])
         for col, algo in enumerate(["cart", "c45"]):

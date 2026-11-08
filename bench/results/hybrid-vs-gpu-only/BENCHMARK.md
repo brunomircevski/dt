@@ -8,124 +8,129 @@
 `--gpu-min-rows` is copied to the host and its subtree grown by the CPU
 threads while the GPU goes on with the next level) against `--cuda --gpu-only`
 (every node, down to the leaves, on the GPU). CART and C4.5 without pruning,
-grown to depth 5, 10, 15, 20, 25, 30 and without a depth limit, on two
-datasets: airline (109.3M rows × 13 features), where the gap is the largest of
-the datasets tried, and MNIST8M (8.1M × 784), where it is the smallest that
-both algorithms agree on. 3 runs a case. The trees are the same in both modes
-(node counts under each group).
+grown to depth 5, 10, 15, 20, 25, 30 and without a depth limit, 3 runs a
+case, on three of the paper's datasets, chosen by a screen of five
+([Datasets](#datasets)): HIGGS (10.5M rows × 28 features), where the hybrid's
+lead is the largest; SOREL-20M's 4M sample (4M × 2,381), where it is the
+smallest; and MNIST8M (8.1M × 784) in between. The trees are the same in both
+modes (node counts under each group). Until 2026-11-08 the benchmark had
+airline in place of HIGGS and SOREL 4M (its rows are in git, 9af6148).
 
 **Where.** The whole node (`--exclusive`), one GPU, every CPU of the node:
 ampere, A100 80 GB PCIe (GPU 0, NUMA node 0), 48 threads (CPUs 0–23, then
 24–47); hopper, H100 PCIe (GPU 2, NUMA node 1), 32 threads (16–31, then 0–15).
 The GPU's socket's CPUs come first and the memory is not bound
 ([bench/cluster/README.md](../../cluster/README.md#settings-specific-to-the-cluster)).
-Depth 15 to no limit, and the `--gpu-min-rows` sweep: ./tree 95b6d77
-(sm_80 and sm_90), 2026-11-06/07, jobs 174 (ampere) and 175 (hopper).
-
-Depth 5 and 10 are from the first runs of this benchmark, on the GPU's socket
-only (ampere 24 threads with `numactl --membind=0`, ./tree fef9ac0,
-2026-11-03; hopper 16 threads with `--membind 1`, `src/` of fef9ac0,
-2026-11-06, job 60), at the `--gpu-min-rows` of that sweep (airline 512,
-MNIST8M 8,192); their run folders keep that job's `machine-depth5-10.json`,
-`plan-depth5-10.json` and `run-depth5-10.log`. They were not rerun: at depth
-10 and below the hybrid hands almost nothing to the CPU, and a test on ampere
-(HIGGS, SUSY, airline, MNIST8M) found both sockets within ±6% of one there.
-The one-socket runs of depth 15 and deeper are in git (7b5a8d4).
+./tree 95b6d77 (sm_80 and sm_90) throughout:
+- HIGGS and SOREL 4M, every depth and the `--gpu-min-rows` sweep:
+  2026-11-07/08, jobs 225 (ampere) and 226 (hopper), `*-higgs-sorel.log`.
+- MNIST8M depth 15 to no limit and its sweep: 2026-11-06/07, jobs 174 and
+  175, `*-both-sockets.log`.
+- MNIST8M depth 5 and 10 are from the first runs of this benchmark, on the
+  GPU's socket only (ampere 24 threads with `numactl --membind=0`, ./tree
+  fef9ac0, 2026-11-03; hopper 16 threads with `--membind 1`, `src/` of
+  fef9ac0, 2026-11-06, job 60), at `--gpu-min-rows 8192`; their run folders
+  keep that job's `machine-depth5-10.json`, `plan-depth5-10.json` and
+  `run-depth5-10.log`. They were not rerun: at depth 10 and below the hybrid
+  hands almost nothing to the CPU, and a test on ampere found both sockets
+  within ±6% of one there.
 
 ## Results (ampere)
 
-Mean training time of 3 runs (presort, build; not reading the data); the
-spread is at most 5% in every case. Hybrid / GPU only, GPU only / hybrid in
-brackets.
+Mean training time of 3 runs (presort, build; not reading the data). The
+spread is at most 5% except on HIGGS, whose runs take 0.15–4 s (up to 12%).
+Hybrid / GPU only, GPU only / hybrid in brackets.
 
-| Depth | airline CART | airline C4.5 | MNIST8M CART | MNIST8M C4.5 |
-|---|---|---|---|---|
-| 5 | 0.55 / 0.55 s (1.00×) | 0.56 / 0.55 s (0.98×) | 3.26 / 3.22 s (0.99×) | 3.33 / 3.30 s (0.99×) |
-| 10 | 0.80 / 0.80 s (0.99×) | 0.82 / 0.81 s (0.99×) | 5.47 / 5.34 s (0.98×) | 5.40 / 5.53 s (1.02×) |
-| 15 | 1.09 / 1.07 s (0.99×) | 1.09 / 1.11 s (1.02×) | 7.47 / 8.82 s (1.18×) | 7.49 / 7.98 s (1.07×) |
-| 20 | 1.52 / 1.80 s (1.18×) | 1.45 / 1.68 s (1.16×) | 8.75 / 14.8 s (1.69×) | 9.17 / 11.6 s (1.27×) |
-| 25 | 1.98 / 4.91 s (2.48×) | 1.91 / 3.33 s (1.74×) | 9.86 / 18.5 s (1.87×) | 10.6 / 15.6 s (1.48×) |
-| 30 | 2.49 / 12.2 s (4.92×) | 2.19 / 6.84 s (3.12×) | 11.0 / 20.5 s (1.86×) | 12.0 / 19.2 s (1.60×) |
-| none | 3.31 / 25.4 s (7.69×) | 3.20 / 18.9 s (5.89×) | 17.0 / 29.6 s (1.75×) | 22.1 / 35.0 s (1.58×) |
+| Depth | HIGGS CART | HIGGS C4.5 | MNIST8M CART | MNIST8M C4.5 | SOREL 4M CART | SOREL 4M C4.5 |
+|---|---|---|---|---|---|---|
+| 5 | 0.145 / 0.148 s (1.03×) | 0.152 / 0.153 s (1.01×) | 3.26 / 3.22 s (0.99×) | 3.33 / 3.30 s (0.99×) | 3.17 / 3.14 s (0.99×) | 3.72 / 3.74 s (1.01×) |
+| 10 | 0.216 / 0.206 s (0.95×) | 0.215 / 0.216 s (1.00×) | 5.47 / 5.34 s (0.98×) | 5.40 / 5.53 s (1.02×) | 4.94 / 4.84 s (0.98×) | 5.26 / 5.29 s (1.01×) |
+| 15 | 0.304 / 0.322 s (1.06×) | 0.295 / 0.317 s (1.07×) | 7.47 / 8.82 s (1.18×) | 7.49 / 7.98 s (1.07×) | 6.67 / 6.79 s (1.02×) | 6.79 / 7.00 s (1.03×) |
+| 20 | 0.456 / 0.822 s (1.80×) | 0.389 / 0.567 s (1.46×) | 8.75 / 14.8 s (1.69×) | 9.17 / 11.6 s (1.27×) | 8.04 / 8.98 s (1.12×) | 8.38 / 8.58 s (1.02×) |
+| 25 | 0.575 / 2.00 s (3.47×) | 0.486 / 1.09 s (2.25×) | 9.86 / 18.5 s (1.87×) | 10.6 / 15.6 s (1.48×) | 9.40 / 10.9 s (1.16×) | 9.90 / 10.3 s (1.04×) |
+| 30 | 0.690 / 3.11 s (4.51×) | 0.542 / 1.67 s (3.08×) | 11.0 / 20.5 s (1.86×) | 12.0 / 19.2 s (1.60×) | 10.8 / 12.8 s (1.19×) | 11.4 / 12.0 s (1.05×) |
+| none | 0.816 / 3.97 s (4.87×) | 0.676 / 2.88 s (4.27×) | 17.0 / 29.6 s (1.75×) | 22.1 / 35.0 s (1.58×) | 35.2 / 41.7 s (1.18×) | 95.0 / 102 s (1.08×) |
 
-- **Up to depth 15 the modes are equal** (0.98–1.02×, MNIST8M's depth 15 aside):
-  few nodes get below `--gpu-min-rows`, so the hybrid hands almost nothing to
-  the CPU, and both run the same GPU levels.
-- **Deeper, the hybrid wins, and by how much depends on how many small nodes
-  the tree has.** airline's unlimited CART tree has 44.7M nodes, nearly all
-  of them small: GPU only still pays a whole level's kernels and
+- **Up to depth 10 the modes are equal** (0.95–1.03×; HIGGS's 0.95× at
+  depth 10 is 10 ms): few nodes get below `--gpu-min-rows`, so the hybrid
+  hands almost nothing to the CPU, and both run the same GPU levels.
+- **Deeper, the hybrid's lead follows the number of small nodes.** HIGGS's
+  unlimited trees have 2.9M (CART) and 1.3M (C4.5) nodes over 69–71 levels,
+  nearly all of them small: GPU only pays a whole level's kernels and
   synchronisation for every level of nodes of a few rows, where the hybrid's
-  CPU threads grow those subtrees in one go. MNIST8M's trees have 0.2–0.3M
-  nodes, so the GPU-only tail is short and the gap stays at about 1.6–1.9×
-  from depth 20 on (CART).
+  CPU threads grow those subtrees in one go, so the lead climbs from 1.5–1.8×
+  at depth 20 to 4.3–4.9× without a limit. MNIST8M's trees have 0.2–0.3M
+  nodes, and the lead stays at about 1.6–1.9× from depth 20 on (CART).
+- **SOREL 4M barely gains (1.02–1.19×).** Its trees are small (88k CART
+  nodes, 70k C4.5) and long and thin: no limit means depth 231 (CART) and
+  572 (C4.5), the levels past 30 peeling a few rows a time off nodes that
+  stay above `--gpu-min-rows`. Those nodes, and every level's 2,381
+  features, stay on the GPU in both modes; C4.5's levels past depth 30 take
+  84 of its 95 s.
 - **The gap is all in the build.** GPU setup is the same in both modes
-  (airline 0.31–0.33 s, MNIST8M 1.2 s at no depth limit). Build at no depth
-  limit: airline CART 2.98 s hybrid, 25.1 s GPU only; MNIST8M CART 15.7 s,
-  28.4 s.
+  (ampere: HIGGS 0.1 s, MNIST8M 1.2 s, SOREL 4M 1.8–2.2 s). Build at no depth limit:
+  HIGGS CART 0.72 s hybrid, 3.88 s GPU only; MNIST8M CART 15.7 s, 28.4 s;
+  SOREL 4M CART 33.4 s, 39.9 s.
+- **VRAM:** the hybrid needs a little less (HIGGS 3.3 GB against 3.8–4.2,
+  SOREL 4M 75.8 GB against 76.2–76.4 of the 80 GB).
 
 ## Results (hopper)
 
-Mean training time of 3 runs, as for ampere; the spread is at most 6%.
-Hybrid / GPU only, GPU only / hybrid in brackets.
+Mean training time of 3 runs, as for ampere. The spread is at most 5% except
+on HIGGS (up to 16%) and SOREL 4M at depth 5 to 25 (up to 16%, the two modes
+alike: 0.93× at depth 5 is within it). Hybrid / GPU only, GPU only / hybrid
+in brackets.
 
-| Depth | airline CART | airline C4.5 | MNIST8M CART | MNIST8M C4.5 |
-|---|---|---|---|---|
-| 5 | 0.32 / 0.32 s (1.00×) | 0.33 / 0.32 s (0.98×) | 1.90 / 1.89 s (0.99×) | 2.01 / 2.00 s (1.00×) |
-| 10 | 0.50 / 0.49 s (0.99×) | 0.51 / 0.51 s (0.99×) | 3.58 / 3.56 s (0.99×) | 3.66 / 3.71 s (1.01×) |
-| 15 | 0.75 / 0.74 s (0.98×) | 0.75 / 0.75 s (0.99×) | 5.47 / 6.98 s (1.28×) | 5.65 / 6.21 s (1.10×) |
-| 20 | 1.08 / 1.38 s (1.27×) | 1.06 / 1.22 s (1.15×) | 6.56 / 12.1 s (1.84×) | 6.91 / 9.34 s (1.35×) |
-| 25 | 1.53 / 4.61 s (3.01×) | 1.42 / 2.82 s (1.98×) | 7.67 / 15.1 s (1.96×) | 8.12 / 12.7 s (1.56×) |
-| 30 | 2.25 / 10.8 s (4.82×) | 1.77 / 6.02 s (3.40×) | 8.66 / 17.0 s (1.96×) | 9.29 / 15.8 s (1.70×) |
-| none | 3.22 / 21.8 s (6.76×) | 3.04 / 15.6 s (5.14×) | 13.0 / 24.5 s (1.88×) | 17.3 / 29.0 s (1.67×) |
+| Depth | HIGGS CART | HIGGS C4.5 | MNIST8M CART | MNIST8M C4.5 | SOREL 4M CART | SOREL 4M C4.5 |
+|---|---|---|---|---|---|---|
+| 5 | 0.115 / 0.115 s (1.00×) | 0.125 / 0.121 s (0.97×) | 1.90 / 1.89 s (0.99×) | 2.01 / 2.00 s (1.00×) | 2.00 / 1.86 s (0.93×) | 2.40 / 2.23 s (0.93×) |
+| 10 | 0.161 / 0.153 s (0.95×) | 0.172 / 0.170 s (0.99×) | 3.58 / 3.56 s (0.99×) | 3.66 / 3.71 s (1.01×) | 3.09 / 3.13 s (1.01×) | 3.46 / 3.46 s (1.00×) |
+| 15 | 0.229 / 0.248 s (1.08×) | 0.230 / 0.246 s (1.07×) | 5.47 / 6.98 s (1.28×) | 5.65 / 6.21 s (1.10×) | 4.16 / 4.58 s (1.10×) | 4.51 / 4.72 s (1.05×) |
+| 20 | 0.347 / 0.750 s (2.16×) | 0.300 / 0.468 s (1.56×) | 6.56 / 12.1 s (1.84×) | 6.91 / 9.34 s (1.35×) | 5.29 / 6.16 s (1.17×) | 5.82 / 5.94 s (1.02×) |
+| 25 | 0.515 / 2.07 s (4.02×) | 0.375 / 0.964 s (2.57×) | 7.67 / 15.1 s (1.96×) | 8.12 / 12.7 s (1.56×) | 6.12 / 7.85 s (1.28×) | 6.69 / 6.97 s (1.04×) |
+| 30 | 0.674 / 3.21 s (4.77×) | 0.451 / 1.57 s (3.49×) | 8.66 / 17.0 s (1.96×) | 9.29 / 15.8 s (1.70×) | 7.06 / 9.22 s (1.31×) | 7.83 / 8.46 s (1.08×) |
+| none | 0.810 / 4.01 s (4.95×) | 0.598 / 2.72 s (4.56×) | 13.0 / 24.5 s (1.88×) | 17.3 / 29.0 s (1.67×) | 24.6 / 30.6 s (1.24×) | 67.6 / 73.3 s (1.08×) |
 
 The trees are the same as ampere's (node counts in both charts).
 
 **hopper against ampere.**
-- **The same picture:** equal to depth 15 on airline (0.98–1.02×) and to
-  depth 10 on MNIST8M, then the hybrid wins by about as much as on ampere
-  (airline 4.8× / 3.4× at depth 30, MNIST8M 1.6–2.0× from depth 25).
-- **The H100 does not widen the gap.** Where the GPU does all the work
-  (depth ≤ 15) the H100 is 1.4–1.7× the A100 (airline depth 5 0.32 s against
-  0.55 s; MNIST8M 1.90 s against 3.26 s). GPU only at no limit gains less,
-  1.2× (airline CART 21.8 s against 25.4 s), as its long tail of levels of a
-  few nodes is launch and synchronisation bound.
-- **The hybrid at no limit on airline is CPU bound:** 3.22 s against ampere's
-  3.31 s (C4.5 3.04 s against 3.20 s), with 32 threads against 48. On
-  MNIST8M the H100 also speeds up the hybrid (13.0 s against 17.0 s, 1.31×).
+- **The same order:** HIGGS 4.6–5.0× at no limit, MNIST8M 1.7–1.9×, SOREL
+  4M 1.08–1.24×; from depth 20 the hybrid's lead on hopper is the same as
+  ampere's or a little larger.
+- **Where the GPU does the work the H100 is faster:** MNIST8M depth 5
+  1.90 s against 3.26 s, SOREL 4M no limit 24.6 / 67.6 s against 35.2 /
+  95.0 s (1.4×).
+- **HIGGS's hybrid at no limit is CPU bound:** 0.81 s on both nodes, with 32
+  threads against 48; GPU only too is the same (4.0 s), its long tail of
+  levels of a few nodes bound by launches and synchronisation, not by the GPU.
 
 ## Both sockets against one
 
 Until 2026-11-06 every CUDA run of the cluster had only the CPUs and memory
-of the GPU's socket (ampere 24 threads, hopper 16). Depth 15 and deeper were
-then run again on both sockets; the hybrid's time, one socket / both (above
-1: both faster), with each placement's own swept `--gpu-min-rows`:
+of the GPU's socket (ampere 24 threads, hopper 16). MNIST8M's depth 15 and
+deeper were then run again on both sockets; the hybrid's time, one socket /
+both (above 1: both faster), with each placement's own swept
+`--gpu-min-rows`:
 
-| Depth | ampere airline CART | C4.5 | ampere MNIST8M CART | C4.5 | hopper airline CART | C4.5 | hopper MNIST8M CART | C4.5 |
-|---|--:|--:|--:|--:|--:|--:|--:|--:|
-| 15 | 1.00 | 1.02 | 1.05 | 1.03 | 0.92 | 0.96 | 1.04 | 0.95 |
-| 20 | 1.03 | 1.03 | 1.13 | 1.06 | 1.09 | 1.01 | 1.18 | 1.00 |
-| 25 | 1.08 | 1.05 | 1.18 | 1.08 | 1.27 | 1.17 | 1.22 | 1.04 |
-| 30 | 1.30 | 1.15 | 1.14 | 1.07 | 1.28 | 1.31 | 1.21 | 1.04 |
-| none | 1.36 | 1.30 | 1.11 | 1.06 | 1.37 | 1.29 | 1.12 | 1.04 |
+| Depth | ampere MNIST8M CART | C4.5 | hopper MNIST8M CART | C4.5 |
+|---|--:|--:|--:|--:|
+| 15 | 1.05 | 1.03 | 1.04 | 0.95 |
+| 20 | 1.13 | 1.06 | 1.18 | 1.00 |
+| 25 | 1.18 | 1.08 | 1.22 | 1.04 |
+| 30 | 1.14 | 1.07 | 1.21 | 1.04 |
+| none | 1.11 | 1.06 | 1.12 | 1.04 |
 
-- **The second socket pays off where the CPU grows many subtrees:** airline
-  from depth 25 (1.15–1.37×, the CPU-bound tail of millions of small nodes),
-  MNIST8M CART from depth 20 (1.11–1.22×). MNIST8M's C4.5 gains 0–8%.
+- **The second socket pays off where the CPU grows many subtrees:** MNIST8M
+  CART from depth 20 (1.11–1.22×); its C4.5 gains 0–8%. airline, in the
+  benchmark until 9af6148, gained 1.15–1.37× from depth 25.
 - **GPU only barely changes** (ampere 0.97–1.03×, hopper 0.94–1.02×), so the
-  hybrid's lead over it grows: airline CART at no limit 5.5× → 7.7× on
-  ampere, 5.0× → 6.8× on hopper.
-- **hopper at depth 15 is 4–8% slower**, but GPU only is too (0.94–0.97×):
-  the GPU does nearly all the work there, so this is the newer build or the
-  node, not the CPU threads.
+  hybrid's lead over it grows.
 - **The sweep moves up:** with more threads the CPU takes bigger nodes well,
-  so the best `--gpu-min-rows` doubles (airline 512 → 2,048 on ampere, 256 →
-  1,024 on hopper; MNIST8M 8,192 → 16,384 on both). The ratios above mix the
-  placement with that retuning; at a fixed value the gain is about the same
-  (ampere airline CART at no limit, `--gpu-min-rows 512`: 4.48 s one socket,
-  3.55 s both, 1.26×).
+  so MNIST8M's best `--gpu-min-rows` doubles (8,192 → 16,384 on both nodes).
 - A test before these runs (ampere, HIGGS, SUSY, airline and MNIST8M, 3 runs,
-  not kept) also tried both sockets' CPUs with the memory bound to the GPU's
-  node: slower than not binding it in every deep case.
+  not kept) found both sockets 1.2–1.5× faster at no depth limit on HIGGS,
+  SUSY and airline CART, and tried both sockets' CPUs with the memory bound
+  to the GPU's node: slower than not binding it in every deep case.
 
 ## Who is working (MNIST8M, ampere, profiled)
 
@@ -179,7 +184,6 @@ shares of each bar:
 
 Table (seconds, share of the training time in brackets; `hybrid_profile_chart.py` prints it):
 
-bench/results/hybrid-vs-gpu-only/chart-profile-ampere-mnist8m.png
 | Algorithm | Depth | Mode | runs | train s | without --profile s | nodes | Setup (GPU init, upload, presort) s (%) | GPU working alone s (%) | GPU + CPU working at once s (%) | CPU working alone s (%) | CPU↔GPU transfer s (%) | Host: launching, waiting, finishing s (%) | CPU subtree thr·s |
 |---|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
 | CART | 5 | hybrid | 3 | 3.20 | 3.26 | 63 | 1.25 (39) | 1.90 (59) | 0.00 (0) | 0.00 (0) | 0.03 (1) | 0.02 (1) | 0 |
@@ -222,88 +226,121 @@ over CART and C4.5, of its time over that algorithm's fastest. Results:
 
 ampere (48 threads):
 
-| airline | default | 256 | 512 | 1024 | **2048** | 4096 | 8192 | 16384 | 32768 |
+| HIGGS | default | 256 | **512** | 1024 | 2048 | 4096 | 8192 | 16384 | 32768 |
 |---|---|---|---|---|---|---|---|---|---|
-| CART (s) | 3.37 | 7.37 | 3.55 | 3.39 | **3.32** | 3.43 | 3.60 | 3.86 | 4.32 |
-| C4.5 (s) | 3.21 | 6.52 | 3.96 | 3.23 | **3.17** | 3.23 | 3.48 | 3.86 | 4.41 |
+| CART (s) | 0.835 | 1.03 | **0.813** | 0.822 | 0.864 | 0.973 | 1.08 | 1.29 | 1.49 |
+| C4.5 (s) | 0.684 | 0.835 | **0.699** | 0.700 | 0.683 | 0.741 | 0.824 | 1.01 | 1.23 |
 
 | MNIST8M | default | 256 | 512 | 1024 | 2048 | 4096 | 8192 | **16384** | 32768 |
 |---|---|---|---|---|---|---|---|---|---|
 | CART (s) | 21.0 | 23.2 | 22.1 | 21.1 | 20.1 | 19.4 | 18.3 | **17.0** | 20.4 |
 | C4.5 (s) | 24.8 | 29.0 | 27.3 | 26.0 | 24.8 | 23.7 | 22.5 | **22.2** | 21.0 |
 
+| SOREL 4M | default | 256 | 512 | 1024 | 2048 | 4096 | 8192 | **16384** | 32768 |
+|---|---|---|---|---|---|---|---|---|---|
+| CART (s) | 38.4 | 40.0 | 39.1 | 38.4 | 37.7 | 36.8 | 36.2 | **35.2** | 45.8 |
+| C4.5 (s) | 98.3 | 99.0 | 98.8 | 98.4 | 97.7 | 97.0 | 96.1 | **95.1** | 94.9 |
+
 hopper (32 threads):
 
-| airline | default | 256 | 512 | **1024** | 2048 | 4096 | 8192 | 16384 | 32768 |
+| HIGGS | default | 256 | **512** | 1024 | 2048 | 4096 | 8192 | 16384 | 32768 |
 |---|---|---|---|---|---|---|---|---|---|
-| CART (s) | 3.21 | 4.01 | 3.28 | **3.24** | 3.23 | 3.38 | 3.48 | 3.90 | 4.13 |
-| C4.5 (s) | 3.18 | 3.97 | 3.06 | **3.01** | 3.12 | 3.24 | 3.47 | 3.83 | 4.50 |
+| CART (s) | 0.828 | 0.823 | **0.811** | 0.826 | 0.857 | 0.926 | 1.08 | 1.25 | 1.43 |
+| C4.5 (s) | 0.645 | 0.610 | **0.597** | 0.603 | 0.635 | 0.685 | 0.799 | 0.929 | 1.14 |
 
 | MNIST8M | default | 256 | 512 | 1024 | 2048 | 4096 | 8192 | **16384** | 32768 |
 |---|---|---|---|---|---|---|---|---|---|
 | CART (s) | 16.7 | 19.0 | 17.6 | 16.8 | 16.1 | 15.4 | 14.3 | **13.0** | 16.0 |
 | C4.5 (s) | 20.0 | 23.7 | 22.4 | 21.0 | 20.1 | 18.9 | 18.0 | **17.5** | 16.1 |
 
-- **airline's minimum is flat**, and ./tree's default (2,048 / 4,096) is within
-  1–3% of the tuned value on both nodes; below 512 airline slows down sharply
-  (2.1× at 256 on ampere).
-- **MNIST8M takes 16,384 on both nodes**, CART 24–28% and C4.5 12–14%
-  faster than the default (1,024 / 1,977). C4.5 alone would take 32,768 (6–9%
-  faster than 16,384), where CART is 20–23% slower.
-- **Against one socket the best value doubles** (below): with twice the
-  threads the CPU keeps up with bigger nodes.
+| SOREL 4M | default | 256 | 512 | 1024 | 2048 | 4096 | 8192 | **16384** | 32768 |
+|---|---|---|---|---|---|---|---|---|---|
+| CART (s) | 27.6 | 28.7 | 28.0 | 27.5 | 27.2 | 26.1 | 25.3 | **24.7** | 30.9 |
+| C4.5 (s) | 70.2 | 70.8 | 70.4 | 70.1 | 69.9 | 69.3 | 68.4 | **67.8** | 70.5 |
 
-The first, one-socket sweeps (the values of the depth 5 and 10 runs) are in
-`sweep-one-socket/`: ampere by hand through `tune.sh`, interleaved
-(`numactl --membind=0 taskset -c 0-23`, `--threads 24`; `ampere-*.csv`,
-`ampere-<dataset>.json`), hopper by `hybrid_vs_gpu_only.sh` (job 60,
-`cuda-hopper-*` and `hopper-<dataset>.json`). They took airline 512 (ampere)
-and 256 (hopper), MNIST8M 8,192 on both:
+- **HIGGS takes 512 on both nodes**, and its minimum is flat: ./tree's
+  default (1,281 / 2,563) is within 8% of it (C4.5 on ampere 2% faster).
+- **MNIST8M and SOREL 4M take 16,384 on both nodes.** MNIST8M's CART is
+  24–28% and its C4.5 12–14% faster than the default (1,024 / 1,977); C4.5
+  alone would take 32,768 (6–9% faster than 16,384), where CART is 20–23%
+  slower. SOREL 4M moves little (CART 8–11%, C4.5 3–4%), as most of its work
+  never reaches `--gpu-min-rows`.
+
+The first, one-socket sweeps of MNIST8M (the value of its depth 5 and 10
+runs) are in `sweep-one-socket/`: ampere by hand through `tune.sh`,
+interleaved (`numactl --membind=0 taskset -c 0-23`, `--threads 24`;
+`ampere-mnist8m.csv`, `ampere-mnist8m.json`), hopper by
+`hybrid_vs_gpu_only.sh` (job 60, `cuda-hopper-mnist8m-*` and
+`hopper-mnist8m.json`). Both took 8,192, half of the both-socket value: with
+twice the threads the CPU keeps up with bigger nodes.
 
 | one socket | default | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 | 32768 |
 |---|---|---|---|---|---|---|---|---|---|
-| ampere airline CART (s) | 4.60 | 4.58 | **4.48** | 4.50 | 4.59 | 4.76 | 5.11 | 5.58 | 6.06 |
-| ampere airline C4.5 (s) | 4.51 | 4.40 | **4.16** | 4.16 | 4.28 | 4.51 | 4.90 | 5.49 | 6.15 |
 | ampere MNIST8M CART (s) | 21.4 | – | 22.3 | 21.2 | 20.5 | 20.0 | **19.0** | 20.5 | 27.0 |
 | ampere MNIST8M C4.5 (s) | 25.3 | – | 27.7 | 26.3 | 25.5 | 24.2 | **23.4** | 22.7 | 26.9 |
-| hopper airline CART (s) | 4.62 | **4.39** | 4.46 | 4.49 | 4.64 | 4.79 | 5.01 | 5.43 | 5.94 |
-| hopper airline C4.5 (s) | 4.46 | **3.94** | 3.90 | 4.01 | 4.19 | 4.47 | 4.89 | 5.34 | 6.09 |
 | hopper MNIST8M CART (s) | 16.6 | 18.7 | 17.4 | 16.6 | 16.0 | 15.5 | **14.5** | 17.0 | 23.7 |
 | hopper MNIST8M C4.5 (s) | 19.6 | 23.5 | 22.1 | 20.6 | 19.6 | 18.9 | **17.9** | 17.7 | 23.2 |
 
-**Datasets.** Picked from a screen at no depth limit on one socket of ampere,
-one run each (`sweep-one-socket/ampere-screen.csv`), GPU only / hybrid, CART
-and C4.5: airline 5.4× / 4.1×, HIGGS 3.0× / 2.8×, SUSY 3.0× / 1.1×, ECBDL'14
-15M 1.5× / 1.3×, MNIST8M 1.44× / 1.40×, Covertype too short to count (0.1 s).
+## Datasets
+
+A screen on ampere, both sockets, no depth limit, unpruned, ./tree's default
+`--gpu-min-rows`, one run each (job 214, 2026-11-07,
+`screen-both-sockets/`), over the paper's datasets that fit in the A100's
+80 GB. GPU-only time / hybrid time:
+
+| Dataset | CART hybrid / GPU only | ratio | C4.5 hybrid / GPU only | ratio | nodes (CART / C4.5) |
+|---|---|--:|---|--:|---|
+| **HIGGS** | 0.86 / 4.15 s | **4.8×** | 0.67 / 2.99 s | **4.5×** | 2.86M / 1.32M |
+| SUSY | 0.35 / 1.26 s | 3.6× | 0.17 / 0.20 s | 1.2× | 1.19M / 25k |
+| ECBDL'14 15M | 19.8 / 30.4 s | 1.53× | 36.0 / 47.7 s | 1.32× | 553k / 389k |
+| MNIST8M | 21.1 / 29.4 s | 1.40× | 24.9 / 35.3 s | 1.42× | 302k / 218k |
+| **SOREL 4M** | 38.2 / 41.6 s | **1.09×** | 98.2 / 102.6 s | **1.04×** | 88k / 70k |
+
+HIGGS has the largest lead for both algorithms and SOREL 4M the smallest;
+MNIST8M, already in the benchmark, stays as the middle case. An earlier
+screen on one socket (`sweep-one-socket/ampere-screen.csv`) also had airline
+(5.4× / 4.1×) and Covertype (too short to count, 0.1 s); airline is not one
+of the paper's datasets.
 
 ## Commands
 
-Depth 15 to no limit and the sweep, one job per node: a wrapper (not kept)
-built ./tree 95b6d77 for sm_80 and sm_90 inside the job, then ran
-`bench/cluster/hybrid_vs_gpu_only.sh` with the deep protocols into
-`hybrid-vs-gpu-only/both-sockets/`, merged here afterwards (the depth 5 and
-10 rows kept, the deeper one-socket rows replaced). Without the wrapper, from
-the repository root after `bench/cluster/build.sh`:
+HIGGS and SOREL 4M, one job per node, through a wrapper (not kept) that ran
+`bench/cluster/hybrid_vs_gpu_only.sh` with `DIR=hybrid-vs-gpu-only/new-datasets`,
+`DATASETS="higgs sorel_4m"`, `PROFILE_DATASETS=""` and
+`TREE_CUDA_BIN=~/dt/tree_95b6d774_<node>` (the binary of the MNIST8M runs),
+merged here afterwards. Without the wrapper, from the repository root after
+`bench/cluster/build.sh`:
+
+```bash
+for n in ampere hopper; do
+  sbatch -J hvg-$n -p $n -w $n --exclusive -t 16:00:00 -o bench/results/hybrid-vs-gpu-only/$n-higgs-sorel.log \
+      --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)",DATASETS="higgs sorel_4m",PROFILE_DATASETS= \
+      bench/cluster/hybrid_vs_gpu_only.sh $n
+done
+```
+
+MNIST8M depth 15 to no limit and its sweep (jobs 174, 175; the profile on ampere only):
 
 ```bash
 P=cart_depth15,cart_depth20,cart_depth25,cart_depth30,cart_full_nodepth,c45_depth15_unpruned,c45_depth20_unpruned,c45_depth25_unpruned,c45_depth30_unpruned,c45_unpruned
 sbatch -J dt-hvg -p ampere -w ampere --exclusive -t 14:00:00 -o bench/results/hybrid-vs-gpu-only/ampere-both-sockets.log \
-    --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)",PROTOCOLS=$P,PROFILE_DATASETS=mnist8m \
+    --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)",PROTOCOLS=$P,DATASETS=mnist8m,PROFILE_DATASETS=mnist8m \
     bench/cluster/hybrid_vs_gpu_only.sh ampere
 sbatch -J dt-hvg -p hopper -w hopper --exclusive -t 10:00:00 -o bench/results/hybrid-vs-gpu-only/hopper-both-sockets.log \
-    --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)",PROTOCOLS=$P,PROFILE_DATASETS= \
+    --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty)",PROTOCOLS=$P,DATASETS=mnist8m,PROFILE_DATASETS= \
     bench/cluster/hybrid_vs_gpu_only.sh hopper
 ```
 
-(job.sh gives the CUDA runs every CPU of the node since 95b6d77; the first
-runs, with the GPU's socket only, were ampere by hand through `tune.sh` and
-job.sh, and hopper as job 60, `hopper-one-socket.log`.)
+(The `*-both-sockets.log` jobs also ran airline, removed here; job.sh gives
+the CUDA runs every CPU of the node since 95b6d77. The first runs, with the
+GPU's socket only, were ampere by hand through `tune.sh` and job.sh, and
+hopper as job 60, `hopper-one-socket.log`.)
 
 Charts (`--node hopper` for hopper's) and the profile charts and table:
 
 ```bash
 d=bench/results/hybrid-vs-gpu-only
-bench/.venv/bin/python bench/hybrid_chart.py $d --node ampere --datasets airline,mnist8m
+bench/.venv/bin/python bench/hybrid_chart.py $d --node ampere --datasets higgs,mnist8m,sorel_4m
 bench/.venv/bin/python bench/hybrid_profile_chart.py $d --node ampere --dataset mnist8m
 bench/.venv/bin/python bench/hybrid_profile_chart.py $d --node ampere --dataset mnist8m --hybrid-only --seconds
 bench/.venv/bin/python bench/hybrid_profile_chart.py $d --node ampere --dataset mnist8m --hybrid-only

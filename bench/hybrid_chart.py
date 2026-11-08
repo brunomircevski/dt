@@ -163,10 +163,13 @@ def main():
     gpus = (versions.get("gpu") or "GPU").splitlines()
     gpu = gpus[int(machine.get("gpu_index", 0))].split(",")[0]
     commit = versions.get("tree_git", "?")
-    shallow = next((d["machine_shallow"] for d in data.values() if d.get("machine_shallow")), None)
+    shallow_sets = [ds for ds, d in data.items() if d.get("machine_shallow")]
+    shallow = data[shallow_sets[0]]["machine_shallow"] if shallow_sets else None
 
-    def placement(depths):
-        some = [r for r in rows if any(r["protocol"] == protocol(a, d) for a in ALGORITHMS for d in depths)]
+    def is_shallow(r):
+        return r["dataset"] in shallow_sets and any(r["protocol"] == protocol(a, d) for a in ALGORITHMS for d in DEPTHS[:2])
+
+    def placement(some):
         threads = sorted({r["threads"] for r in some})
         dates = sorted({r["time"][:10] for r in some})
         return f"{'/'.join(map(str, threads))} CPU threads", f"{dates[0]}" + (f" to {dates[-1]}" if len(dates) > 1 else "")
@@ -177,14 +180,14 @@ def main():
               for a in ALGORITHMS for c, label in BACKENDS.values()]
     fig.legend(handles=legend, loc="upper left", ncol=4, frameon=False, fontsize=8.5,
                bbox_to_anchor=(0.055, 0.965))
-    if shallow:  # depth 5 and 10 from the earlier one-socket job
-        deep, low = placement(DEPTHS[2:]), placement(DEPTHS[:2])
-        where = (f"{args.node} node: {gpu}. Depth 15 to no limit: {deep[0]} on both sockets (the GPU's first, "
-                 f"memory not bound), ./tree {commit}, {deep[1]}; depth 5 and 10: {low[0]} on the GPU's socket, "
-                 f"./tree {shallow.get('versions', {}).get('tree_git', '?')}, {low[1]}.")
-    else:
-        every = placement(DEPTHS)
-        where = f"{args.node} node: {gpu}, {every[0]} on both sockets, ./tree {commit}, {every[1]}."
+    every = placement([r for r in rows if not is_shallow(r)])
+    where = f"{args.node} node: {gpu}, {every[0]} on both sockets (the GPU's first, memory not bound), ./tree {commit}, {every[1]}"
+    if shallow:  # depth 5 and 10 of these datasets from an earlier one-socket job
+        low = placement([r for r in rows if is_shallow(r)])
+        names = ", ".join(NAMES.get(ds, ds) for ds in shallow_sets)
+        where += (f"; {names} at depth 5 and 10: {low[0]} on the GPU's socket, "
+                  f"./tree {shallow.get('versions', {}).get('tree_git', '?')}, {low[1]}")
+    where += "."
     details = (
         f"{where} Runs per case: "
         f"{'/'.join(map(str, reps))}; bar = mean training time (load excluded), whisker = fastest to slowest.\n"
