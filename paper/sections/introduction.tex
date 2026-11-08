@@ -1,2 +1,91 @@
 \section{Introduction}
 \label{sec:intro}
+
+Decision trees are among the most widely used models in machine learning and
+data mining~\cite{costa2023survey}. Their predictions can be inspected and
+explained, which makes them attractive wherever a model has to be understood
+or audited, and they are the base learners of ensemble methods such as random
+forests and gradient boosting~\cite{chen2016xgboost,ke2017lightgbm}.
+CART~\cite{breiman1984cart} and C4.5~\cite{quinlan1993c45} remain the
+reference algorithms for the induction of classification trees.
+
+Growing a single tree is usually considered inexpensive, but a tree is rarely
+trained only once. Model selection compares many candidate values of
+parameters such as the pruning strength, the depth limit or the minimum leaf
+size, and $k$-fold
+cross-validation multiplies the number of trees by $k$. At the same time,
+datasets with tens of millions of samples and thousands of features are
+increasingly common. At this scale, a sequential implementation takes minutes
+to hours per tree, and this cost is paid again for every tree that model
+selection requires. Faster induction of a single tree therefore shortens the
+whole modelling process and makes exact trees practical on large data.
+
+Modern servers offer many cores, several sockets, high-bandwidth memory and,
+increasingly, data-center GPUs. Exploiting them for tree induction is not
+straightforward. A node near the root holds most of the training set, whereas
+the lower levels consist of many small nodes: large nodes offer enough work
+for thousands of GPU threads, while small ones do not amortize the cost of
+launching GPU kernels and transferring data. Moreover, split evaluation
+performs little computation per value read, so it is limited mainly by memory
+bandwidth.
+
+Parallel decision tree induction has a long history, from presorting-based
+scalable algorithms such as SLIQ~\cite{mehta1996sliq} and
+SPRINT~\cite{shafer1996sprint} to multicore~\cite{aldinucci2014fastflow} and
+distributed~\cite{abuzaid2016yggdrasil} systems. Several studies proposed GPU
+implementations~\cite{lo2014cudt,nasridinov2014gpu,strnad2016gpu}, evaluated
+on GPUs of earlier generations. The most widely used GPU tree
+learners~\cite{chen2016xgboost,mitchell2017xgboostgpu,ke2017lightgbm,raschka2020cuml}
+rely on histogram-based split finding over discretized feature values, so
+their trees approximate, rather than reproduce, those of CART and C4.5. To the
+best of our knowledge, no publicly available implementation grows exact CART
+and C4.5 trees on multicore CPUs, GPUs and both together, evaluated on large
+datasets and current server hardware.
+
+In this paper, we investigate parallel implementations of CART and C4.5 for
+multicore CPUs, CUDA-enabled GPUs and heterogeneous CPU--GPU systems. All of
+them follow the original algorithms exactly, considering every distinct
+feature value as a split threshold, and grow identical trees, verified against
+reference implementations of both algorithms; the reported speed-ups thus come
+without any change of the model. The heterogeneous implementation assigns
+tree nodes to the devices by the number of training samples they contain:
+large nodes are processed on the GPU, which exploits its parallelism where the
+work is concentrated, and small nodes on the CPU cores, which avoids the
+overhead of GPU execution for small workloads. Rather than only coordinating
+the GPU, the CPU thus grows part of the tree concurrently with it.
+
+We evaluate five implementations, from a textbook sequential baseline to the
+heterogeneous one, on five public datasets with up to 32 million samples and
+2,381 features, on recent CPU servers and on two generations of data-center
+GPUs.
+% Headline numbers: Tables tab:time-cart and tab:time-c45 (depth <= 10, no
+% pruning; epyc1, H100) and bench/results/hybrid-vs-gpu-only (A100, HIGGS, no
+% depth limit). Update them when the tables are rerun.
+The optimized sequential implementation is 8--25$\times$ faster than the
+textbook one, all cores of a two-socket server add a further 12--40$\times$,
+and the GPU up to 4$\times$ more, nearly 1,600$\times$ in total. Compared with
+scikit-learn~\cite{pedregosa2011sklearn} and Weka~\cite{hall2009weka}, our
+multicore implementation trains CART trees up to 360$\times$ and C4.5 trees up
+to 3,100$\times$ faster, and the GPU implementations up to 1,400$\times$ and
+8,100$\times$ faster, respectively. For deep trees, the heterogeneous
+implementation is up to 4.9$\times$ faster than growing all nodes on the GPU.
+
+The main contributions of this paper are:
+\begin{itemize}
+\item exact parallel implementations of CART and C4.5 for multicore CPUs, GPUs
+  and heterogeneous CPU--GPU systems that grow identical, verified trees;
+\item a heterogeneous scheme in which the CPU and the GPU grow the tree
+  concurrently, with nodes assigned by size;
+\item an experimental evaluation on large datasets and current hardware,
+  covering training time, memory usage, scalability, the breakdown of training
+  time and energy consumption, with a comparison to established CPU and GPU
+  implementations;
+\item an open-source release of the implementations and
+  benchmarks.\footnote{\plan{Repository URL.}}
+\end{itemize}
+
+The rest of the paper is organized as follows. Section~\ref{sec:related}
+reviews related work, Section~\ref{sec:impl} describes our implementations,
+Section~\ref{sec:design} the experimental setup and Section~\ref{sec:results}
+the results. Section~\ref{sec:discussion} discusses the findings and
+Section~\ref{sec:conclusion} concludes the paper.
