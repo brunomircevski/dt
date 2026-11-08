@@ -30,38 +30,29 @@ PDF names are `Short-Article-Title_FirstAuthorYear.pdf`.
 | 2 | Lo et al., CUDT | 2014 | single tree, GPU (SPRINT) | ★★★★★ | yes |
 | 3 | Nasridinov et al., DT on GPU | 2014 | single tree, GPU (ID3), maybe CPU+GPU | ★★★★★ | **no** (paywalled) |
 | 4 | Liao et al., CudaTree | 2013 | random forest, GPU, CPU+GPU forest | ★★★★ | **no** (link dead) |
-| 5 | Sharp, DT and forests on GPU | 2008 | forests, GPU (vision) | ★★★ | yes |
-| 6 | Aldinucci et al., FastFlow (ECML-PKDD) | 2010 | single tree, multicore (C4.5) | ★★★★ | yes |
-| 7 | Aldinucci et al., FastFlow (CCPE) | 2014 | single tree, multicore (C4.5) | ★★★★★ | yes |
-| 8 | Shafer et al., SPRINT | 1996 | presorted attribute lists, parallel | ★★★★★ | yes |
-| 9 | Mehta et al., SLIQ | 1996 | presorting, scalable | ★★★★ | yes |
-| 10 | Ruggieri, Efficient C4.5 | 2002 | fast C4.5 (EC4.5/YaDT) | ★★★★ | **no** (paywalled) |
-| 11 | Abuzaid et al., Yggdrasil | 2016 | deep trees, distributed, exact | ★★★★★ | yes |
-| 12 | Loreti & Visani, parallel GLEAMS | 2024 | parallel DT taxonomy, Ray | ★★★ | yes |
-| 13 | Chattratichat et al., large-scale DM | 1997 | parallel DM, data/task parallelism | ★★ | yes |
-| 14 | Chen & Guestrin, XGBoost | 2016 | GBDT system | ★★★★★ | yes |
-| 15 | Mitchell & Frank, XGBoost on GPU | 2017 | GBDT, GPU, exact split | ★★★★★ | yes |
-| 16 | Zhang, Si, Hsieh, GPU tree boosting | 2018 | GBDT, GPU histograms | ★★★★ | yes |
-| 17 | Wen et al., GPU-GBDT (IPDPS) | 2018 | GBDT, GPU, exact | ★★★★ | yes |
-| 18 | Wen et al., ThunderGBM (TPDS) | 2019 | GBDT, GPU, multi-GPU | ★★★★ | yes |
-| 19 | Liu, Peng, Wen, multi-output GBDT | 2025 | GBDT, GPU, ICPP | ★★★ | yes |
-| 20 | Ke et al., LightGBM | 2017 | GBDT, histograms | ★★★ | yes |
-| 21 | Wang et al., XGT | 2025 | private DT on GPU (MPC) | ★★ | yes |
-| 22 | Costa & Pedreira, DT survey | 2023 | survey | ★★★ | **no** (paywalled) |
-| 23 | Mienye & Jere, DT survey | 2024 | survey | ★★★ | yes |
-| 24 | Rivera-Lopez et al., metaheuristic DT survey | 2022 | survey (evolutionary DT) | ★★ | yes |
-| 25 | Breiman et al., CART | 1984 | algorithm | ★★★★★ | book |
-| 26 | Quinlan, C4.5 | 1993 | algorithm | ★★★★★ | book |
-| 27 | Fayyad & Irani, continuous attributes | 1992 | boundary-point shortcut (used in our code) | ★★★★ | **no** (OA, bot-blocked) |
-| 28 | Pedregosa et al., scikit-learn | 2011 | baseline | ★★★★ | yes |
-| 29 | Hall et al., WEKA | 2009 | baseline (J48) | ★★★★ | yes |
-| 30 | Therneau & Atkinson, rpart | — | baseline | ★★★ | software |
-| 31 | Raschka et al., cuML | 2020 | baseline | ★★★★ | **no** (OA, not fetched) |
-| 32 | Merrill & Garland, decoupled look-back scan | 2016 | GPU primitive | ★★★ | yes |
-| 33 | Baldi et al., HIGGS/SUSY | 2014 | dataset | ★★★★ | yes |
-| 34 | Triguero et al., ECBDL'14 | 2015 | dataset | ★★★★ | **no** (OA, bot-blocked) |
-| 35 | Loosli et al., MNIST8M | 2007 | dataset | ★★★★ | book chapter |
-| 36 | Harang & Rudd, SOREL-20M | 2020 | dataset | ★★★★ | yes |
+| 5 | Aldinucci et al., FastFlow (ECML-PKDD) | 2010 | single tree, multicore (C4.5) | ★★★★ | yes |
+| 6 | Aldinucci et al., FastFlow (CCPE) | 2014 | single tree, multicore (C4.5) | ★★★★★ | yes |
+| 7 | Shafer et al., SPRINT | 1996 | presorted attribute lists, parallel | ★★★★★ | yes |
+| 8 | Mehta et al., SLIQ | 1996 | presorting, scalable | ★★★★ | yes |
+| 9 | Ruggieri, Efficient C4.5 | 2002 | fast C4.5 (EC4.5/YaDT) | ★★★★ | **no** (paywalled) |
+| 10 | Abuzaid et al., Yggdrasil | 2016 | deep trees, distributed, exact | ★★★★★ | yes |
+| 11 | Chen & Guestrin, XGBoost | 2016 | GBDT system | ★★★★★ | yes |
+| 12 | Mitchell & Frank, XGBoost on GPU | 2017 | GBDT, GPU, exact split | ★★★★★ | yes |
+| 13 | Wen et al., ThunderGBM (TPDS) | 2019 | GBDT, GPU, multi-GPU | ★★★★ | yes |
+| 14 | Ke et al., LightGBM | 2017 | GBDT, histograms | ★★★ | yes |
+| 15 | Costa & Pedreira, DT survey | 2023 | survey | ★★★ | **no** (paywalled) |
+| 16 | Breiman et al., CART | 1984 | algorithm | ★★★★★ | book |
+| 17 | Quinlan, C4.5 | 1993 | algorithm | ★★★★★ | book |
+| 18 | Fayyad & Irani, continuous attributes | 1992 | boundary-point shortcut (used in our code) | ★★★★ | **no** (OA, bot-blocked) |
+| 19 | Pedregosa et al., scikit-learn | 2011 | baseline | ★★★★ | yes |
+| 20 | Hall et al., WEKA | 2009 | baseline (J48) | ★★★★ | yes |
+| 21 | Therneau & Atkinson, rpart | — | baseline | ★★★ | software |
+| 22 | Raschka et al., cuML | 2020 | baseline | ★★★★ | **no** (OA, not fetched) |
+| 23 | Merrill & Garland, decoupled look-back scan | 2016 | GPU primitive | ★★★ | yes |
+| 24 | Baldi et al., HIGGS/SUSY | 2014 | dataset | ★★★★ | yes |
+| 25 | Triguero et al., ECBDL'14 | 2015 | dataset | ★★★★ | **no** (OA, bot-blocked) |
+| 26 | Loosli et al., MNIST8M | 2007 | dataset | ★★★★ | book chapter |
+| 27 | Harang & Rudd, SOREL-20M | 2020 | dataset | ★★★★ | yes |
 
 ---
 
@@ -89,8 +80,8 @@ references need checking before the paper says it:
 A safe wording: *"To our knowledge, no previous work assigns the nodes of a
 single CART or C4.5 tree to the CPU or the GPU by their size, with both devices
 growing the tree."* Also check the co-author's own GPU and hybrid work on
-evolutionary tree induction (Jurczuk, Czajkowski, Kretowski), cited in the
-Rivera-Lopez survey (#24); a reviewer from that community will know it.
+evolutionary tree induction (Jurczuk, Czajkowski, Kretowski); a reviewer from
+that community will know it.
 
 ## Missing PDFs (get them manually)
 
@@ -98,11 +89,11 @@ Rivera-Lopez survey (#24); a reviewer from that community will know it.
 |---|---|---|---|
 | 3 | Nasridinov et al. 2014 | paywalled (Springer) | https://doi.org/10.1007/s00607-013-0343-z |
 | 4 | Liao et al. 2013, CudaTree | biglearn.org file gone, Wayback blocked scripts | https://hgpu.org/?p=11070 or https://www.academia.edu/5330891 (in a browser) |
-| 10 | Ruggieri 2002, EC4.5 | paywalled (IEEE) | https://doi.org/10.1109/69.991727 |
-| 22 | Costa & Pedreira 2023 | paywalled (Springer) | https://doi.org/10.1007/s10462-022-10275-5 |
-| 27 | Fayyad & Irani 1992 | open access, Springer blocks scripts | https://link.springer.com/content/pdf/10.1007/BF00994007.pdf (in a browser) |
-| 31 | Raschka et al. 2020 (cuML) | open access (MDPI), not fetched | https://doi.org/10.3390/info11040193 |
-| 34 | Triguero et al. 2015 | open access, repository blocks scripts | https://nottingham-repository.worktribe.com/preview/982001/Triguero-et-al-cleanVersion.pdf (in a browser) |
+| 9 | Ruggieri 2002, EC4.5 | paywalled (IEEE) | https://doi.org/10.1109/69.991727 |
+| 15 | Costa & Pedreira 2023 | paywalled (Springer) | https://doi.org/10.1007/s10462-022-10275-5 |
+| 18 | Fayyad & Irani 1992 | open access, Springer blocks scripts | https://link.springer.com/content/pdf/10.1007/BF00994007.pdf (in a browser) |
+| 22 | Raschka et al. 2020 (cuML) | open access (MDPI), not fetched | https://doi.org/10.3390/info11040193 |
+| 25 | Triguero et al. 2015 | open access, repository blocks scripts | https://nottingham-repository.worktribe.com/preview/982001/Triguero-et-al-cleanVersion.pdf (in a browser) |
 
 The two CUDT files were the same article (Hindawi and Wiley downloads), one is
 kept.
@@ -115,7 +106,7 @@ kept.
 
 * **Citation**: D. Strnad, A. Nerat. Parallel construction of classification
   trees on a GPU. *Concurrency and Computation: Practice and Experience*
-  28(5):1417–1436, 2016 (online 2015). DOI 10.1002/cpe.3660.
+  28(5):1417–1436, 2016 (online 2015). DOI 10.1002/cpe.3660. (`strnad2016gpu`)
 * **PDF**: `Parallel-Construction-Classification-Trees-on-GPU_Strnad2016.pdf`
 * **Original note (PL)**: Jedna z najważniejszych do przeczytania: budowa
   binarnych drzew w CUDA, równoległość na poziomie węzłów, cech i podziałów;
@@ -142,7 +133,7 @@ kept.
 
 * **Citation**: W.-T. Lo, Y.-S. Chang, R.-K. Sheu, C.-C. Chiu, S.-M. Yuan.
   CUDT: A CUDA Based Decision Tree Algorithm. *The Scientific World Journal*
-  2014, Article 745640, 12 pages. DOI 10.1155/2014/745640.
+  2014, Article 745640, 12 pages. DOI 10.1155/2014/745640. (`lo2014cudt`)
 * **PDF**: `CUDT-CUDA-Based-Decision-Tree_Lo2014.pdf`
 * **Original note (PL)**: Bardzo bliska tematycznie: budowa drzewa w CUDA, CPU
   steruje wykonaniem, GPU realizuje obliczenia. Rozwiązanie wywodzi się ze
@@ -162,7 +153,7 @@ kept.
 
 * **Citation**: A. Nasridinov, Y. Lee, Y.-H. Park. Decision tree construction
   on GPU: ubiquitous parallel computing approach. *Computing* 96:403–413,
-  2014 (online 2013). DOI 10.1007/s00607-013-0343-z.
+  2014 (online 2013). DOI 10.1007/s00607-013-0343-z. (`nasridinov2014gpu`)
 * **PDF**: none (paywalled), see *Missing PDFs*.
 * **Original note (PL)**: Równoległa budowa ID3 na GPU, z uwzględnieniem
   czasu oraz zużycia energii. Bliska problematyka, choć inny algorytm
@@ -197,32 +188,14 @@ kept.
   "CPU+GPU" tree work we know; say it splits whole trees of a forest between
   devices, while we split the nodes of one tree by size.
 
-### 5. Sharp, Implementing Decision Trees and Forests on a GPU
-
-* **Citation**: T. Sharp. Implementing Decision Trees and Forests on a GPU.
-  In *Computer Vision – ECCV 2008*, LNCS 5305, pp. 595–608, Springer, 2008.
-  DOI 10.1007/978-3-540-88693-8_44.
-* **PDF**: `DT-and-Forests-on-GPU_Sharp2008.pdf`
-* **Original note (PL)**: Wczesna praca o uczeniu i wykonywaniu drzew
-  całkowicie na GPU. Kontekst rozpoznawania obiektów, więc mniej bezpośrednie
-  porównanie z klasycznym CART/C4.5 na danych tabelarycznych.
-* **Our view**: The first GPU decision trees: forests for object recognition
-  trained and evaluated with Direct3D shaders (pre-CUDA), histograms of
-  random feature responses, about 100× over the CPU. Random features and
-  histogram thresholds, not exhaustive search over sorted values; images, not
-  tabular data.
-* **Usefulness**: ★★★
-* **Use in paper**: One sentence in related work: GPU trees date back to 2008,
-  first in computer vision.
-
 ## 2. Single decision trees on multicore CPUs and clusters
 
-### 6. Aldinucci, Ruggieri, Torquati, Porting Decision Tree Algorithms to Multicore using FastFlow
+### 5. Aldinucci, Ruggieri, Torquati, Porting Decision Tree Algorithms to Multicore using FastFlow
 
 * **Citation**: M. Aldinucci, S. Ruggieri, M. Torquati. Porting Decision Tree
   Algorithms to Multicore Using FastFlow. In *ECML PKDD 2010*, LNCS 6321,
   pp. 7–23, Springer, 2010. DOI 10.1007/978-3-642-15880-3_7.
-  arXiv:1006.3424.
+  arXiv:1006.3424. (`aldinucci2010fastflow`)
 * **PDF**: `Porting-DT-Algorithms-to-Multicore-FastFlow_Aldinucci2010.pdf`
   (arXiv version)
 * **Original note (PL)**: Równoległa implementacja C4.5 na wielordzeniowym
@@ -233,14 +206,14 @@ kept.
   tasks (NAP, Nodes & Attributes Parallelisation). This mix of node- and attribute-level parallelism
   is the same as our `--parallel` backend (features of a big node in
   parallel, subtrees as tasks). Up to 7× on 8 cores.
-* **Usefulness**: ★★★★ (cite with #7; #7 is the full version)
-* **Use in paper**: Related work (CPU). Cite together with #7.
+* **Usefulness**: ★★★★ (cite with #6; #6 is the full version)
+* **Use in paper**: Related work (CPU). Cite together with #6.
 
-### 7. Aldinucci, Ruggieri, Torquati, Decision tree building on multi-core using FastFlow
+### 6. Aldinucci, Ruggieri, Torquati, Decision tree building on multi-core using FastFlow
 
 * **Citation**: M. Aldinucci, S. Ruggieri, M. Torquati. Decision tree building
   on multi-core using FastFlow. *Concurrency and Computation: Practice and
-  Experience* 26(3):800–820, 2014 (online 2013). DOI 10.1002/cpe.3063.
+  Experience* 26(3):800–820, 2014 (online 2013). DOI 10.1002/cpe.3063. (`aldinucci2014fastflow`)
 * **PDF**: `DT-Building-on-Multicore-FastFlow_Aldinucci2014.pdf` (author's
   manuscript, AperTO Turin repository)
 * **Original note (PL)**: Rozwinięte badanie równoległego C4.5, z analizą
@@ -259,7 +232,7 @@ kept.
   different (presorted columns, out-of-place partition, slot memory layout).
   Results: compare scaling.
 
-### 8. Shafer, Agrawal, Mehta, SPRINT
+### 7. Shafer, Agrawal, Mehta, SPRINT
 
 * **Citation**: J. Shafer, R. Agrawal, M. Mehta. SPRINT: A Scalable Parallel
   Classifier for Data Mining. In *Proc. 22nd VLDB*, pp. 544–555, 1996.
@@ -273,7 +246,7 @@ kept.
 * **Use in paper**: Related work (CPU) and method: origin of presorting with
   attribute lists that are partitioned, not resorted, at each node.
 
-### 9. Mehta, Agrawal, Rissanen, SLIQ
+### 8. Mehta, Agrawal, Rissanen, SLIQ
 
 * **Citation**: M. Mehta, R. Agrawal, J. Rissanen. SLIQ: A Fast Scalable
   Classifier for Data Mining. In *EDBT'96*, LNCS 1057, pp. 18–32, Springer,
@@ -287,7 +260,7 @@ kept.
 * **Use in paper**: Related work, with SPRINT: presorting and breadth-first
   growth.
 
-### 10. Ruggieri, Efficient C4.5
+### 9. Ruggieri, Efficient C4.5
 
 * **Citation**: S. Ruggieri. Efficient C4.5. *IEEE Transactions on Knowledge
   and Data Engineering* 14(2):438–444, 2002. DOI 10.1109/69.991727.
@@ -304,12 +277,12 @@ kept.
 * **Use in paper**: Compared implementations (YaDT); related work on fast
   sequential C4.5.
 
-### 11. Abuzaid et al., Yggdrasil
+### 10. Abuzaid et al., Yggdrasil
 
 * **Citation**: F. Abuzaid, J. K. Bradley, F. T. Liang, A. Feng, L. Yang,
   M. Zaharia, A. S. Talwalkar. Yggdrasil: An Optimized System for Training
   Deep Decision Trees at Scale. In *Advances in Neural Information Processing
-  Systems 29 (NIPS 2016)*, 2016.
+  Systems 29 (NIPS 2016)*, 2016. (`abuzaid2016yggdrasil`)
 * **PDF**: `Yggdrasil-Deep-DTs-at-Scale_Abuzaid2016.pdf`
 * **Original note (PL)**: Rozproszone uczenie drzew, podział danych według
   cech, kompresja i ograniczanie komunikacji. Bez binowania progów, z
@@ -327,44 +300,9 @@ kept.
   MNIST8M. Possibly compare our MNIST8M single-machine times with their
   cluster times (different depth and hardware: state them).
 
-### 12. Loreti & Visani, Parallel approaches for a decision tree-based explainability algorithm
-
-* **Citation**: D. Loreti, G. Visani. Parallel approaches for a decision
-  tree-based explainability algorithm. *Future Generation Computer Systems*
-  158:308–322, 2024. DOI 10.1016/j.future.2024.04.044.
-* **PDF**: `Parallel-Approaches-DT-Explainability-GLEAMS_Loreti2024.pdf`
-  (was in `refs/`)
-* **Original note**: — (already in `refs/`)
-* **Our view**: Parallelises GLEAMS, a tree-based explainability method, with
-  Ray. Its related-work section is a recent overview of parallel tree
-  building (a table classifying SPRINT, ScalParC, PLANET and others by
-  data/task parallelism and partitioning) and argues parallelism also cuts energy. The algorithm itself
-  is not CART/C4.5.
-* **Usefulness**: ★★★
-* **Use in paper**: Related work: a recent paper (2024, FGCS) showing the
-  topic is still active; borrow its taxonomy of parallel strategies to place
-  ours (task-parallel subtrees + data-parallel nodes + device split).
-
-### 13. Chattratichat et al., Large Scale Data Mining: Challenges and Responses
-
-* **Citation**: J. Chattratichat, J. Darlington, M. Ghanem, Y. Guo,
-  H. Hüning, M. Köhler, J. Sutiwaraphun, H. W. To, D. Yang. Large Scale Data
-  Mining: Challenges and Responses. In *Proc. KDD-97*, AAAI, 1997 (4 pages).
-* **PDF**: `Large-Scale-Data-Mining-Challenges-Responses_Chattratichat1997.pdf`
-  (was in `refs/`)
-* **Original note**: — (already in `refs/`)
-* **Our view**: Early parallel data mining (Imperial College): classification
-  trees parallelised by data parallelism (training set split across
-  processors), task parallelism (subtrees as tasks) and hybrids, chosen with
-  algorithmic skeletons and performance models. Historical; the task/data
-  terminology is still the one we use.
-* **Usefulness**: ★★
-* **Use in paper**: Optional, one citation for "data- and task-parallel tree
-  induction has been studied since the 1990s".
-
 ## 3. Tree boosting systems and GPU GBDT
 
-### 14. Chen & Guestrin, XGBoost
+### 11. Chen & Guestrin, XGBoost
 
 * **Citation**: T. Chen, C. Guestrin. XGBoost: A Scalable Tree Boosting
   System. In *Proc. 22nd ACM SIGKDD*, pp. 785–794, ACM, 2016.
@@ -383,11 +321,11 @@ kept.
   related work, compared implementations (why XGBoost with squared error on
   one tree is the closest equivalent to a Gini tree on bins).
 
-### 15. Mitchell & Frank, Accelerating the XGBoost algorithm using GPU computing
+### 12. Mitchell & Frank, Accelerating the XGBoost algorithm using GPU computing
 
 * **Citation**: R. Mitchell, E. Frank. Accelerating the XGBoost algorithm
   using GPU computing. *PeerJ Computer Science* 3:e127, 2017.
-  DOI 10.7717/peerj-cs.127.
+  DOI 10.7717/peerj-cs.127. (`mitchell2017xgboostgpu`)
 * **PDF**: `Accelerating-XGBoost-with-GPU_Mitchell2017.pdf`
 * **Original note (EN)**: Mitchell R, Frank E. (2017) Accelerating the
   XGBoost algorithm using GPU computing. PeerJ Computer Science 3:e127
@@ -401,62 +339,25 @@ kept.
   as our CUDA backend.
 * **Usefulness**: ★★★★★
 * **Use in paper**: Related work (GPU): the closest exact GPU tree builder.
-  Method: our per-node scans are the same primitive (cite with Merrill #32).
+  Method: our per-node scans are the same primitive (cite with Merrill #23).
   Results: HIGGS timing can be put in context (different hardware, boosting).
 
-### 16. Zhang, Si, Hsieh, GPU-acceleration for Large-scale Tree Boosting
-
-* **Citation**: H. Zhang, S. Si, C.-J. Hsieh. GPU-acceleration for Large-scale
-  Tree Boosting. SysML Conference 2018. arXiv:1706.08359 (2017).
-* **PDF**: `GPU-Acceleration-Large-Scale-Tree-Boosting_Zhang2018.pdf`
-  (arXiv v1, was in `refs/`)
-* **Original note (PL)**: Przyspieszanie budowy histogramów na GPU; ważna
-  praca związana z GPU w LightGBM. Dotyczy podejścia histogramowego, a nie
-  pełnego przeszukiwania wszystkich progów.
-* **Our view**: Argues that histogram-based approximate splits scale better on
-  GPUs than exact multi-scan or radix-sort approaches, and builds a fast
-  feature-histogram kernel (LightGBM GPU). This is the opposite design choice
-  to ours (exact thresholds); useful as the argument we answer: exact
-  induction can be fast on GPUs too, and gives the textbook CART/C4.5 tree.
-* **Usefulness**: ★★★★
-* **Use in paper**: Related work (GPU): histogram vs exact. Discussion: why we
-  keep exact thresholds (identical trees to the CPU, to scikit-learn and to
-  C4.5; no binning parameter).
-
-### 17. Wen et al., Efficient Gradient Boosted Decision Tree Training on GPUs
-
-* **Citation**: Z. Wen, B. He, K. Ramamohanarao, S. Lu, J. Shi. Efficient
-  Gradient Boosted Decision Tree Training on GPUs. In *IEEE IPDPS 2018*,
-  pp. 234–243, 2018. DOI 10.1109/IPDPS.2018.00033.
-* **PDF**: `Efficient-GBDT-Training-on-GPUs_Wen2018.pdf`
-* **Original note (PL)**: Optymalizacja uczenia GBDT na GPU: kompresja,
-  przydział pracy wątkom i blokom, ponowne wykorzystanie wyników. Bezpośredni
-  precedens dla pracy o wydajności uczenia drzew na konferencji HPC.
-* **Our view**: GPU-GBDT over sorted feature values, giving the same model
-  (same RMSE) as XGBoost's exact method:
-  run-length encoding to shrink sorted columns, dynamic thread/block
-  allocation for irregular per-node workloads, reuse of intermediate results.
-  Same problems as ours (irregular node sizes, memory traffic of sorted
-  columns); a precedent for publishing tree-training performance at an HPC
-  venue.
-* **Usefulness**: ★★★★
-* **Use in paper**: Related work (GPU); venue argument (IPDPS). Method: compare
-  workload allocation for nodes of very different sizes with our size-based
-  device assignment.
-
-### 18. Wen et al., Exploiting GPUs for Efficient Gradient Boosting Decision Tree Training (ThunderGBM)
+### 13. Wen et al., Exploiting GPUs for Efficient Gradient Boosting Decision Tree Training (ThunderGBM)
 
 * **Citation**: Z. Wen, J. Shi, B. He, J. Chen, K. Ramamohanarao, Q. Li.
   Exploiting GPUs for Efficient Gradient Boosting Decision Tree Training.
   *IEEE Transactions on Parallel and Distributed Systems* 30(12):2706–2717,
-  2019. DOI 10.1109/TPDS.2019.2920131.
+  2019. DOI 10.1109/TPDS.2019.2920131. (`wen2019thundergbm`)
 * **PDF**: `Exploiting-GPUs-GBDT-Training-ThunderGBM_Wen2019.pdf` (author
   copy). Note: arXiv:1802.05640, which some indexes give for this paper, is a
   different paper (piece-wise linear regression trees).
 * **Original note (PL)**: System ThunderGBM; optymalizacja pamięci,
   sortowania, histogramów i obsługa wielu GPU. Istotny punkt odniesienia dla
   analizy ograniczeń istniejących bibliotek.
-* **Our view**: The journal version of #17: RLE compression, stable-sort-based
+* **Our view**: The journal version of Wen et al., IPDPS 2018 (GPU-GBDT over
+  sorted feature values, same model as XGBoost's exact method; dynamic
+  thread/block allocation for irregular per-node workloads, a counterpart of
+  our size-based device assignment): RLE compression, stable-sort-based
   partitioning of the data between children, two-stage histogram building,
   multi-GPU. Up to 10× over CPU XGBoost/LightGBM/CatBoost, and handles
   high-dimensional data where other GPU libraries fail, which is our
@@ -467,25 +368,7 @@ kept.
   GPU libraries on wide data. Consider ThunderGBM as an extra baseline or say
   why not (GBDT only, maintenance).
 
-### 19. Liu, Peng, Wen, Accelerating Multi-Output GBDTs with GPUs
-
-* **Citation**: H. Liu, X. Peng, Z. Wen. Accelerating Multi-Output GBDTs with
-  GPUs. In *Proc. 54th International Conference on Parallel Processing (ICPP
-  '25)*, pp. 720–729, ACM, 2025. DOI 10.1145/3754598.3754638.
-* **PDF**: `Accelerating-MultiOutput-GBDTs-with-GPUs_Liu2025.pdf`
-* **Original note (PL)**: Nowszy przykład: przyspieszanie GBDT na GPU,
-  adaptacyjny wybór metod budowy histogramów i podział cech między GPU. Mocny
-  argument za dodaniem ICPP do Waszej listy.
-* **Our view**: GPU training of multi-output GBDT: adaptive choice of
-  histogram construction method, memory layout for vector gradients, features
-  split across GPUs; 1.7–170× speed-ups. Histogram-based and boosting, so not
-  a direct comparison; shows the topic is accepted at ICPP in 2025.
-* **Usefulness**: ★★★
-* **Use in paper**: Related work (one sentence, recent GPU tree training);
-  venue choice (ICPP). The adaptive choice of kernel by workload is a parallel
-  to our choice of device by node size.
-
-### 20. Ke et al., LightGBM
+### 14. Ke et al., LightGBM
 
 * **Citation**: G. Ke, Q. Meng, T. Finley, T. Wang, W. Chen, W. Ma, Q. Ye,
   T.-Y. Liu. LightGBM: A Highly Efficient Gradient Boosting Decision Tree. In
@@ -496,33 +379,16 @@ kept.
 * **Our view**: Histogram-based GBDT with GOSS and EFB. The standard reference
   for histogram (binned) split finding, the approximation we do not make.
 * **Usefulness**: ★★★
-* **Use in paper**: Related work: histogram methods (with #16), and
+* **Use in paper**: Related work: histogram methods (with #13), and
   introduction (ensembles).
-
-### 21. Wang et al., XGT: Fast and Secure Decision Tree Training and Inference on GPUs
-
-* **Citation**: Q. Wang, S. Cui, L. Zhou, Y. Dong, J. Bai, Y. S. Koh,
-  G. Russello. XGT: Fast and Secure Decision Tree Training and Inference on
-  GPUs. *IEEE Transactions on Dependable and Secure Computing* 22(6):7479–7494,
-  2025. DOI 10.1109/TDSC.2025.3597394.
-* **PDF**: `XGT-Secure-DT-Training-Inference-GPUs_Wang2025.pdf` (was in
-  `refs/`)
-* **Original note**: — (already in `refs/`)
-* **Our view**: Privacy-preserving (MPC) tree training and inference on GPUs,
-  turning tree operations into matrix operations; 278× over CPU MPC. A
-  different problem (secure computation dominates cost); shows GPU tree
-  training is a current topic in 2025.
-* **Usefulness**: ★★
-* **Use in paper**: Optional, one sentence on recent GPU tree work in other
-  settings.
 
 ## 4. Surveys
 
-### 22. Costa & Pedreira, Recent advances in decision trees: an updated survey
+### 15. Costa & Pedreira, Recent advances in decision trees: an updated survey
 
 * **Citation**: V. G. Costa, C. E. Pedreira. Recent advances in decision
   trees: an updated survey. *Artificial Intelligence Review*
-  56(5):4765–4800, 2023 (online 2022). DOI 10.1007/s10462-022-10275-5.
+  56(5):4765–4800, 2023 (online 2022). DOI 10.1007/s10462-022-10275-5. (`costa2023survey`)
   (Your list had "56(2):1-36"; the published issue is 56(5), pp. 4765–4800.)
 * **PDF**: none (paywalled), see *Missing PDFs*.
 * **Original note (EN)**: Recent advances in decision trees: an updated
@@ -536,42 +402,9 @@ kept.
 * **Use in paper**: Introduction, first paragraph (trees remain popular and
   interpretable).
 
-### 23. Mienye & Jere, A Survey of Decision Trees: Concepts, Algorithms, and Applications
-
-* **Citation**: I. D. Mienye, N. Jere. A Survey of Decision Trees: Concepts,
-  Algorithms, and Applications. *IEEE Access* 12:86716–86727, 2024.
-  DOI 10.1109/ACCESS.2024.3416838.
-* **PDF**: `Survey-of-Decision-Trees-Concepts-Algorithms-Applications_Mienye2024.pdf`
-  (was in `refs/`)
-* **Original note (EN)**: A Survey of Decision Trees: Concepts, Algorithms, and
-  Applications, I. D. Mienye and N. Jere, in IEEE Access, vol. 12,
-  pp. 86716-86727, 2024, doi: 10.1109/ACCESS.2024.3416838.
-* **Our view**: Recent survey with the formulas of ID3, C4.5, C5.0, CART,
-  CHAID and tree ensembles, and applications (medicine, fraud). Open access.
-* **Usefulness**: ★★★
-* **Use in paper**: Introduction (with #22); a current reference next to
-  Breiman and Quinlan for readers who want the definitions.
-
-### 24. Rivera-Lopez et al., Induction of decision trees as classification models through metaheuristics
-
-* **Citation**: R. Rivera-Lopez, J. Canul-Reich, E. Mezura-Montes,
-  M. A. Cruz-Chávez. Induction of decision trees as classification models
-  through metaheuristics. *Swarm and Evolutionary Computation* 69:101006,
-  2022. DOI 10.1016/j.swevo.2021.101006.
-* **PDF**: `DT-Induction-via-Metaheuristics-Survey_RiveraLopez2022.pdf` (was in
-  `refs/`)
-* **Original note**: — (already in `refs/`)
-* **Our view**: Survey of global (evolutionary, swarm, ...) tree induction, the
-  alternative to greedy top-down CART/C4.5. Lists the parallel and GPU
-  versions of global induction by Jurczuk et al. (the co-author's group).
-* **Usefulness**: ★★
-* **Use in paper**: One sentence: greedy top-down induction remains the
-  standard because global methods are far costlier; and as the entry point to
-  the group's own GPU work (see the novelty section).
-
 ## 5. Algorithms, baselines and GPU primitives (from `paper/references.bib`)
 
-### 25. Breiman et al., Classification and Regression Trees
+### 16. Breiman et al., Classification and Regression Trees
 
 * **Citation**: L. Breiman, J. H. Friedman, R. A. Olshen, C. J. Stone.
   *Classification and Regression Trees*. Wadsworth, 1984.
@@ -584,7 +417,7 @@ kept.
 * **Use in paper**: Sect. 2.1, and the CV motivation (Breiman's K-fold CV
   needs K+1 trees).
 
-### 26. Quinlan, C4.5: Programs for Machine Learning
+### 17. Quinlan, C4.5: Programs for Machine Learning
 
 * **Citation**: J. R. Quinlan. *C4.5: Programs for Machine Learning*. Morgan
   Kaufmann, 1993. (`quinlan1993c45`)
@@ -596,7 +429,7 @@ kept.
   attributes in C4.5" (JAIR 4:77–90, open access) too if the Release 8 MDL
   correction is described.
 
-### 27. Fayyad & Irani, On the Handling of Continuous-Valued Attributes
+### 18. Fayyad & Irani, On the Handling of Continuous-Valued Attributes
 
 * **Citation**: U. M. Fayyad, K. B. Irani. On the Handling of
   Continuous-Valued Attributes in Decision Tree Generation. *Machine Learning*
@@ -611,7 +444,7 @@ kept.
 * **Use in paper**: Method: cite where the boundary-point shortcut is
   described.
 
-### 28. Pedregosa et al., Scikit-learn
+### 19. Pedregosa et al., Scikit-learn
 
 * **Citation**: F. Pedregosa et al. Scikit-learn: Machine Learning in Python.
   *Journal of Machine Learning Research* 12:2825–2830, 2011.
@@ -622,7 +455,7 @@ kept.
 * **Usefulness**: ★★★★
 * **Use in paper**: Compared implementations.
 
-### 29. Hall et al., The WEKA Data Mining Software: An Update
+### 20. Hall et al., The WEKA Data Mining Software: An Update
 
 * **Citation**: M. Hall, E. Frank, G. Holmes, B. Pfahringer, P. Reutemann,
   I. H. Witten. The WEKA Data Mining Software: An Update. *SIGKDD
@@ -633,7 +466,7 @@ kept.
 * **Usefulness**: ★★★★
 * **Use in paper**: Compared implementations.
 
-### 30. Therneau & Atkinson, rpart
+### 21. Therneau & Atkinson, rpart
 
 * **Citation**: T. Therneau, B. Atkinson. rpart: Recursive Partitioning and
   Regression Trees. R package, https://CRAN.R-project.org/package=rpart.
@@ -643,7 +476,7 @@ kept.
 * **Usefulness**: ★★★
 * **Use in paper**: Compared implementations.
 
-### 31. Raschka, Patterson, Nolet, Machine Learning in Python (cuML)
+### 22. Raschka, Patterson, Nolet, Machine Learning in Python (cuML)
 
 * **Citation**: S. Raschka, J. Patterson, C. Nolet. Machine Learning in
   Python: Main Developments and Technology Trends in Data Science, Machine
@@ -654,7 +487,7 @@ kept.
 * **Usefulness**: ★★★★
 * **Use in paper**: Compared implementations.
 
-### 32. Merrill & Garland, Single-pass Parallel Prefix Scan with Decoupled Look-back
+### 23. Merrill & Garland, Single-pass Parallel Prefix Scan with Decoupled Look-back
 
 * **Citation**: D. Merrill, M. Garland. Single-pass Parallel Prefix Scan with
   Decoupled Look-back. NVIDIA Technical Report NVR-2016-002, 2016.
@@ -667,7 +500,7 @@ kept.
 
 ## 6. Datasets (from `paper/references.bib`)
 
-### 33. Baldi, Sadowski, Whiteson, HIGGS and SUSY
+### 24. Baldi, Sadowski, Whiteson, HIGGS and SUSY
 
 * **Citation**: P. Baldi, P. Sadowski, D. Whiteson. Searching for Exotic
   Particles in High-Energy Physics with Deep Learning. *Nature
@@ -675,11 +508,11 @@ kept.
 * **PDF**: `HIGGS-SUSY-Exotic-Particles-Deep-Learning_Baldi2014.pdf` (arXiv
   version)
 * **Our view**: Source of SUSY and HIGGS and of the "last 500,000 rows are the
-  test set" rule. HIGGS is also used by Mitchell & Frank (#15).
+  test set" rule. HIGGS is also used by Mitchell & Frank (#12).
 * **Usefulness**: ★★★★
 * **Use in paper**: Datasets table.
 
-### 34. Triguero et al., ROSEFW-RF (ECBDL'14)
+### 25. Triguero et al., ROSEFW-RF (ECBDL'14)
 
 * **Citation**: I. Triguero, S. del Río, V. López, J. Bacardit,
   J. M. Benítez, F. Herrera. ROSEFW-RF: The winner algorithm for the ECBDL'14
@@ -695,18 +528,18 @@ kept.
 * **Use in paper**: Datasets table; the winner needed a Hadoop cluster, our
   tree trains on one node.
 
-### 35. Loosli, Canu, Bottou, MNIST8M
+### 26. Loosli, Canu, Bottou, MNIST8M
 
 * **Citation**: G. Loosli, S. Canu, L. Bottou. Training Invariant Support
   Vector Machines Using Selective Sampling. In *Large Scale Kernel Machines*,
   pp. 301–320, MIT Press, 2007. (`loosli2007mnist8m`)
 * **PDF**: none (book chapter).
 * **Our view**: Origin of MNIST8M (deformed MNIST digits), also used by
-  Yggdrasil (#11).
+  Yggdrasil (#10).
 * **Usefulness**: ★★★★
 * **Use in paper**: Datasets table.
 
-### 36. Harang & Rudd, SOREL-20M
+### 27. Harang & Rudd, SOREL-20M
 
 * **Citation**: R. Harang, E. M. Rudd. SOREL-20M: A Large Scale Benchmark
   Dataset for Malicious PE Detection. arXiv:2012.07634, 2020.
@@ -722,15 +555,14 @@ kept.
 ## How the references map to the paper's story
 
 * **Introduction, why trees and why speed** (hyperparameter tuning,
-  cross-validation, ensembles): #22, #23 (trees are popular), #25 (CV needs
-  K+1 trees), #14, #20 (ensembles grow thousands of trees), #1 (tree building
+  cross-validation, ensembles): #15 (trees are popular), #16 (CV needs
+  K+1 trees), #11, #14 (ensembles grow thousands of trees), #1 (tree building
   inside iterative methods).
-* **Large-scale exact induction**: #8, #9 (presorting), #11 (exact, deep,
-  MNIST8M, high-dimensional), #7 (largest UCI sets, multicore).
-* **Exact vs histogram on GPU**: exact #15, #17, #2; histogram #16, #20, #18.
+* **Large-scale exact induction**: #7, #8 (presorting), #10 (exact, deep,
+  MNIST8M, high-dimensional), #6 (largest UCI sets, multicore).
+* **Exact vs histogram on GPU**: exact #12, #2; histogram #14, #13.
   Our position: exact thresholds, identical trees on all devices.
 * **CPU-GPU split**: #2 (CPU controls only), #4 (whole trees per device), #3
   (to check), #1 (size-aware batching on one device). Ours: nodes by size,
   both devices grow the tree.
-* **Venues with similar papers**: CCPE (#1, #7), IPDPS (#17), TPDS (#18),
-  ICPP (#19), NeurIPS (#11), FGCS (#12).
+* **Venues with similar papers**: CCPE (#1, #6), TPDS (#13), NeurIPS (#10).
