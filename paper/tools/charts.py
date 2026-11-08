@@ -3,7 +3,7 @@
 (text width 122 mm = 4.80 in; fonts rendered by LaTeX, 7-8 pt, so they match
 the text). Every chart is built from the benchmark results in bench/results/.
 
-  bench/.venv/bin/python paper/charts.py          # writes paper/figs/test-*.pdf
+  bench/.venv/bin/python paper/tools/charts.py          # writes paper/figs/test-*.pdf
 
 Styles:
   ladder    speed-up staircase: each dataset's time through the four steps of
@@ -38,7 +38,7 @@ from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter, NullLocator  # noqa: E402
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 RES = ROOT / "bench" / "results"
 OUT = ROOT / "paper" / "figs"
 sys.path.insert(0, str(ROOT / "bench"))
