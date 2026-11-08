@@ -7,7 +7,7 @@ Heterogeneous CPU-GPU Architectures*. Springer LNCS format (`llncs.cls` 2.24,
 | File | Content |
 |---|---|
 | `main.tex` | Preamble, title, authors; `\input`s the sections |
-| `sections/*.tex` | One file per section (abstract, introduction, related-work, approach, experiment-design, results, chart-tests, discussion, conclusion): blue `\plan{...}` placeholders saying what goes where, the dataset table |
+| `sections/*.tex` | One file per section (introduction, related-work, approach, experiment-design, results, chart-tests, discussion, conclusion): blue `\plan{...}` placeholders saying what goes where, the dataset table |
 | `references.bib` | Bibliography (written from memory: verify every entry) |
 
 The figures are temporary: `\graphicspath` points at `../bench/results/`, so
