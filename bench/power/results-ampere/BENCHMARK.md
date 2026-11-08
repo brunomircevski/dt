@@ -73,8 +73,7 @@ The CPU packages and the GPU are counters, so they are exact over any window.
 ## Protocol
 
 [../power_bench.sh](../power_bench.sh) `all` with `TARGET=720 IDLE=900
-STEP=600 REPS=2 REPS_BY="simple=1 serial=1" REPEAT_BY="serial=2"` (and the
-default `WARMUP=2`). [../pwrlog.py](../pwrlog.py) samples every sensor every
+STEP=600 REPS=2 REPS_BY="simple=1 serial=1" REPEAT_BY="serial=2" WARMUP=2`. [../pwrlog.py](../pwrlog.py) samples every sensor every
 0.1 s for the whole job.
 
 1. **Warm-up.** Parallel, GPU and Hybrid train two trees per algorithm. The
@@ -173,7 +172,7 @@ On mordor3, from `~/dt`:
 
 ```bash
 sbatch -p ampere -w ampere --exclusive -c 48 -t 12:00:00 -J pwr-psu-ampere \
-  --export=ALL,TARGET=720,IDLE=900,STEP=600,REPS=2,REPS_BY="simple=1 serial=1",REPEAT_BY="serial=2" \
+  --export=ALL,TARGET=720,IDLE=900,STEP=600,REPS=2,REPS_BY="simple=1 serial=1",REPEAT_BY="serial=2",WARMUP=2 \
   -o bench/results/power-psu-ampere/ampere/job.log bench/power/power_bench.sh all bench/results/power-psu-ampere/ampere
 ```
 

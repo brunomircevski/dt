@@ -1,7 +1,7 @@
-job 137 on hopper, 2026-11-06T12:48:10+01:00, kind all
-commit 
+job 300 on hopper, 2026-11-08T14:34:13+01:00, kind all
+commit a2891e70
 data bench/data/ecbdl_15m/train.csv, reps 3 simple=1 serial=1, repeat , target 120 s, idle 300 s, step 300 s, pre 20 s, algos cart c45, impls simple serial parallel cuda gpuonly
-used_gpu 2 (cpus 16-31, memory node 1, 16 threads)
+used_gpu 2 (cpus 16-31, memory node 1, 16 threads, warm-up 15 s)
 protocol --no-prune -d 10
 kernel 7.0.0-34-generic
 dmi Supermicro SYS-741GE-TNRT
@@ -13,7 +13,7 @@ governor intel_cpufreq schedutil
 cpus available 32
 perf_event_paranoid 4
 power1_accuracy 97.500%
-power1_average 435000000
+power1_average 528000000
 power1_average_interval 1000
 power1_average_interval_max 3600000
 power1_average_interval_min 1000
@@ -27,17 +27,17 @@ rapl_max intel-rapl:0 package-0 262143328850
 rapl_max intel-rapl:0:0 dram 262143328850
 rapl_max intel-rapl:1 package-1 262143328850
 rapl_max intel-rapl:1:0 dram 262143328850
-psu_file 1793965690.314117018 454
+psu_file 1794144852.976342470 528
                total        used        free      shared  buff/cache   available
-Mem:            1007          14         557           0         441         993
+Mem:            1007          24         544          10         454         983
 index, name, power.limit [W], driver_version
 0, NVIDIA H100 PCIe, 350.00 W, 615.71.09
 1, NVIDIA H100 PCIe, 350.00 W, 615.71.09
 2, NVIDIA H100 PCIe, 350.00 W, 615.71.09
 3, NVIDIA H100 PCIe, 350.00 W, 615.71.09
-repeat parallel cart 11 (warm-up train 12239.4 ms)
-repeat cuda cart 41 (warm-up train 3015.7 ms)
-repeat gpuonly cart 38 (warm-up train 3327.2 ms)
-repeat parallel c45 10 (warm-up train 14899.8 ms)
-repeat cuda c45 41 (warm-up train 3039.8 ms)
-repeat gpuonly c45 38 (warm-up train 3332.3 ms)
+repeat parallel cart 11 (warm-up train 12386.2 ms)
+repeat cuda cart 42 (warm-up train 2998.1 ms)
+repeat gpuonly cart 42 (warm-up train 2981.5 ms)
+repeat parallel c45 10 (warm-up train 14883.4 ms)
+repeat cuda c45 41 (warm-up train 3023.6 ms)
+repeat gpuonly c45 42 (warm-up train 2999.8 ms)

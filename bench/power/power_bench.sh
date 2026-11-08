@@ -51,8 +51,9 @@
 # IDLE (60), STEP (0), PRE (20), ALGOS ("cart c45"), IMPLS (gpu: "cuda gpuonly",
 # cpu: "simple serial parallel", all: all five); GPU (0), GPU_CPUS (0-23),
 # GPU_MEM (0) and GPU_THREADS (24): the GPU the GPU backends use, and the CPUs
-# and memory node of its NUMA node; WARMUP (2): seconds of --repeat-warmup for
-# the GPU implementations.
+# and memory node of its NUMA node; WARMUP (15): seconds of --repeat-warmup
+# for the GPU implementations (2 s was enough on ampere, but on hopper it left
+# every tree after the first few 8% slower; 15 s keeps them at single-run speed).
 set -uo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 KIND=$1
@@ -67,7 +68,7 @@ GPU=${GPU:-0}
 GPU_CPUS=${GPU_CPUS:-0-23}
 GPU_MEM=${GPU_MEM:-0}
 GPU_THREADS=${GPU_THREADS:-24}
-WARMUP=${WARMUP:-2}
+WARMUP=${WARMUP:-15}
 ALGOS=${ALGOS:-cart c45}
 PROTOCOL=(--no-prune -d 10)
 mkdir -p "$OUT/out"

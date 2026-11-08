@@ -13,15 +13,25 @@ and hopper were busy). It also holds a plan for the paper's energy measurements.
 - **`results/BENCHMARK.md`: the results** (ECBDL'14 15M, depth 10, jobs 84–86):
   time, power and energy per tree on ampere, dell4 and epyc1, with charts.
 - **`results-ampere/BENCHMARK.md`: all five implementations on ampere with CPU
-  packages, the GPU in use and the PSU together** (job 136, 2026-11-06; it
-  replaces job 99, which had no PSU). ampere's BMC gives a point reading every
-  ~59 s, so every measured window lasts ≥ 720 s and holds ≥ 12 readings.
+  packages, the GPU in use and the PSU together** (job 223, 2026-11-07).
+  ampere's BMC gives a point reading every ~59 s, so every case's windows add
+  up to ≥ 720 s.
 - **`results-epyc/BENCHMARK.md` and `results-dell/BENCHMARK.md`: the three CPU
-  implementations with CPU packages (RAPL) and PSU together** (jobs 144 and
-  148, 2026-11-06, after the admins opened RAPL to users): Serial-Simple 1×,
-  Serial-Opt 3×, Parallel 10×.
+  implementations with CPU packages (RAPL) and PSU together** (jobs 217 and
+  218, 2026-11-07): Serial-Simple 1×, Serial-Opt 3×, Parallel 10×.
 - **`results-hopper/BENCHMARK.md`: all five implementations on hopper with CPU
-  packages, the GPU in use and the PSU together** (job 137, 2026-11-06).
+  packages, the GPU in use and the PSU together** (job 300, 2026-11-08).
+
+Since 2026-11-07 every tree in these four folders is the only tree of a fresh
+process (`--repeat` forks one child per tree), and every tree is measured. A
+GPU or Hybrid child keeps its CPU threads busy before its timer
+(`--repeat-warmup`: 2 s on ampere, 15 s on hopper, where 2 s left later trees
+8% slower), as the CSV load does before a single run's tree. Each folder's
+BENCHMARK.md has a Time check table: the time per tree matches the time
+benchmark (`bench/results/cluster-ecbdl`, single runs) within 3%. The runs
+before (jobs 136, 137, 144, 148) measured trees trained one after another in one
+process; their later GPU trees were up to 40% slower, and they are in the git
+history.
 
 ## What each node offers
 
