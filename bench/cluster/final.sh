@@ -7,6 +7,8 @@
 #   bench/cluster/final.sh -t      # the quick check: one run of each kind of job, into cluster-test/
 #   bench/cluster/final.sh -n      # write the plan files only (bench/cluster/plans/final-*.txt)
 #   bench/cluster/final.sh         # write them and submit
+#   bench/cluster/final.sh -g      # the same without cuML and XGBoost; -G: only them
+#                                  # (after the GPU nodes' ./tree jobs, if queued)
 #
 # One chain of SLURM jobs per node (batch.sh, one plan file each, run one after
 # the other with afterany, so a failed or killed job does not stop the next),
@@ -29,11 +31,13 @@
 # pruning, CART and C4.5, test accuracy on each dataset's test set.
 
 set -euo pipefail
-TEST= SUBMIT=1
-while getopts "tnh" option; do
+TEST= SUBMIT=1 TREE=1 LIBS=1
+while getopts "tngGh" option; do
   case "$option" in
     t) TEST=1 ;;
     n) SUBMIT= ;;
+    g) LIBS= ;;
+    G) TREE= ;;
     *) sed -n '2,30p' "$0"; exit 2 ;;
   esac
 done
@@ -41,9 +45,11 @@ cd "$(dirname "$0")/../.."  # repository root: the jobs start here (SLURM_SUBMIT
 for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python; do
   [ -e "$f" ] || { echo "$f missing: build first (bench/cluster/README.md)" >&2; exit 1; }
 done
-git diff --quiet HEAD -- src bench Makefile ||
-  { echo "uncommitted changes in src/, bench/ or Makefile: measure a commit" >&2; exit 1; }
-export TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)"
+# The code must be a commit (the old run folders may be moved out of bench/results).
+CODE=(src Makefile bench/*.py bench/adapters bench/cluster bench/datasets.toml bench/results/cluster-gpu-vs-others/scripts)
+git diff --quiet HEAD -- "${CODE[@]}" ||
+  { echo "uncommitted changes in ${CODE[*]}: measure a commit" >&2; exit 1; }
+export TREE_GIT_DESCRIBE="$(git describe --always --abbrev=12)"
 PLANS=bench/cluster/plans
 mkdir -p "$PLANS"
 P=cart_depth10,c45_depth10_unpruned
@@ -128,7 +134,7 @@ fi
 # Never mix two runs in one directory: run.py appends to results.jsonl.
 clash=$(cut -d' ' -f2,3 "$PLANS"/final-*.txt | tr ' ' / | while read -r run; do
   [ ! -e "bench/results/$run/results.jsonl" ] || echo "bench/results/$run"; done)
-[ -z "$clash" ] || { echo "already has results (move it away first):"; echo "$clash"; exit 1; } >&2
+[ -z "$TREE" ] || [ -z "$clash" ] || { echo "already has results (move it away first):"; echo "$clash"; exit 1; } >&2
 wc -l "$PLANS"/final-*.txt
 [ -n "$SUBMIT" ] || exit 0
 
@@ -147,11 +153,17 @@ chain() {
   echo "$after"
 }
 limit=4-00:00:00; [ -z "$TEST" ] || limit=04:00:00
-hopper=$(chain hopper hopper "$limit" hopper)
-ampere=$(chain ampere ampere "$limit" ampere)
-chain epyc epyc1 "$limit" epyc-1 epyc-2 epyc-3 > /dev/null
-chain epyc epyc2 "$limit" epyc2-1 epyc2-2 > /dev/null
-chain dell-long dell1 "$limit" dell-1 dell-2 dell-3 dell-4 > /dev/null
+if [ -n "$TREE" ]; then
+  hopper=$(chain hopper hopper "$limit" hopper)
+  ampere=$(chain ampere ampere "$limit" ampere)
+  chain epyc epyc1 "$limit" epyc-1 epyc-2 epyc-3 > /dev/null
+  chain epyc epyc2 "$limit" epyc2-1 epyc2-2 > /dev/null
+  chain dell-long dell1 "$limit" dell-1 dell-2 dell-3 dell-4 > /dev/null
+else  # after the GPU nodes' ./tree jobs still queued or running
+  hopper=$(squeue -a -h -u "$USER" -n dt-final-hopper -o %i | tail -1)
+  ampere=$(squeue -a -h -u "$USER" -n dt-final-ampere -o %i | tail -1)
+fi
+[ -n "$LIBS" ] || { squeue -a -u "$USER" -o "%.8i %.10P %.22j %.2t %.10M %.12l %R"; exit 0; }
 
 # cuML and XGBoost after ./tree on each GPU node: one tree (10 fits), then each
 # library's default forest of 10 trees (10 fits), each in one process after an
