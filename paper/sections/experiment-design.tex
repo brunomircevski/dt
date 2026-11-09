@@ -3,7 +3,7 @@
 
 \subsection{Datasets}
 \plan{One sentence per dataset (domain, how the test set is defined). All
-features numeric; ECBDL's nominal features as integer codes. The GPUs train
+attributes numeric; ECBDL's nominal attributes as integer codes. The GPUs train
 ECBDL on its first 15M samples and SOREL on its first 4M (about 9.5G values each,
 73\,GiB of the 80\,GB VRAM).}
 
@@ -18,7 +18,7 @@ GPU subsamples are the first samples of the training set and use the full test s
 \small
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
-Dataset & Features & Classes & Training samples & Test samples & Size \\
+Dataset & Attributes & Classes & Training samples & Test samples & Size \\
 \midrule
 SUSY~\cite{baldi2014higgs}          & 18   & 2  & 4,500,000  & 500,000   & 0.3\,GB \\
 HIGGS~\cite{baldi2014higgs}         & 28   & 2  & 10,500,000 & 500,000   & 1.2\,GB \\
@@ -66,7 +66,7 @@ is the closest equivalent (no public GPU C4.5; J48 depth limit adapter;
 XGBoost squared error = Gini on bins). rpart and YaDT: add or say why not.}
 
 \subsection{Protocol and Measurement}
-\plan{One tree, depth $\le$ 10, no pruning, all samples and features; what is
+\plan{One tree, depth $\le$ 10, no pruning, all samples and attributes; what is
 timed (training only, from data in memory; GPU setup and upload included);
 peak RAM and VRAM; runs per case, means and spread; exclusive nodes; fairness
 (CPU threads of the hybrid, warm library processes, input layout). Source:

@@ -2,12 +2,90 @@
 \label{sec:related}
 
 \subsection{Decision Tree Induction: CART and C4.5}
-\plan{Brief: CART~\cite{breiman1984cart} (Gini, binary splits, cost-complexity
-pruning), C4.5~\cite{quinlan1993c45} (gain ratio, MDL threshold cost,
-error-based pruning). Only what is needed to read Sect.~\ref{sec:impl}.}
 
-\subsection{Parallel Decision Tree Induction}
+CART~\cite{breiman1984cart} builds a binary tree by recursive partitioning.
+At each node it chooses the split that most reduces Gini impurity, and it then
+simplifies the tree by cost-complexity pruning. C4.5~\cite{quinlan1993c45}
+chooses splits by gain ratio: the information gain divided by the entropy of
+the split itself. It splits a nominal attribute into one branch per value
+and a numeric attribute at a single threshold, and applies error-based pruning.
+For a numeric attribute, an exact search sorts the values in the node and
+evaluates every cut between consecutive distinct values. For entropy-based
+criteria, Fayyad and Irani~\cite{fayyad1992continuous} showed that an optimal
+cut lies on a boundary between classes in this order, so the remaining cuts can
+be skipped without changing the result. EC4.5~\cite{ruggieri2002yadt} obtained
+the same tree as C4.5 with a faster threshold search, a line continued by
+YaDT~\cite{ruggieri2004yadt}. The cost of exact induction is therefore dominated
+by sorting and scanning the samples of every node, which the systems below
+address in different ways.
 
-\subsubsection{Multicore CPU}
+\subsection{Scalable and Parallel Induction on CPUs}
 
-\subsubsection{GPU-based}
+SLIQ~\cite{mehta1996sliq} sorts each numeric attribute once before induction
+and grows the tree breadth-first. It keeps the class labels in a list that must
+fit in memory. SPRINT~\cite{shafer1996sprint} removes this limit by keeping one
+presorted list per attribute. When a node is split, each list is
+partitioned between the children instead of being sorted again. SPRINT also
+runs on clusters, with the lists divided among the machines. Both still test
+every distinct value as a threshold. They scale because they avoid sorting
+again, not because they test fewer thresholds.
+
+Tree induction can be parallelised in two ways. Task parallelism grows
+different subtrees at the same time. Data parallelism splits the work within one
+node, by attribute or by sample. Many systems combine both. Task parallelism
+suffers from load imbalance, because subtrees differ in size. Data parallelism
+has little work to share once nodes become small. Mixed schemes therefore use
+data parallelism near the root and task parallelism deeper in the
+tree~\cite{aldinucci2014fastflow}. Aldinucci
+et al.~\cite{aldinucci2014fastflow} parallelised YaDT on multicore processors with
+the FastFlow framework. Their NP strategy processes nodes as tasks, and their NAP
+strategy also splits a node's attributes across threads when a cost estimate
+says it pays off. They call this mix ``hybrid'', but on a single processor.
+Choosing the strategy by node size anticipates our idea of choosing the device
+by node size.
+
+Yggdrasil~\cite{abuzaid2016yggdrasil} runs on a Spark cluster and splits the
+data by attribute. Each worker keeps all values of its attributes, sorted and,
+where possible, compressed. It sends back only its best split. Systems that partition by sample must exchange statistics for every
+candidate split, so they use binning to keep that exchange small. Yggdrasil trains deep trees on
+thousands of attributes without binning, but on a cluster rather than within a
+single machine.
+
+\subsection{GPU-Based Tree Induction}
+
+\paragraph{Single trees.}
+CUDT~\cite{lo2014cudt} ports SPRINT's attribute lists to CUDA. The CPU
+controls the construction and stores the tree. The GPU evaluates the splits
+with prefix sums and partitions the lists, one node at a time. Its
+speed-up is largest at the root and shrinks with depth: nodes become smaller and
+more numerous, and each one needs its own host--device transfers. Nasridinov et al.~\cite{nasridinov2014gpu} split the work in the
+same way for ID3. The tree grows one node at a time: the GPU sorts the node's
+samples and does the calculations, and the CPU updates the tree. They call this
+``hybrid CPU--GPU'' and report both running time and energy on a low-end
+GPU. Strnad and
+Nerat~\cite{strnad2016gpu} instead keep the whole construction of a CART-like
+binary tree on the GPU, combining node-, attribute- and split-level parallelism.
+Nodes are processed in batches of similar size to limit load imbalance. The
+schedule therefore takes node size into account, but it uses only the GPU.
+
+\paragraph{Ensembles and boosting.}
+CudaTree~\cite{liao2013cudatree} learns random forests on the GPU. It first grows depth-first, with the whole GPU working on one large node at a time. Below a node size chosen by a fitted model, it switches to breadth-first growth, processing a whole level at once. Its authors also ran CudaTree alongside the multicore library wiseRF, but the GPU and the CPU trained different trees of the same forest rather than sharing one tree. For gradient boosting, Mitchell and Frank~\cite{mitchell2017xgboostgpu} ported the exact greedy algorithm of XGBoost~\cite{chen2016xgboost} to the GPU. It processes all nodes of a level together, using prefix sums over the sorted attribute values. The CPU does no computation, which avoids host--device transfers but requires the training data to fit in GPU memory. ThunderGBM~\cite{wen2019thundergbm} also names the shift from a few large nodes to many small ones as a main difficulty for GPUs. Histogram-based learners such as LightGBM~\cite{ke2017lightgbm} test only bin boundaries and are not exact.
+
+\subsection{Heterogeneous CPU--GPU Induction}
+
+The works above combine the CPU and the GPU in different ways. In CUDT and in
+Nasridinov et al., the CPU controls the construction and the GPU computes the
+splits. Strnad and Nerat and
+CudaTree organise the work by node size, but only on the GPU. CudaTree with
+wiseRF is the only work above in which both devices build trees at the same
+time, but each device builds whole trees of a forest. Presorting, level-wise GPU
+growth and size-aware scheduling have all been used before. Our work differs in
+what each device is given, namely individual nodes of one tree, and in letting
+the CPU grow part of the tree rather than only control it.
+
+In our hybrid scheme, the GPU grows the large nodes of a tree level by level.
+Subtrees below a size threshold go to a pool of CPU threads, which grow them
+while the GPU continues with the large nodes. To our knowledge,
+no previous work divides the nodes of a single CART or C4.5 tree between the
+CPU and the GPU by size, with both devices working on the tree at the same
+time.
