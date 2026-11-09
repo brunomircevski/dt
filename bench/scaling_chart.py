@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Thread-scaling chart of ./tree: training time (solid lines, left axis) and peak
-memory (dashed lines, right axis) against the number of threads, one colour per
-protocol (CART, C4.5); dot = mean over the runs, bar = min-max of the time.
-Threads and time on log axes, so that ideal scaling (dotted: the 1-thread time
-divided by the threads) is a straight line; memory on a linear axis.
---socket: a run of the same data on one socket of the same machine (submit.sh's
-socket-* runs: its CPUs and its memory only), drawn as a hollow diamond.
+"""Thread-scaling chart of ./tree (cluster-cpu-scaling): speed-up over one
+thread against the number of threads, one panel per node (epyc, dell), one
+colour per dataset, CART solid and C4.5 dashed, with the ideal line, the start
+of the second socket and the speed-up and parallel efficiency at the most
+threads. 1 thread is the serial backend (--serial), more the parallel one.
 
-Also writes scaling.csv: one row per (protocol, threads) with the mean time,
-speedup over 1 thread (serial backend), parallel efficiency and peak RSS.
+Also writes scaling.csv in every run folder: one row per (protocol, threads)
+with the mean time, speed-up over 1 thread, parallel efficiency and peak RSS.
 
-  bench/.venv/bin/python bench/scaling_chart.py bench/results/<run> [--socket <run>] [--out chart.png]
+  bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling [--out chart.png]
 """
 
 import argparse
@@ -25,7 +23,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
-from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter, NullLocator  # noqa: E402
 
 import benchlib as B  # noqa: E402
 from chart import GRID, INK, MUTED, NAMES  # noqa: E402
@@ -84,166 +81,132 @@ def summarise(cases):
     return [p for p in B.PROTOCOLS if p in out], out
 
 
-def figure(run, dataset, protocols, series, machine, out, socket=None):
-    settings = machine["settings"]
-    meta = json.load(open(run / "plan.json"))["datasets"][dataset]
-    threads = sorted({p["threads"] for points in series.values() for p in points})
-    fig, ax = plt.subplots(figsize=(8.6, 5.4))
-    ax.set_xscale("log", base=2)
-    ax.set_xlim(min(threads) / 1.15, max(threads) * 2.6)  # room for the end labels
-    ax.xaxis.set_minor_locator(NullLocator())
-    ax.set_xticks([t for t in threads if t in (1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128)
-                   or t == max(threads)])
-    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
-    ax.tick_params(colors=MUTED, labelsize=8.5, length=0)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    for side in ("left", "bottom"):
-        ax.spines[side].set_color(GRID)
-    ax.grid(axis="both", color=GRID, linewidth=0.8)
-    ax.set_axisbelow(True)
-    ax.set_xlabel("threads", fontsize=9, color=MUTED)
-    tree = LABELS.get(protocols[0], "").partition(", ")[2]
-    ax.set_title("Time (solid, left, log), peak RSS (dashed, right)"
-                 + (f"; trees: {tree}" if tree else ""), loc="left",
-                 fontsize=10.5, color=INK, fontweight="bold")
-    mem = ax.twinx()
-    mem.tick_params(colors=MUTED, labelsize=8.5, length=0)
-    for side in ("top", "left", "bottom"):
-        mem.spines[side].set_visible(False)
-    mem.spines["right"].set_color(GRID)
+NODES = [("epyc", "epyc1"), ("dell", "dell1")]
+DATASETS = [("higgs", "#2a78d6", "o"), ("mnist8m", "#eb6834", "s")]
+STYLE = {"cart_depth10": ("CART", "-", True), "c45_depth10_unpruned": ("C4.5", "--", False)}
+FIELDS = ["protocol", "threads", "runs", "time_mean", "time_min", "time_max", "speedup",
+          "efficiency", "peak_rss_mean", "nodes", "test_accuracy", "train_accuracy", "same_tree"]
 
-    for protocol in protocols:
-        points, color = series[protocol], COLORS.get(protocol, INK)
-        xs = [p["threads"] for p in points]
-        serial = next((p["time_mean"] for p in points if p["threads"] == 1), None)
-        if serial:  # ideal scaling: n threads take 1/n of the serial time
-            ax.plot(xs, [serial / x for x in xs], color=color, linewidth=1, linestyle=":",
-                    alpha=0.7, zorder=1)
-        ax.plot(xs, [p["time_mean"] for p in points], color=color, linewidth=2, marker="o",
-                markersize=7, markeredgecolor="white", markeredgewidth=1.5, zorder=3)
-        ax.vlines(xs, [p["time_min"] for p in points], [p["time_max"] for p in points],
-                  color=color, linewidth=2, zorder=2)
-        mem.plot(xs, [p["peak_rss_mean"] / 1e9 for p in points], color=color, linewidth=1.6,
-                 linestyle=(0, (4, 2.5)), marker="s", markersize=5, markerfacecolor="white",
-                 markeredgecolor=color, markeredgewidth=1.4, zorder=3)
-    slowest = max((p["time_mean"] for points in (socket or {}).values() for p in points), default=0)
-    for protocol in protocols if socket else []:
-        color = COLORS.get(protocol, INK)
-        for p in socket.get(protocol, []):
-            ax.vlines(p["threads"], p["time_min"], p["time_max"], color=color, linewidth=1.5, zorder=4)
-            ax.plot(p["threads"], p["time_mean"], marker="D", markersize=8, color=color,
-                    markerfacecolor="white", markeredgewidth=1.8, linestyle="none", zorder=5)
-            ax.annotate(f"1 socket: {p['time_mean']:.3g} s", (p["threads"], p["time_mean"]),
-                        xytext=(-8, 0 if len(protocols) == 1 else 7 if p["time_mean"] == slowest else -7),
-                        textcoords="offset points", ha="right", va="center",
-                        fontsize=8.5, color=INK,
-                        bbox=dict(facecolor="white", edgecolor="none", pad=1, alpha=0.85))
-    every = [p[k] for points in [*series.values(), *(socket or {}).values()] for p in points
-             for k in ("time_min", "time_max")]
-    ax.set_yscale("log")
-    ax.set_ylim(min(every) / 1.6, max(every) * 1.4)
-    ax.yaxis.set_major_locator(LogLocator(base=10, subs=(1, 2, 5)))
-    ax.yaxis.set_minor_formatter(NullFormatter())
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
-    mem.set_ylim(0, 1.15 * max(p["peak_rss_mean"] for points in series.values()
-                               for p in points) / 1e9)
-    mem.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} GB RAM"))
 
-    # Value at the last thread count, at the end of each line, pushed apart
-    # vertically where two lines end close together.
-    fig.canvas.draw()
-    gap = 13  # pixels between label centres
-    for axis, key, scale, unit in ((ax, "time_mean", 1, "s"),
-                                   (mem, "peak_rss_mean", 1e9, "GB")):
-        placed = []
-        ends = [(series[p][-1]["threads"], series[p][-1][key] / scale,
-                 series[p][-1]["speedup"] if key == "time_mean" else None) for p in protocols]
-        for x, y, speedup in sorted(ends, key=lambda end: end[1]):
-            pixel = wanted = axis.transData.transform((x, y))[1]
-            if placed and pixel - placed[-1] < gap:
-                pixel = placed[-1] + gap
-            placed.append(pixel)
-            axis.annotate(f"{y:.3g} {unit}" + (f" ({speedup:.1f}×)" if speedup else ""), (x, y), xytext=(7, (pixel - wanted) * 72 / fig.dpi),
-                          textcoords="offset points", va="center", fontsize=9, color=INK)
+def load(base):
+    """-> {(node, dataset): (series, machine)}, writing each run folder's scaling.csv."""
+    out = {}
+    for node, _ in NODES:
+        for dataset, _, _ in DATASETS:
+            run = base / f"cpu-{node}-{dataset}"
+            if not (run / "results.jsonl").exists():
+                print(f"missing: {run}")
+                continue
+            cases, found = collect(run)
+            protocols, series = summarise(cases)
+            with open(run / "scaling.csv", "w", newline="") as handle:
+                writer = csv.DictWriter(handle, FIELDS)
+                writer.writeheader()
+                for protocol in protocols:
+                    writer.writerows({k: p[k] for k in FIELDS} for p in series[protocol])
+            out[(node, dataset)] = (series, json.load(open(run / "machine.json")))
+    return out
 
-    def accuracy(point):
-        """Test accuracy, or training accuracy where only that was recorded
-        (run.py --train-accuracy-only)."""
-        if point.get("test_accuracy") is not None:
-            return f", test {100 * point['test_accuracy']:.2f}%"
-        if point.get("train_accuracy") is not None:
-            return f", training accuracy {100 * point['train_accuracy']:.2f}%"
-        return ""
 
-    handles = [Line2D([], [], color=COLORS.get(p, INK), linewidth=2, marker="o", markersize=7,
-                      markeredgecolor="white", label=f"{LABELS.get(p, p).split(',')[0]}: "
-                      f"{series[p][0]['nodes']:,} nodes{accuracy(series[p][0])}")
-               for p in protocols]
-    fig.text(0.08, 1 - 0.4 / 5.4, B.hardware_line(machine, False), fontsize=8.6, color=INK,
-             va="top")
-    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.08, 1 - 0.62 / 5.4),
-               ncol=len(handles), frameon=False, fontsize=9, handletextpad=0.4,
-               columnspacing=1.6)
-    fig.suptitle(f"./tree thread scaling on {NAMES.get(dataset, dataset)}: "
-                 f"{meta['n_train']:,} training rows, {len(meta['features'])} features",
-                 x=0.08, y=1 - 0.05 / 5.4, ha="left", fontsize=12.5, color=INK,
-                 fontweight="bold")
-    counts = defaultdict(set)  # runs per point -> thread counts
-    for points in series.values():
-        for p in points:
-            counts[p["runs"]].add(p["threads"])
+def runs_note(data):
+    """'10 runs per point' or the counts that differ, for the footnote."""
+    counts = defaultdict(set)
+    for (node, dataset), (series, _) in data.items():
+        for protocol, points in series.items():
+            for p in points:
+                counts[p["runs"]].add(f"{NAMES.get(dataset, dataset)} {p['threads']}")
     if len(counts) == 1:
         n = next(iter(counts))
-        runs = f"mean of {n} runs, bar: min–max" if n > 1 else "one run per point"
-    else:
-        common = max(counts, key=lambda n: len(counts[n]))
-        runs = f"mean of {common} runs (" + "; ".join(
-            f"{', '.join(map(str, sorted(t)))} threads: {n}" for n, t in sorted(counts.items())
-            if n != common) + "), bar: min–max"
-    days = sorted({r["time"][:10] for points in series.values() for p in points for r in p["rows"]})
+        return f"mean of {n} runs per point" if n > 1 else "one run per point"
+    common = max(counts, key=lambda n: len(counts[n]))
+    rest = "; ".join(f"{n} runs: " + ", ".join(sorted(v)) for n, v in sorted(counts.items()) if n != common)
+    return f"mean of {common} runs per point ({rest} threads)"
+
+
+def figure(data, out):
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.6), sharey=True)
+    top = max(p["threads"] for series, _ in data.values() for pts in series.values() for p in pts)
+    for ax, (node, host) in zip(axes, NODES):
+        ax.plot([1, top], [1, top], color=GRID, linewidth=1.5, zorder=0)
+        ax.text(top * 0.3, top * 0.3 + 2.5, "ideal", fontsize=9, color=MUTED, rotation=34)
+        if node == "epyc":  # CPUs 0-23 socket 0, 24-47 socket 1; dell1's alternate between the sockets
+            half = top // 2
+            ax.axvline(half + 0.5, color=MUTED, linewidth=0.8, linestyle=(0, (1, 3)), zorder=0)
+            ax.text(half + 1.5, 1.5, "2nd socket \u2192", fontsize=8.5, color=MUTED, va="bottom")
+        else:
+            ax.text(top * 0.55, 1.5, "threads alternate between the sockets", fontsize=8.5, color=MUTED,
+                    va="bottom")
+        machine = None
+        ends = []
+        lines = []
+        for dataset, color, marker in DATASETS:
+            if (node, dataset) not in data:
+                continue
+            series, machine = data[(node, dataset)]
+            one = []
+            for protocol, (algo, ls, filled) in STYLE.items():
+                points = series.get(protocol)
+                if not points or points[0]["threads"] != 1:
+                    continue
+                t = [p["threads"] for p in points]
+                sp = [p["speedup"] for p in points]
+                ax.plot(t, sp, linestyle=ls, color=color, linewidth=1.8, marker=marker, markersize=5,
+                        markerfacecolor=color if filled else "white", markeredgewidth=1.2, zorder=3)
+                ends.append((sp[-1], t[-1], color, f"{sp[-1]:.0f}\u00d7 ({100 * points[-1]['efficiency']:.0f}%)"))
+                one.append(f"{algo} {points[0]['time_mean']:.3g} s \u2192 {points[-1]['time_mean']:.3g} s")
+            lines.append(f"{NAMES.get(dataset, dataset)}: " + ", ".join(one))
+        # end labels, pushed apart where they would overlap
+        placed = []
+        for y, x, color, text in sorted(ends):
+            yy = y if not placed or y - placed[-1] > 1.6 else placed[-1] + 1.6
+            placed.append(yy)
+            ax.annotate(text, (x, y), xytext=(x + 1, yy), fontsize=8.5, color=color, va="center")
+        ax.set_xlim(0, top * 1.27)
+        ax.set_ylim(0, top)
+        ax.set_xticks([1, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48])
+        ax.set_xlabel("threads", fontsize=9.5, color=MUTED)
+        ax.grid(color=GRID, linewidth=0.6)
+        ax.set_axisbelow(True)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        ax.tick_params(colors=MUTED, labelsize=8.5)
+        cpu = B.hardware(machine)["cpu"] if machine else "?"
+        ax.set_title(f"{host}: {cpu}", loc="left", fontsize=10.5, color=INK, fontweight="bold")
+        ax.text(0.01, 0.99, "1 thread \u2192 48 threads:\n" + "\n".join(lines), transform=ax.transAxes,
+                fontsize=8, color=INK, va="top", linespacing=1.4,
+                bbox=dict(facecolor="white", edgecolor=GRID, boxstyle="round,pad=0.4"))
+    axes[0].set_ylabel("speed-up over 1 thread", fontsize=9.5, color=MUTED)
+    handles = [Line2D([], [], color=c, linewidth=1.8, marker=m, markersize=5, label=NAMES.get(d, d))
+               for d, c, m in DATASETS]
+    handles += [Line2D([], [], color=MUTED, linewidth=1.8, linestyle=ls, marker="o", markersize=5,
+                       markerfacecolor=MUTED if filled else "white", label=algo)
+                for algo, ls, filled in STYLE.values()]
+    fig.legend(handles=handles, loc="upper right", bbox_to_anchor=(0.99, 0.985), ncol=4, frameon=False,
+               fontsize=9.5)
+    fig.suptitle("./tree thread scaling: depth \u2264 10, no pruning", x=0.06, y=0.975, ha="left",
+                 fontsize=12.5, color=INK, fontweight="bold")
+    commits = sorted({m.get("versions", {}).get("tree_git", "?") for _, m in data.values()})
+    days = sorted({r["time"][:10] for series, _ in data.values() for pts in series.values()
+                   for p in pts for r in p["rows"]})
     dates = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
-    fig.text(0.08, 0.015,
-             f"Dot: {runs}. 1 thread = the serial backend, more = the parallel backend;\n"
-             "every thread count builds the same tree. Training time excludes reading the data;\n"
-             "peak memory is the peak RSS up to the end of training, the loaded data included.\n"
-             "Log axes for time and threads; dotted: ideal scaling (the 1-thread time divided by the threads).\n"
-             f"End label: time (speedup over 1 thread). ./tree {machine.get('versions', {}).get('tree_git', '?')}, "
-             f"run {dates}, {machine.get('host', '?')}."
-             + ("\nHollow diamond: one socket, all its CPUs, memory bound to its NUMA nodes "
-                "(the line's CPUs come from both sockets' CPU list in order)." if socket else ""),
-             fontsize=8, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.08, right=0.84, top=1 - 1.25 / 5.4, bottom=0.32 if socket else 0.29)
+    fig.text(0.06, 0.012,
+             f"Speed-up: the 1-thread time (--serial) over the time with n threads (--parallel), {runs_note(data)}.\n"
+             "End label: speed-up (parallel efficiency) at 48 threads. Threads take the CPUs in the kernel's order: on "
+             "epyc1 socket 0's 24 cores, then socket 1's; on dell1 the sockets alternate. Memory first-touch.\nEvery thread count grows the same tree. Training time excludes "
+             f"reading the data. ./tree {', '.join(commits)}, run {dates}.",
+             fontsize=8.3, color=MUTED, linespacing=1.5)
+    fig.subplots_adjust(left=0.06, right=0.99, top=0.88, bottom=0.2, wspace=0.08)
     fig.savefig(out, dpi=150, facecolor="white")
     return out
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("run")
-    parser.add_argument("--socket", help="a run of the same data on one socket of the machine")
-    parser.add_argument("--out", help="output file (default: <run>/chart.png)")
+    parser.add_argument("base", help="bench/results/cluster-cpu-scaling")
+    parser.add_argument("--out", help="output file (default: <base>/chart.png)")
     args = parser.parse_args()
-    run = Path(args.run)
-    machine = json.load(open(run / "machine.json"))
-    cases, dataset = collect(run)
-    protocols, series = summarise(cases)
-    fields = ["protocol", "threads", "runs", "time_mean", "time_min", "time_max", "speedup",
-              "efficiency", "peak_rss_mean", "nodes", "test_accuracy", "train_accuracy", "same_tree"]
-    with open(run / "scaling.csv", "w", newline="") as handle:
-        writer = csv.DictWriter(handle, fields)
-        writer.writeheader()
-        for protocol in protocols:
-            writer.writerows({k: p[k] for k in fields} for p in series[protocol])
-    print(run / "scaling.csv")
-    socket = None
-    if args.socket:
-        socket_cases, socket_dataset = collect(Path(args.socket))
-        if socket_dataset != dataset:
-            raise SystemExit(f"--socket ran {socket_dataset}, not {dataset}")
-        socket = summarise({k: v for k, v in socket_cases.items() if k[0] in protocols})[1]
-    print(figure(run, dataset, protocols, series, machine,
-                 Path(args.out) if args.out else run / "chart.png", socket))
+    base = Path(args.base)
+    print(figure(load(base), Path(args.out) if args.out else base / "chart.png"))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # SOREL-20M (malware, 2381 features): training set and test set
 
+**Status (2026-11-09): being rerun** on one build of main with every other benchmark (`bench/cluster/final.sh`, 10 runs per case, 3 where one process takes over an hour; CUDA on every CPU of the node). The numbers and charts below are still the 2026-10 runs (ec77727, CUDA on the GPU's socket only) and will be replaced. The one-socket runs (`socket-*`) were removed; they are in git at 3354a8a.
+
 ./tree only, trained on the training rows and scored on the test rows
 ([bench/cluster/README.md](../../cluster/README.md#test-set-benchmarks)).
 

@@ -1,50 +1,26 @@
 # Thread scaling on the mordor3 CPU servers: ./tree with 1 to 48 threads on HIGGS and MNIST8M
 
-**Status:** run on 2026-10-29/30 at ec77727 (main with the CPU presort of 4fb419c), on epyc1, epyc2 (the same hardware) and dell1, each node alone and used whole. Every tree is grown to depth ≤ 10 without pruning, as in the test-set benchmarks.
-- **Runs per point:** 10; MNIST8M at 1 and 2 threads 3 (each over 2 minutes).
-- **48 threads and one socket:** the test-set benchmarks' runs ([cluster-higgs](../cluster-higgs/BENCHMARK.md), [cluster-mnist8m](../cluster-mnist8m/BENCHMARK.md)), merged into these folders.
-- **Same trees:** every thread count built the same tree on both nodes, the same as in the test-set benchmarks.
+**Status (2026-11-09):** being rerun on one build of main with every other benchmark (`bench/cluster/final.sh`, 10 runs per point). The tables below are still the runs of 2026-10-29/30 on ec77727 (10 runs per point; MNIST8M at 1 and 2 threads 3) and will be replaced. Every tree is grown to depth ≤ 10 without pruning, as in the test-set benchmarks; every thread count built the same tree on both nodes.
 
-The earlier version (HIGGS and airline, pruned trees, 2026-10-20) is in git history.
+![Speed-up over one thread on epyc1 and dell1, HIGGS and MNIST8M, CART and C4.5](chart.png)
 
 ```bash
-s=bench/results/cluster-cpu-scaling
-for d in higgs mnist8m; do for n in epyc dell; do
-  bench/.venv/bin/python bench/scaling_chart.py $s/cpu-$n-$d --socket bench/results/cluster-$d/socket-$n-$d --out /tmp/$n-$d.png
-done; done
-bench/.venv/bin/python bench/grid_chart.py /tmp/epyc-higgs.png /tmp/dell-higgs.png /tmp/epyc-mnist8m.png /tmp/dell-mnist8m.png --cols 2 --out $s/chart.png
+bench/cluster/final.sh            # queues these runs with all the others (cpu-epyc-<data>, cpu-dell-<data>)
+bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling   # chart.png, <run>/scaling.csv
 ```
 
 - **Protocols:** `cart_depth10` and `c45_depth10_unpruned`.
 - **Threads:** 1, 2, 4, then every 4 up to 48.
-  - **1 thread** is the serial backend (`--serial`); more threads use `--parallel --threads N`. Speedup is the serial time divided by the N-thread time, so it includes the parallel backend's own overhead.
-  - **Pinning:** N threads are pinned to the first N CPUs in the kernel's order (`--cpus 0-47`). `run.log` records that order (`lscpu`).
-- **Measurements:** as in every benchmark here: training time timed inside ./tree (presort, build; no file reading), and peak RSS up to the end of training, from the same process. The legend gives ./tree's training accuracy.
+  - **1 thread** is the serial backend (`--serial`); more threads use `--parallel --threads N`. Speed-up is the serial time divided by the N-thread time, so it includes the parallel backend's own overhead. Efficiency is the speed-up divided by N.
+  - **Pinning:** N threads are pinned to the first N CPUs in the kernel's order (`--cpus 0-47`), memory first-touch. `run.log` records that order (`lscpu`).
+- **Measurements:** as in every benchmark here: training time timed inside ./tree (presort, build; no file reading), and peak RSS up to the end of training, from the same process. `scaling.csv` in each run directory has every point with its min–max, speed-up, efficiency and peak RSS.
 
 | Node | CPU | RAM | CPU order (`lscpu`) | Governor |
 |---|---|---|---|---|
-| epyc1, epyc2 | 2× EPYC 9255 (Zen 5), 24 cores each, no SMT | 512 GB DDR5-6400 | CPUs 0–23 on socket 0, 24–47 on socket 1 (one NUMA node each) | `performance` |
+| epyc1 | 2× EPYC 9255 (Zen 5), 24 cores each, no SMT | 512 GB DDR5-6400 | CPUs 0–23 on socket 0, 24–47 on socket 1 (one NUMA node each) | `performance` |
 | dell1 | 2× Xeon Gold 6542Y (Emerald Rapids), 24 cores each, no SMT | 1 TB DDR5-5200 | CPUs alternate between the sockets and their 4 NUMA nodes (0, 2, 1, 3, 0, …) | `powersave` (intel_pstate, boosts) |
 
-So on epyc up to 24 threads stay on one socket, and the second socket joins from 28 on. On dell1 every thread count from 2 on is spread over both sockets.
-
-All four charts in one image (HIGGS above MNIST8M, epyc left, dell right). Threads and time are on log axes, so ideal scaling (dotted: the 1-thread time divided by the threads) is a straight line:
-
-![Thread scaling on epyc and dell1, HIGGS and MNIST8M](chart.png)
-
-### One socket
-
-The diamonds at 24 threads are the one-socket runs of the test-set benchmarks (`socket-*`): 24 threads on every CPU of one socket, the memory bound to its NUMA nodes.
-
-| | epyc: 24 threads / one socket | dell: 24 threads / one socket |
-|---|--:|--:|
-| HIGGS CART | 0.83 / 0.83 s | 1.21 / 1.21 s |
-| HIGGS C4.5 | 0.94 / 0.93 s | 1.58 / 1.68 s |
-| MNIST8M CART | 11.17 / 11.1 s | 15.31 / 16.0 s |
-| MNIST8M C4.5 | 10.39 / 10.3 s | 15.18 / 15.5 s |
-
-- **epyc:** the same within 2%. Its first 24 CPUs are one socket, so the 24-thread point already ran on one socket.
-- **dell:** within 6%, with one socket no faster, although its 24 threads sit on one socket instead of 12 cores of each.
+So on epyc up to 24 threads stay on one socket, and the second socket joins from 28 on (the dotted line in the chart). On dell1 every thread count from 2 on is spread over both sockets.
 
 ## HIGGS
 
@@ -103,17 +79,6 @@ The trees are CART 2,047 nodes (training accuracy 80.77%) and C4.5 1,453 nodes (
 - **No step at the second socket:** both nodes keep gaining at every thread count.
 - **Memory:** 71.2 GiB serial to 74.0 GiB at 48 threads: the spare slots are small against the data.
 
-## dell1: two oddities, checked on 2026-10-30
+## dell1: the noisy 4-thread point
 
-**The 4-thread point on HIGGS is noisy.** On dell its runs spread over 4.8–7.1 s (CART) and 6.3–10.0 s (C4.5), against under 10% at 2 and 8 threads, and the mean sits above the line. A repeat on the idle node gave the same spread (4.7–6.9 s, 6.2–8.1 s: `dell-ab/repeat-4-threads`), and so did the previous build (below). Presort and build both vary, the user CPU time does not. The cause was not found.
-
-**One socket looked 27–35% slower than the previous build on HIGGS and SUSY** (HIGGS CART 0.95 → 1.21 s, SUSY CART 0.32 → 0.43 s), on the same socket, and not on airline, ECBDL or MNIST8M. It is not the code: alternating this build with the previous one (`tree_cpu3`, 67495f9 plus the waits of 8bdf641) on dell1, 10 runs of each, twice, this build is 1–3% faster. Both sit between the two batches' numbers (HIGGS CART 0.95 and 1.21 s), so the difference is dell1's state between batches (`dell-ab/`, new-1, old-1, new-2, old-2). The tables keep the scheduled batch's runs.
-
-| Mean of 10, two rounds | ec77727 | previous build |
-|---|--:|--:|
-| one socket, HIGGS CART | 1.06, 1.07 s | 1.08, 1.09 s |
-| one socket, HIGGS C4.5 | 1.45, 1.47 s | 1.47, 1.49 s |
-| one socket, SUSY CART | 0.36, 0.36 s | 0.37, 0.37 s |
-| one socket, SUSY C4.5 | 0.39, 0.39 s | 0.40, 0.40 s |
-| 4 threads, HIGGS CART | 5.48, 5.14 s | 5.69, 5.78 s |
-| 4 threads, HIGGS C4.5 | 7.19, 7.10 s | 6.82, 7.96 s |
+On dell1 the HIGGS runs at 4 threads spread over 4.8–7.1 s (CART) and 6.3–10.0 s (C4.5) on 2026-10-30, against under 10% at 2 and 8 threads, on the old and the new build alike; dell1's batches also differed by up to 35%. The cause was not found ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)); compare low thread counts on epyc. The A/B runs of that check are in git at 3354a8a (`dell-ab/`).

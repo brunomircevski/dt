@@ -22,9 +22,9 @@ It measures training time and peak memory, and records tree size and training an
 | `run.py` | Checks the data, then runs every case in fresh processes. It measures time inside each tool and memory from outside, and writes `results/<run-id>/`. |
 | `report.py` | Turns results into Markdown tables (single- and multi-thread separate), a per-case CSV and a per-process CSV. It can merge runs from several machines. |
 | `chart.py` | One figure per dataset: training time and peak RSS per tool, single- and multi-thread in separate panels. |
-| `testset_chart.py`, `rows_chart.py`, `runs_chart.py`, `machines_chart.py`, `grid_chart.py` | The test-set benchmarks' charts: bars per backend and node, time and memory against rows, every run, several machines, charts in a grid. |
-| `scaling_chart.py` | Thread-scaling figure of ./tree for one run: training time and peak RSS (second axis) against threads, one colour per protocol, plus `scaling.csv` (time, speedup, efficiency, peak RSS). |
-| `simple_chart.py` | The chart of `cluster-cpu-vs-others`. |
+| `testset_chart.py`, `rows_chart.py`, `runs_chart.py`, `machines_chart.py` | The test-set benchmarks' charts: bars per backend and node, time and memory against rows, every run, several machines, charts in a grid. |
+| `scaling_chart.py` | The thread-scaling chart of `cluster-cpu-scaling`: speed-up over one thread against threads, epyc and dell, HIGGS and MNIST8M, CART and C4.5, plus each run's `scaling.csv` (time, speed-up, efficiency, peak RSS). |
+| `vs_chart.py` | The charts of `cluster-cpu-vs-others` (./tree against scikit-learn and J48) and `cluster-gpu-vs-others` (against cuML and XGBoost). |
 | `profile_chart.py`, `profile_share_chart.py` | Where the training time goes, from `run.py --profile`. |
 | `merge_runs.py` | Appends extra runs of a case to its run folder. |
 
