@@ -156,7 +156,13 @@ def xgb_fit(X, y, case, trees):
     assert case == "cart", "XGBoost has no entropy criterion"
     # More than 2 classes: one multi-output tree (multi_strategy
     # multi_output_tree) instead of XGBoost's default of one tree per class.
-    multi = {"multi_strategy": "multi_output_tree"} if CLASSES > 2 else {}
+    # Its histograms hold every class's gradients (MNIST8M: 10 x 784 features x
+    # 256 bins per node), so at depth 10 the default cache of up to 65,536
+    # nodes' histograms runs out of 80 GB: keep fewer (built again when needed;
+    # the same tree).
+    multi = ({"multi_strategy": "multi_output_tree",
+              "max_cached_hist_node": int(os.environ.get("XGB_MAX_CACHED_HIST_NODE", 256))}
+             if CLASSES > 2 else {})
     if FOREST == "default":  # XGBRFClassifier's defaults, one round
         import xgboost as xgb
         t = time.perf_counter()
