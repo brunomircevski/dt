@@ -5,7 +5,7 @@
 # bench/results/cluster-cpu-scaling/cpu-epyc-<data>/ and cpu-dell-<data>/.
 #
 #   bench/cluster/scaling.sh -m 3            # HIGGS, each case 3 times
-#   bench/cluster/scaling.sh -m 3 -d airline
+#   bench/cluster/scaling.sh -m 10 -d mnist8m   (final.sh queues both, 10 runs per point)
 
 set -euo pipefail
 RUNS=1
@@ -30,7 +30,7 @@ export TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)"
 echo "code: $TREE_GIT_DESCRIBE, $DATASET -> bench/results/$DIR, runs per case: $RUNS"
 
 ids=()
-for job in "cpu-epyc-$DATASET epyc epyc1" "cpu-dell-$DATASET dell dell1"; do
+for job in "cpu-epyc-$DATASET epyc epyc1" "cpu-dell-$DATASET dell-long dell1"; do
   read -r name partition node <<<"$job"
   # run.py appends to results.jsonl: never mix two runs in one directory.
   if [ -e "bench/results/$DIR/$name/results.jsonl" ]; then
@@ -39,8 +39,8 @@ for job in "cpu-epyc-$DATASET epyc epyc1" "cpu-dell-$DATASET dell dell1"; do
   fi
   mkdir -p "bench/results/$DIR/$name"
   ids+=("$(sbatch --parsable --hold -J "dt-scaling-$name" -p "$partition" -w "$node" --exclusive \
-    -t 04:00:00 -o "bench/results/$DIR/$name/run.log" \
-    bench/cluster/job.sh "$DIR" "$name" "$DATASET" tree "$RUNS" cart_alpha_nodepth,c45 scaling)")
+    -t 1-00:00:00 -o "bench/results/$DIR/$name/run.log" \
+    bench/cluster/job.sh "$DIR" "$name" "$DATASET" tree "$RUNS" cart_depth10,c45_depth10_unpruned scaling)")
   echo "$name: job ${ids[-1]} on $node"
 done
 scontrol release "${ids[@]}"

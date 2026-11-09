@@ -1,84 +1,41 @@
 #!/usr/bin/env bash
-# The cluster benchmark on mordor3: one SLURM job per node, one whole node
+# One benchmark run per job on mordor3: one SLURM job per node, one whole node
 # each, held until all are queued and then released together (run it on the
-# login node; it only calls sbatch). Results go to
-# bench/results/cluster-<dataset>/ (cluster-higgs, -airline, -susy, -ecbdl, -chess;
-# sorel and sorel_4m in cluster-sorel):
-#   cuda-hopper-<data>  H100 PCIe (GPU 2 of 4), 2x Xeon Gold 6444Y   CUDA
-#   cuda-ampere-<data>  A100 80GB PCIe (GPU 0), 2x EPYC 7402          CUDA
-#   cpu-epyc-<data>     epyc1: 2x EPYC 9255                           parallel
-#   cpu-dell-<data>     dell1: 2x Xeon Gold 6542Y                     parallel
-#   cpu-dell512-<data>  dell2: the same CPUs, 512 GB instead of 1 TB  parallel
-#                       (only when named, e.g. for the memory pressure of full ECBDL)
-#   socket-epyc-<data>  epyc1, one socket: its 24 CPUs and memory     parallel
-#   socket-dell-<data>  dell1, the same (job.sh SOCKET=auto)          (only when named)
-#   serial-epyc-<data>  epyc1, one thread                             serial
-#   serial-dell-<data>  dell1, one thread                             serial
-#                       (only when named; the job still owns the whole node)
-#   gpuonly-hopper-<data>  hopper, --cuda --gpu-only, every CPU       CUDA, GPU only
-#   gpuonly-ampere-<data>  ampere, the same                           (only when named)
-#   simple-epyc-<data>  epyc1, one socket: ./tree --simple, --serial, parallel,
-#                       scikit-learn and Weka J48, every tree hashed
-#                       (only when named; the old "simple" benchmark, in git at 8ce4940)
-#   simple-epyc-<data>-<tool>-<protocol>  the same, one tool and protocol per job
-#                       (tool: simple, serial, parallel, dual (parallel on both
-#                       sockets, every CPU), sklearn, j48; protocol:
-#                       cart, c45; J48 has no CART), each with its own time limit,
-#                       so a tool that fails or runs out of time stops only its own
-#                       job (HIGGS: hours of J48)
-#   vs-epyc-<data>-<tool>-<protocol>  the same tools, one job each, at depth 10
-#                       without pruning (cart_depth10, c45_depth10_unpruned;
-#                       J48 through its adapter's depth limit), every tree hashed
-#                       (only when named; cluster-cpu-vs-others since 2026-10-27,
-#                       with -e for the test sets and -w epyc1 or epyc2)
-# The GPU nodes run CUDA only, the CPU nodes parallel only: a CPU benchmark
-# on a GPU node would measure a CPU that is only there to feed the GPU.
-# The epyc and dell partitions have more nodes: the runs always take epyc1
-# and dell1, so runs of both datasets on one partition wait for each other.
+# login node; it only calls sbatch). For the full set of runs use final.sh;
+# this is for single reruns. Results go to bench/results/cluster-<dataset>/
+# (ecbdl and ecbdl_15m in cluster-ecbdl, sorel and sorel_4m in cluster-sorel,
+# chess_* in cluster-chess):
+#   cuda-hopper-<data>     H100 PCIe, 2x Xeon Gold 6444Y     --cuda, every CPU
+#   cuda-ampere-<data>     A100 80GB PCIe, 2x EPYC 7402      --cuda, every CPU
+#   cpu-epyc-<data>        epyc1: 2x EPYC 9255               --parallel, 48 threads
+#   cpu-dell-<data>        dell1: 2x Xeon Gold 6542Y         --parallel, 48 threads
+#   (only when named:)
+#   gpuonly-hopper-<data>, gpuonly-ampere-<data>             --cuda --gpu-only, every CPU
+#   serial-epyc-<data>, serial-dell-<data>                   --serial, one thread
+#   simple-epyc-<data>, simple-dell-<data>                   --simple, one thread
+#   vs-epyc-<data>-<tool>-<algorithm>   scikit-learn (sklearn-cart) or Weka J48
+#                          (j48-c45), one thread, every tree hashed; into
+#                          cluster-cpu-vs-others with -o
+# The GPU nodes run CUDA only, the CPU nodes the CPU backends only: a CPU
+# benchmark on a GPU node would measure a CPU that is only there to feed the GPU.
 # Build and prepare first (bench/cluster/README.md).
 #
-#   bench/cluster/submit.sh                  # HIGGS, each case once, all four nodes
-#   bench/cluster/submit.sh -m 3             # each case 3 times
-#   bench/cluster/submit.sh -m 3 -d airline  # the airline dataset
-#   bench/cluster/submit.sh -m 3 cuda-hopper-higgs   # only the named runs
-#   bench/cluster/submit.sh -m 3 -d airline -p cart_full_nodepth,c45_unpruned \
-#       -o cluster-airline/noprunning                # unpruned trees
-#   bench/cluster/submit.sh -m 3 -e -d higgs -p cart_depth10,cart_depth10_alpha,c45_depth10_unpruned,c45_depth10 \
-#       cuda-hopper-higgs gpuonly-hopper-higgs cuda-ampere-higgs gpuonly-ampere-higgs \
-#       cpu-epyc-higgs cpu-dell-higgs            # the test-set benchmark (cluster-higgs/README.md)
-#   bench/cluster/submit.sh -d ecbdl_15m -a 1234 # ECBDL'14, 15M rows, after job 1234
-#   bench/cluster/submit.sh -d ecbdl             # full ECBDL'14: CPU nodes only (no GPU
-#                                                # has the 160 GB it needs)
-#   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
-#       cuda-hopper-chess_1b cuda-ampere-chess_1b cpu-epyc-chess_1b cpu-dell-chess_1b \
-#       cpu-dell512-chess_1b                     # chess: 1m, 10m, 100m, 1b; with dell2
-#   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
-#       serial-epyc-chess_1b serial-dell-chess_1b    # one thread (--serial)
-#   bench/cluster/submit.sh -m 3 -d chess_1b -p cart_full_nodepth,c45_unpruned \
-#       gpuonly-hopper-chess_1b gpuonly-ampere-chess_1b  # every node on the GPU
-#   bench/cluster/submit.sh -m 3 socket-epyc-higgs socket-dell-higgs  # one socket
-#   bench/cluster/submit.sh -d covertype -o cluster-cpu-vs-others simple-epyc-covertype
-#   bench/cluster/submit.sh -m 3 -d higgs -o cluster-cpu-vs-others $(for t in parallel serial \
-#       sklearn simple; do echo simple-epyc-higgs-$t-cart simple-epyc-higgs-$t-c45; done) \
-#       simple-epyc-higgs-j48-c45                # one job per tool and protocol
+#   bench/cluster/submit.sh -m 10 -e -d higgs -p cart_depth10,c45_depth10_unpruned cuda-hopper-higgs
+#   bench/cluster/submit.sh -m 3 -e -d mnist8m -o cluster-cpu-vs-others -w epyc2 vs-epyc-mnist8m-j48-c45
 # -P <file>: no jobs: append each run to that plan file instead, one line each
 # (time limit, then job.sh's arguments and environment), for batch.sh: several
 # runs, of any datasets, one after another in one job on one node.
-# -w: every job on that node instead (e.g. epyc2, the same hardware as epyc1);
-# -p: run.py's protocols (default cart_alpha_nodepth,c45: no depth limit, as
-# C4.5 has none); -o: the directory under bench/results/; -a: start only after
-# that job (e.g. prepare.sh) ended well; -e: test accuracy too (run.py
-# --test-accuracy: the test rows predicted from each dumped tree); -n: the NUMA node of the GPU, or of
-# the threads and memory of a CPU run (job.sh NUMA_NODE). The CUDA runs
-# (cuda-*, gpuonly-*) use every CPU of the node, their GPU's node first; without
-# -n job.sh takes the GPU on the NUMA node with the most free memory (hopper:
-# node 1, as another user's /dev/shm filled node 0 in 2026-10). The socket-*
-# runs measure the parallel backend on one socket.
+# -m: runs per case; -w: every job on that node instead (e.g. epyc2, the same
+# hardware as epyc1); -p: run.py's protocols (default cart_depth10,
+# c45_depth10_unpruned); -o: the directory under bench/results/; -a: start only
+# after that job (e.g. prepare.sh) ended well; -e: test accuracy too (run.py
+# --test-accuracy: the test rows predicted from each dumped tree); -n: the NUMA
+# node of the GPU, or of the threads and memory of a CPU run (job.sh NUMA_NODE).
 
 set -euo pipefail
 RUNS=1
 DATASET=higgs
-PROTOCOLS=cart_alpha_nodepth,c45
+PROTOCOLS=cart_depth10,c45_depth10_unpruned
 OUTDIR=
 NUMA=
 AFTER=
@@ -102,21 +59,12 @@ done
 shift $((OPTIND - 1))
 [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || { echo "-m needs a positive number of runs" >&2; exit 2; }
 case "$DATASET" in
-  higgs) DIR=cluster-higgs; LIMIT=01:00:00 TIMEOUT=3600 ;;
-  airline) DIR=cluster-airline; LIMIT=04:00:00 TIMEOUT=3600 ;;
-  # ECBDL: the dell partition allows at most 12 hours.
-  ecbdl_15m) DIR=cluster-ecbdl; LIMIT=08:00:00 TIMEOUT=10800 ;;
-  ecbdl) DIR=cluster-ecbdl; LIMIT=12:00:00 TIMEOUT=18000 ;;
-  mnist8m) DIR=cluster-mnist8m; LIMIT=08:00:00 TIMEOUT=10800 ;;
-  # SOREL-20M: 136 GB of CSV, CPU nodes only.
-  sorel) DIR=cluster-sorel; LIMIT=12:00:00 TIMEOUT=18000 ;;
-  # Its first 4M rows: what an 80 GB GPU holds (as ecbdl_15m).
-  sorel_4m) DIR=cluster-sorel; LIMIT=12:00:00 TIMEOUT=10800 ;;
-  chess_1m|chess_10m|chess_100m|chess_1b) DIR=cluster-chess; LIMIT=02:00:00 TIMEOUT=3600 ;;
-  covertype) DIR=cluster-cpu-vs-others; LIMIT=02:00:00 TIMEOUT=3600 ;;
-  # SUSY (4.5M rows) for the simple benchmark: hours of --simple, scikit-learn and J48.
-  susy) DIR=cluster-cpu-vs-others; LIMIT=12:00:00 TIMEOUT=10800 ;;
-  *) echo "-d: higgs, airline, ecbdl_15m, ecbdl, mnist8m, sorel, sorel_4m, covertype, susy or chess_1m, chess_10m, chess_100m, chess_1b" >&2
+  susy|higgs|mnist8m) DIR=cluster-$DATASET; LIMIT=1-00:00:00 TIMEOUT=14400 ;;
+  ecbdl|ecbdl_15m) DIR=cluster-ecbdl; LIMIT=4-00:00:00 TIMEOUT=36000 ;;
+  sorel|sorel_4m) DIR=cluster-sorel; LIMIT=4-00:00:00 TIMEOUT=36000 ;;
+  chess_1m|chess_10m|chess_100m|chess_1b) DIR=cluster-chess; LIMIT=1-00:00:00 TIMEOUT=14400 ;;
+  covertype) DIR=cluster-test; LIMIT=02:00:00 TIMEOUT=3600 ;;
+  *) echo "-d: susy, higgs, mnist8m, ecbdl_15m, ecbdl, sorel_4m, sorel, chess_1m, chess_10m, chess_100m, chess_1b or covertype" >&2
      exit 2 ;;
 esac
 DIR="${OUTDIR:-$DIR}"
@@ -128,45 +76,27 @@ for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$D
     { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 
-#        name                    partition  node    impls      threads  [protocols  time limit  timeout]
-JOBS=("cuda-hopper-$DATASET  hopper     hopper  tree_cuda  all"
-      "cuda-ampere-$DATASET  ampere     ampere  tree_cuda  all"
-      "cpu-epyc-$DATASET     epyc       epyc1   tree       all"
-      "cpu-dell-$DATASET     dell       dell1   tree       all")
-
-# Full ECBDL needs about 160 GB of GPU memory, SOREL about 240 GB: CPU nodes
-# only, unless the GPU runs are named (to record that they do not fit).
+# dell1 is in the dell (12 hours at most) and dell-long (14 days) partitions.
+#        name                    partition  node    impls          threads  [protocols  time limit  timeout]
+JOBS=("cuda-hopper-$DATASET     hopper     hopper  tree_cuda      all"
+      "cuda-ampere-$DATASET     ampere     ampere  tree_cuda      all"
+      "cpu-epyc-$DATASET        epyc       epyc1   tree           all"
+      "cpu-dell-$DATASET        dell-long  dell1   tree           all")
+# Full ECBDL and SOREL do not fit in 80 GB of GPU memory: CPU nodes only.
 GPU_JOBS=()
 if [ "$DATASET" = ecbdl ] || [ "$DATASET" = sorel ]; then
   GPU_JOBS=("${JOBS[@]:0:2}")
   JOBS=("${JOBS[@]:2}")
 fi
 OPTIONAL=(${GPU_JOBS[@]+"${GPU_JOBS[@]}"}
-          "cpu-dell512-$DATASET  dell-512GB dell2   tree       all"
-          "socket-epyc-$DATASET  epyc       epyc1   tree       all"
-          "socket-dell-$DATASET  dell       dell1   tree       all"
-          "serial-epyc-$DATASET  epyc       epyc1   tree       1"
-          "serial-dell-$DATASET  dell       dell1   tree       1"
-          "gpuonly-hopper-$DATASET  hopper  hopper  tree_gpu_only  all"
-          "gpuonly-ampere-$DATASET  ampere  ampere  tree_gpu_only  all"
-          "simple-epyc-$DATASET  epyc       epyc1   tree,tree_simple,sklearn,j48  1,all")
-# The simple benchmark, one job per tool and protocol: the time limit of the
-# job, and the timeout of each process, fit the tool (HIGGS, one thread:
-# ./tree --serial about 40 s, --simple about 10x that, J48 hours).
-#     tool      impls        threads  time limit   timeout (s)
-for tool in "parallel  tree         all  02:00:00    3600" \
-            "dual      tree         all  02:00:00    3600" \
-            "serial    tree         1    04:00:00    3600" \
-            "sklearn   sklearn      1    1-00:00:00  21600" \
-            "simple    tree_simple  1    1-00:00:00  21600" \
-            "j48       j48          1    3-00:00:00  86400"; do
-  read -r t impls threads limit timeout <<<"$tool"
-  OPTIONAL+=("simple-epyc-$DATASET-$t-c45  epyc  epyc1  $impls  $threads  c45  $limit  $timeout"
-            "vs-epyc-$DATASET-$t-c45  epyc  epyc1  $impls  $threads  c45_depth10_unpruned  $limit  $timeout")
-  [ "$t" = j48 ] ||  # Weka has no CART
-    OPTIONAL+=("simple-epyc-$DATASET-$t-cart  epyc  epyc1  $impls  $threads  cart_alpha_nodepth  $limit  $timeout"
-               "vs-epyc-$DATASET-$t-cart  epyc  epyc1  $impls  $threads  cart_depth10  $limit  $timeout")
-done
+          "gpuonly-hopper-$DATASET  hopper     hopper  tree_gpu_only  all"
+          "gpuonly-ampere-$DATASET  ampere     ampere  tree_gpu_only  all"
+          "serial-epyc-$DATASET     epyc       epyc1   tree           1"
+          "serial-dell-$DATASET     dell-long  dell1   tree           1"
+          "simple-epyc-$DATASET     epyc       epyc1   tree_simple    1"
+          "simple-dell-$DATASET     dell-long  dell1   tree_simple    1"
+          "vs-epyc-$DATASET-sklearn-cart  epyc  epyc1  sklearn  1  cart_depth10          7-00:00:00  86400"
+          "vs-epyc-$DATASET-j48-c45       epyc  epyc1  j48      1  c45_depth10_unpruned  7-00:00:00  86400")
 
 # Only the runs named on the command line, if any.
 if [ $# -gt 0 ]; then
@@ -199,19 +129,17 @@ for job in "${JOBS[@]}"; do
   read -r name partition node impls threads protocols limit timeout <<<"$job"
   node="${NODE:-$node}"
   mkdir -p "bench/results/$DIR/$name"
-  socket=; [[ "$name" != socket-* && "$name" != simple-* && "$name" != vs-* ]] || socket=,SOCKET=auto
-  [[ "$name" != simple-*-dual-* && "$name" != vs-*-dual-* ]] || socket=  # both sockets
-  # The simple and vs runs check that every backend grew the same tree.
-  extra=; [[ "$name" != simple-* && "$name" != vs-* ]] || extra=",RUN_EXTRA=--hash-trees"
+  # The library runs check that they grew the same tree on every run.
+  extra=; [[ "$name" != vs-* ]] || extra=",RUN_EXTRA=--hash-trees"
   if [ -n "$PLAN" ]; then
-    environment="${NUMA:+,NUMA_NODE=$NUMA}${ACCURACY:+,ACCURACY=$ACCURACY}$socket$extra"
+    environment="${NUMA:+,NUMA_NODE=$NUMA}${ACCURACY:+,ACCURACY=$ACCURACY}$extra"
     echo "${limit:-$LIMIT} $DIR $name $DATASET $impls $RUNS ${protocols:-$PROTOCOLS} $threads ${timeout:-$TIMEOUT}" \
       "${environment:+${environment#,}}" >> "$PLAN"
     echo "$name: planned in $PLAN"
     continue
   fi
   ids+=("$(sbatch --parsable --hold -J "dt-$name" -p "$partition" -w "$node" --exclusive -t "${limit:-$LIMIT}" \
-    --export=ALL${NUMA:+,NUMA_NODE=$NUMA}${ACCURACY:+,ACCURACY=$ACCURACY}$socket$extra \
+    --export=ALL${NUMA:+,NUMA_NODE=$NUMA}${ACCURACY:+,ACCURACY=$ACCURACY}$extra \
     ${AFTER:+--dependency=afterok:$AFTER} -o "bench/results/$DIR/$name/run.log" \
     bench/cluster/job.sh "$DIR" "$name" "$DATASET" "$impls" "$RUNS" "${protocols:-$PROTOCOLS}" "$threads" \
     "${timeout:-$TIMEOUT}")")

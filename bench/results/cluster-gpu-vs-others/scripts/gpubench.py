@@ -5,8 +5,10 @@ timed fit to OUT and saves the last model's test predictions.
 
   gpubench.py IMPL DATASET CASE REPS OUT PRED_DIR [TREES [DEPTH]]
     IMPL     cuml | xgboost
-    DATASET  higgs | susy | airline | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
-    CASE     cart   Gini (cuML) or the Gini-equivalent squared error (XGBoost)
+    DATASET  higgs | mnist8m | susy | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
+    CASE     cart   Gini (cuML) or the Gini-equivalent squared error (XGBoost;
+                    with more than 2 classes one multi-output tree on the
+                    one-hot labels, whose summed squared error is Gini too)
              c45    entropy (cuML only; XGBoost has no entropy criterion)
     TREES    trees per fit (default 1): cuML n_estimators, XGBoost
              num_parallel_tree in one round
@@ -38,6 +40,7 @@ import numpy as np
 DATA_ROOT = os.environ.get("DATA_ROOT", os.path.expanduser("~/dt/bench/data"))
 DEPTH = 19  # set by main()
 TREES = 1   # set by main()
+CLASSES = 2  # set by main()
 WARMUP_ROWS = int(os.environ.get("WARMUP_ROWS", 50_000)) or None
 BINS = {"cuml": 128, "xgboost": 256}  # each library's default
 FOREST = os.environ.get("FOREST", "identical")
@@ -151,12 +154,17 @@ def xgb_fit(X, y, case, trees):
     # so the split gain is the drop in the children's squared error, which is
     # n/2 times the drop in Gini impurity: the CART split, on histogram bins.
     assert case == "cart", "XGBoost has no entropy criterion"
+    # More than 2 classes: one multi-output tree (multi_strategy
+    # multi_output_tree) instead of XGBoost's default of one tree per class.
+    multi = {"multi_strategy": "multi_output_tree"} if CLASSES > 2 else {}
     if FOREST == "default":  # XGBRFClassifier's defaults, one round
         import xgboost as xgb
         t = time.perf_counter()
         dtrain = xgb.QuantileDMatrix(X, label=y.astype(np.float32))
         dmatrix = time.perf_counter() - t
-        params = {"device": "cuda", "tree_method": "hist", "objective": "binary:logistic",
+        objective = ({"objective": "multi:softprob", "num_class": CLASSES} if CLASSES > 2
+                     else {"objective": "binary:logistic"})
+        params = {"device": "cuda", "tree_method": "hist", **objective, **multi,
                   "eta": 1.0, "subsample": 0.8, "colsample_bynode": 0.8, "lambda": 1e-5,
                   "max_depth": DEPTH, "num_parallel_tree": trees, "seed": 0}
         return xgb.train(params, dtrain, num_boost_round=1), {"dmatrix_seconds": dmatrix}
@@ -165,11 +173,15 @@ def xgb_fit(X, y, case, trees):
     # tree, and XGBoost averages the forest (each leaf scaled by 1/trees).
     import xgboost as xgb
     t = time.perf_counter()
-    dtrain = xgb.QuantileDMatrix(X, label=y.astype(np.float32), max_bin=BINS["xgboost"])
+    # More than 2 classes: the one-hot labels; the summed squared error of a
+    # split is n/2 times the drop in Gini impurity for any number of classes,
+    # whatever base_score is (one round).
+    label = y.astype(np.float32) if CLASSES == 2 else np.eye(CLASSES, dtype=np.float32)[y]
+    dtrain = xgb.QuantileDMatrix(X, label=label, max_bin=BINS["xgboost"])
     dmatrix = time.perf_counter() - t
-    params = {"device": "cuda", "tree_method": "hist", "objective": "reg:squarederror",
+    params = {"device": "cuda", "tree_method": "hist", "objective": "reg:squarederror", **multi,
               "eta": 1.0, "lambda": 0.0, "alpha": 0.0, "gamma": 0.0,
-              "min_child_weight": 1.0, "base_score": float(y.mean()),
+              "min_child_weight": 1.0, **({"base_score": float(y.mean())} if CLASSES == 2 else {}),
               "max_bin": BINS["xgboost"],
               "subsample": 1.0, "colsample_bytree": 1.0,  # nthread: its default, the CPUs it may use
               "max_depth": DEPTH, "grow_policy": "depthwise", "num_parallel_tree": trees}
@@ -178,8 +190,10 @@ def xgb_fit(X, y, case, trees):
 
 
 def xgb_predict(booster, X):
-    # In chunks, like cuML's (chess_1b: 10^9 rows).
-    return (predict_chunks(booster.inplace_predict, X, 10_000_000) > 0.5).astype(np.int8)
+    # In chunks, like cuML's (chess_1b: 10^9 rows). More than 2 classes: one
+    # output per class, the largest wins.
+    p = predict_chunks(booster.inplace_predict, X, 10_000_000)
+    return (p.argmax(axis=1) if p.ndim == 2 else p > 0.5).astype(np.int8)
 
 
 def xgb_info(booster, X, y, Xt):
@@ -201,13 +215,14 @@ def version(impl):
 
 
 def main():
-    global DEPTH, TREES
+    global DEPTH, TREES, CLASSES
     impl, dataset, case, reps, out, pred_dir = sys.argv[1:7]
     TREES = int(sys.argv[7]) if len(sys.argv) > 7 else 1
     DEPTH = int(sys.argv[8]) if len(sys.argv) > 8 else 19
     fit, info, predict = IMPLS[impl]
     X, y = load(dataset, "train")
     Xt, yt = load(dataset, "test")
+    CLASSES = int(y.max()) + 1
     gpu = GpuMemory()
     t = time.perf_counter()
     model, _ = fit(X[:WARMUP_ROWS], y[:WARMUP_ROWS], case, TREES)  # imports, CUDA context, JIT

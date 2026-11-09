@@ -2,18 +2,18 @@
 # SLURM job: the whole GPU comparison on one node (GPU 0), e.g.
 #   sbatch -p hopper --exclusive -t 02:00:00 -o results/hopper.log job.sh hopper
 #   IMPLS="cuml xgboost" DATASETS=airline sbatch ...   runs only those
-#   (default: tree cuml xgboost, on higgs and airline; ECBDL: DATASETS=ecbdl_15m;
-#   chess: DATASETS=chess_1b; tree_gpu: ./tree --gpu-only)
-#   NUMA_NODE=1 sbatch ...   the first GPU on NUMA node 1, and every case bound
-#   to that node's CPUs and memory (numactl): one socket, the GPU's. Without it
-#   the job takes the NUMA node of a GPU with the most free memory (hopper's
-#   node 0 had 40 GB free in 2026-10). Every library and ./tree runs on its
-#   default threads, all the CPUs it may use: the same CPUs for everyone.
+#   (default: cuml xgboost, on higgs and mnist8m; tree: ./tree --cuda,
+#   tree_gpu: ./tree --gpu-only, both from $B/dt)
+#   NUMA_NODE=1 sbatch ...   the first GPU on NUMA node 1. Without it the job
+#   takes the GPU on the NUMA node with the most free memory, as ./tree's
+#   bench/cluster/job.sh does (hopper: node 1). Nothing is bound: every library
+#   runs on its default threads with every CPU of the node and first-touch
+#   memory, as ./tree's CUDA runs (since 95b6d77).
 #   REPLACE=1 sbatch ...   first moves the IMPLS' earlier rows out of each
 #   dataset's results.jsonl (to results.jsonl.before-<job id>)
-#   TREES="1 10" DEPTH=10 sbatch ...   the libraries' fits with 1 and with 10
-#   trees each, depth <= 10 (default: TREES=1, DEPTH=19; ./tree always grows
-#   one tree, at depth 19). A forest that fails with cuML's default 4 streams
+#   TREES="1 10" DEPTH=19 sbatch ...   the libraries' fits with 1 and with 10
+#   trees each, depth <= 19 (default: TREES=1, DEPTH=10; ./tree always grows
+#   one tree, at depth 19). REPS: timed fits per process (default 10). A forest that fails with cuML's default 4 streams
 #   (out of GPU memory) is run again with N_STREAMS=1.
 #   RESULTS=$HOME/gpu-dt-bench/results-forest sbatch ...   where results go
 #   CUML_WARMUP_ROWS=0 sbatch ...   cuML's untimed warm-up fit on all rows
@@ -24,10 +24,10 @@
 # results/<dataset>/<node>/pred/.
 #SBATCH -J gdb-bench
 set -uo pipefail
-NODE="$1" REPS="${REPS:-3}" IMPLS="${IMPLS:-tree cuml xgboost}" DATASETS="${DATASETS:-higgs airline}"
-TREES="${TREES:-1}" DEPTH="${DEPTH:-19}" CUML_WARMUP_ROWS="${CUML_WARMUP_ROWS:-50000}"
+NODE="$1" REPS="${REPS:-10}" IMPLS="${IMPLS:-cuml xgboost}" DATASETS="${DATASETS:-higgs mnist8m}"
+TREES="${TREES:-1}" DEPTH="${DEPTH:-10}" CUML_WARMUP_ROWS="${CUML_WARMUP_ROWS:-50000}"
 B=$HOME/gpu-dt-bench RESULTS="${RESULTS:-$HOME/gpu-dt-bench/results}"
-TREE_COMMIT=$(cut -c1-7 $B/dt/.git/HEAD)  # detached at the measured commit; no git on the nodes
+TREE_COMMIT=$(cut -c1-7 $B/dt/.git/HEAD 2>/dev/null || echo none)  # only for IMPLS tree, tree_gpu
 SCRATCH=$(mktemp -d /tmp/gdb.XXXXXX)  # node-local tmpfs, for the tree dumps
 export TMPDIR=$SCRATCH  # every temp file of the job, removed with it
 # Leave the node as we found it, also when the job fails or SLURM ends it:
@@ -36,7 +36,7 @@ export TMPDIR=$SCRATCH  # every temp file of the job, removed with it
 trap 'rm -rf "$SCRATCH"; find -L "${DATA_ROOT:-$HOME/dt/bench/data}" -type f -exec dd if={} iflag=nocache count=0 status=none \; 2>/dev/null' EXIT
 trap 'exit 143' TERM INT
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1
-if [ -z "${NUMA_NODE:-}" ]; then  # GPU runs stay on one socket, their GPU's
+if [ -z "${NUMA_NODE:-}" ]; then  # the GPU on the node with the most free memory
   NUMA_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
     while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
     while read -r node; do
@@ -45,7 +45,6 @@ if [ -z "${NUMA_NODE:-}" ]; then  # GPU runs stay on one socket, their GPU's
 fi
 BIND=()
 if [ -n "${NUMA_NODE:-}" ]; then
-  BIND=(numactl --cpunodebind="$NUMA_NODE" --membind="$NUMA_NODE")
   # nvidia-smi's bus id (00000000:2A:00.0) ends in the sysfs one (0000:2a:00.0).
   CUDA_VISIBLE_DEVICES="$(nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader | tr A-Z a-z |
     while IFS=', ' read -r index bus; do
@@ -60,15 +59,15 @@ echo "job ${SLURM_JOB_ID:-} on $(hostname), $(nproc) CPUs, $(date '+%F %T'), rep
 echo "trees per library fit: $TREES (forest settings: ${FOREST:-identical}), depth <= $DEPTH, cuML warm-up rows: $CUML_WARMUP_ROWS (0 = all), results: $RESULTS"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "free memory per NUMA node: $(numactl -H | awk '/ free:/ { printf "%snode %s %d GiB", (n++ ? ", " : ""), $2, $4 / 1024 }')"
-[ -z "${NUMA_NODE:-}" ] || echo "NUMA node $NUMA_NODE: GPU $CUDA_VISIBLE_DEVICES, ${BIND[*]}, CPUs $(cat /sys/devices/system/node/node$NUMA_NODE/cpulist)"
+echo "GPU $CUDA_VISIBLE_DEVICES on NUMA node $NUMA_NODE; every CPU, memory first-touch"
 echo "CPU governor: $(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort -u | tr '\n' ' ')"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,driver_version,power.limit --format=csv,noheader
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | sed 's/^/GPU process: /'
 
-run() {  # timeout per process: a case that does not finish in 60 min is reported as such;
+run() {  # timeout per process: a case that does not finish in 4 hours is reported as such;
   # --foreground keeps the case in the job's process group, so scancel stops it
   echo; echo "=== $(date +%H:%M:%S) $*"
-  timeout --foreground 3600 "$@" && return 0
+  timeout --foreground 14400 "$@" && return 0
   local status=$?
   echo "{\"failed\": \"$*\", \"status\": $status, \"n_streams\": \"${N_STREAMS:-}\"}" | tee -a "$OUT/failed.jsonl"
   return $status
