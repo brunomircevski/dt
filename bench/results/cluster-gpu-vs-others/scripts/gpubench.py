@@ -159,9 +159,11 @@ def xgb_fit(X, y, case, trees):
     # Its histograms hold every class's gradients (MNIST8M: 10 x 784 features x
     # 256 bins per node), so at depth 10 the default cache of up to 65,536
     # nodes' histograms runs out of 80 GB: keep fewer (built again when needed;
-    # the same tree).
+    # the same tree). 256 still asks for 28.7 GB more than an H100 has free;
+    # on MNIST8M one tree takes 5.5 s with 128, 6.4 s with 64, 7.1 s
+    # with 32 (H100, 2026-11-10).
     multi = ({"multi_strategy": "multi_output_tree",
-              "max_cached_hist_node": int(os.environ.get("XGB_MAX_CACHED_HIST_NODE", 256))}
+              "max_cached_hist_node": int(os.environ.get("XGB_MAX_CACHED_HIST_NODE", 128))}
              if CLASSES > 2 else {})
     if FOREST == "default":  # XGBRFClassifier's defaults, one round
         import xgboost as xgb
