@@ -159,8 +159,8 @@ def xgb_fit(X, y, case, trees):
     # Its histograms hold every class's gradients (MNIST8M: 10 x 784 features x
     # 256 bins per node), so at depth 10 the default cache of up to 65,536
     # nodes' histograms runs out of 80 GB: keep fewer (built again when needed;
-    # the same tree). 256 still asks for 28.7 GB more than an H100 has free;
-    # on MNIST8M one tree takes 5.5 s with 128, 6.4 s with 64, 7.1 s
+    # the same tree). With 256 it asked for 28.7 GB with 27.3 GB free on an
+    # H100; on MNIST8M one tree takes 5.5 s with 128, 6.4 s with 64, 7.1 s
     # with 32 (H100, 2026-11-10).
     multi = ({"multi_strategy": "multi_output_tree",
               "max_cached_hist_node": int(os.environ.get("XGB_MAX_CACHED_HIST_NODE", 128))}
@@ -198,9 +198,13 @@ def xgb_fit(X, y, case, trees):
 
 
 def xgb_predict(booster, X):
-    # In chunks, like cuML's (chess_1b: 10^9 rows). More than 2 classes: one
-    # output per class, the largest wins.
-    p = predict_chunks(booster.inplace_predict, X, 10_000_000)
+    # In chunks, like cuML's (chess_1b: 10^9 rows), each copied to the GPU:
+    # given host memory, XGBoost falls back to a DMatrix, which for MNIST8M's
+    # multi-output tree ran over 30 min on one CPU with 239 GB (1M rows on the
+    # GPU: 1.5 s, the same outputs). More than 2 classes: one output per class,
+    # the largest wins.
+    import cupy as cp
+    p = predict_chunks(lambda c: cp.asnumpy(booster.inplace_predict(cp.asarray(c))), X, 1_000_000)
     return (p.argmax(axis=1) if p.ndim == 2 else p > 0.5).astype(np.int8)
 
 
