@@ -79,10 +79,14 @@ class GpuMemory:
 
 
 def depth_of(left, right):
-    """Depth and node count of a tree given child arrays (-1 = leaf), root 0."""
+    """Depth and node count of a tree given child arrays (left -1 = leaf), root 0.
+    Only the left child marks a leaf: in XGBoost's multi-output trees a leaf's
+    right_children entry is its index in leaf_weights."""
     depth = np.zeros(len(left), dtype=np.int64)
     order = [0]
     for node in order:  # breadth first
+        if left[node] < 0:
+            continue
         for child in (left[node], right[node]):
             if child >= 0:
                 depth[child] = depth[node] + 1
@@ -199,10 +203,10 @@ def xgb_fit(X, y, case, trees):
 
 def xgb_predict(booster, X):
     # In chunks, like cuML's (chess_1b: 10^9 rows), each copied to the GPU:
-    # given host memory, XGBoost falls back to a DMatrix, which for MNIST8M's
-    # multi-output tree ran over 30 min on one CPU with 239 GB (1M rows on the
-    # GPU: 1.5 s, the same outputs). More than 2 classes: one output per class,
-    # the largest wins.
+    # given host memory, XGBoost falls back to predicting from a DMatrix
+    # (MNIST8M's multi-output tree: 1M rows 7.5 s on the host, 1.5 s on the
+    # GPU, the same outputs). More than 2 classes: one output per class, the
+    # largest wins.
     import cupy as cp
     p = predict_chunks(lambda c: cp.asnumpy(booster.inplace_predict(cp.asarray(c))), X, 1_000_000)
     return (p.argmax(axis=1) if p.ndim == 2 else p > 0.5).astype(np.int8)
