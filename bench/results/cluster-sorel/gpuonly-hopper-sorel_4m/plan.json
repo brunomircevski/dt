@@ -4,13 +4,13 @@
    "sorel_4m",
    "cart_depth10",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "sorel_4m",
    "c45_depth10_unpruned",
    "tree_gpu_only",
-   16
+   32
   ]
  ],
  "protocols": {

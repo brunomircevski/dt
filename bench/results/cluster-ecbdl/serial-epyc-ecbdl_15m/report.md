@@ -1,6 +1,6 @@
 ## serial-epyc-ecbdl_15m
 
-**serial-epyc-ecbdl_15m**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2 x86_64, governor performance, turbo on, ./tree ec77727, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**serial-epyc-ecbdl_15m**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor performance, turbo on, ./tree f1fe270e76bb, CPUs in order of use 0-47, 10 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
@@ -16,6 +16,6 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 277 s | 277 s–277 s | 1.00× | 106.17 GiB | 106.17 GiB | 725 | 363 | 10 | 97.92% | 98.32% |
+| ./tree | 276 s | 276 s–276 s | 1.00× | 106.17 GiB | 106.17 GiB | 725 | 363 | 10 | 97.92% | 98.32% |
 
 Test accuracy is measured on 2,897,917 rows: its 95% interval is ±0.01 percentage points at most.

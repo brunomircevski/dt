@@ -1,21 +1,21 @@
 ## gpuonly-ampere-higgs
 
-**gpuonly-ampere-higgs**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree ec77727, CPUs in order of use 0-23, 10 run(s) per case, warm-up 50000 rows
+**gpuonly-ampere-higgs**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree f1fe270e76bb, CPUs in order of use 0-23,24-47, 10 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA, GPU only 641 MiB
 
 ### higgs (10,500,000 train / 500,000 test rows, 28 features, 2 classes)
 
-**CART, grown to depth 10, no pruning** (`cart_depth10`), 24 threads
+**CART, grown to depth 10, no pruning** (`cart_depth10`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA, GPU only | 205 ms | 203 ms–210 ms |  | 1.75 GiB (+ GPU 3.30 GiB) | 1.12 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
+| ./tree CUDA, GPU only | 209 ms | 200 ms–211 ms |  | 1.75 GiB (+ GPU 3.30 GiB) | 1.12 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
 
-**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 24 threads
+**C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA, GPU only | 218 ms | 216 ms–221 ms |  | 1.78 GiB (+ GPU 3.30 GiB) | 1.15 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
+| ./tree CUDA, GPU only | 216 ms | 214 ms–220 ms |  | 1.78 GiB (+ GPU 3.30 GiB) | 1.15 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
 
 Test accuracy is measured on 500,000 rows: its 95% interval is ±0.13 percentage points at most.

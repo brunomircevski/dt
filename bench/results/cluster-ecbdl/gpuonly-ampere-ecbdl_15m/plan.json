@@ -4,13 +4,13 @@
    "ecbdl_15m",
    "cart_depth10",
    "tree_gpu_only",
-   24
+   48
   ],
   [
    "ecbdl_15m",
    "c45_depth10_unpruned",
    "tree_gpu_only",
-   24
+   48
   ]
  ],
  "protocols": {
@@ -369,6 +369,296 @@
     "tree_simple": [
      "--c45",
      "--no-prune"
+    ]
+   }
+  },
+  "cart_depth5": {
+   "title": "CART, grown to depth 5, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "5"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "5"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "5"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "5"
+    ]
+   }
+  },
+  "c45_depth5_unpruned": {
+   "title": "C4.5, grown to depth 5, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "5"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "5"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "5"
+    ],
+    "tree_simple": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "5"
+    ]
+   }
+  },
+  "cart_depth15": {
+   "title": "CART, grown to depth 15, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "15"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "15"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "15"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "15"
+    ]
+   }
+  },
+  "c45_depth15_unpruned": {
+   "title": "C4.5, grown to depth 15, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "15"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "15"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "15"
+    ],
+    "tree_simple": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "15"
+    ]
+   }
+  },
+  "cart_depth20": {
+   "title": "CART, grown to depth 20, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "20"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "20"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "20"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "20"
+    ]
+   }
+  },
+  "c45_depth20_unpruned": {
+   "title": "C4.5, grown to depth 20, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "20"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "20"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "20"
+    ],
+    "tree_simple": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "20"
+    ]
+   }
+  },
+  "cart_depth25": {
+   "title": "CART, grown to depth 25, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "25"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "25"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "25"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "25"
+    ]
+   }
+  },
+  "c45_depth25_unpruned": {
+   "title": "C4.5, grown to depth 25, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "25"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "25"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "25"
+    ],
+    "tree_simple": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "25"
+    ]
+   }
+  },
+  "cart_depth30": {
+   "title": "CART, grown to depth 30, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "tree_simple": [
+     "--cart",
+     "--no-prune",
+     "-d",
+     "30"
+    ]
+   }
+  },
+  "c45_depth30_unpruned": {
+   "title": "C4.5, grown to depth 30, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "30"
+    ],
+    "tree_simple": [
+     "--c45",
+     "--no-prune",
+     "-d",
+     "30"
     ]
    }
   }

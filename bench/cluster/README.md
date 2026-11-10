@@ -57,7 +57,15 @@ bench/cluster/final.sh      # submit
 | hopper, ampere | `--cuda` and `--gpu-only` on SUSY, HIGGS, MNIST8M, ECBDL'14 15M, SOREL 4M, chess 1M–1000M; then cuML and XGBoost (one tree, then the default forest of 10) on HIGGS and MNIST8M from `~/gpu-dt-bench` into `results-final/` | 10 | half a day each |
 | epyc1 | `--parallel` 48 threads on every dataset, thread scaling (HIGGS, MNIST8M), `--serial` on every dataset, `--simple` on all but ECBDL'14, SOREL and SOREL 4M | 10 | about 2.7 days |
 | epyc2 | scikit-learn and Weka J48 on HIGGS and MNIST8M (cluster-cpu-vs-others), then `--simple` on ECBDL'14, SOREL and SOREL 4M | 10; J48 on MNIST8M and `--simple` on full ECBDL'14 and SOREL 3 | about 3 days |
-| dell1 (dell-long) | the same as epyc1, then the long `--simple` runs | as epyc | about 5.5 days |
+| dell1 (dell-long) | `--parallel` 48 threads, thread scaling, `--serial`, then `--simple` on full SOREL | as epyc | about 2.5 days |
+| dell2, dell3 (dell-long) | `--simple` on ECBDL'14 and SOREL 4M (dell2), on the other datasets (dell3), moved there from dell1 on 2026-11-10 | as epyc | about 1.5 days |
+
+dell2 and dell3 have half of dell1's memory channels, but one thread does not
+use the bandwidth: on 2026-11-09/10 `--serial` and `--simple` on SUSY and HIGGS
+(10 and 3 runs each, CART and C4.5) took 0.9–1.2% longer on dell2 than on dell1
+(one 5% case: a single slow run). Full SOREL stays on dell1: `--simple` peaks at
+123 GiB, about what dell2's NUMA node 0 has free (dell1's has twice that).
+The moved jobs record `TREE_GIT_DESCRIBE` ce907ddfe59f, the same `src` as f1fe270.
 
 Runs per case: 10, and 3 where one process takes over an hour. Parallel runs
 use every CPU (both sockets), one-thread runs the first CPU, memory
