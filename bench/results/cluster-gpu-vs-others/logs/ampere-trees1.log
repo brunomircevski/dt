@@ -1,0 +1,23 @@
+job 183 on ampere, 48 CPUs, 2026-11-10 10:05:48, reps 10, ./tree b014290
+trees per library fit: 1 (forest settings: identical), depth <= 10, cuML warm-up rows: 0 (0 = all), results: /home/bmircevski/gpu-dt-bench/results-final
+load average: 1.11 1.63 3.26
+free memory per NUMA node: node 0 485 GiB, node 1 436 GiB
+GPU 0 on NUMA node 0; every CPU, memory first-touch
+CPU governor: ondemand 
+0, NVIDIA A100 80GB PCIe, 0 MiB, 81920 MiB, 615.71.09, 300.00 W
+1, NVIDIA A100 80GB PCIe, 0 MiB, 81920 MiB, 615.71.09, 300.00 W
+2, NVIDIA A100-PCIE-40GB, 0 MiB, 40960 MiB, 615.71.09, 250.00 W
+3, NVIDIA A100-PCIE-40GB, 0 MiB, 40960 MiB, 615.71.09, 250.00 W
+
+=== 10:05:49 /home/bmircevski/gpu-dt-bench/venv/bin/python /home/bmircevski/gpu-dt-bench/gpubench.py xgboost mnist8m cart 10 /home/bmircevski/gpu-dt-bench/results-final/mnist8m/ampere/results.jsonl /home/bmircevski/gpu-dt-bench/results-final/mnist8m/ampere/pred 1 10
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 0, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 29.468163236044347, "dmatrix_seconds": 21.262032030150294, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:07:03"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 1, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 29.2889083083719, "dmatrix_seconds": 21.161713046953082, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:07:32"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 2, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 28.807367535308003, "dmatrix_seconds": 20.611277736723423, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:08:01"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 3, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 28.83150138705969, "dmatrix_seconds": 20.681583140045404, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:08:30"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 4, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 28.800393952056766, "dmatrix_seconds": 20.523248864337802, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:08:59"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 5, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 28.700647664256394, "dmatrix_seconds": 20.595486185047776, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:09:27"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 6, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 28.8323565130122, "dmatrix_seconds": 20.637077835854143, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:09:56"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 7, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 28.6550799398683, "dmatrix_seconds": 20.550529838074, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:10:25"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 8, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 29.449340821243823, "dmatrix_seconds": 20.948810088913888, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:10:54"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 9, "trees": 1, "forest": "identical", "depth_limit": 10, "train_seconds": 28.83307381067425, "dmatrix_seconds": 20.673135051038116, "warmup_seconds": 3.471919030882418, "warmup_rows": 50000, "version": "3.4.1", "host": "ampere", "time": "2026-11-10 10:11:23", "train_accuracy": 0.8076783950617284, "test_accuracy": 0.8451, "nodes": 2047.0, "depth": 10, "root": "f318 < 2", "gpu_peak_mib": 75131}
+done 2026-11-10 10:11:30

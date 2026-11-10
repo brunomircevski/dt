@@ -2,7 +2,7 @@
 
 One tree per run, grown to depth ≤ 10 without pruning on every training row and feature, scored on the dataset's test set, on the H100 PCIe of hopper and the A100 80 GB PCIe of ampere: one GPU and every CPU of the node, as ./tree's CUDA runs. cuML and XGBoost also grow a forest of 10 trees with their own random-forest defaults; its time divided by 10 is the bar "forest of 10 / 10".
 
-**Status (2026-11-09):** being rerun on one build of main with every other benchmark (`bench/cluster/final.sh`): the libraries 10 timed fits per case, ./tree 10 runs. The chart below still shows the 2026-10 runs (./tree ec77727 on the GPU's socket only; libraries 2026-10-27, 3 fits, bound to the GPU's socket); MNIST8M's libraries have not run yet. Until 2026-11-09 this benchmark also had SUSY, airline, ECBDL'14 15M and chess 1000M; those runs are in git at 3354a8a.
+**Final data (2026-11-09/10):** ./tree f1fe270 (`bench/cluster/final.sh`, 10 runs per case), cuML and XGBoost 10 timed fits per case. XGBoost on MNIST8M first ran out of memory and stalled in `gpubench.py`'s tree walk; it was rerun on 2026-11-10 with the fixes (538fc78; `logs/*-first.log` are the first pass, with every other library run). Until 2026-11-09 this benchmark also had SUSY, airline, ECBDL'14 15M and chess 1000M; those runs are in git at 3354a8a.
 
 ![./tree against cuML and XGBoost, HIGGS and MNIST8M, CART and C4.5, H100 and A100](chart.png)
 
@@ -11,6 +11,23 @@ bench/cluster/final.sh            # queues the libraries on hopper and ampere af
 # then copy ~/gpu-dt-bench/results-final/<dataset>/<node>/ to <dataset>/<node>/ here, and:
 bench/.venv/bin/python bench/vs_chart.py gpu     # chart.png, summary.csv
 ```
+
+## Results
+
+Mean of 10 runs, H100 (A100 in brackets); the chart has every bar with its spread, memory, test accuracy and nodes.
+
+| | ./tree hybrid | cuML, 1 tree | XGBoost, 1 tree | ./tree faster than cuML / XGBoost |
+|---|--:|--:|--:|--:|
+| HIGGS CART | 0.159 s (0.208) | 0.450 s (0.507) | 2.62 s (2.72) | 2.8× / 16× (2.4× / 13×) |
+| HIGGS C4.5 (cuML: entropy) | 0.168 s (0.222) | 0.453 s (0.506) | — | 2.7× (2.3×) |
+| MNIST8M CART | 3.74 s (5.18) | 7.96 s (10.4) | 26.7 s (29.0) | 2.1× / 7.1× (2.0× / 5.6×) |
+| MNIST8M C4.5 (cuML: entropy) | 3.90 s (5.31) | 7.99 s (10.4) | — | 2.0× (2.0×) |
+
+- **./tree --gpu-only** takes the same time as the hybrid (within 3%) with less than half its RAM (MNIST8M 26 against 77 GB).
+- **XGBoost's time is mostly `QuantileDMatrix`:** the binning takes about 2.4 s of 2.6 s on HIGGS and 20–21 s of 27 s on MNIST8M; the tree itself takes 0.2–0.4 s and 6 s. Its one tree is ./tree's CART tree on MNIST8M (2,047 nodes, training 80.77%, test 84.51%) and nearly on HIGGS (2,033 against 2,029 nodes, test 70.51% against 70.52%).
+- **XGBoost needs 79 GB of VRAM on MNIST8M:** the multi-output tree's histograms (10 classes × 784 features × 256 bins per node). Its default cache of up to 65,536 nodes' histograms does not fit in 80 GB, nor does 256; `gpubench.py` keeps 128 (`max_cached_hist_node`, the same tree). ./tree uses 53 GB, cuML 27 GB.
+- **A forest's tree is cheaper than one full tree:** cuML's default forest takes 0.10 s (HIGGS) and 0.45 s (MNIST8M) per tree on the H100, faster than ./tree's one tree, because each tree sees a bootstrap sample and √features per split; its trees are not the full-data tree (it is a forest, test 90.4% against one tree's 84.5% on MNIST8M).
+- **H100 against A100:** ./tree 1.3–1.4× faster on the H100, cuML 1.1–1.3×, XGBoost 1.04–1.09× (its binning runs mostly on the CPUs).
 
 ## What is compared
 
@@ -52,4 +69,5 @@ TREES=10 FOREST=default RESULTS=$PWD/results-final sbatch -p hopper -w hopper --
 | `chart.png` | HIGGS and MNIST8M, CART and C4.5: time of one tree per implementation and GPU, with its runs, RAM and VRAM, test accuracy and nodes |
 | `summary.csv` | One row per dataset, algorithm, implementation and GPU: mean, standard deviation, runs, min, max, VRAM, test accuracy, nodes |
 | `<dataset>/<node>/` | `results.jsonl` (every cuML and XGBoost fit), `machine.json` |
+| `logs/` | the SLURM logs: `<node>-trees<1|10>-first.log` every library run but XGBoost on MNIST8M, `<node>-trees<1|10>.log` its rerun |
 | `scripts/` | the harness (above) |

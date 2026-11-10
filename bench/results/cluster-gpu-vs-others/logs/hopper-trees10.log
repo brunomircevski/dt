@@ -1,0 +1,23 @@
+job 182 on hopper, 32 CPUs, 2026-11-10 10:11:06, reps 10, ./tree b014290
+trees per library fit: 10 (forest settings: default), depth <= 10, cuML warm-up rows: 0 (0 = all), results: /home/bmircevski/gpu-dt-bench/results-final
+load average: 11.24 8.94 5.72
+free memory per NUMA node: node 0 484 GiB, node 1 495 GiB
+GPU 2 on NUMA node 1; every CPU, memory first-touch
+CPU governor: schedutil 
+0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 620.70.06, 350.00 W
+1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 620.70.06, 350.00 W
+2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 620.70.06, 350.00 W
+3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 620.70.06, 350.00 W
+
+=== 10:11:07 /home/bmircevski/gpu-dt-bench/venv/bin/python /home/bmircevski/gpu-dt-bench/gpubench.py xgboost mnist8m cart 10 /home/bmircevski/gpu-dt-bench/results-final/mnist8m/hopper/results.jsonl /home/bmircevski/gpu-dt-bench/results-final/mnist8m/hopper/pred 10 10
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 0, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 67.14859296299983, "dmatrix_seconds": 20.812109717007843, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:12:40"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 1, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 65.89309106799192, "dmatrix_seconds": 19.53741763198923, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:13:46"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 2, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 67.01962804500363, "dmatrix_seconds": 20.58855211600894, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:14:53"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 3, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 66.69965895899804, "dmatrix_seconds": 20.337542220004252, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:16:00"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 4, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 66.32078043700312, "dmatrix_seconds": 19.899399237998296, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:17:06"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 5, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 66.46497469198948, "dmatrix_seconds": 20.10080483900674, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:18:13"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 6, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 66.3131455900002, "dmatrix_seconds": 19.9449110100104, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:19:19"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 7, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 66.02173361599853, "dmatrix_seconds": 19.65760879399022, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:20:25"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 8, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 67.46660007799801, "dmatrix_seconds": 20.95210127699829, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:21:32"}
+{"impl": "xgboost", "dataset": "mnist8m", "case": "cart", "bins": 256, "rep": 9, "trees": 10, "forest": "default", "depth_limit": 10, "train_seconds": 67.4300326579978, "dmatrix_seconds": 21.079585269995732, "warmup_seconds": 5.337162121999427, "warmup_rows": 50000, "version": "3.4.1", "host": "hopper", "time": "2026-11-10 10:22:40", "train_accuracy": 0.8817295061728395, "test_accuracy": 0.9075, "nodes": 2044.6, "depth": 10, "root": "f345 < 2", "gpu_peak_mib": 75125}
+done 2026-11-10 10:22:45
