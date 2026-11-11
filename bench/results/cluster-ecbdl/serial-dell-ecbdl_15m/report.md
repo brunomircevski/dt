@@ -1,6 +1,6 @@
 ## serial-dell-ecbdl_15m
 
-**serial-dell-ecbdl_15m**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 1007 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor powersave, turbo on, ./tree ec77727, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**serial-dell-ecbdl_15m**: INTEL(R) XEON(R) GOLD 6542Y, 48 logical CPUs (P-cores None, E-cores None), 1007 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor powersave, turbo on, ./tree f1fe270e76bb, CPUs in order of use 0-47, 10 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
@@ -10,12 +10,12 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 351 s | 351 s–351 s | 1.00× | 106.17 GiB | 106.17 GiB | 1,863 | 932 | 10 | 97.92% | 98.31% |
+| ./tree | 346 s | 345 s–348 s | 1.00× | 106.17 GiB | 106.17 GiB | 1,863 | 932 | 10 | 97.92% | 98.31% |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 1 thread
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 425 s | 425 s–425 s | 1.00× | 106.17 GiB | 106.17 GiB | 725 | 363 | 10 | 97.92% | 98.32% |
+| ./tree | 433 s | 433 s–435 s | 1.00× | 106.17 GiB | 106.17 GiB | 725 | 363 | 10 | 97.92% | 98.32% |
 
 Test accuracy is measured on 2,897,917 rows: its 95% interval is ±0.01 percentage points at most.

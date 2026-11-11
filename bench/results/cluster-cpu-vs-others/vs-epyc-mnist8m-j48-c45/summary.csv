@@ -1,0 +1,2 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+vs-epyc-mnist8m-j48-c45,mnist8m,c45_depth10_unpruned,j48,1,ok,True,18988.499532609,18972.422728171,19031.877910492,18997.600057090665,30.754582351039407,3,,19094.998136741982,87656828928,87655309312,87659712512,87554461696,1453,727,10,0.70963321,0.7465,0.008526287236540885,,0.005156405
