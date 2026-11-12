@@ -212,8 +212,15 @@ CutCandidate CpuTreeBuilder::scanFeatureK(const Entry *entries, std::uint32_t co
           step /= 2;
         }
       }
+      std::uint32_t *const lane[kLanes] = {laneCounts, laneCounts + classes,
+                                           laneCounts + 2 * classes, laneCounts + 3 * classes};
+      for (; cut + kLanes <= safe; cut += kLanes) {
+        for (std::size_t k = 0; k < kLanes; ++k) {
+          ++lane[k][codec.cls(entries[cut - 1 + k].packed)];
+        }
+      }
       for (; cut < safe; ++cut) {
-        ++laneCounts[(cut & (kLanes - 1)) * classes + codec.cls(entries[cut - 1].packed)];
+        ++laneCounts[codec.cls(entries[cut - 1].packed)];
       }
     }
     for (; cut < end; ++cut) {
