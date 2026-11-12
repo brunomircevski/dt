@@ -161,6 +161,8 @@ private:
                          std::uint32_t leftCount, Keep keep, const std::uint64_t *leftBits,
                          bool isWinner, std::uint32_t feature,
                          ChildSweep *const *children) const;
+  void moveRows(const Entry *source, std::uint32_t count, Entry *target, std::uint32_t left,
+                std::uint32_t right, Keep keep, const std::uint64_t *leftBits) const;
   void partitionFeatureOutOfPlace(const Entry *source, Entry *target, std::uint32_t count,
                                   std::uint32_t leftCount, Keep keep,
                                   const std::uint64_t *leftBits) const;

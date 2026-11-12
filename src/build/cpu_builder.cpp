@@ -485,14 +485,14 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
   return item.slots;
 }
 
-// Stable partition of `source` into `target` by goesLeft: left rows to
-// [0, leftCount), right rows to [leftCount, count), in order (only one of the
-// two if the other child is a leaf). The columns of a big node do not fit in
-// the caches, so the stores bypass them (non-temporal: no read of the target
-// lines first, no eviction of data still needed).
-void CpuTreeBuilder::partitionFeatureOutOfPlace(const Entry *source, Entry *target,
-                                                std::uint32_t count, std::uint32_t leftCount,
-                                                Keep keep, const std::uint64_t *leftBits) const {
+// Moves `count` entries of `source` to `target` by leftBits: left rows to
+// target[left], target[left + 1], ..., right rows to target[right], ... (only
+// those of `keep`'s side if one child is a leaf). The columns of a big node do
+// not fit in the caches, so the stores bypass them (non-temporal: no read of
+// the target lines first, no eviction of data still needed); the caller fences.
+void CpuTreeBuilder::moveRows(const Entry *source, std::uint32_t count, Entry *target,
+                              std::uint32_t left, std::uint32_t right, Keep keep,
+                              const std::uint64_t *leftBits) const {
   auto store = [](Entry *at, Entry entry) {
 #if defined(__SSE2__)
     _mm_stream_si64(reinterpret_cast<long long *>(at), std::bit_cast<long long>(entry));
@@ -506,26 +506,34 @@ void CpuTreeBuilder::partitionFeatureOutOfPlace(const Entry *source, Entry *targ
     return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
   };
   if (keep == Keep::Both) {
-    std::uint32_t left = 0;
-    std::uint32_t right = leftCount;
     for (std::uint32_t index = 0; index < count; ++index) {
       const Entry entry = source[index];
       const std::uint32_t isLeft = goesLeft(entry);
-      store(target + (isLeft ? left : right), entry);
+      // isLeft ? left : right, without a branch: GCC turned the conditional
+      // into one, mispredicted on every other row of an even split.
+      store(target + (right ^ ((left ^ right) & (0u - isLeft))), entry);
       left += isLeft;
       right += 1 - isLeft;
     }
-  } else {
-    // One child: usually a lopsided split, so the branch is predictable.
-    const std::uint32_t wanted = keep == Keep::Left;
-    Entry *write = target + (keep == Keep::Left ? 0 : leftCount);
-    for (std::uint32_t index = 0; index < count; ++index) {
-      const Entry entry = source[index];
-      if (goesLeft(entry) == wanted) {
-        store(write++, entry);
-      }
+    return;
+  }
+  // One child: usually a lopsided split, so the branch is predictable.
+  const std::uint32_t wanted = keep == Keep::Left;
+  Entry *write = target + (keep == Keep::Left ? left : right);
+  for (std::uint32_t index = 0; index < count; ++index) {
+    const Entry entry = source[index];
+    if (goesLeft(entry) == wanted) {
+      store(write++, entry);
     }
   }
+}
+
+// Stable partition of `source` into `target`: left rows to [0, leftCount),
+// right rows to [leftCount, count), in order.
+void CpuTreeBuilder::partitionFeatureOutOfPlace(const Entry *source, Entry *target,
+                                                std::uint32_t count, std::uint32_t leftCount,
+                                                Keep keep, const std::uint64_t *leftBits) const {
+  moveRows(source, count, target, 0, leftCount, keep, leftBits);
 #if defined(__SSE2__)
   _mm_sfence(); // the stores are visible before another thread reads them
 #endif
@@ -575,23 +583,8 @@ void CpuTreeBuilder::partitionInBlocks(const std::vector<const Entry *> &sources
         other.wait(value, std::memory_order_acquire);
       }
     }
-    Entry *target = targets[column];
-    std::uint32_t left = before;
-    std::uint32_t right = leftCount + (start - before);
-    for (std::uint32_t index = 0; index < length; ++index) {
-      const Entry entry = source[index];
-      const std::uint32_t isLeft = goesLeft(entry);
-      if (isLeft ? keep != Keep::Right : keep != Keep::Left) {
-#if defined(__SSE2__)
-        _mm_stream_si64(reinterpret_cast<long long *>(target + (isLeft ? left : right)),
-                        std::bit_cast<long long>(entry));
-#else
-        target[isLeft ? left : right] = entry;
-#endif
-      }
-      left += isLeft;
-      right += 1 - isLeft;
-    }
+    moveRows(source, length, targets[column], before, leftCount + (start - before), keep,
+             leftBits);
 #if defined(__SSE2__)
     _mm_sfence(); // the stores are visible before another thread reads them
 #endif
