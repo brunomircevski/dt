@@ -101,10 +101,16 @@ Three more shortcuts never change the result:
   class counts, so the gain is convex in them and its maximum over the box is
   at one of the four corners. A block whose corners (with a rounding slack)
   cannot beat the best cut so far is skipped: its rows are only counted.
-  About half the sweep time on one thread, and the same cuts are settled.
+  Before that, a block whose first and last values are too close for a cut
+  is skipped without the bound: the values are sorted, so none of its
+  neighbours are far enough apart either (most blocks of C4.5's sweeps on
+  HIGGS, where neighbours within its `1e-5` gap are common).
 * **Runs of equal values** (most rows of discrete features, e.g. covertype)
-  only update the class counts, in a tight loop with four interleaved sets of
-  counters, so rows of the same class in a row do not wait for each other.
+  only update the class counts, with four interleaved sets of counters, so
+  rows of the same class in a row do not wait for each other. A long run is
+  crossed in steps that double while the entry a step ahead is still too
+  close to the current one for a threshold (sorted values: then so is every
+  pair between them), so most of its rows are counted without comparisons.
 * **Skipping cuts that cannot win.** One more row moving left raises the
   Gini gain by less than `3/n` and the entropy gain by at most
   `(log2 n + log2 e)/n`. So after a cut whose estimate is far below the best,
@@ -157,10 +163,15 @@ One thread pool (`ThreadPool`), two kinds of work:
   its columns' slots (`Subtree::slots`, shared by its descendants until the
   next move). Every entry moves once, written with non-temporal stores; the rows going
   left are marked in a bitmap (a bit per row, 1.3 MB on HIGGS) that stays in
-  the caches while the columns stream through. With two classes, children of
-  4096+ rows are swept *during* the partition: each column passes through a
-  small staging buffer per child (in L1) where the child's sweep reads it, so
-  a big node's columns are read once per level instead of twice. These nodes
+  the caches while the columns stream through. The row's side picks the
+  target index with a mask, not a branch (an even split would mispredict
+  every other row), and an entry moves as one 64-bit word. With two classes,
+  children of 4096+ rows are swept *during* the partition: each column passes
+  through a small staging buffer per child (in L1) where the child's sweep
+  reads it, so a big node's columns are read once per level instead of
+  twice. The entries go to the buffers in runs that cannot fill one, so the
+  loop keeps the buffers' sizes in registers, and full buffers are flushed
+  (written to the target, then swept) between runs. These nodes
   are bound by memory bandwidth, so this is where most of the parallel time
   goes. Their Gini sweeps (65536+ rows) divide instead of looking up `1/n` in
   the count tables, which are as large as the training set and cost more
