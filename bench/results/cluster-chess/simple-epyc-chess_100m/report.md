@@ -1,6 +1,6 @@
 ## simple-epyc-chess_100m
 
-**simple-epyc-chess_100m**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-31-generic #31~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Aug 10 09:38:02 UTC 2 x86_64, governor performance, turbo on, ./tree ec77727, CPUs in order of use 0-47, 3 run(s) per case, warm-up 50000 rows
+**simple-epyc-chess_100m**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor performance, turbo on, ./tree f1fe270e76bb, CPUs in order of use 0-47, 10 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree simple 5 MiB
 
@@ -10,12 +10,12 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree simple 5 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree simple | 78.4 s | 78.4 s–78.4 s |  | 2.18 GiB | 2.18 GiB | 17 | 9 | 4 | 100.00% | 99.98% |
+| ./tree simple | 78.5 s | 78.5 s–79.7 s |  | 2.19 GiB | 2.18 GiB | 17 | 9 | 4 | 100.00% | 99.98% |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 1 thread
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree simple | 90 s | 90 s–90 s |  | 2.19 GiB | 2.18 GiB | 17 | 9 | 4 | 100.00% | 100.00% |
+| ./tree simple | 90.1 s | 90 s–91.6 s |  | 2.19 GiB | 2.18 GiB | 17 | 9 | 4 | 100.00% | 100.00% |
 
 Test accuracy is measured on 4,500 rows: its 95% interval is ±0.04 percentage points at most.
