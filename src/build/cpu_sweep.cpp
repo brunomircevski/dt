@@ -181,6 +181,7 @@ CutCandidate CpuTreeBuilder::scanFeatureK(const Entry *entries, std::uint32_t co
   const double rowsPerGain = rows / maxGainStep<Crit>(count);
   const EntryCodec codec = codec_;
   constexpr std::size_t kLanes = 4;
+  constexpr std::uint32_t kRunStep = 16; // see moveRows
   std::uint32_t fixedLaneCounts[kLanes * kFixedClasses];
   std::uint32_t *laneCounts = fixedLaneCounts;
   if constexpr (FixedK == 0) {
@@ -196,6 +197,25 @@ CutCandidate CpuTreeBuilder::scanFeatureK(const Entry *entries, std::uint32_t co
   auto moveRows = [&](std::uint32_t cut, std::uint32_t end, bool untilThreshold) {
     std::fill_n(laneCounts, kLanes * classes, 0u);
     std::uint32_t thresholds = 0;
+    if (untilThreshold) {
+      // Long runs (discrete features) without comparing every pair: the
+      // values are sorted, so if entry `last` is too close to entry
+      // `safe - 1` for a threshold, no cut in [safe, last] has one. The step
+      // doubles while that holds and halves when it does not.
+      std::uint32_t safe = cut; // the cuts in [cut, safe) have no threshold
+      for (std::uint32_t step = kRunStep; step >= kRunStep;) {
+        const std::uint32_t last = safe - 1 + step;
+        if (last < end && !isCut(entries[safe - 1].value, entries[last].value, gap)) {
+          safe = last + 1;
+          step *= 2;
+        } else {
+          step /= 2;
+        }
+      }
+      for (; cut < safe; ++cut) {
+        ++laneCounts[(cut & (kLanes - 1)) * classes + codec.cls(entries[cut - 1].packed)];
+      }
+    }
     for (; cut < end; ++cut) {
       const bool threshold = isCut(entries[cut - 1].value, entries[cut].value, gap);
       if (untilThreshold && threshold) {
