@@ -91,6 +91,30 @@ constexpr std::size_t kFewColumns = 8;
 constexpr std::uint32_t kSweptChildRows = 1u << 12;
 constexpr std::uint32_t kStageEntries = 1024;
 
+// The partitions move entries as one 64-bit word: GCC copies an Entry field
+// by field (the float through an SSE register), two loads and two stores.
+static_assert(std::endian::native == std::endian::little, "Entry::packed is the high half");
+std::uint64_t entryWord(const Entry &entry) { return std::bit_cast<std::uint64_t>(entry); }
+std::uint32_t packedOf(std::uint64_t word) { return static_cast<std::uint32_t>(word >> 32); }
+void putEntry(Entry *at, std::uint64_t word) { std::memcpy(at, &word, sizeof word); }
+
+// A non-temporal store: the columns of a big node do not fit in the caches,
+// so their stores bypass them (no read of the target line first, no eviction
+// of data still needed). An _mm_sfence() makes them visible to other threads.
+void streamEntry(Entry *at, std::uint64_t word) {
+#if defined(__SSE2__)
+  _mm_stream_si64(reinterpret_cast<long long *>(at), static_cast<long long>(word));
+#else
+  putEntry(at, word);
+#endif
+}
+
+// 1 if the entry's row goes left (its bit in Columns::leftBits).
+std::uint32_t leftBit(const std::uint64_t *leftBits, EntryCodec codec, std::uint64_t word) {
+  const std::uint32_t row = codec.row(packedOf(word));
+  return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
+}
+
 } // namespace
 
 void fillCountTables(std::size_t size, CountTable &xlog, CountTable &inverse, ThreadPool *pool) {
@@ -487,31 +511,19 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
 
 // Moves `count` entries of `source` to `target` by leftBits: left rows to
 // target[left], target[left + 1], ..., right rows to target[right], ... (only
-// those of `keep`'s side if one child is a leaf). The columns of a big node do
-// not fit in the caches, so the stores bypass them (non-temporal: no read of
-// the target lines first, no eviction of data still needed); the caller fences.
+// those of `keep`'s side if one child is a leaf), with non-temporal stores
+// (streamEntry(); the caller fences).
 void CpuTreeBuilder::moveRows(const Entry *source, std::uint32_t count, Entry *target,
                               std::uint32_t left, std::uint32_t right, Keep keep,
                               const std::uint64_t *leftBits) const {
-  auto store = [](Entry *at, Entry entry) {
-#if defined(__SSE2__)
-    _mm_stream_si64(reinterpret_cast<long long *>(at), std::bit_cast<long long>(entry));
-#else
-    *at = entry;
-#endif
-  };
   const EntryCodec codec = codec_;
-  auto goesLeft = [leftBits, codec](Entry entry) {
-    const std::uint32_t row = codec.row(entry.packed);
-    return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
-  };
   if (keep == Keep::Both) {
     for (std::uint32_t index = 0; index < count; ++index) {
-      const Entry entry = source[index];
-      const std::uint32_t isLeft = goesLeft(entry);
+      const std::uint64_t word = entryWord(source[index]);
+      const std::uint32_t isLeft = leftBit(leftBits, codec, word);
       // isLeft ? left : right, without a branch: GCC turned the conditional
       // into one, mispredicted on every other row of an even split.
-      store(target + (right ^ ((left ^ right) & (0u - isLeft))), entry);
+      streamEntry(target + (right ^ ((left ^ right) & (0u - isLeft))), word);
       left += isLeft;
       right += 1 - isLeft;
     }
@@ -521,9 +533,9 @@ void CpuTreeBuilder::moveRows(const Entry *source, std::uint32_t count, Entry *t
   const std::uint32_t wanted = keep == Keep::Left;
   Entry *write = target + (keep == Keep::Left ? left : right);
   for (std::uint32_t index = 0; index < count; ++index) {
-    const Entry entry = source[index];
-    if (goesLeft(entry) == wanted) {
-      store(write++, entry);
+    const std::uint64_t word = entryWord(source[index]);
+    if (leftBit(leftBits, codec, word) == wanted) {
+      streamEntry(write++, word);
     }
   }
 }
@@ -558,10 +570,6 @@ void CpuTreeBuilder::partitionInBlocks(const std::vector<const Entry *> &sources
       new std::atomic<std::uint32_t>[columns * blocks]());
   std::unique_ptr<std::atomic<std::uint32_t>[]> read(new std::atomic<std::uint32_t>[columns]());
   const EntryCodec codec = codec_;
-  auto goesLeft = [leftBits, codec](Entry entry) {
-    const std::uint32_t row = codec.row(entry.packed);
-    return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
-  };
   pool_->parallelFor(columns * blocks, [&](std::size_t item) {
     const std::size_t column = item / blocks;
     const std::size_t block = item % blocks;
@@ -570,7 +578,7 @@ void CpuTreeBuilder::partitionInBlocks(const std::vector<const Entry *> &sources
     const Entry *source = sources[column] + start;
     std::uint32_t mine = 0;
     for (std::uint32_t index = 0; index < length; ++index) {
-      mine += goesLeft(source[index]);
+      mine += leftBit(leftBits, codec, entryWord(source[index]));
     }
     std::uint32_t before = 0; // left rows of the column before this block
     if (block > 0) {
@@ -602,21 +610,22 @@ void CpuTreeBuilder::partitionInBlocks(const std::vector<const Entry *> &sources
 // rows forward, or right rows backward from the end.
 void CpuTreeBuilder::partitionFeature(Entry *entries, std::uint32_t count,
                                       std::uint32_t leftCount, Entry *buffer, Keep keep) const {
+  auto isLeft = [this](std::uint64_t word) { return goesLeft_[codec_.row(packedOf(word))]; };
   if (keep == Keep::Left) {
     std::uint32_t write = 0;
     for (std::uint32_t index = 0; index < count; ++index) {
-      const Entry entry = entries[index];
-      entries[write] = entry;
-      write += goesLeft_[codec_.row(entry.packed)];
+      const std::uint64_t word = entryWord(entries[index]);
+      putEntry(entries + write, word);
+      write += isLeft(word);
     }
     return;
   }
   if (keep == Keep::Right) {
     std::uint32_t write = count; // right rows fill [write, count)
     for (std::uint32_t index = count; index-- > 0;) {
-      const Entry entry = entries[index];
-      entries[write - 1] = entry;
-      write -= 1u - goesLeft_[codec_.row(entry.packed)];
+      const std::uint64_t word = entryWord(entries[index]);
+      putEntry(entries + write - 1, word);
+      write -= 1u - isLeft(word);
     }
     return;
   }
@@ -626,12 +635,12 @@ void CpuTreeBuilder::partitionFeature(Entry *entries, std::uint32_t count,
     std::uint32_t rightWrite = count;
     std::uint32_t leftWrite = leftCount;
     for (std::uint32_t index = count; index-- > 0;) {
-      const Entry entry = entries[index];
-      const std::uint32_t goesLeft = goesLeft_[codec_.row(entry.packed)];
-      entries[rightWrite - 1] = entry;
-      buffer[leftWrite] = entry;
-      rightWrite -= 1 - goesLeft;
-      leftWrite -= goesLeft;
+      const std::uint64_t word = entryWord(entries[index]);
+      const std::uint32_t left = isLeft(word);
+      putEntry(entries + rightWrite - 1, word);
+      putEntry(buffer + leftWrite, word);
+      rightWrite -= 1 - left;
+      leftWrite -= left;
     }
     std::memcpy(entries, buffer + 1, leftCount * sizeof(Entry));
     return;
@@ -639,12 +648,12 @@ void CpuTreeBuilder::partitionFeature(Entry *entries, std::uint32_t count,
   std::uint32_t leftWrite = 0;
   std::uint32_t rightWrite = 0;
   for (std::uint32_t index = 0; index < count; ++index) {
-    const Entry entry = entries[index];
-    const std::uint32_t goesLeft = goesLeft_[codec_.row(entry.packed)];
-    entries[leftWrite] = entry;
-    buffer[rightWrite] = entry;
-    leftWrite += goesLeft;
-    rightWrite += 1 - goesLeft;
+    const std::uint64_t word = entryWord(entries[index]);
+    const std::uint32_t left = isLeft(word);
+    putEntry(entries + leftWrite, word);
+    putEntry(buffer + rightWrite, word);
+    leftWrite += left;
+    rightWrite += 1 - left;
   }
   std::memcpy(entries + leftWrite, buffer, rightWrite * sizeof(Entry));
 }
@@ -663,13 +672,6 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
                                        std::uint32_t feature,
                                        ChildSweep *const *children) const {
   using Sweep = TwoClassSweep<Crit, HasGap>;
-  auto store = [](Entry *at, Entry entry) {
-#if defined(__SSE2__)
-    _mm_stream_si64(reinterpret_cast<long long *>(at), std::bit_cast<long long>(entry));
-#else
-    *at = entry;
-#endif
-  };
   const SweepSetup setup = sweepSetup();
   // --profile: the sweeps count as Sweep, the rest as PartitionSweep.
   const bool traced = trace::on();
@@ -709,7 +711,7 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
       Entry *to = target + childBegin[child];
       const std::uint32_t end = stage.base + stage.size;
       for (std::uint32_t index = stage.written; index < end; ++index) {
-        store(to + index, stage.data[index - stage.base]);
+        streamEntry(to + index, entryWord(stage.data[index - stage.base]));
       }
       stage.written = end;
       std::uint32_t from = end;
@@ -730,10 +732,6 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
       stage.base = from;
     };
     const EntryCodec codec = codec_;
-    auto goesLeft = [leftBits, codec](Entry entry) {
-      const std::uint32_t row = codec.row(entry.packed);
-      return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
-    };
     // The entries go to the stages in runs that cannot fill a stage, and
     // stages of kStageEntries or more are flushed between runs (a flush
     // leaves only the few entries the sweep still reads, so every run takes
@@ -754,10 +752,10 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
         std::uint32_t leftSize = left.size;
         std::uint32_t rightSize = right.size;
         for (; index < end; ++index) {
-          const Entry entry = source[index];
-          const std::uint32_t isLeft = goesLeft(entry);
-          leftData[leftSize] = entry;
-          rightData[rightSize] = entry;
+          const std::uint64_t word = entryWord(source[index]);
+          const std::uint32_t isLeft = leftBit(leftBits, codec, word);
+          putEntry(leftData + leftSize, word);
+          putEntry(rightData + rightSize, word);
           leftSize += isLeft;
           rightSize += 1 - isLeft;
         }
@@ -780,9 +778,9 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
         Entry *const data = stage.data;
         std::uint32_t size = stage.size;
         for (; index < end; ++index) {
-          const Entry entry = source[index];
-          data[size] = entry;
-          size += goesLeft(entry) == wanted;
+          const std::uint64_t word = entryWord(source[index]);
+          putEntry(data + size, word);
+          size += leftBit(leftBits, codec, word) == wanted;
         }
         stage.size = size;
         if (size >= kStageEntries) {
