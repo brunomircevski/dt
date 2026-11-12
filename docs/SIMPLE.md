@@ -30,13 +30,13 @@ Notation: `N` training rows, `F` features, `K` classes, `n` rows of a node.
 | 2 | Column entries | row ids; value and label gathered from the dataset | 8-byte `Entry{value, row << b \| class}` streamed | random gathers → sequential reads |
 | 3 | Column slots | none (per-node vectors) | F + 1 slots of N entries, one spare | out-of-place partition without a copy back |
 | **Split search** |||||
-| 4 | Gain per cut | exact `cutGain` at every allowed cut | incremental estimate with a proven error bound; `cutGain` only for candidates, settled every 256 cuts | about one exact gain per block of cuts instead of one per cut |
+| 4 | Gain per cut | exact `cutGain` at every allowed cut | same, at every cut items 6, 7 and 9 leave | none |
 | 5 | Two classes | general loop | specialised `TwoClassSweep` | constant factor; HIGGS, SUSY, airline, ECBDL are binary |
 | 6 | Convexity bound | none | blocks of 16 cuts skipped when their corner bound is below the best (nodes of 64+ rows) | skips most of a big binary node |
-| 7 | `maxGainStep` skip | none | skips the cuts that cannot catch up with the best | fewer estimates |
+| 7 | `maxGainStep` skip | none | skips the cuts that cannot catch up with the best | fewer `cutGain` calls |
 | 8 | Runs of equal values | one cut test per row | runs passed over, counts added in 4 lanes | constant factor on low-cardinality features |
-| 9 | Boundary points | every cut scored | `isSkippableCut`: a cut between two single same-class rows is skipped | fewer estimates (Risk A) |
-| 10 | Log tables | `LogTable` below 65,536, `log2` above | `c·log₂c` and `1/c` tabled for every count up to N | no `log2` or division in big nodes |
+| 9 | Boundary points | every cut scored | `isSkippableCut`: a cut between two single same-class rows is skipped | fewer `cutGain` calls (Risk A) |
+| 10 | Log tables | `LogTable` below 65,536, `log2` above | same for `cutGain`; the bound's corners (6) use `c·log₂c` and `1/c` tabled for every count up to N | no `log2` or division in the bound |
 | 11 | Class count | runtime `K` | templated for K = 3..8 | constant factor |
 | 12 | Constant features | sorted and scanned again in every node | dropped for the whole subtree | fewer features deeper down |
 | 13 | Children's class counts | counted again from the labels | taken from the winner's sweep | O(n) per node |
@@ -68,8 +68,8 @@ Notation: `N` training rows, `F` features, `K` classes, `n` rows of a node.
   sorts are ascending; `+0.0f` makes −0 and +0 share a radix key, as they
   compare equal for `std::sort`; NaN is rejected by the loader, so
   `operator<` is a strict weak order (Risk E). The entry codec is lossless.
-* **Estimates (4, 6, 7, 10).** Only the exact `cutGain` decides, in cut order,
-  with the same `kTieEps` rule. An estimate, a block bound or a skip only rules
+* **Bounds (6, 7, 10).** Only the exact `cutGain` decides, in cut order,
+  with the same `kTieEps` rule. A block bound or a skip only rules
   a cut out when it provably cannot beat the best exact gain by `kTieEps`;
   this holds if the rounding bounds are true bounds (Risk B).
 * **Runs and constant features (8, 12).** No cut is allowed inside a run in

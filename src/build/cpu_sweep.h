@@ -15,11 +15,6 @@
 
 namespace dt {
 
-// Candidates a sweep buffers before settling them (see scanFeatureK()).
-constexpr std::uint32_t kSweepBlock = 256;
-// Candidates buffered before the first settling (then twice as many each
-// time, up to kSweepBlock), so that small nodes get a threshold early.
-constexpr std::uint32_t kFirstSettle = 16;
 // Unit roundoff of double.
 constexpr double kRoundoff = 0x1p-53;
 
@@ -39,8 +34,8 @@ template <Criterion Crit> double maxGainStep(std::uint32_t count) {
   }
 }
 
-// Skipping cuts that cannot win. After a cut with gain estimate `gain`, the
-// exact gain of the cut j steps further is at most gain + margin + j * step / n
+// Skipping cuts that cannot win. After a cut with gain `gain` (within
+// `margin` of the exact function), the exact gain of the cut j steps further is at most gain + margin + j * step / n
 // (maxGainStep), so the next skippableSteps() cuts provably cannot beat
 // `bestGain` by kTieEps (rounding: another margin, and a small factor on the
 // step). Short skips do not pay off (the loop exit is mispredicted), so a
@@ -63,7 +58,8 @@ inline std::uint32_t skippableSteps(double bestGain, double gain, double margin,
 // impurities are concave in a child's class counts (n * Gini and n * entropy
 // are perspectives of concave functions), so the gain is convex in the left
 // class counts, and its maximum over the box of counts a block passes through
-// is at one of the box's four corners. Rounding: the estimate is within
+// is at one of the box's four corners (as in tileBoundKernel on the GPU).
+// Rounding: the corners' estimate is within
 // `margin` of cutGain(), and both are within a few roundings of the exact
 // function (entropy: of terms up to n * log2(n), the tabled c * log2(c)
 // included), which `boundSlack` covers twice.
@@ -79,54 +75,13 @@ constexpr std::uint32_t kDividingSweepRows = 1u << 16;
 constexpr std::uint32_t kMinFurtherSkip = 32;
 
 
-// Exact part of a sweep (see scanFeatureK()): the buffered candidates, in
-// sweep order, go through the rule "keep a cut if its gain beats the best by
-// more than kTieEps", with cutGain(). Candidates before the last one whose
-// estimate beats all earlier buffered estimates by more than
-// 2 * margin + kTieEps are skipped. `countsAt(i, out)` writes the class counts
-// left of candidate i into `counts` (classCount values).
-// Returns the buffer index of the last candidate kept, or -1.
-template <class CountsAt>
-int settleCandidates(const double *estimate, const std::uint32_t *position, std::uint32_t size,
-                     double margin, const std::uint32_t *total, int classCount,
-                     std::uint32_t count, double parentWeighted, Criterion criterion,
-                     LogTable logs, CountsAt &&countsAt, std::uint32_t *counts,
-                     double &bestGain, std::uint32_t &bestCut, std::uint32_t *bestLeft) {
-  int kept = -1;
-  std::uint32_t from = 0;
-  double highest = -INFINITY;
-  const double clearLead = 2.0 * margin + kTieEps;
-  for (std::uint32_t index = 0; index < size; ++index) {
-    if (estimate[index] > highest + clearLead) {
-      from = index;
-    }
-    highest = std::max(highest, estimate[index]);
-  }
-  for (std::uint32_t index = from; index < size; ++index) {
-    if (estimate[index] <= bestGain + kTieEps - margin) {
-      continue;
-    }
-    countsAt(index, counts);
-    const double gain =
-        cutGain(total, counts, classCount, count, position[index], parentWeighted, criterion, logs);
-    if (gain > bestGain + kTieEps) {
-      bestGain = gain;
-      bestCut = position[index];
-      std::copy_n(counts, classCount, bestLeft);
-      kept = static_cast<int>(index);
-    }
-  }
-  return kept;
-}
-
-// The sweep of scanFeatureK() for two classes (e.g. SUSY, HIGGS), with the
-// same estimate / candidate logic but leaner: the class counts at a cut follow
-// from the number of class-1 rows left of it, the estimates need no running
-// sums (Gini: no division, with tabled reciprocals; entropy: cutGain() with a
-// multiplication by 1/n instead of the division), the boundary-point shortcut
-// is decided without a branch (on continuous features it is a coin flip), and
-// whole blocks of cuts are skipped when they hold no threshold or a bound
-// shows that none of them can beat the best cut so far (see kBoundBlock).
+// The sweep of scanFeatureK() for two classes (e.g. SUSY, HIGGS): the class
+// counts at a cut follow from the number of class-1 rows left of it, every
+// cut the boundary-point shortcut leaves gets cutGain(), and whole blocks of
+// cuts are skipped when they hold no threshold or a bound shows that none of
+// them can beat the best cut so far (see kBoundBlock; only the bound's
+// corners use a cheaper estimate: Gini with tabled reciprocals, entropy with
+// tabled c*log2(c), both times 1/n).
 //
 // It can run in pieces, so that a child's sweep runs while the child's column
 // is being written by the parent's partition: advance() takes the cuts whose
@@ -180,8 +135,6 @@ public:
     std::uint32_t cut = cut_;
     std::uint32_t ones = ones_;
     std::uint32_t tries = tries_;
-    std::uint32_t found = found_;
-    double threshold = threshold_;
     double bestGain = bestGain_;
     const std::uint32_t count = count_;
     const std::uint32_t minChild = minChild_;
@@ -207,7 +160,7 @@ public:
         return lower < upper; // isCut() with no gap
       }
     };
-    // The estimate at a cut with left class counts (left0, left1).
+    // The estimate at a bound's corner with left class counts (left0, left1).
     const bool divide = setup_.divide && count >= kDividingSweepRows;
     auto estimateAt = [&](std::uint32_t left0, std::uint32_t left1) {
       const std::uint32_t leftCount = left0 + left1;
@@ -238,18 +191,6 @@ public:
         return (parentWeighted - leftWeighted - rightWeighted) * inverseRows;
       }
     };
-    // Candidates are settled before advance() returns, so that the entries
-    // around them can still be read.
-    auto settleNow = [&]() {
-      found_ = found;
-      settle(entries);
-      found = 0;
-      threshold = threshold_;
-      bestGain = bestGain_;
-    };
-    double *estimate = estimate_;
-    std::uint32_t *position = position_;
-    std::uint32_t *onesAt = onesAt_;
     while (cut <= lastCut) {
       const std::uint32_t blockEnd = std::min(cut + blockCuts, lastCut + 1); // cuts [cut, blockEnd)
       if (blockEnd >= available && available < count) {
@@ -287,12 +228,7 @@ public:
             std::max(std::max(estimateAt(l0lo, l1lo), estimateAt(l0hi, l1hi)),
                      std::max(estimateAt(l0hi, l1lo), estimateAt(l0lo, l1hi))) +
             boundSlack;
-        bool skip = upper <= bestGain + kTieEps;
-        if (!skip && found > 0) {
-          settleNow(); // the exact best so far may already be high enough
-          skip = upper <= bestGain + kTieEps;
-        }
-        if (skip) {
+        if (upper <= bestGain + kTieEps) {
           // Far below the best cut, the cuts after the block cannot reach it
           // either (the gain grows by at most maxGainStep / n per row): they
           // are skipped too, without the bound's table lookups.
@@ -329,24 +265,25 @@ public:
             cut + 1 >= count || distinct(current.value, entries[cut + 1].value);
         const bool skippable = (previousClass == codec.cls(current.packed)) & leftDistinct &
                                rightDistinct & (cut > minChild) & (cut + minChild < count);
-        const double gain = estimateAt(cut - ones, ones);
-        // Buffered unless skipped, without a branch on `skippable`.
-        estimate[found] = gain;
-        position[found] = cut;
-        onesAt[found] = ones;
-        found += !skippable & (gain > threshold);
-        if (found == settleAt_) {
-          settleNow();
+        if (skippable) {
+          continue;
+        }
+        const std::uint32_t counts[2] = {cut - ones, ones};
+        const double gain =
+            cutGain(total_, counts, 2, count, cut, parentWeighted, Crit, setup_.logs);
+        if (gain > bestGain + kTieEps) {
+          bestGain = gain;
+          bestCut_ = cut;
+          bestLeft_[0] = counts[0];
+          bestLeft_[1] = counts[1];
+          bestValues_ = {previous.value, current.value};
         }
       }
-    }
-    if (found > 0) {
-      settleNow();
     }
     cut_ = cut;
     ones_ = ones;
     tries_ = tries;
-    found_ = found;
+    bestGain_ = bestGain;
   }
 
   // The best cut, after advance(..., count); `bestLeft` receives its class
@@ -371,24 +308,6 @@ public:
 private:
   static constexpr double kMargin = 256.0 * kRoundoff; // a few roundings of terms <= n, / n
 
-  void settle(const Entry *entries) {
-    std::uint32_t counts[2];
-    const int kept = settleCandidates(
-        estimate_, position_, found_, kMargin, total_, 2, count_, parentWeighted_, Crit,
-        setup_.logs,
-        [&](std::uint32_t index, std::uint32_t *out) {
-          out[0] = position_[index] - onesAt_[index];
-          out[1] = onesAt_[index];
-        },
-        counts, bestGain_, bestCut_, bestLeft_);
-    if (kept >= 0) {
-      bestValues_ = {entries[bestCut_ - 1].value, entries[bestCut_].value};
-    }
-    found_ = 0;
-    settleAt_ = std::min(2 * settleAt_, kSweepBlock);
-    threshold_ = bestGain_ + kTieEps - kMargin;
-  }
-
   Setup setup_;
   std::uint32_t count_;
   std::uint32_t total_[2];
@@ -412,12 +331,6 @@ private:
   std::uint32_t bestCut_ = 0;
   std::uint32_t bestLeft_[2] = {0, 0};
   std::pair<float, float> bestValues_{0.0f, 0.0f};
-  double threshold_ = -INFINITY; // estimates at or below it cannot beat the best cut
-  std::uint32_t found_ = 0;
-  std::uint32_t settleAt_ = kFirstSettle;
-  double estimate_[kSweepBlock];
-  std::uint32_t position_[kSweepBlock];
-  std::uint32_t onesAt_[kSweepBlock];
 };
 
 } // namespace dt

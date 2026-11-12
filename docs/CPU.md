@@ -72,26 +72,14 @@ for cut in [minChild, n - minChild]:          # cut = rows going left
     keep it if gain > best + 1e-12            # ties: earliest cut
 ```
 
-but `cutGain` (a loop over the classes and up to three divisions) is only
-called for a few cuts. The sweep works in two steps:
-
-1. **Estimate.** Moving one row left changes the gain's ingredients by one
-   term, so at every cut with a threshold a cheap estimate is computed with
-   no loop over the classes and no division: Gini from the sums of squared
-   class counts (they change by an exact integer) and tabled reciprocals
-   `1/n`, entropy from running sums of `c·log2 c` (recomputed after runs and
-   every 256 updates, so rounding errors stay small). With two classes the
-   counts follow from the number of class-1 rows, and the estimate needs no
-   running sums at all. The estimate is provably within a tiny `margin` of
-   `cutGain` (a bound on the rounding errors, ~1e-14).
-2. **Exact chain on candidates.** A cut whose estimate cannot beat the best
-   cut by the tie tolerance cannot change the result. The others are
-   buffered with their class counts and settled in order: `cutGain` decides,
-   exactly as in the loop above. Before that, every buffered cut before the
-   last estimate that beats all earlier buffered ones by more than
-   `2·margin + 1e-12` is dropped: that cut's exact gain beats them all by
-   more than the tolerance, so whatever they did to the best cut, the result
-   is the same once it is reached (this keeps rising stretches cheap).
+and the sweep is that loop: every cut that the boundary-point shortcut
+leaves gets `cutGain`, in double precision, as on the GPU. Until November
+2026 the CPU first computed a cheap running estimate of every cut (no loop
+over the classes, no division) and buffered only the cuts whose estimate
+could beat the best for `cutGain`; scoring every cut exactly turned out as
+fast overall (within a few percent either way on HIGGS and MNIST8M, see
+[PERFORMANCE.md](PERFORMANCE.md#november-2026-one-exact-sweep-on-every-gpu)),
+so the estimate was removed.
 
 Three more shortcuts never change the result:
 
@@ -101,6 +89,9 @@ Three more shortcuts never change the result:
   class counts, so the gain is convex in them and its maximum over the box is
   at one of the four corners. A block whose corners (with a rounding slack)
   cannot beat the best cut so far is skipped: its rows are only counted.
+  The corners use a cheap estimate (tabled `1/n` and `c·log2 c`) within a
+  proven rounding slack of `cutGain`. The GPU's `tileBoundKernel` is the same
+  bound over a tile.
   Before that, a block whose first and last values are too close for a cut
   is skipped without the bound: the values are sorted, so none of its
   neighbours are far enough apart either (most blocks of C4.5's sweeps on
@@ -113,8 +104,8 @@ Three more shortcuts never change the result:
   pair between them), so most of its rows are counted without comparisons.
 * **Skipping cuts that cannot win.** One more row moving left raises the
   Gini gain by less than `3/n` and the entropy gain by at most
-  `(log2 n + log2 e)/n`. So after a cut whose estimate is far below the best,
-  the next `(best - estimate)·n / bound` cuts are skipped: their rows are only
+  `(log2 n + log2 e)/n`. So after a cut whose gain is far below the best,
+  the next `(best - gain)·n / bound` cuts are skipped: their rows are only
   counted (and, for C4.5, their thresholds). Only skips of at least 8 cuts are
   taken; shorter ones cost more than they save. After a skipped block the
   same bound skips further cuts without any table lookup (if it covers at
