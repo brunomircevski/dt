@@ -262,8 +262,14 @@ public:
         // largest value over the box is at a corner; if that cannot beat the
         // best cut so far, no cut of the block can (see kBoundBlock).
         std::uint32_t blockOnes = 0;
-        for (std::uint32_t index = cut - 1; index + 1 < blockEnd; ++index) {
-          blockOnes += codec.cls(entries[index].packed);
+        if (blockEnd - cut == kBoundBlock) { // a fixed count: the compiler vectorizes it
+          for (std::uint32_t index = 0; index < kBoundBlock; ++index) {
+            blockOnes += codec.cls(entries[cut - 1 + index].packed);
+          }
+        } else {
+          for (std::uint32_t index = cut - 1; index + 1 < blockEnd; ++index) {
+            blockOnes += codec.cls(entries[index].packed);
+          }
         }
         if (!distinct(entries[cut - 1].value, entries[blockEnd - 1].value)) {
           // No threshold in the block (sorted values: if its first and last
