@@ -21,14 +21,6 @@ enum class Backend {
   Cuda      // GPU for large nodes (breadth-first), CPU pool for small subtrees
 };
 
-
-// How the GPU scores cuts.
-enum class GpuSweep {
-  Auto,    // OnePass on GPUs with fast double precision (data-center parts)
-  OnePass, // every cut in double precision
-  TwoPass  // single-precision filter, double precision only for candidates
-};
-
 // CART always uses the Gini index, as in Breiman et al.
 struct CartOptions {
   // Minimal cost-complexity pruning with a fixed alpha, as scikit-learn
@@ -76,7 +68,6 @@ struct GpuOptions {
   // for them (C4.5's pruning allocates it when it needs it). With --threads 1
   // the CPU side is one thread (the staged copies too).
   bool only = false;
-  GpuSweep sweep = GpuSweep::Auto;
 };
 
 struct Options {

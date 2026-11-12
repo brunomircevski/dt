@@ -27,13 +27,10 @@
 //                          the root, the parent level's partition counts them
 //      2. segmentPrefix    per segment: exclusive scan over its tiles, giving
 //                          each tile the class counts left of it
-//      3. tileEstimate / segmentMax / tileCandidate / tileExact
-//                          each tile sweeps its cuts: first in single
-//                          precision, then exactly (the CPU's double-precision
-//                          function) for the cuts that can still be the best
-//                          (with few classes, from the few the first sweep
-//                          kept). On GPUs with fast double precision, one
-//                          exact sweep.
+//      3. tileExact        each tile scores its cuts exactly (the CPU's
+//                          double-precision function); with two classes,
+//                          tileBound first rules out tiles that cannot hold
+//                          the best cut
 //      4. segmentBest      best cut per segment and the class counts left of
 //                          it -> host picks the split (SplitRules) and the
 //                          children
@@ -357,19 +354,12 @@ private:
     CUDA_CHECK(cudaDeviceGetDefaultMemPool(&memoryPool, device));
     std::uint64_t keep = UINT64_MAX;
     CUDA_CHECK(cudaMemPoolSetAttribute(memoryPool, cudaMemPoolAttrReleaseThreshold, &keep));
-    int fp32PerFp64 = 0;
-    CUDA_CHECK(cudaDeviceGetAttribute(&fp32PerFp64, cudaDevAttrSingleToDoublePrecisionPerfRatio,
-                                      device));
-    onePass_ = options_.gpu.sweep == GpuSweep::OnePass ||
-               (options_.gpu.sweep == GpuSweep::Auto && fp32PerFp64 <= 4);
     CUDA_CHECK(cudaDeviceGetAttribute(&smCount_, cudaDevAttrMultiProcessorCount, device));
     profile_.setOrigin(stream_);
     if (trace::on()) {
       cudaDeviceProp properties{};
       CUDA_CHECK(cudaGetDeviceProperties(&properties, device));
       trace::info("gpu", properties.name);
-      trace::info("gpu_sweep", onePass_ ? "one-pass" : "two-pass");
-      trace::add("gpu_fp32_per_fp64", fp32PerFp64);
       trace::add("gpu_context_seconds", contextSeconds);
     }
   }
@@ -920,58 +910,13 @@ private:
       tileUpper = tileUpper_.get();
       segmentLower = segmentLower_.get();
     }
-    if (onePass_) {
-      profile_.run("tileExact", stream_, [&]() {
-        tileExactKernel<MAXK, false><<<tiles, kThreads, 0, stream_>>>(
-            src, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
-            tileHist_.get(), nodeCounts_.get(), tileUpper, segmentLower, nullptr, nullptr,
-            tileBest_.get(), tileTries_.get(), nullptr, nullptr);
-      });
-      CUDA_CHECK(cudaGetLastError());
-    } else {
-      constexpr bool kKeep = MAXK <= kMaxCandidateClasses;
-      Candidate<MAXK> *candidates =
-          kKeep ? reinterpret_cast<Candidate<MAXK> *>(candidates_.get()) : nullptr;
-      profile_.run("tileEstimate", stream_, [&]() {
-        tileEstimateKernel<MAXK><<<tiles, kThreads, 0, stream_>>>(
-            src, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
-            tileHist_.get(), nodeCounts_.get(), tileUpper, segmentLower, tileMax_.get(),
-            tileTries_.get(), candidates, candidateCount_.get());
-      });
-      CUDA_CHECK(cudaGetLastError());
-      profile_.run("segmentMax", stream_, [&]() {
-        segmentMaxKernel<float><<<segmentBlocks, kThreads, 0, stream_>>>(
-            segments_.get(), tileMax_.get(), segmentMax_.get());
-      });
-      CUDA_CHECK(cudaGetLastError());
-      if constexpr (kKeep) {
-        std::uint32_t *listed = tileList_.get() + tiles;
-        CUDA_CHECK(cudaMemsetAsync(listed, 0, sizeof(std::uint32_t), stream_));
-        profile_.run("tileCandidate", stream_, [&]() {
-          tileCandidateKernel<MAXK><<<(tiles + kWarps - 1) / kWarps, kThreads, 0, stream_>>>(
-              tiles, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
-              nodeCounts_.get(), tileUpper, segmentLower, tileMax_.get(), segmentMax_.get(),
-              candidates, candidateCount_.get(), tileBest_.get(), tileList_.get(), listed);
-        });
-        CUDA_CHECK(cudaGetLastError());
-        // The listed tiles are few: a grid of resident blocks loops over them.
-        const unsigned blocks = std::min<unsigned>(tiles, static_cast<unsigned>(smCount_) * 4);
-        profile_.run("tileExact", stream_, [&]() {
-          tileExactKernel<MAXK, true><<<blocks, kThreads, 0, stream_>>>(
-              src, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
-              tileHist_.get(), nodeCounts_.get(), tileUpper, segmentLower, tileMax_.get(),
-              segmentMax_.get(), tileBest_.get(), nullptr, tileList_.get(), listed);
-        });
-      } else {
-        profile_.run("tileExact", stream_, [&]() {
-          tileExactKernel<MAXK, true><<<tiles, kThreads, 0, stream_>>>(
-              src, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
-              tileHist_.get(), nodeCounts_.get(), tileUpper, segmentLower, tileMax_.get(),
-              segmentMax_.get(), tileBest_.get(), nullptr, nullptr, nullptr);
-        });
-      }
-      CUDA_CHECK(cudaGetLastError());
-    }
+    profile_.run("tileExact", stream_, [&]() {
+      tileExactKernel<MAXK><<<tiles, kThreads, 0, stream_>>>(
+          src, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
+          tileHist_.get(), nodeCounts_.get(), tileUpper, segmentLower, tileBest_.get(),
+          tileTries_.get());
+    });
+    CUDA_CHECK(cudaGetLastError());
     profile_.run("segmentBest", stream_, [&]() {
       segmentBestKernel<<<segmentBlocks, kThreads, 0, stream_>>>(
           src, segments_.get(), params_, tileHist_.get(), tileBest_.get(), tileTries_.get(),
@@ -1102,8 +1047,6 @@ private:
       nodes[n].minChild = rules_->minChildRows(node.count);
       nodes[n].parentWeighted = weightedImpurity(counts, classCount_, node.count,
                                                  rules_->criterion(), rules_->logTable());
-      floatGainFilter(classCount_, node.count, rules_->criterion(), nodes[n].filterScale,
-                      nodes[n].filterMargin);
     }
     firstSegment[nodeCount] = segments.size();
     const std::size_t segmentCount = segments.size();
@@ -1116,17 +1059,7 @@ private:
     constant_.reserve(segmentCount, stream_);
     tileHist_.reserve(static_cast<std::size_t>(tiles) * classes, stream_);
     tileBest_.reserve(tiles, stream_);
-    tileMax_.reserve(tiles, stream_);
     tileTries_.reserve(tiles, stream_);
-    segmentMax_.reserve(segmentCount, stream_);
-    if (!onePass_ && classCount_ <= kMaxCandidateClasses) {
-      const std::size_t candidateBytes = classCount_ <= 2   ? sizeof(Candidate<2>)
-                                         : classCount_ <= 4 ? sizeof(Candidate<4>)
-                                                            : sizeof(Candidate<8>);
-      candidates_.reserve(static_cast<std::size_t>(tiles) * kCandidates * candidateBytes, stream_);
-      candidateCount_.reserve(tiles, stream_);
-      tileList_.reserve(static_cast<std::size_t>(tiles) + 1, stream_);
-    }
     if (classCount_ == 2) {
       tileUpper_.reserve(tiles, stream_);
       tileLower_.reserve(tiles, stream_);
@@ -1587,7 +1520,6 @@ private:
   DistinctValues overlapDistinct_;   // ... with these distinct values (C4.5)
   DeviceArray<std::uint32_t> rootCounts_;
   std::vector<std::uint32_t> hostRootCounts_;
-  bool onePass_ = false;
   int smCount_ = 1;
   std::size_t rows_;
   std::size_t features_;
@@ -1652,11 +1584,6 @@ private:
   DeviceArray<std::uint32_t> nodeCounts_; // class counts of the level's nodes
   DeviceArray<NodeDesc> nodes_;
   DeviceArray<BestCut> tileBest_;
-  DeviceArray<float> tileMax_;
-  DeviceArray<float> segmentMax_;
-  DeviceArray<unsigned char> candidates_;    // tileEstimate: Candidate<MAXK>[kCandidates] per tile
-  DeviceArray<std::uint32_t> candidateCount_;
-  DeviceArray<std::uint32_t> tileList_;      // tiles left to tileExact, then their number
   DeviceArray<double> tileUpper_;    // two classes: tileBoundKernel
   DeviceArray<double> tileLower_;
   DeviceArray<double> segmentLower_;

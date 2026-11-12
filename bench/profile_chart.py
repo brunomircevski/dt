@@ -88,7 +88,6 @@ KERNELS = [
 ]
 KERNEL_OF = {"presortGather": "presort", "presortSort": "presort", "presortDistinct": "presort",
              "tileBound": "search", "segmentLower": "search", "tileExact": "search",
-             "tileEstimate": "search", "segmentMax": "search", "tileCandidate": "search",
              "segmentBest": "search", "tileHistogram": "search", "segmentConstant": "search",
              "segmentPrefix": "search", "markGoesLeft": "partition", "partition": "partition",
              "handOffGather": "handoff", "leafRows": "leaves", "arrangeSort": "leaves",

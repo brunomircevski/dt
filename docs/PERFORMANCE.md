@@ -2,6 +2,35 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: one exact sweep on every GPU
+
+The CUDA grower had two ways to score cuts, picked from the GPU's FP32:FP64
+ratio: one exact double-precision sweep (H100, A100: every result so far), or
+a single-precision estimate of every cut followed by the exact gain of the
+cuts within a proven error bound of the node's best (two-pass, for consumer
+GPUs). Measured on the cluster with `--gpu-sweep` forcing each mode (main at
+1e65506, 7 interleaved runs per case, `--no-prune -d 10`, hybrid and
+`--gpu-only`; build time median, ms; the profiles' sweep kernels agree):
+
+| Dataset | Algorithm | H100 one-pass | H100 two-pass | A100 one-pass | A100 two-pass |
+|---|---|---:|---:|---:|---:|
+| HIGGS | CART | 80 | 76 (−5%) | 113 | 105 (−7%) |
+| HIGGS | C4.5 | 85 | 80 (−7%) | 117 | 110 (−5%) |
+| MNIST8M | CART | 3086 | 3009 (−3%) | 3948 | 3847 (−3%) |
+| MNIST8M | C4.5 | 3196 | 3567 (+12%) | 4076 | 4367 (+7%) |
+| SOREL 4M | CART | 2107 | 2073 (−2%) | 2952 | 2876 (−3%) |
+| SOREL 4M | C4.5 | 2235 | 2204 (−1%) | 3149 | 3078 (−2%) |
+| ECBDL'14 15M | CART | 2259 | 2231 (−1%) | 3192 | 3114 (−2%) |
+| ECBDL'14 15M | C4.5 | 2273 | 2242 (−1%) | 3227 | 3142 (−3%) |
+
+(Hybrid; `--gpu-only` is within 1% of it.) The float pass saves 30–70 ms
+of sweep kernels on the big two-class sets, but it keeps candidates only for
+up to 8 classes: on MNIST8M (10 classes) the exact pass sweeps the surviving
+tiles again, which costs C4.5 210–440 ms. Over all 16 cases one-pass was 1.3%
+faster on the H100 and 0.4% slower on the A100. Two-pass was removed (its
+kernels, buffers and `--gpu-sweep`), so every GPU runs the same, simpler
+code.
+
 ## November 2026: the CPU sweeps and partitions after the grower split (mordor3 cluster)
 
 After a4d89adf (cpu_builder.cpp split into presort, cpu_sweep and
@@ -664,7 +693,8 @@ Where it comes from (details in [CPU.md](CPU.md) and [CUDA.md](CUDA.md)):
   again after raising.
 * Cuda: a single-pass partition that also counts the next level's tile
   histograms; the exact (double precision) pass scores only the few cuts the
-  float pass kept per tile; a Gini estimate with a relative error bound;
+  float pass kept per tile; a Gini estimate with a relative error bound (the
+  float pass was removed in November 2026: see above);
   C4.5's sorted values copied into memory page-locked during setup.
 
 HIGGS CART on the laptop GPU is limited by the CPU threads finishing the small

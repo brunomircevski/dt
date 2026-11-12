@@ -40,8 +40,6 @@ struct NodeDesc {
   std::int32_t splitFeature = -1; // chosen split (-1: none)
   std::uint32_t leftCount = 0;
   std::int32_t partition = 0;     // split, and not both children are leaves
-  float filterScale = 0.0f;       // see floatGainFilter()
-  float filterMargin = 0.0f;
   std::int32_t marksRight = 0;    // goesLeft holds the right rows (more left than right)
 };
 
@@ -54,107 +52,6 @@ struct ScanParams {
   double minGap;
   LogTable logs;          // device copy of the host table
 };
-
-// Single-precision estimate of cutGain, used only to rule out cuts that
-// cannot be the best one (consumer GPUs run double precision ~64x slower).
-template <int MAXK>
-__device__ __forceinline__ float floatCutGain(const std::uint32_t *total,
-                                              const std::uint32_t *left, int classCount,
-                                              std::uint32_t n, std::uint32_t nLeft,
-                                              float parentWeighted, Criterion criterion) {
-  const std::uint32_t nRight = n - nLeft;
-  float leftWeighted;
-  float rightWeighted;
-  if (criterion == Criterion::Gini) {
-    // gain = sum_k (l_k nR - r_k nL)^2 / (n^2 nL nR), where
-    // l_k nR - r_k nL = l_k n - t_k nL is exact in 64 bits (its magnitude is
-    // at most nL nR < 2^62): no term cancels another, so the estimate is
-    // within a small relative error of the gain (floatGainFilter).
-    const auto difference = [&](int k) {
-      const unsigned long long leftTimesRows = static_cast<unsigned long long>(left[k]) * n;
-      const unsigned long long totalTimesLeft = static_cast<unsigned long long>(total[k]) * nLeft;
-      return static_cast<float>(static_cast<long long>(leftTimesRows - totalTimesLeft));
-    };
-    float squares = 0.0f;
-    if (MAXK == 2 && classCount == 2) { // the second difference is minus the first
-      const float d = difference(0);
-      squares = 2.0f * (d * d);
-    } else {
-#pragma unroll
-      for (int k = 0; k < MAXK; ++k) {
-        if (k < classCount) {
-          const float d = difference(k);
-          squares += d * d;
-        }
-      }
-    }
-    const float rows = static_cast<float>(n);
-    return squares / (rows * rows * static_cast<float>(nLeft) * static_cast<float>(nRight));
-  } else {
-    // m * entropy of a side as sum_k c_k * log2(m / c_k): every term is at
-    // most its count times log2(m), never a difference of terms of size
-    // m * log2(m), so single precision stays accurate (floatGainMargin).
-    const float leftRows = static_cast<float>(nLeft);
-    const float rightRows = static_cast<float>(nRight);
-    leftWeighted = 0.0f;
-    rightWeighted = 0.0f;
-#pragma unroll
-    for (int k = 0; k < MAXK; ++k) {
-      if (k < classCount) {
-        const std::uint32_t l = left[k];
-        const std::uint32_t r = total[k] - left[k];
-        if (l > 0) {
-          leftWeighted += static_cast<float>(l) * log2f(leftRows / static_cast<float>(l));
-        }
-        if (r > 0) {
-          rightWeighted += static_cast<float>(r) * log2f(rightRows / static_cast<float>(r));
-        }
-      }
-    }
-  }
-  return (parentWeighted - leftWeighted - rightWeighted) / static_cast<float>(n);
-}
-
-// Cuts whose float gain is below filterCutoff(best float gain of the segment)
-// cannot be the best cut, or tie with it, so only the others are scored in
-// double precision. The cutoff is best - (best * scale + margin), with a
-// generous bound B on |floatCutGain - cutGain| over the node's cuts: scale and
-// margin hold 2 B + kTieEps (a cut can be best only if its gain reaches the
-// best one's minus kTieEps, and each of the two estimates may be off by B).
-//   Gini: the estimate is within (K + 10) 2^-24 of the gain relatively (to
-//   first order: 3 roundings per square, K - 1 additions of non-negative
-//   terms, 7 for the denominator, 1 for the division); the gains, and so
-//   their error, are at most best / (1 - that). cutGain's own error is a few
-//   double roundings on each of the ~2K+4 terms, each at most n, divided by
-//   n. Twice these bounds, and 1% more, cover the cutoff's float roundings.
-//   Entropy: a term c * log2f(m / c) is within c * (0.9 + 1.8 log2(m / c)) *
-//   1e-7 of c * log2(m / c) (the division and the product are correctly
-//   rounded, log2f is within 1 ulp), so a side's sum is within m * (0.9 +
-//   1.8 log2 K + 0.6 (K - 1) log2 K) * 1e-7 with the additions; the
-//   subtractions from the parent's value (at most n log2 K) and the division
-//   add 2.4e-7 log2 K. Counts of 2^24 and more are not exact in float: twice
-//   the bound.
-void floatGainFilter(int classCount, std::uint32_t n, Criterion criterion, float &scale,
-                     float &margin) {
-  if (criterion == Criterion::Gini) {
-    const double relative = 2.0 * (classCount + 10) * std::ldexp(1.0, -24);
-    const double doubleBound = 2.0 * 4.0 * (2.0 * classCount + 8.0) * std::ldexp(1.0, -52);
-    scale = static_cast<float>(1.01 * 2.0 * relative / (1.0 - relative));
-    margin = static_cast<float>(1.01 * (2.0 * doubleBound + kTieEps));
-    return;
-  }
-  const double classBits = std::max(1.0, std::log2(double(classCount)));
-  double bound = 4.0 * (1.0 + 2.0 * classBits + 0.6 * (classCount - 1) * classBits) * 1e-7;
-  if (n >= (1u << 24)) {
-    bound *= 2.0;
-  }
-  scale = 0.0f;
-  margin = static_cast<float>(2.0 * bound + kTieEps);
-}
-
-__device__ __forceinline__ float filterCutoff(float best, const NodeDesc &node) {
-  return best - fmaxf(best, 0.0f) * node.filterScale - node.filterMargin;
-}
 
 struct CopyJob {
   unsigned long long from;
@@ -304,8 +201,8 @@ __global__ void segmentConstantKernel(const Entry *src, const Segment *segments,
 // 1. Class histogram of every tile
 // ---------------------------------------------------------------------------
 // Also counts the tile's cuts (C4.5's "tries"; distinct values within the
-// node's allowed cut positions), so that the sweeps can skip whole tiles. A
-// segment of one tile needs neither (tileEstimate counts its cuts).
+// node's allowed cut positions), so that the sweep can skip whole tiles. A
+// segment of one tile needs neither (tileExact counts its cuts).
 template <int MAXK>
 __global__ void __launch_bounds__(kThreads)
     tileHistogramKernel(const Entry *src, const Segment *segments,
@@ -325,7 +222,7 @@ __global__ void __launch_bounds__(kThreads)
   const Segment segment = segments[segmentIndex];
   const int classCount = params.classCount;
   if (segment.tileCount == 1) {
-    // Nothing before the tile; tileEstimate counts its cuts.
+    // Nothing before the tile; tileExact counts its cuts.
     if (threadIdx.x < classCount) {
       tileHist[static_cast<std::size_t>(tile) * classCount + threadIdx.x] = 0;
     }
@@ -409,7 +306,7 @@ __global__ void __launch_bounds__(kThreads)
 // kTileBoundGap below the exact gain of another cut of the segment holds no
 // cut that can be the segment's best, nor one that can tie with it (the
 // reduction's near-ties are kTieEps = 1e-12 wide, so its choice among the
-// other cuts cannot drift that far), so the sweeps skip it.
+// other cuts cannot drift that far), so the sweep skips it.
 constexpr double kTileBoundGap = 1e-8;
 
 __global__ void tileBoundKernel(const Entry *src, const Segment *segments, std::uint32_t tileCount,
@@ -534,15 +431,9 @@ __global__ void __launch_bounds__(kThreads)
 //     left[k] = (rows of class k before this step) + popc(ballot(class == k) & lanes below i)
 // and its neighbours' values through warp shuffles.
 //
-// Two passes keep double precision (slow on consumer GPUs) rare:
-//   3a. tileEstimate: count the cuts (C4.5's "tries") and estimate every
-//       cut's gain in single precision; keep the best estimate per tile.
-//   3b. segmentMax:   best estimate per (node, feature).
-//   3c. tileExact:    score in double precision (the exact CPU function) only
-//       the cuts whose estimate is within the proven float error of that best.
-//       With at most 8 classes, tileCandidate scores the cuts tileEstimate
-//       kept instead, and tileExact sweeps only the tiles that had too many.
-// With fast double precision, tileExact alone scores every cut and counts.
+// tileExact scores, in double precision (the exact CPU function), every cut
+// the boundary-point rule and (two classes) the tile bound leave, and counts
+// C4.5's tries.
 constexpr int kWarps = kThreads / 32;
 constexpr int kWarpSteps = kTile / kThreads; // 32-entry steps per warp
 
@@ -553,22 +444,6 @@ template <int MAXK> struct TileSweep {
   float value[kWarpSteps];
   std::uint32_t cls[kWarpSteps];
   std::uint32_t warpLeft[MAXK]; // class counts before this warp's first entry
-};
-
-// With few classes, tileEstimate also keeps the cuts of the tile whose
-// estimate is within the float error of the tile's best one (a superset of
-// those within that error of the segment's best) when there are at most
-// kCandidates of them, so tileCandidate scores them without sweeping the tile
-// again; tileExact sweeps only the tiles with more of them.
-constexpr std::uint32_t kCandidates = 8;
-constexpr int kMaxCandidateClasses = 8;
-
-template <int MAXK> struct alignas(8) Candidate {
-  float estimate;
-  std::uint32_t position;
-  float leftValue;
-  float rightValue;
-  std::uint32_t left[MAXK]; // class counts left of the cut
 };
 
 // Load a tile and work out the class counts before each warp's entries.
@@ -629,20 +504,17 @@ __device__ __forceinline__ void loadTile(TileSweep<MAXK> &sweep, const Entry *sr
 }
 
 // Visit every cut of this lane that must be scored: onCut(step, position,
-// leftCounts, previousValue, estimate); the estimate is only computed if
-// ESTIMATE. Returns the number of real cuts.
-template <int MAXK, bool ESTIMATE, typename OnCut>
+// leftCounts, previousValue). Returns the number of real cuts.
+template <int MAXK, typename OnCut>
 __device__ __forceinline__ std::uint32_t sweepTile(const TileSweep<MAXK> &sweep,
                                                    const Segment &segment, const NodeDesc &node,
-                                                   const ScanParams &params,
-                                                   const std::uint32_t *totals, OnCut &&onCut) {
+                                                   const ScanParams &params, OnCut &&onCut) {
   const unsigned full = 0xFFFFFFFFu;
   const int lane = threadIdx.x & 31;
   const int warp = threadIdx.x >> 5;
   const unsigned lanesBelow = (1u << lane) - 1u;
   const std::uint32_t count = segment.count;
   const std::uint32_t minChild = node.minChild;
-  const float parentWeighted = static_cast<float>(node.parentWeighted);
   const Entry *column = sweep.column;
 
   std::uint32_t left[MAXK];
@@ -695,189 +567,11 @@ __device__ __forceinline__ std::uint32_t sweepTile(const TileSweep<MAXK> &sweep,
         skip = isSkippableCut(true, leftSingleton, rightSingleton, position, count, minChild);
       }
       if (!skip) {
-        float estimate = 0.0f;
-        if constexpr (ESTIMATE) {
-          estimate = floatCutGain<MAXK>(totals, leftHere, params.classCount, count, position,
-                                        parentWeighted, params.criterion);
-        }
-        onCut(step, position, leftHere, previous, estimate);
+        onCut(step, position, leftHere, previous);
       }
     }
   }
   return tries;
-}
-
-// Write the tile's cuts whose estimate reaches `cutoff` to `slots`, in
-// position order, if there are at most kCandidates of them; their number
-// goes to *count either way. Bit `step` of `scored` says whether this thread
-// scored a cut at that step, and estimates[step * kThreads + threadIdx.x]
-// (shared, written by this thread) is then its estimate. Uses
-// `warpCandidates` (shared) and one __syncthreads.
-template <int MAXK>
-__device__ __forceinline__ void keepCandidates(const TileSweep<MAXK> &sweep,
-                                               const ScanParams &params, unsigned scored,
-                                               const float *estimates, float cutoff,
-                                               Candidate<MAXK> *slots, std::uint32_t *count,
-                                               std::uint32_t *warpCandidates) {
-  const unsigned full = 0xFFFFFFFFu;
-  const int lane = threadIdx.x & 31;
-  const int warp = threadIdx.x >> 5;
-  const unsigned lanesBelow = (1u << lane) - 1u;
-  unsigned mine = 0; // bit per step
-#pragma unroll
-  for (int step = 0; step < kWarpSteps; ++step) {
-    if (((scored >> step) & 1u) && !(estimates[step * kThreads + threadIdx.x] < cutoff)) {
-      mine |= 1u << step;
-    }
-  }
-  std::uint32_t warpCount = 0;
-  if (__any_sync(full, mine != 0)) {
-#pragma unroll
-    for (int step = 0; step < kWarpSteps; ++step) {
-      warpCount += __popc(__ballot_sync(full, (mine >> step) & 1u));
-    }
-  }
-  if (lane == 0) {
-    warpCandidates[warp] = warpCount;
-  }
-  __syncthreads();
-  std::uint32_t slot = 0;
-  std::uint32_t total = 0;
-#pragma unroll
-  for (int other = 0; other < kWarps; ++other) {
-    const std::uint32_t n = warpCandidates[other];
-    slot += other < warp ? n : 0;
-    total += n;
-  }
-  if (threadIdx.x == 0) {
-    *count = total;
-  }
-  if (total > kCandidates || warpCount == 0) {
-    return;
-  }
-  std::uint32_t left[MAXK];
-#pragma unroll
-  for (int k = 0; k < MAXK; ++k) {
-    left[k] = sweep.warpLeft[k];
-  }
-  // The tile's entries are read again (from cache): keeping them in registers
-  // would cost the sweep its occupancy.
-  for (int step = 0; step < kWarpSteps; ++step) {
-    const std::uint32_t index = warp * (kWarpSteps * 32) + step * 32 + lane;
-    float value = 0.0f;
-    std::uint32_t cls = 0xFFFFFFFFu;
-    if (index < sweep.length) {
-      const Entry entry = sweep.column[sweep.start + index];
-      value = entry.value;
-      cls = params.codec.cls(entry.packed);
-    }
-    float previous = __shfl_up_sync(full, value, 1);
-    std::uint32_t leftHere[MAXK];
-#pragma unroll
-    for (int k = 0; k < MAXK; ++k) {
-      const unsigned votes = __ballot_sync(full, cls == static_cast<std::uint32_t>(k));
-      leftHere[k] = left[k] + __popc(votes & lanesBelow);
-      left[k] += __popc(votes);
-    }
-    const unsigned kept = __ballot_sync(full, (mine >> step) & 1u);
-    if ((mine >> step) & 1u) {
-      const std::uint32_t position = sweep.start + index; // >= minChild >= 1
-      if (lane == 0) {
-        previous = sweep.column[position - 1].value;
-      }
-      Candidate<MAXK> &candidate = slots[slot + __popc(kept & lanesBelow)];
-      candidate.estimate = estimates[step * kThreads + threadIdx.x];
-      candidate.position = position;
-      candidate.leftValue = previous;
-      candidate.rightValue = value;
-#pragma unroll
-      for (int k = 0; k < MAXK; ++k) {
-        candidate.left[k] = leftHere[k];
-      }
-    }
-    slot += __popc(kept);
-  }
-}
-
-// Also counts the cuts of single-tile segments (tileHistogram skipped them).
-// With `candidates`, also keeps the tile's best cuts (keepCandidates).
-template <int MAXK>
-__global__ void __launch_bounds__(kThreads)
-    tileEstimateKernel(const Entry *src, const Segment *segments,
-                       const std::uint32_t *tileSegment, const std::uint8_t *constant,
-                       const NodeDesc *nodes, ScanParams params, const std::uint32_t *tilePrefix,
-                       const std::uint32_t *nodeCounts, const double *tileUpper,
-                       const double *segmentLower, float *tileMax, std::uint32_t *tileTries,
-                       Candidate<MAXK> *candidates, std::uint32_t *candidateCount) {
-  using FloatReduce = cub::BlockReduce<float, kThreads>;
-  using SumReduce = cub::BlockReduce<std::uint32_t, kThreads>;
-  __shared__ union {
-    typename FloatReduce::TempStorage max;
-    typename SumReduce::TempStorage sum;
-  } storage;
-  __shared__ std::uint32_t totals[MAXK];
-  __shared__ std::uint32_t warpCounts[kWarps][MAXK];
-  __shared__ std::uint32_t warpCandidates[kWarps];
-  __shared__ float sharedMax;
-  // Few classes: each thread's estimate per step, for keepCandidates.
-  __shared__ float estimates[MAXK <= kMaxCandidateClasses ? kTile : 1];
-
-  const std::uint32_t tile = blockIdx.x;
-  const std::uint32_t segmentIndex = tileSegment[tile];
-  const Segment segment = segments[segmentIndex];
-  const bool single = segment.tileCount == 1;
-  if (constant[segmentIndex] || tileRuledOut(tileUpper, segmentLower, tile, segmentIndex)) {
-    if (threadIdx.x == 0) {
-      tileMax[tile] = -INFINITY;
-      if (single) {
-        tileTries[tile] = 0;
-      }
-    }
-    return;
-  }
-  const NodeDesc node = nodes[segment.node];
-  TileSweep<MAXK> sweep;
-  loadTile<MAXK>(sweep, src, segment, segmentIndex, tile, params, tilePrefix, nodeCounts,
-                 warpCounts, totals);
-  float best = -INFINITY;
-  const bool keep = MAXK <= kMaxCandidateClasses && candidates;
-  unsigned scored = 0; // keep: bit per step
-  const std::uint32_t tries = sweepTile<MAXK, true>(
-      sweep, segment, node, params, totals,
-      [&](int step, std::uint32_t, const std::uint32_t *, float, float estimate) {
-        best = fmaxf(best, estimate);
-        if (keep) {
-          estimates[step * kThreads + threadIdx.x] = estimate;
-          scored |= 1u << step;
-        }
-      });
-  const float tileBest = FloatReduce(storage.max).Reduce(best, Max());
-  if (threadIdx.x == 0) {
-    tileMax[tile] = tileBest;
-    sharedMax = tileBest;
-  }
-  if constexpr (MAXK <= kMaxCandidateClasses) {
-    if (candidates) {
-      __syncthreads();
-      const float localMax = sharedMax;
-      if (localMax == -INFINITY) {
-        if (threadIdx.x == 0) {
-          candidateCount[tile] = 0;
-        }
-      } else {
-        keepCandidates<MAXK>(sweep, params, scored, estimates, filterCutoff(localMax, node),
-                             candidates + static_cast<std::size_t>(tile) * kCandidates,
-                             candidateCount + tile, warpCandidates);
-      }
-    }
-  }
-  if (single) {
-    __syncthreads();
-    const std::uint32_t tileTotalTries = SumReduce(storage.sum).Sum(tries);
-    if (threadIdx.x == 0) {
-      tileTries[tile] = tileTotalTries;
-    }
-  }
 }
 
 template <typename T>
@@ -896,21 +590,16 @@ __global__ void __launch_bounds__(kThreads)
   }
 }
 
-
-// The tile's best cut in double precision, if it may be the segment's best.
-// Whether the tile is skipped depends only on the tile (the whole block
-// returns early together).
-template <int MAXK, bool FILTER>
-__device__ __forceinline__ void exactTile(std::uint32_t tile, const Entry *src,
-                                          const Segment *segments,
-                                          const std::uint32_t *tileSegment,
-                                          const std::uint8_t *constant, const NodeDesc *nodes,
-                                          const ScanParams &params,
-                                          const std::uint32_t *tilePrefix,
-                                          const std::uint32_t *nodeCounts,
-                                          const double *tileUpper, const double *segmentLower,
-                                          const float *tileMax, const float *segmentMax,
-                                          BestCut *tileBest, std::uint32_t *tileTries) {
+// The tile's best cut in double precision (one block per tile), and the
+// cuts of single-tile segments (tileHistogram skipped them). Whether the tile
+// is skipped depends only on the tile (the whole block returns early together).
+template <int MAXK>
+__global__ void __launch_bounds__(kThreads)
+    tileExactKernel(const Entry *src, const Segment *segments, const std::uint32_t *tileSegment,
+                    const std::uint8_t *constant, const NodeDesc *nodes, ScanParams params,
+                    const std::uint32_t *tilePrefix, const std::uint32_t *nodeCounts,
+                    const double *tileUpper, const double *segmentLower, BestCut *tileBest,
+                    std::uint32_t *tileTries) {
   using CutReduce = cub::BlockReduce<BestCut, kThreads>;
   using SumReduce = cub::BlockReduce<std::uint32_t, kThreads>;
   __shared__ union {
@@ -920,20 +609,15 @@ __device__ __forceinline__ void exactTile(std::uint32_t tile, const Entry *src,
   __shared__ std::uint32_t totals[MAXK];
   __shared__ std::uint32_t warpCounts[kWarps][MAXK];
 
+  const std::uint32_t tile = blockIdx.x;
   const std::uint32_t segmentIndex = tileSegment[tile];
   const Segment segment = segments[segmentIndex];
   const bool single = segment.tileCount == 1;
   const NodeDesc node = nodes[segment.node];
-  float cutoff = -INFINITY;
-  bool skip = constant[segmentIndex] || tileRuledOut(tileUpper, segmentLower, tile, segmentIndex);
-  if (FILTER && !skip) {
-    cutoff = filterCutoff(segmentMax[segmentIndex], node);
-    skip = tileMax[tile] < cutoff; // no cut of this tile can be the best one
-  }
-  if (skip) {
+  if (constant[segmentIndex] || tileRuledOut(tileUpper, segmentLower, tile, segmentIndex)) {
     if (threadIdx.x == 0) {
       tileBest[tile] = kNoCut;
-      if (!FILTER && single) {
+      if (single) {
         tileTries[tile] = 0;
       }
     }
@@ -943,13 +627,9 @@ __device__ __forceinline__ void exactTile(std::uint32_t tile, const Entry *src,
   loadTile<MAXK>(sweep, src, segment, segmentIndex, tile, params, tilePrefix, nodeCounts,
                  warpCounts, totals);
   BestCut best = kNoCut;
-  const std::uint32_t tries = sweepTile<MAXK, FILTER>(
-      sweep, segment, node, params, totals,
-      [&](int step, std::uint32_t position, const std::uint32_t *left, float previous,
-          float estimate) {
-        if (FILTER && estimate < cutoff) {
-          return;
-        }
+  const std::uint32_t tries = sweepTile<MAXK>(
+      sweep, segment, node, params,
+      [&](int step, std::uint32_t position, const std::uint32_t *left, float previous) {
         const double gain = cutGain(totals, left, params.classCount, segment.count, position,
                                     node.parentWeighted, params.criterion, params.logs);
         if (best.gain == -INFINITY || isBetterCut(gain, position, best.gain, best.position)) {
@@ -960,114 +640,12 @@ __device__ __forceinline__ void exactTile(std::uint32_t tile, const Entry *src,
   if (threadIdx.x == 0) {
     tileBest[tile] = tileWinner;
   }
-  if (!FILTER && single) {
+  if (single) {
     __syncthreads();
     const std::uint32_t tileTotalTries = SumReduce(storage.sum).Sum(tries);
     if (threadIdx.x == 0) {
       tileTries[tile] = tileTotalTries;
     }
-  }
-}
-
-// FILTER: two-pass mode (only cuts whose estimate reaches the cutoff are
-// scored). Otherwise every cut is scored, and the cuts of single-tile
-// segments are counted here. With `tileList`, the blocks loop over the
-// *listed tiles instead (those tileCandidate left).
-template <int MAXK, bool FILTER>
-__global__ void __launch_bounds__(kThreads)
-    tileExactKernel(const Entry *src, const Segment *segments, const std::uint32_t *tileSegment,
-                    const std::uint8_t *constant, const NodeDesc *nodes, ScanParams params,
-                    const std::uint32_t *tilePrefix, const std::uint32_t *nodeCounts,
-                    const double *tileUpper, const double *segmentLower, const float *tileMax,
-                    const float *segmentMax, BestCut *tileBest, std::uint32_t *tileTries,
-                    const std::uint32_t *tileList, const std::uint32_t *listed) {
-  if (!tileList) {
-    exactTile<MAXK, FILTER>(blockIdx.x, src, segments, tileSegment, constant, nodes, params,
-                            tilePrefix, nodeCounts, tileUpper, segmentLower, tileMax, segmentMax,
-                            tileBest, tileTries);
-    return;
-  }
-  // loadTile's __syncthreads keeps one tile's shared memory from the next.
-  const std::uint32_t count = *listed;
-  for (std::uint32_t i = blockIdx.x; i < count; i += gridDim.x) {
-    exactTile<MAXK, FILTER>(tileList[i], src, segments, tileSegment, constant, nodes, params,
-                            tilePrefix, nodeCounts, tileUpper, segmentLower, tileMax, segmentMax,
-                            tileBest, tileTries);
-  }
-}
-
-// Two-pass mode with few classes: one warp per tile scores the candidates
-// tileEstimate kept (in double precision) and lists the tiles that had too
-// many for tileExact.
-template <int MAXK>
-__global__ void __launch_bounds__(kThreads)
-    tileCandidateKernel(std::uint32_t tiles, const Segment *segments,
-                        const std::uint32_t *tileSegment, const std::uint8_t *constant,
-                        const NodeDesc *nodes, ScanParams params, const std::uint32_t *nodeCounts,
-                        const double *tileUpper, const double *segmentLower, const float *tileMax,
-                        const float *segmentMax, const Candidate<MAXK> *candidates,
-                        const std::uint32_t *candidateCount, BestCut *tileBest,
-                        std::uint32_t *tileList, std::uint32_t *listed) {
-  const unsigned full = 0xFFFFFFFFu;
-  const int lane = threadIdx.x & 31;
-  const std::uint32_t tile = blockIdx.x * kWarps + (threadIdx.x >> 5);
-  if (tile >= tiles) {
-    return;
-  }
-  const std::uint32_t segmentIndex = tileSegment[tile];
-  const Segment segment = segments[segmentIndex];
-  const NodeDesc node = nodes[segment.node];
-  float cutoff = -INFINITY;
-  bool skip = constant[segmentIndex] || tileRuledOut(tileUpper, segmentLower, tile, segmentIndex);
-  if (!skip) {
-    cutoff = filterCutoff(segmentMax[segmentIndex], node);
-    skip = tileMax[tile] < cutoff; // no cut of this tile can be the best one
-  }
-  if (skip) {
-    if (lane == 0) {
-      tileBest[tile] = kNoCut;
-    }
-    return;
-  }
-  // tileEstimate kept the cuts reaching the tile's own cutoff, which is at
-  // most this one (checked: if not, the tile is swept again).
-  const std::uint32_t count = candidateCount[tile];
-  if (count > kCandidates || filterCutoff(tileMax[tile], node) > cutoff) {
-    if (lane == 0) {
-      tileList[atomicAdd(listed, 1u)] = tile;
-    }
-    return;
-  }
-  BestCut best = kNoCut;
-  if (static_cast<std::uint32_t>(lane) < count) {
-    const Candidate<MAXK> candidate =
-        candidates[static_cast<std::size_t>(tile) * kCandidates + lane];
-    if (!(candidate.estimate < cutoff)) {
-      std::uint32_t totals[MAXK];
-      const std::uint32_t *counts =
-          nodeCounts + static_cast<std::size_t>(segment.node) * params.classCount;
-#pragma unroll
-      for (int k = 0; k < MAXK; ++k) {
-        totals[k] = k < params.classCount ? counts[k] : 0;
-      }
-      const double gain = cutGain(totals, candidate.left, params.classCount, segment.count,
-                                  candidate.position, node.parentWeighted, params.criterion,
-                                  params.logs);
-      best = {gain, candidate.position, candidate.leftValue, candidate.rightValue};
-    }
-  }
-  // Candidates are in position order: reduce in a fixed order.
-#pragma unroll
-  for (int offset = kCandidates / 2; offset > 0; offset >>= 1) {
-    BestCut other;
-    other.gain = __shfl_down_sync(full, best.gain, offset);
-    other.position = __shfl_down_sync(full, best.position, offset);
-    other.leftValue = __shfl_down_sync(full, best.leftValue, offset);
-    other.rightValue = __shfl_down_sync(full, best.rightValue, offset);
-    best = BetterCut()(best, other);
-  }
-  if (lane == 0) {
-    tileBest[tile] = best;
   }
 }
 

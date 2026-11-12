@@ -95,12 +95,11 @@ tree has half the nodes or fewer). No public GPU C4.5 exists. Lead with CART.
 
 ## Caveats to state
 
-* **On the H100 and A100 the mixed-precision filter is not used:** at an
-  FP32:FP64 ratio of 4:1 or less the grower runs one exact double sweep
-  (`onePass_` in `gpu_grower.cu`). The lead over cuML there comes from the
-  data layout, the partition, the two-class tile bound and the CPU/GPU split.
-  The float filter is what makes consumer GPUs (64:1, e.g. the laptop's RTX
-  5070) work.
+* **One exact sweep, no mixed precision:** the grower scores every cut the
+  boundary-point rule and the two-class tile bound leave in double precision
+  (the H100 and A100 run FP64 at half the FP32 rate). The lead over cuML comes
+  from the data layout, the partition, the two-class tile bound and the
+  CPU/GPU split. Consumer GPUs (FP64 about 64× slower) are not a target.
 * **./tree is a CPU + GPU hybrid:** nodes below `--gpu-min-rows` (CART
   rows / 8192 within [1024, 2048], C4.5 rows / 4096 within [1024, 4096]) go to
   the CPU. Report the GPU / CPU share and a thread sweep.
@@ -116,8 +115,7 @@ tree has half the nodes or fewer). No public GPU C4.5 exists. Lead with CART.
 
 ## Experiments still missing
 
-1. **Clean ablation** on one commit and machine: `--gpu-sweep one-pass` against
-   `two-pass` (also on the laptop), a `--gpu-min-rows` sweep, a `--threads`
+1. **Clean ablation** on one commit and machine: a `--gpu-min-rows` sweep, a `--threads`
    sweep (1 / 4 / 8 / all); the bitmap, fused next-level histograms, tile bound
    and asynchronous hand-off ring would need compile-time switches. Only the
    2026-10-28 changes were measured on one commit

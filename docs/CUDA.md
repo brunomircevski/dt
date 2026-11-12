@@ -80,10 +80,8 @@ anything.
 | 0 | `segmentConstantKernel` | Segments whose values are all equal (first vs last entry). Every later kernel skips their tiles, they are not partitioned, and the feature is dropped for the node's whole subtree (see CPU.md). |
 | 1 | `tileHistogramKernel` | Class counts of each tile (one `__ballot_sync` per class per 32 entries), and C4.5's cut counts. Only at the root: below it, the parent level's partition (5) counts them while it writes the children. |
 | 2 | `segmentPrefixKernel` | Per segment, exclusive scan over its tiles: each tile learns the class counts *before* it. |
-| 2b | `tileBoundKernel`, `segmentMaxKernel` | Two classes only: an upper bound of every tile's gains and the exact gain of one of its cuts. The gain is convex in the left class counts, and a tile's cuts lie in the box between the counts before and after it, so none beats the largest of the box's four corners. Every sweep skips a tile whose bound is more than `kTileBoundGap = 1e-8` below the best of those exact gains in its segment: most tiles of a big node. |
-| 3a | `tileEstimateKernel` | Sweep all cuts of the tile in **single precision**; keep the tile's best estimate and count C4.5's `tries`. With at most 8 classes it also keeps the tile's *candidates*: the cuts within the float error bound of the tile's own best estimate (with their class counts and values), if there are at most 8. |
-| 3b | `segmentMaxKernel` | Best estimate per segment. |
-| 3c | `tileCandidateKernel`, `tileExactKernel` | Compute the exact **double-precision** gain (`dt::cutGain`, the CPU's function) only for cuts whose estimate is within a proven float error bound of the segment's best. `tileCandidateKernel` (one warp per tile) scores the candidates 3a kept; `tileExactKernel` sweeps again only the tiles that had more (with more than 8 classes: every tile that can hold the best cut). On GPUs with fast double precision (data-center parts: A100, H100, B200…, detected from the FP32:FP64 ratio) 3a and 3b are skipped and `tileExactKernel` scores every cut once (`--gpu-sweep` overrides). |
+| 2b | `tileBoundKernel`, `segmentMaxKernel` | Two classes only: an upper bound of every tile's gains and the exact gain of one of its cuts. The gain is convex in the left class counts, and a tile's cuts lie in the box between the counts before and after it, so none beats the largest of the box's four corners. The sweep (3) skips a tile whose bound is more than `kTileBoundGap = 1e-8` below the best of those exact gains in its segment: most tiles of a big node. |
+| 3 | `tileExactKernel` | Score every cut of the tile that the boundary-point rule leaves with the exact **double-precision** gain (`dt::cutGain`, the CPU's function), and count C4.5's `tries` of single-tile segments. One sweep, on every GPU: the H100 and the A100 run double precision at half the single-precision rate, so a single-precision pre-filter does not pay (see [One exact pass](#one-exact-pass)). |
 | 4 | `segmentBestKernel` | Best cut per (node, feature), and the class counts left of it. **Host** (the level's only round trip): `SplitRules::choose` picks each node's split exactly like the CPU; the winning feature's left counts give both children's class counts, so children that are leaves (pure, too small, depth limit) are finished on the spot. |
 | 5 | `markGoesLeftKernel`, `partitionKernel` | Stable partition of every non-constant column of every split node into a free slot (skipped for nodes whose children are both leaves), in **one pass**: each tile learns how many left and right entries come before it by decoupled look-back on its predecessors' published counts, then writes its entries coalesced. While writing, it counts the class histograms (and C4.5 cut counts) of the next level's tiles, so step 1 is not needed below the root. |
 | 6 | `copyKernel` | Children with fewer than `--gpu-min-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer; only the columns that can still split them. |
@@ -137,7 +135,7 @@ columns the tree uses had to be uploaded first unless the raw values were kept
 threshold tried (`cluster-gpu-prune`, a benchmark that was never committed).
 It is in the git history before the commit that removed `--gpu-prune`.
 
-### Inside the sweep (kernels 3a / 3c)
+### Inside the sweep (kernel 3)
 
 Each warp handles 256 consecutive entries of the tile in 8 steps of 32. In a
 step, lane `i` holds entry `i`; the class counts left of its entry are
@@ -151,43 +149,29 @@ entries one by one, and there is no shared-memory scan and no atomic. A cut
 the boundary-point rule rules out (`isSkippableCut`, shared with the CPU) is
 not scored.
 
-### Why two passes
+### One exact pass
 
-Consumer GPUs run double precision about 64× slower than single precision. The
-float pass rules out almost all cuts; the exact pass keeps the result
-bit-identical to the CPU, so `tests/check.sh` can require identical
-trees. (Comparing against the *tile's* best estimate was not enough: in a node
-with millions of rows the gain hardly changes within 2048 rows, so most cuts
-survived. The segment-wide best fixes that.)
-
-The tighter the float error bound, the fewer cuts survive. The Gini estimate
-is computed as `Σ_k (l_k·n − t_k·n_L)² / (n² · n_L · n_R)` (`l` left, `t` node
-class counts): the differences are exact in 64-bit integers and no term
-cancels another, so its error is a small fraction of the gain itself, not of
-`n` (the bound is relative: `cutoff = best − best·scale − margin`). With the
-former formula, which subtracts terms of size `n`, hundreds of cuts per
-segment survived near the optimum in big nodes. Entropy is summed as
-`c·log2(m/c)` terms, which are accurate already.
-
-The candidates of 3a are kept against the tile's own best estimate, which is
-at most the segment's, so they include every cut 3c has to score
-(`tileCandidateKernel` checks that, and sweeps the tile again otherwise).
-Few tiles have more than 8 of them, so the second sweep, which read every
-surviving tile again, mostly disappears: on HIGGS (test laptop) the exact
-pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
+Until November 2026 the grower could also sweep in two passes: a
+single-precision estimate of every cut (with a proven error bound), then the
+exact gain only for the cuts within that bound of the node's best. That paid
+on consumer GPUs, whose double precision is about 64× slower than single
+precision, and was picked from the device's FP32:FP64 ratio. ./tree now
+targets data-center GPUs only (the cluster's H100 and A100, FP32:FP64 = 2:1),
+where one exact sweep was as fast or faster
+([PERFORMANCE.md](PERFORMANCE.md#november-2026-one-exact-sweep-on-every-gpu)),
+so the two-pass kernels and the `--gpu-sweep` option were removed; they are in
+the git history before that commit. Every GPU now runs the same kernels.
 
 ### Why the result is exact
 
-* The float filter is conservative: the cutoff is `best − (best·σ + μ)`, with
-  σ and μ covering `2B + ε_tie`, `B` a proven bound on |float estimate − exact
-  gain| (derivation in the comment above `floatGainFilter`). Every cut that
-  could win or tie is scored with the CPU's `cutGain` in double precision.
+* Every cut that the boundary-point rule and the two-class tile bound leave
+  is scored with the CPU's `cutGain` in double precision.
 * Near-ties (gains within `kTieEps = 1e-12`) go to the earlier cut, then the
   lower feature, in a fixed reduction order; `c·log2 c` comes from the table
   the CPU uses ([ALGORITHMS.md](ALGORITHMS.md#ties-and-cpugpu-agreement)).
 * So the trees are byte-identical across `--simple`, `--serial`,
-  `--parallel` and `--cuda`, and across the H100, the A100 and the laptop's
-  RTX 5070 (`tests/check.sh`).
+  `--parallel` and `--cuda`, and across the H100 and the A100
+  (`tests/check.sh`).
 
 ## Tuning
 
@@ -235,9 +219,8 @@ pass went from 260–290 ms to about 15 ms (CART) and 55 ms (C4.5).
 Device: one copy of the columns in `features + 1` slots (`8 × rows ×
 (features + 1)` bytes, 0.76 GB for 5M × 18), a 512 MB ring for the hand-offs to
 the CPU, with C4.5 pruning a copy of the raw values if it fits (for `arrangeRows`),
-plus small per-level arrays (the largest: 3a's candidates, 8 × (16 + 4·K)
-bytes per tile with K the class count rounded up to 2, 4 or 8, e.g. 28 MB at
-HIGGS's root level). The builder checks free memory first and
+plus small per-level arrays (the largest: the tile histograms, 4·K bytes per
+tile with K the class count, e.g. about 124 MB at MNIST8M's root level). The builder checks free memory first and
 suggests `--parallel` if it does not fit.
 
 * **Presort** in the slots too: the raw values are uploaded into the last
@@ -275,13 +258,13 @@ Input: X ∈ R^{n×F}, labels y ∈ {0..K-1}^n, depth limit D, hand-off size m
  7      if L = {root}: TileHistogram(S)                   ▷ below the root, step 13 did it
  8      SegmentPrefix(S)                                  ▷ class counts before each tile
  9      if K = 2: TileBound(S)                            ▷ Alg. 2b
-10      SweepTiles(S); SegmentBest(S)                     ▷ Alg. 2 (Alg. 3 on slow-FP64 GPUs)
+10      SweepTiles(S); SegmentBest(S)                     ▷ Alg. 2
 11      copy the best cut of every (v, f) to the host     ▷ the level's only round trip
         host: choose each v's split (CART / C4.5 rule); children's counts from
               the winner's left counts; leaves (pure, < minChild, depth D) finished
-12      MarkGoesLeft                                      ▷ Alg. 5: 1-bit bitmap in L2
+12      MarkGoesLeft                                      ▷ Alg. 4: 1-bit bitmap in L2
 13      Partition(S) → children's columns in free slots,
-                       with the next level's tile histograms   ▷ Alg. 4
+                       with the next level's tile histograms   ▷ Alg. 3
 14      children with < m rows: gather → device ring → host (copy stream);
               a host callback starts CPU subtree tasks; the GPU continues
 15      L ← the other children
@@ -318,28 +301,10 @@ for each tile t of segment (v, f):
     U_t ← max over the corners c ∈ {a₀, z₀} × {a₁, z₁} of Gain(total, c)   ▷ convex gain
     ℓ_t ← exact gain of one allowed cut of t                                ▷ a lower bound
 lower(v, f) ← max_t ℓ_t
-every sweep skips tile t if U_t < lower(v, f) − 1e-8
+the sweep skips tile t if U_t < lower(v, f) − 1e-8
 ```
 
-### Algorithm 3: exact result with mostly single precision
-
-Only when FP32:FP64 > 4:1. (`tileEstimateKernel`, `segmentMaxKernel`,
-`tileCandidateKernel`, `tileExactKernel`)
-
-```
-pass 1 (float), per tile:
-    ĝ(cut) ← Σ_k (l_k·n − t_k·n_L)² / (n²·n_L·n_R)     ▷ Gini; differences exact in int64
-             (entropy: Σ c·log2(m/c) per side)
-    tileMax ← max ĝ;  keep the ≤ 8 cuts within the bound of tileMax as candidates
-segMax ← max of tileMax over the segment
-cutoff ← segMax − (segMax·σ + μ)                       ▷ σ, μ from the proven bound 2B + ε_tie
-pass 2 (double), per tile:
-    tileMax < cutoff   → skip
-    ≤ 8 candidates     → one warp scores them with the CPU's cutGain
-    otherwise          → sweep the tile again in double (Alg. 2)
-```
-
-### Algorithm 4: single-pass stable partition with next-level counts
+### Algorithm 3: single-pass stable partition with next-level counts
 
 (`partitionKernel`)
 
@@ -359,7 +324,7 @@ while writing: class histogram (match_any + shared atomics) and cut count (ballo
                of each next-level tile, so the next level skips TileHistogram
 ```
 
-### Algorithm 5: goes-left bitmap
+### Algorithm 4: goes-left bitmap
 
 (`markGoesLeftKernel`)
 

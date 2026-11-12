@@ -98,8 +98,6 @@ void printUsage(const char *program) {
       << GpuOptions::kAutoMaxMinRowsCart << ")\n"
       << "  --gpu-only               grow every node on the GPU, no hand-offs to the CPU\n"
       << "                           (the CPU threads still feed the GPU and prune)\n"
-      << "  --gpu-sweep MODE         auto | one-pass | two-pass (default auto: one-pass\n"
-      << "                           on GPUs with fast double precision)\n"
       << "\n"
       << "Profiling:\n"
       << "  --profile FILE           write where the training time goes as JSON: phases,\n"
@@ -198,7 +196,7 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
     refuse({"--cf"}, "is for C4.5; CART prunes with --alpha");
   }
   if (options.backend != Backend::Cuda) {
-    refuse({"--gpu-min-rows", "--gpu-only", "--gpu-sweep"}, "is for --cuda only");
+    refuse({"--gpu-min-rows", "--gpu-only"}, "is for --cuda only");
   }
   if (options.gpu.only) {
     refuse({"--gpu-min-rows"}, "contradicts --gpu-only (no node goes to the CPU)");
@@ -267,17 +265,6 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.gpu.minRows = parseCount(arg, args.value(arg));
     } else if (arg == "--gpu-only") {
       options.gpu.only = true;
-    } else if (arg == "--gpu-sweep") {
-      const std::string value = args.value(arg);
-      if (value == "auto") {
-        options.gpu.sweep = GpuSweep::Auto;
-      } else if (value == "one-pass") {
-        options.gpu.sweep = GpuSweep::OnePass;
-      } else if (value == "two-pass") {
-        options.gpu.sweep = GpuSweep::TwoPass;
-      } else {
-        throw std::runtime_error("Unknown --gpu-sweep mode: " + value);
-      }
     } else if (!arg.empty() && arg[0] == '-') {
       throw std::runtime_error("Unknown option: " + arg);
     } else {

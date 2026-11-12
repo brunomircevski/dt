@@ -121,7 +121,6 @@ Subtree raising is always on, as in the original program.
 |------|---------|---------|
 | `--gpu-min-rows N` | CART: rows / 8192, between 1024 and 2048; C4.5: rows / 4096, between 1024 and 4096 | `--cuda`: nodes with fewer rows are finished by the CPU pool while the GPU grows the big ones. |
 | `--gpu-only` | off | `--cuda`: grow every node on the GPU, with no hand-offs to the CPU (and no host arena for them). The CPU threads (`--threads`) still count the classes, stage the copies to and from the GPU and run C4.5's pruning. |
-| `--gpu-sweep auto\|one-pass\|two-pass` | `auto` | `--cuda`: score every cut in double precision (`one-pass`), or filter in single precision first and use double precision only for the candidates (`two-pass`). `auto` picks one-pass on GPUs with fast double precision (A100, H100, B200…). |
 
 The best values depend on the hardware and the data (`docs/CPU.md`,
 `docs/CUDA.md` explain what each threshold does). The defaults were tuned on
