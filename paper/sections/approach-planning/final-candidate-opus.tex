@@ -1,0 +1,141 @@
+\section{Our Approach}
+\label{sec:impl}
+
+All five implementations grow the same exact CART or C4.5 tree. They differ
+in how the sorted order of a node's samples is maintained, in how many
+candidate cuts are scored exactly, and in where the nodes are grown. \ImplGpu{} and \ImplHybrid{} are two configurations of one CUDA
+code path, without and with hand-offs of small subtrees to the CPU.
+
+\subsection{Common Design}
+\label{sec:impl-common}
+
+The training set is stored column-major as 32-bit floats. Every
+implementation scores a cut with the same double-precision routine, compiled
+for both the CPU and the GPU, and applies the same CART or C4.5 rules to
+choose the attribute and to stop growth. Gains within $10^{-12}$ are treated
+as equal; the earlier cut, then the lower attribute index, wins. The
+optimizations below discard only cuts that cannot change this decision, and
+the selected cut is always scored by the shared routine. The tree is stored
+as flat arrays in preorder, so its layout does not depend on which thread or
+device created a node. Our tests require identical trees from all five
+implementations. Pruning runs after growth, on the CPU with shared code, and
+is disabled in our experiments.
+
+\subsection{\ImplSerialBase}
+\label{sec:impl-simple}
+
+\ImplSerialBase{} follows the textbook formulation and serves as the reference
+for the others. At each node, it sorts the node's sample indices by every
+attribute with a comparison sort, scores every admissible cut, and splits the
+indices into two new lists, recursing on each. A node with $n$ samples and $F$
+attributes costs $O(Fn\log n)$, and the sort reads values at random positions
+through the indices, so it is bound by memory latency rather than bandwidth.
+
+\subsection{\ImplSerialOpt}
+\label{sec:impl-serial}
+
+\ImplSerialOpt{} changes how this algorithm is executed in three ways.
+
+\emph{Sort once.} As in SLIQ and SPRINT~\cite{mehta1996sliq,shafer1996sprint},
+every attribute is sorted once before induction, here by a stable,
+single-threaded radix sort on the bits of the values. A column consists of
+8-byte entries that pair a value with its sample index and class, so a sweep
+reads class counts sequentially. A node occupies the same index range in
+every column. After a split, the left samples are the first $n_L$ entries of
+the winning column; the other columns are partitioned stably according to
+these samples, which keeps both children sorted. An attribute that is
+constant over a node is dropped for its whole subtree.
+
+\emph{Score few cuts exactly.} The sweep updates a cheap estimate of the gain
+at each cut, with a bounded rounding error. Only cuts whose estimate could
+still beat the best one are scored by the shared routine, in cut order. For
+two classes, the gain is convex in the left class counts, and blocks of cuts
+are skipped when a bound at the corners of their count range falls below the
+best gain.
+
+\emph{Allocate once.} The columns occupy $F+1$ slots of $8N$ bytes for $N$
+training samples. The spare slot lets nodes of $2^{15}$ or more samples be
+partitioned out of place with streaming stores; smaller nodes are partitioned
+in place through a reused buffer. Large blocks are placed on transparent huge
+pages. \ImplSerialOpt{} is the builder of \ImplParallel{} run without a
+thread pool.
+
+\subsection{\ImplParallel}
+\label{sec:impl-parallel}
+
+\ImplParallel{} runs this builder on a thread pool and, like the NAP strategy
+of Aldinucci et al.~\cite{aldinucci2014fastflow}, chooses the kind of
+parallelism by node size. Nodes of at least 32,768 samples sweep their
+attributes in parallel and partition one column per thread. After a node of at least 4,096
+samples is split, its left child becomes a task and the thread continues with
+the right child. Up to $\min(F-1, p)$ spare slots for $p$ threads let a large
+node move all its columns at once. The presort is parallel too. Nodes are
+renumbered in preorder at the end, so the tree equals that of
+\ImplSerialOpt{}.
+
+The implementation has no explicit NUMA policy: it neither pins threads nor
+binds or interleaves memory. The thread count follows the process's CPU
+affinity, so \texttt{numactl} or \texttt{taskset} can confine a run to
+selected sockets, and by default Linux places each page on the socket of the
+thread that first writes it. Huge pages reduce translation overhead but do
+not control placement.
+
+\subsection{\ImplGpu}
+\label{sec:impl-gpu}
+
+A small node cannot occupy thousands of GPU threads. \ImplGpu{} therefore
+grows the tree breadth-first: all nodes of a level are processed by one fixed
+sequence of kernel launches. Work is divided into tiles of 2,048 entries of
+one node's range in one column, one thread block per tile. The device holds
+one copy of the columns in $F+1$ slots, presorted with CUB's stable radix sort
+as soon as each attribute is uploaded.
+
+Within a warp, the class counts left of each entry are obtained with ballot
+and population-count instructions rather than a serial scan. The best cut of
+every node and attribute is copied to the host, which applies the same CART or
+C4.5 rule as the CPU and finishes children that are leaves; this is the only
+round trip per level. A single-pass stable partition with decoupled
+look-back~\cite{merrill2016scan} then writes the children into a free slot
+while counting the class histograms of the next level's tiles. The A100 and
+H100 score all cuts in double precision; GPUs with slow double precision first
+discard cuts that cannot win with a conservative single-precision pass.
+
+Data are uploaded from pageable memory through pinned staging buffers that CPU
+threads fill while earlier chunks are in flight. This is the only explicit
+NUMA handling in the code: on multi-socket hosts, the staging buffers are
+allocated on the GPU's NUMA node and the copying threads are pinned to its
+CPUs. In \ImplGpu{}, the hand-off threshold is one sample, so every node stays
+on the GPU; the CPU stages copies, applies the split rule and, for C4.5,
+prunes.
+
+\subsection{\ImplHybrid}
+\label{sec:impl-hybrid}
+
+\ImplHybrid{} divides the nodes of one tree between the devices by size
+(Fig.~\ref{fig:hybrid}). A GPU level costs about as much for many small nodes
+as for a few large ones, whereas CPU threads grow small subtrees as
+independent tasks. Children with fewer than $m$ samples therefore leave the
+GPU and are grown by the \ImplParallel{} builder while the GPU continues with
+the next level. By default, $m$ is $N/8192$ bounded to $[1024, 2048]$ for
+CART and $N/4096$ bounded to $[1024, 4096]$ for C4.5; these bounds were chosen
+empirically, and $m$ can be set explicitly.
+
+The hand-off is asynchronous. A kernel gathers the columns that can still
+split the handed-off nodes into a device ring buffer. Copy streams move them
+through two pinned buffers into a pageable host arena, and a host callback
+queued behind each copy submits the CPU tasks; the GPU never waits for them.
+The arena is pre-faulted by all threads in the background and is not bound to
+the GPU's NUMA node. Nodes from both devices enter one shared store, so the
+final tree is again the same.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figs/approach-hybrid.pdf}
+\caption{Two consecutive levels of \ImplHybrid{}. The GPU grows the large
+nodes of a level together; children with fewer than $m$ samples are copied
+through a device ring and pinned buffers into a host arena, and a callback
+starts them as subtree tasks on the CPU pool, which runs while the GPU grows
+the next level. Both devices add nodes to one shared store. \ImplGpu{} is the
+same scheme with $m=1$.}
+\label{fig:hybrid}
+\end{figure}

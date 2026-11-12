@@ -1,12 +1,134 @@
 \section{Our Approach}
 \label{sec:impl}
 
-\subsection{Serial Simple}
+We implemented CART and C4.5 five times: \ImplSerialBase{}, \ImplSerialOpt{},
+\ImplParallel{}, \ImplGpu{} and \ImplHybrid{}. All five grow exactly the same
+tree. They differ in how a node's samples are kept sorted, which cuts are
+scored, and where and in what order nodes are grown (Table~\ref{tab:impl}).
 
-\subsection{Serial Optimized}
+All implementations share the data layout and the split rules. Attribute values
+are stored by attribute as 32-bit floats, and class labels are mapped to
+integers. One double-precision routine computes the gain of a cut on both the
+CPU and the GPU. Because the two can still differ in the last bit, gains within
+$10^{-12}$ count as equal: the earlier cut wins, then the attribute with the
+lower index. Every optimization below skips only cuts that provably cannot win
+under this rule. Parallel builders create nodes in a nondeterministic order, so
+nodes are renumbered in preorder at the end. A regression suite requires every
+implementation to reproduce the same reference trees, which match scikit-learn
+and Quinlan's C4.5 except where two cuts have exactly equal gain.
 
-\subsection{Multicore CPU}
+Pruning runs after growth, in CPU code shared by all implementations. With a
+fixed $\alpha$, CART also stops early at nodes with fewer than $\alpha N$
+misclassified training samples, since pruning would collapse any subtree below
+them anyway. The pruned tree is the same, but those subtrees are never grown.
 
-\subsection{GPU-Based}
+\begin{table}
+\caption{The five implementations. \emph{Presort}: each attribute is sorted
+once and kept sorted by stable partitioning. \emph{Bounds}: cuts that provably
+cannot win are skipped. \emph{Filter}: the remaining cuts are scored only if a
+cheap estimate can beat the best cut so far. \ImplHybrid{} grows large nodes
+as \ImplGpu{} and small subtrees as \ImplParallel{}.}
+\label{tab:impl}
+\centering
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}llllll@{}}
+\toprule
+ & Sorting & Scoring & Hardware & Parallelism & Node order \\
+\midrule
+\ImplSerialBase{} & each node & all cuts        & 1 core      & none      & depth-first \\
+\ImplSerialOpt{}  & presort   & bounds, filter  & 1 core      & none      & depth-first \\
+\ImplParallel{}   & presort   & bounds, filter  & cores       & data, task & depth-first \\
+\ImplGpu{}        & presort   & bounds          & GPU         & data      & breadth-first \\
+\ImplHybrid{}     & presort   & both            & GPU + cores & data, task & both \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{Hybrid}
+\subsection{\ImplSerialBase}
+\label{sec:impl-simple}
+
+\ImplSerialBase{} follows the textbook algorithm and is the baseline for the
+others. At each node it sorts the node's samples by every attribute, scores
+every cut, chooses the split with the shared rule, and recurses on the two
+children. For a node with $n$ samples and $F$ attributes, sorting alone costs
+$O(Fn\log n)$, and every comparison reads an attribute value from a random
+memory location.
+
+\subsection{\ImplSerialOpt}
+\label{sec:impl-serial}
+
+\ImplSerialOpt{} keeps the algorithm but changes how it is executed in two
+ways.
+
+\emph{Sort once.} Before growth, every attribute is presorted with a stable
+radix sort. Each sorted entry holds the value together with the sample and its
+class, so a sweep never has to look up a label. A node occupies the same index
+range in every attribute. After a split, the winning attribute already lists
+the left samples first, and every other attribute is partitioned stably to
+match, which keeps both children sorted, as in SLIQ and
+SPRINT~\cite{mehta1996sliq,shafer1996sprint}. An attribute that is constant on
+a node is dropped for the node's entire subtree.
+
+\emph{Score few cuts.} The sweep over a sorted attribute skips cuts that
+provably cannot win. A cut between two samples of the same class with unique
+values is never optimal~\cite{fayyad1992continuous}, and with two classes the
+gain is convex in the class counts, so an upper bound can rule out a whole
+block of consecutive cuts. For the remaining cuts, the sweep maintains a cheap
+gain estimate with a bounded error, and only cuts whose estimate can still beat
+the best cut so far are scored by the exact routine. The winning sweep also
+yields the class counts of both children.
+
+Memory is allocated once: every attribute has a buffer of fixed size, and one
+spare buffer lets large nodes be partitioned out of place.
+
+\subsection{\ImplParallel}
+\label{sec:impl-parallel}
+
+\ImplParallel{} runs the \ImplSerialOpt{} builder on a pool of threads and
+combines both kinds of parallelism, in the spirit of the NAP strategy of
+Aldinucci et al.~\cite{aldinucci2014fastflow}. Nodes with at least 32,768
+samples sweep and partition their attributes in parallel. When a node with at
+least 4,096 samples is split, one child becomes a new task and the current
+thread continues with the other. Data parallelism thus serves the few large
+nodes near the root, and task parallelism the many small subtrees below. The
+presort is parallel as well, and extra spare buffers let all threads partition
+attributes at the same time. Threads are not pinned to cores, and memory is not
+placed explicitly on NUMA nodes.
+
+\subsection{\ImplGpu}
+\label{sec:impl-gpu}
+
+\ImplGpu{} grows the whole tree on the GPU, breadth-first: it processes all
+nodes of a tree level together, so that deep levels with many small nodes still
+keep the device busy. The attributes are presorted on the GPU as they are
+uploaded and stored as in \ImplSerialOpt{}.
+
+For each level, the GPU splits every node's attributes into tiles of 2,048
+samples, finds the best cut of every tile, and reduces these to the best cut of
+every node and attribute. Only these results go to the CPU, which applies the
+shared CART or C4.5 rule and turns children that cannot be split into leaves.
+The GPU then partitions the split nodes and, in the same pass, collects the
+class counts for the next level. Each level therefore needs a single round
+trip between CPU and GPU. The sweeps skip cuts with the same bounds as
+\ImplSerialOpt{}, applied to whole tiles, but score every remaining cut with
+the exact routine: a sweep in which all cuts are processed at once has no best
+cut so far to filter against. Data is uploaded through page-locked staging buffers, placed on
+the GPU's NUMA node.
+
+\subsection{\ImplHybrid}
+\label{sec:impl-hybrid}
+
+\ImplHybrid{} uses the same GPU builder but hands each child with fewer than
+$m$ samples to the \ImplParallel{} builder, while the GPU continues with the
+large nodes of the next level. A GPU level costs about the same for a thousand
+mid-size nodes as for a few large ones, whereas CPU threads grow small subtrees
+independently. By default, $m$ is $N/8192$ clamped to $[1024,2048]$ for CART
+and $N/4096$ clamped to $[1024,4096]$ for C4.5; \ImplGpu{} is the special case
+$m=1$.
+
+Hand-offs are asynchronous. For each level, the GPU gathers the attributes that
+can still split the handed-off children and copies them to host memory in the
+background; once the copy is complete, CPU tasks start growing these subtrees.
+The GPU does not wait for them. Nodes from both devices are renumbered in
+preorder once both finish.

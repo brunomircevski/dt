@@ -1,0 +1,135 @@
+\section{Our Approach}
+\label{sec:impl}
+
+Five configurations grow the same exact CART or C4.5 tree. They differ in how
+a node's rows remain sorted, which cuts are scored explicitly, and where and
+in what order nodes are grown. \ImplGpu{} and \ImplHybrid{} are two modes of
+one CUDA grower, without and with CPU subtree hand-offs.
+
+\subsection{Common Design}
+\label{sec:impl-common}
+
+Feature values are stored column-major as 32-bit floats, and labels are mapped
+to dense integers. All configurations use the same CART and C4.5 rule layer
+and the same double-precision gain calculation, compiled for both CPU and GPU.
+Gains within \(10^{-12}\) are ties; the earlier cut and then the lower feature
+index win. Optimized searches use conservative filters, but the shared exact
+calculation selects the final cut.
+
+\ImplSerialBase{} works with row-identifier lists. The other configurations
+represent each feature by presorted 8-byte entries containing its value and a
+packed row and class identifier. A node occupies the same interval in every
+feature column. A stable partition gives its children sorted intervals, so no
+feature is sorted again, following the principle of SLIQ and
+SPRINT~\cite{mehta1996sliq,shafer1996sprint}. Concurrent builders first place
+nodes in a shared chunked store and finally renumber them into flat preorder
+arrays; creation order therefore cannot alter the output. Tests require
+identical trees from all configurations. Shared CPU code performs CART or
+C4.5 post-processing after growth.
+
+\subsection{\ImplSerialBase}
+\label{sec:impl-simple}
+
+\ImplSerialBase{} is a direct sequential implementation and the reference for
+the others. At each node, it copies the row identifiers for every feature,
+sorts them by value, scores every admissible cut, applies the shared
+split-selection rule, and recursively grows two new lists. It therefore
+repeats \(O(Fn\log n)\) sorting for a node with \(n\) rows and \(F\) features,
+accesses values indirectly through row identifiers, and allocates temporary
+vectors throughout growth.
+
+\subsection{\ImplSerialOpt}
+\label{sec:impl-serial}
+
+\ImplSerialOpt{} replaces repeated sorting by a stable, single-threaded radix
+presort. The first \(n_L\) entries of the winning column form the left child;
+the remaining columns are stably partitioned to match, preserving their
+order. A feature constant within a node is removed for its whole subtree.
+
+During each sweep, class counts and an inexpensive gain estimate are updated
+incrementally. Only candidates that can still beat the incumbent under
+conservative rounding and convexity bounds are scored exactly, in cut order;
+binary-class specialization and bulk handling of equal values reduce the
+remaining work. The winning sweep also supplies the children's class counts.
+
+Columns are allocated once in slots. The serial builder keeps one spare slot:
+large ranges move out of place through a one-bit row map, whereas small ranges
+use a reused buffer. Large allocations request transparent huge pages, and an
+explicit stack replaces recursion. \ImplParallel{} is this same builder with a
+thread pool enabled.
+
+\subsection{\ImplParallel}
+\label{sec:impl-parallel}
+
+\ImplParallel{} combines two granularities of work. Nodes with at least
+32,768 rows sweep features and partition columns in parallel. After a node
+with at least 4,096 rows is split, one child becomes a pool task while the
+current worker continues with the other. Thus data parallelism serves the few
+large nodes near the root, and task parallelism serves the many smaller
+subtrees below. Presort and final preorder assembly are parallel as well, and
+up to \(\min(F-1,p)\) spare slots let \(p\) threads move columns concurrently.
+
+The CPU path has no socket-aware scheduler or explicit NUMA memory policy:
+workers are not pinned and columns are not divided by socket. The pool respects
+the process affinity mask, so external \texttt{taskset} or \texttt{numactl}
+restrictions remain in force; page placement is otherwise left to Linux
+first-touch behavior.
+
+\subsection{\ImplGpu}
+\label{sec:impl-gpu}
+
+\ImplGpu{} (\texttt{--cuda --gpu-only}) sets the hand-off threshold to one
+row, so every nonempty subtree remains on the GPU. Unlike the depth-first CPU
+builders, it processes all active nodes of one level together. Each
+node--feature interval is divided into 2,048-entry tiles, one CUDA block per
+tile. A level detects constant intervals, forms tile histograms and prefixes,
+finds each feature's best cut, and returns these compact results to the host.
+The host applies the shared CART or C4.5 choice rule. The device then stably
+partitions the columns and simultaneously forms the next level's histograms,
+requiring one split-decision round trip per level.
+The CPU still stages transfers, chooses splits, and runs shared
+post-processing.
+
+The device stores the same entries in one slot per feature plus one spare, and
+CUB performs a stable radix presort as columns arrive. On the evaluated A100
+and H100, cuts are scored directly in double precision. Devices with slow
+double precision may first apply a conservative single-precision filter and
+then score every surviving candidate exactly.
+
+Uploads pass through page-locked staging buffers rather than pinning the
+training matrix. This is the implementation's only explicit NUMA placement:
+on a multi-socket host, the buffers are allocated by a thread bound to the
+GPU's PCI NUMA node, and dedicated copy threads are pinned to that node's
+CPUs. General training memory and workers are not bound this way.
+
+\subsection{\ImplHybrid}
+\label{sec:impl-hybrid}
+
+\ImplHybrid{} retains level-synchronous GPU growth for large nodes but sends
+smaller children to the \ImplParallel{} builder
+(Fig.~\ref{fig:approach-hybrid}). The threshold is configurable; automatically
+it is \(N/8192\), clamped to 1,024--2,048 rows for CART, and \(N/4096\),
+clamped to 1,024--4,096 rows for C4.5. These empirical defaults reflect that a
+GPU level has substantial fixed overhead, whereas CPU threads can grow small
+subtrees independently.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figs/approach-hybrid.pdf}
+\caption{One level of \ImplHybrid{}. Children with at least \(m\) rows form
+the next GPU level. Smaller children are gathered into a device ring, copied
+through pinned buffers into a host arena, and grown by the CPU pool while the
+GPU continues. Both paths contribute to one shared node store.
+\ImplGpu{} sets \(m=1\), so no nonempty child is handed off.}
+\label{fig:approach-hybrid}
+\end{figure}
+
+For a hand-off, the GPU gathers only columns that can still split the child
+into a bounded device ring. Copy streams transfer them through pinned buffers
+into a pageable host arena, and a host callback starts CPU tasks when their
+data arrive. The GPU level loop does not wait for these tasks. The arena is
+pre-touched by CPU threads but is not bound to the GPU's NUMA node. CPU and
+GPU branches allocate from the same node store and are assembled in preorder
+after both finish. Assignment is therefore per node of one tree, not per tree
+of a forest, and the CPU grows subtrees rather than merely controlling the
+GPU.
