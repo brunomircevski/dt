@@ -125,8 +125,8 @@ int settleCandidates(const double *estimate, const std::uint32_t *position, std:
 // sums (Gini: no division, with tabled reciprocals; entropy: cutGain() with a
 // multiplication by 1/n instead of the division), the boundary-point shortcut
 // is decided without a branch (on continuous features it is a coin flip), and
-// whole blocks of cuts are skipped when a bound shows that none of them can
-// beat the best cut so far (see kBoundBlock).
+// whole blocks of cuts are skipped when they hold no threshold or a bound
+// shows that none of them can beat the best cut so far (see kBoundBlock).
 //
 // It can run in pieces, so that a child's sweep runs while the child's column
 // is being written by the parent's partition: advance() takes the cuts whose
@@ -264,6 +264,14 @@ public:
         std::uint32_t blockOnes = 0;
         for (std::uint32_t index = cut - 1; index + 1 < blockEnd; ++index) {
           blockOnes += codec.cls(entries[index].packed);
+        }
+        if (!distinct(entries[cut - 1].value, entries[blockEnd - 1].value)) {
+          // No threshold in the block (sorted values: if its first and last
+          // ones are too close for a cut, so are all its neighbours), e.g.
+          // inside a run of equal values: only its rows move.
+          ones += blockOnes;
+          cut = blockEnd;
+          continue;
         }
         const std::uint32_t l1lo = ones + codec.cls(entries[cut - 1].packed);
         const std::uint32_t l1hi = ones + blockOnes;
