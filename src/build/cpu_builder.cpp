@@ -86,7 +86,8 @@ std::uint32_t waitNonZero(const std::atomic<std::uint32_t> &value) {
 constexpr std::size_t kFewColumns = 8;
 
 // Children with at least this many rows are swept during the out-of-place
-// partition of their parent, through staging buffers of kStageEntries.
+// partition of their parent, through staging buffers that are flushed when
+// they hold kStageEntries (partitionAndSweep()).
 constexpr std::uint32_t kSweptChildRows = 1u << 12;
 constexpr std::uint32_t kStageEntries = 1024;
 
@@ -740,37 +741,59 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
       const std::uint32_t row = codec.row(entry.packed);
       return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
     };
+    // The entries go to the stages in runs that cannot fill a stage, and
+    // stages of kStageEntries or more are flushed between runs (a flush
+    // leaves only the few entries the sweep still reads, so every run takes
+    // at least 64 entries). So the loops keep the stage sizes in registers.
+    // With the capacity checks inside the loop the sizes went through memory
+    // on every entry (flush() changes them), and the loop's speed depended
+    // on how the compiler arranged flush(): when a4d89adf moved the sweep to
+    // its own files, GCC 13 inlined flush() here, and C4.5's build on HIGGS
+    // took 15% longer on a Xeon 6542Y (docs/PERFORMANCE.md).
     if (keep == Keep::Both) {
       Stage &left = stages[0];
       Stage &right = stages[1];
-      for (std::uint32_t index = 0; index < count; ++index) {
-        const Entry entry = source[index];
-        const std::uint32_t isLeft = goesLeft(entry);
-        left.data[left.size] = entry;
-        right.data[right.size] = entry;
-        left.size += isLeft;
-        right.size += 1 - isLeft;
-        if (left.size == kCapacity) {
-          flush(0);
+      for (std::uint32_t index = 0; index < count;) {
+        const std::uint32_t end =
+            index + std::min(count - index, kCapacity - std::max(left.size, right.size));
+        Entry *const leftData = left.data;
+        Entry *const rightData = right.data;
+        std::uint32_t leftSize = left.size;
+        std::uint32_t rightSize = right.size;
+        for (; index < end; ++index) {
+          const Entry entry = source[index];
+          const std::uint32_t isLeft = goesLeft(entry);
+          leftData[leftSize] = entry;
+          rightData[rightSize] = entry;
+          leftSize += isLeft;
+          rightSize += 1 - isLeft;
         }
-        if (right.size == kCapacity) {
-          flush(1);
+        left.size = leftSize;
+        right.size = rightSize;
+        for (int child = 0; child < 2; ++child) {
+          if (stages[child].size >= kStageEntries) {
+            flush(child);
+          }
         }
       }
       flush(0);
       flush(1);
     } else {
-      // One child: usually a lopsided split, so the branch is predictable.
       const int child = keep == Keep::Left ? 0 : 1;
       const std::uint32_t wanted = keep == Keep::Left;
       Stage &stage = stages[child];
-      for (std::uint32_t index = 0; index < count; ++index) {
-        const Entry entry = source[index];
-        if (goesLeft(entry) == wanted) {
-          stage.data[stage.size++] = entry;
-          if (stage.size == kCapacity) {
-            flush(child);
-          }
+      for (std::uint32_t index = 0; index < count;) {
+        const std::uint32_t end = index + std::min(count - index, kCapacity - stage.size);
+        Entry *const data = stage.data;
+        std::uint32_t size = stage.size;
+        for (; index < end; ++index) {
+          const Entry entry = source[index];
+          data[size] = entry;
+          size += goesLeft(entry) == wanted;
+        }
+        stage.size = size;
+        if (size >= kStageEntries) {
+          flush(child);
         }
       }
       flush(child);
