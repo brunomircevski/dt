@@ -2,6 +2,92 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: the CPU sweeps and partitions after the grower split (mordor3 cluster)
+
+After a4d89adf (cpu_builder.cpp split into presort, cpu_sweep and
+cpu_builder), one-thread C4.5 on HIGGS built in 19.1 s on dell against
+16.6 s before (ebbea71); epyc and CART did not move. `--profile` put the
+whole loss in the partition half of `partition_sweep` (8.65 → 11.33 s; the
+sweeps, 7.6 s, unchanged). The two-class sweep compiled to the same code. But
+`partitionAndSweep<Entropy, true>` grew from 2490 to 3382 bytes: with
+`sweepSetup()` now out of line, GCC 13 inlined the staging buffers'
+`flush()` into it. Its loop already kept the two buffers' sizes in memory
+(a store and a reload per entry), and with the inlined flush that cost the
+3 s on the Xeon 6542Y (no PMU counters there, so the exact stall is not
+known). Marking `flush()` noinline gave back 16.5 s. The fix that went in
+does not depend on what GCC inlines: entries go to the buffers in runs that
+cannot fill one, with the sizes in registers, and full buffers are flushed
+between runs (8dedb431). MNIST8M's one-thread C4.5 on epyc was also slower
+after the split (sweep 48 → 60 s in `--profile`) with the same instructions in
+`scanFeatureK`, so most likely code or data placement; the changes below
+replace that code.
+
+Every change keeps the trees: the `--dump` of every run below has the same
+SHA-256 as ec77727's, `tests/check.sh` passes for `./tree_cpu` (dell3) and
+`./tree` with the CUDA backend (hopper), and the CUDA build compiles for
+sm_75/80/90. In the order of the commits, one-thread build on dell's HIGGS
+C4.5 (interleaved runs in separate jobs):
+
+* **Staging runs** (8dedb431): 19.17 → 16.10 s, back to ebbea71's 16.59 s.
+* **Blocks without a threshold** (f94a9158). C4.5's 1e-5 gap makes most
+  16-cut blocks of HIGGS's sweeps hold no allowed threshold; the values are
+  sorted, so first-to-last of the block decides it, before the corner bound
+  is computed: 16.10 → 9.92 s (SUSY C4.5 2.95 → 2.72 s). CART has no gap and
+  is unaffected.
+* **No branch on the row's side** in the out-of-place partition (41c2f03d,
+  `moveRows()`, shared with `partitionInBlocks`): GCC made `isLeft ? left :
+  right` a branch that an even split mispredicts on every other row; the
+  target index is now a mask. With **galloping runs** in `scanFeatureK`
+  (2c81e137: a run of values within the gap is crossed in doubling steps,
+  so most of its rows are counted without comparisons) and **64-bit entry
+  moves** (94f33242), MNIST8M one-thread build 236 → 156 s on dell and 188 →
+  95 s on epyc (C4.5), CART 263 → 159 s and 205 → 97 s. HIGGS C4.5 on dell
+  within noise of the step before; on epyc 8.9 s after the staging runs →
+  6.6 s with the gap skip and these three.
+* **A full block's class-1 count in a fixed-count loop** (f49ab9d4, which GCC
+  vectorizes) and **four counter lanes for the rows of a run** (c444d72c):
+  dell HIGGS C4.5 10.1 → 8.8 s, epyc 6.6 → 5.5 s, MNIST8M epyc C4.5 95 →
+  83 s.
+
+Final A/B, `--no-prune -d 10`, build ms, interleaved in one job per node
+(HIGGS/SUSY 4 runs, MNIST8M/ECBDL 15M 3, ECBDL 15M one-thread 1); one thread
+is `taskset -c 0 --serial`, 48 is `--parallel --threads 48`; CV ≤ 1.3% for
+one thread, ≤ 12% at 48 threads (SUSY):
+
+Build seconds; the change is against f1fe270.
+
+| case | threads | dell ec77727 | dell f1fe270 | dell c45-perf | epyc ec77727 | epyc f1fe270 | epyc c45-perf |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| HIGGS C4.5 | 1 | 16.60 | 19.13 | **8.75** (-54%) | 9.97 | 10.11 | **5.54** (-45%) |
+| HIGGS CART | 1 | 12.18 | 12.15 | **9.35** (-23%) | 8.62 | 8.58 | **5.94** (-31%) |
+| SUSY C4.5 | 1 | 3.10 | 3.14 | **2.57** (-18%) | 2.42 | 2.48 | **1.79** (-28%) |
+| SUSY CART | 1 | 2.94 | 2.92 | **2.68** (-8%) | 2.31 | 2.33 | **1.93** (-17%) |
+| MNIST8M C4.5 | 1 | 238 | 239 | **154** (-36%) | 176 | 188 | **83.0** (-56%) |
+| MNIST8M CART | 1 | 266 | 266 | **157** (-41%) | 204 | 205 | **87.3** (-57%) |
+| ECBDL 15M C4.5 | 1 | 346 | 363 | **185** (-49%) | 235 | 235 | **108** (-54%) |
+| ECBDL 15M CART | 1 | 283 | 285 | **185** (-35%) | 186 | 188 | **104** (-45%) |
+| HIGGS C4.5 | 48 | 0.75 | 0.89 | **0.61** (-32%) | 0.48 | 0.45 | **0.34** (-26%) |
+| HIGGS CART | 48 | 0.62 | 0.62 | **0.57** (-8%) | 0.48 | 0.47 | **0.35** (-25%) |
+| SUSY C4.5 | 48 | 0.24 | 0.26 | **0.22** (-16%) | 0.19 | 0.17 | **0.16** (-7%) |
+| SUSY CART | 48 | 0.25 | 0.25 | **0.23** (-6%) | 0.20 | 0.18 | **0.18** (-1%) |
+| MNIST8M C4.5 | 48 | 9.88 | 9.72 | **9.38** (-3%) | 4.64 | 4.88 | **3.50** (-28%) |
+| MNIST8M CART | 48 | 9.88 | 9.78 | **9.33** (-5%) | 5.15 | 5.16 | **3.54** (-31%) |
+| ECBDL 15M C4.5 | 48 | 10.86 | 11.06 | **9.10** (-18%) | 6.28 | 6.30 | **3.44** (-45%) |
+| ECBDL 15M CART | 48 | 9.81 | 9.87 | **9.01** (-9%) | 5.16 | 5.17 | **3.58** (-31%) |
+
+Tried and dropped (same trees in every case):
+
+* **`flush()` noinline** fixes the regression (16.53 s) but leaves the
+  sizes in memory; superseded by the staging runs.
+* **`sweepSetup()` inline again, `-falign-loops=64`**: no change.
+* **Plain stores instead of non-temporal ones** in the partitions: slower on
+  both nodes (dell HIGGS C4.5 10.1 → 11.4 s, epyc 6.6 → 7.0 s, MNIST8M 1-4%).
+* **Bounding growing spans of blocks** (up to 256 cuts) before the 16-cut
+  blocks: slower on SUSY.
+* **A `scanFeatureK<10>` instantiation** for MNIST's 10 classes: slower
+  (local, 6.57 vs 6.37 s on a 500K sample).
+* **No zero-fill of the multi-class counters**: no change.
+
 ## November 2026: C4.5's GPU setup on SOREL 4M (CUDA hybrid)
 
 C4.5's setup on SOREL 4M took 3.4 s on the A100 node against CART's 1.9 s
