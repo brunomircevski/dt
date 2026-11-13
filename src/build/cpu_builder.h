@@ -33,14 +33,16 @@ namespace dt {
 // child are also moved through a buffer. A slot or two more than features is
 // enough: memory stays at about one copy of the columns.
 //
-// `leftBits` (a bit per row id) says which rows of a node that is
-// partitioned out of place go left: 1/8 of a byte per row, so it stays in
-// the caches while the columns stream through them.
+// `train` (the training set, whose rows are the row ids; the CPU growers)
+// allows this; the CUDA backend's hand-offs are partitioned in place. The
+// rows of such a node that go left are marked in a bitmap of the thread that
+// splits it (a bit per row id), the biggest nodes' from the raw values of
+// `train` (see split()).
 struct Columns {
   Entry *data = nullptr;
   std::size_t stride = 0;
   std::size_t slots = 0; // slots in data (0: one per feature)
-  std::uint64_t *leftBits = nullptr;
+  const Dataset *train = nullptr;
 
   Entry *slot(std::size_t index) const { return data + index * stride; }
 };
@@ -105,9 +107,11 @@ struct SweepSetup; // what a threshold sweep needs from the builder (cpu_builder
 class CpuTreeBuilder {
 public:
   // `goesLeft` is a scratch byte per row id (rows of different nodes never
-  // collide). `pool` may be null (serial build). Without `tables`, tables
-  // for counts below kLogTableSize are used. `leafOfRow` (optional, a value
-  // per row id) receives the NodeStore id of the leaf each row ends in.
+  // collide) for nodes partitioned in place without `pool` or without
+  // Columns::train (the CUDA backend's hand-offs); may be null otherwise.
+  // `pool` may be null (serial build). Without `tables`,
+  // tables for counts below kLogTableSize are used. `leafOfRow` (optional, a
+  // value per row id) receives the NodeStore id of the leaf each row ends in.
   CpuTreeBuilder(const SplitRules &rules, const EntryCodec &codec, std::size_t featureCount,
                  NodeStore &store, std::uint8_t *goesLeft, ThreadPool *pool,
                  const ParallelOptions &options, CountTables tables = {},
@@ -150,12 +154,13 @@ private:
   CutCandidate scanFeatureK(const Entry *entries, std::uint32_t count,
                             const std::uint32_t *total, double parentWeighted,
                             std::uint32_t minChild, std::uint32_t *bestLeft) const;
-  // Returns the slots of the children's columns. `children` (left, right;
-  // null entries for children without) are swept on the way (out of place).
+  // Returns the slots of the children's columns. `leftBits` (the rows going
+  // left; null: goesLeft_) is required out of place, where `children` (left,
+  // right; null entries for children without) are swept on the way.
   std::shared_ptr<const SlotMap> partition(const Columns &columns, const Subtree &item,
                                            int winner, std::uint32_t leftCount, Keep keep,
-                                           bool outOfPlace, bool blocked,
-                                           ChildSweep *const *children);
+                                           const std::uint64_t *leftBits, bool outOfPlace,
+                                           bool blocked, ChildSweep *const *children);
   template <Criterion Crit, bool HasGap>
   void partitionAndSweep(const Entry *source, Entry *target, std::uint32_t count,
                          std::uint32_t leftCount, Keep keep, const std::uint64_t *leftBits,
@@ -171,8 +176,9 @@ private:
                          const std::vector<std::uint32_t> &waitFor, std::uint32_t count,
                          std::uint32_t leftCount, Keep keep,
                          const std::uint64_t *leftBits) const;
+  template <class IsLeft>
   void partitionFeature(Entry *entries, std::uint32_t count, std::uint32_t leftCount,
-                        Entry *buffer, Keep keep) const;
+                        Entry *buffer, Keep keep, IsLeft isLeft) const;
 
   const SplitRules &rules_;
   EntryCodec codec_;

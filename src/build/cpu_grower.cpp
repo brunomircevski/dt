@@ -22,12 +22,11 @@ public:
         rows_(train.rowCount), features_(train.featureCount()),
         codec_(makeEntryCodec(train.classCount(), train.rowCount)),
         slots_(features_ + spareSlots(pool, features_)),
-        goesLeft_(new std::uint8_t[rows_]) {
+        goesLeft_(pool ? nullptr : new std::uint8_t[rows_]) {
     // A slot per column and a few more (see Columns): serial and parallel
     // builds run the same algorithm, big nodes are partitioned out of place
     // in both, only on one thread or on many.
     work_.reset(new Entry[slots_ * rows_]);
-    leftBits_.reset(new std::uint64_t[rows_ / 64 + 1]);
   }
 
   Tree grow(const SplitRules &rules, GrowTimings &timings, DistinctValues *distinct,
@@ -66,8 +65,7 @@ public:
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
                            options_.parallel, countTables(),
                            leafOfRow ? leafOfRow->ids.data() : nullptr);
-    builder.grow(Columns{work_.get(), count, slots_, leftBits_.get()},
-                 std::move(root));
+    builder.grow(Columns{work_.get(), count, slots_, &train_}, std::move(root));
     if (pool_) {
       pool_->waitIdle();
     }
@@ -170,8 +168,7 @@ private:
   std::size_t slots_; // features_ + spareSlots()
   std::unique_ptr<Entry[]> work_;   // slots_ slots: the columns being partitioned
   SlotMap slotOf_;                  // where in work_ each feature's column starts
-  std::unique_ptr<std::uint64_t[]> leftBits_; // Columns::leftBits
-  std::unique_ptr<std::uint8_t[]> goesLeft_;
+  std::unique_ptr<std::uint8_t[]> goesLeft_; // one thread: in-place marks (see split())
   CountTable countXlog_; // see countTables()
   CountTable countInverse_;
 };

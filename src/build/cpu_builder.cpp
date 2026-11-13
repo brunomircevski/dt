@@ -26,6 +26,13 @@ namespace {
 // builder has a spare column slot (Columns::slots).
 constexpr std::uint32_t kOutOfPlaceRows = 1u << 15;
 
+// Such nodes with at least 1 / kRawMarkShare of all rows mark every row id
+// from the winner's raw values, on all threads (markByValue()); smaller ones
+// mark their own rows on the splitting thread alone, about 2 ns per row.
+// 4 to 32 built the same within noise (HIGGS, SUSY, chess_100m, 48 threads);
+// 2 was 20% slower on dell chess_100m (marks of the 2nd level on one thread).
+constexpr std::size_t kRawMarkShare = 8;
+
 // Nodes with at least this many rows are partitioned out of place in blocks
 // of kPartitionBlock entries by all threads (partitionInBlocks()) when they
 // have fewer free slots than threads (and columns to move), so that the
@@ -109,10 +116,58 @@ void streamEntry(Entry *at, std::uint64_t word) {
 #endif
 }
 
-// 1 if the entry's row goes left (its bit in Columns::leftBits).
+// 1 if the entry's row goes left (its bit in the splitting thread's bitmap).
 std::uint32_t leftBit(const std::uint64_t *leftBits, EntryCodec codec, std::uint64_t word) {
   const std::uint32_t row = codec.row(packedOf(word));
   return static_cast<std::uint32_t>(leftBits[row >> 6] >> (row & 63)) & 1u;
+}
+
+// The bitmap of the rows that go left (a bit per row id, `rows` row ids) of
+// the big nodes this thread splits. Each thread has its own: a shared one
+// had the rows of every node that is being split in each 64-byte line, so
+// every mark took lines that the threads partitioning other nodes were
+// reading (atomic marks cost 24-54 ns per row on 48 threads instead of 2).
+// A thread uses it from the mark to the end of the node's partition, and
+// never splits another node in between (ThreadPool::parallelFor runs only
+// its own items on the calling thread); the partition's helpers only read
+// it. Not initialised: a mark writes the bit of each of the node's rows.
+std::uint64_t *threadLeftBits(std::size_t rows) {
+  thread_local std::vector<std::uint64_t, UninitializedAllocator<std::uint64_t>> bits;
+  if (bits.size() < rows / 64 + 1) {
+    bits.resize(rows / 64 + 1);
+  }
+  return bits.data();
+}
+
+// Bit `row` of `bits` = values[row] <= leftValue, for the rows of the words
+// [fromWord, toWord) (of `rows` rows): sequential reads, whole words
+// written, no atomics. The node's left rows are exactly its rows with a value
+// up to the cut's leftValue (the next value is larger; the entries hold
+// value + 0.0f, and -0.0 <= x compares as 0.0 <= x); the bits of rows of
+// other nodes are not read.
+void markByValue(const float *values, std::size_t rows, float leftValue, std::uint64_t *bits,
+                 std::size_t fromWord, std::size_t toWord) {
+  for (std::size_t word = fromWord; word < toWord; ++word) {
+    const std::size_t first = word * 64;
+    const std::size_t length = std::min<std::size_t>(64, rows - std::min(rows, first));
+    std::uint64_t mask = 0;
+#if defined(__SSE2__)
+    if (length == 64) { // four values per compare (GCC does not vectorize the loop)
+      const __m128 limit = _mm_set1_ps(leftValue);
+      for (std::size_t quad = 0; quad < 16; ++quad) {
+        const __m128 four = _mm_loadu_ps(values + first + 4 * quad);
+        mask |= std::uint64_t{static_cast<std::uint32_t>(_mm_movemask_ps(_mm_cmple_ps(four, limit)))}
+                << (4 * quad);
+      }
+      bits[word] = mask;
+      continue;
+    }
+#endif
+    for (std::size_t bit = 0; bit < length; ++bit) {
+      mask |= std::uint64_t{values[first + bit] <= leftValue} << bit;
+    }
+    bits[word] = mask;
+  }
 }
 
 } // namespace
@@ -302,33 +357,43 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   }
   const std::size_t blocks = wide ? 4 * (pool_->workerCount() + 1) : 1;
   // Out of place needs a slot that holds none of the node's columns.
-  const bool outOfPlace = columns.leftBits && count >= kOutOfPlaceRows &&
+  const bool outOfPlace = columns.train && count >= kOutOfPlaceRows &&
                           (columns.slots > 0 ? columns.slots : featureCount_) > features.size();
+  // The CPU growers mark in the thread's bitmap, also in place: a byte
+  // array shared by all threads had 64 rows of every node split at once in
+  // each cache line. On one thread the bytes stay for in place: a byte is
+  // stored without loading its line first, a bit is not (HIGGS full depth
+  // 3% faster). The CUDA backend's hand-offs mark goesLeft_.
+  std::uint64_t *const leftBits =
+      columns.train && (outOfPlace || pool_) ? threadLeftBits(columns.stride) : nullptr;
   std::optional<trace::Doing> marking(std::in_place, trace::Work::Mark);
-  parallelFor(widePool, blocks, [&](std::size_t block) {
-    const std::uint32_t end = static_cast<std::uint32_t>(std::size_t{count} * (block + 1) / blocks);
-    for (std::uint32_t index = static_cast<std::uint32_t>(std::size_t{count} * block / blocks);
-         index < end; ++index) {
+  if (outOfPlace && count >= columns.stride / kRawMarkShare) {
+    const float *values = columns.train->column(static_cast<std::size_t>(decision.feature));
+    const float leftValue = winner[leftCount - 1].value;
+    const std::size_t words = columns.stride / 64 + 1;
+    parallelFor(widePool, blocks, [&](std::size_t block) {
+      markByValue(values, columns.stride, leftValue, leftBits, words * block / blocks,
+                  words * (block + 1) / blocks);
+    });
+  } else if (leftBits) {
+    for (std::uint32_t index = 0; index < leftCount; ++index) {
       const std::uint32_t row = codec_.row(winner[index].packed);
-      if (outOfPlace) {
-        const std::uint64_t bit = std::uint64_t{1} << (row & 63);
-        if (!pool_) { // one thread: nothing else writes the words
-          std::uint64_t &word = columns.leftBits[row >> 6];
-          word = index < leftCount ? word | bit : word & ~bit;
-          continue;
-        }
-        // Atomic: the rows of other nodes share the words.
-        std::atomic_ref<std::uint64_t> word(columns.leftBits[row >> 6]);
-        if (index < leftCount) {
-          word.fetch_or(bit, std::memory_order_relaxed);
-        } else {
-          word.fetch_and(~bit, std::memory_order_relaxed);
-        }
-      } else {
-        goesLeft_[row] = index < leftCount;
-      }
+      leftBits[row >> 6] |= std::uint64_t{1} << (row & 63);
     }
-  });
+    for (std::uint32_t index = leftCount; index < count; ++index) {
+      const std::uint32_t row = codec_.row(winner[index].packed);
+      leftBits[row >> 6] &= ~(std::uint64_t{1} << (row & 63));
+    }
+  } else {
+    parallelFor(widePool, blocks, [&](std::size_t block) {
+      const std::uint32_t end =
+          static_cast<std::uint32_t>(std::size_t{count} * (block + 1) / blocks);
+      for (std::uint32_t index = static_cast<std::uint32_t>(std::size_t{count} * block / blocks);
+           index < end; ++index) {
+        goesLeft_[codec_.row(winner[index].packed)] = index < leftCount;
+      }
+    });
+  }
   marking.reset();
   const Keep keep = leftTerminal ? Keep::Right : rightTerminal ? Keep::Left : Keep::Both;
   // Big children (two classes) are swept while the columns are partitioned.
@@ -366,7 +431,8 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   std::optional<trace::Doing> partitioning(
       std::in_place, swept[0] || swept[1] ? trace::Work::PartitionSweep : trace::Work::Partition);
   std::shared_ptr<const SlotMap> slots =
-      partition(columns, item, decision.feature, leftCount, keep, outOfPlace, blocked, swept);
+      partition(columns, item, decision.feature, leftCount, keep, leftBits, outOfPlace, blocked,
+                swept);
   partitioning.reset();
 
   // 5. Children. A big left child becomes a pool task so idle threads can pick
@@ -395,6 +461,7 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
 std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
                                                          const Subtree &item, int winner,
                                                          std::uint32_t leftCount, Keep keep,
+                                                         const std::uint64_t *leftBits,
                                                          bool outOfPlace, bool blocked,
                                                          ChildSweep *const *children) {
   const std::uint32_t count = item.count;
@@ -448,7 +515,7 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
           moveWaits.push_back(waitFor[index] == kNone ? kNone : moveOf[waitFor[index]]);
         }
       }
-      partitionInBlocks(sources, targets, moveWaits, count, leftCount, keep, columns.leftBits);
+      partitionInBlocks(sources, targets, moveWaits, count, leftCount, keep, leftBits);
       return slots;
     }
     // Columns are taken in order, so the one a column waits for has started.
@@ -470,16 +537,16 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
                     // CART: Gini, values must differ; C4.5: entropy, gap.
                     if (gini) {
                       partitionAndSweep<Criterion::Gini, false>(source, target, count,
-                                                                leftCount, keep, columns.leftBits,
+                                                                leftCount, keep, leftBits,
                                                                 isWinner, feature, children);
                     } else {
                       partitionAndSweep<Criterion::Entropy, true>(source, target, count,
-                                                                  leftCount, keep, columns.leftBits,
+                                                                  leftCount, keep, leftBits,
                                                                   isWinner, feature, children);
                     }
                   } else if (!isWinner) {
                     partitionFeatureOutOfPlace(source, target, count, leftCount, keep,
-                                               columns.leftBits);
+                                               leftBits);
                   }
                   done[index].store(1, std::memory_order_release);
                 });
@@ -501,8 +568,16 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
     if (keep == Keep::Both && buffer.size() < count) {
       buffer.resize(count);
     }
-    partitionFeature(columnOf(columns, item, others[index]) + item.begin, count, leftCount,
-                     buffer.data(), keep);
+    Entry *entries = columnOf(columns, item, others[index]) + item.begin;
+    if (leftBits) {
+      partitionFeature(entries, count, leftCount, buffer.data(), keep, [&](std::uint64_t word) {
+        return leftBit(leftBits, codec_, word);
+      });
+    } else {
+      partitionFeature(entries, count, leftCount, buffer.data(), keep, [&](std::uint64_t word) {
+        return std::uint32_t{goesLeft_[codec_.row(packedOf(word))]};
+      });
+    }
   };
   parallelFor(pool_ && count >= options_.featureParallelRows ? pool_ : nullptr, others.size(),
               partitionOne);
@@ -603,14 +678,15 @@ void CpuTreeBuilder::partitionInBlocks(const std::vector<const Entry *> &sources
   });
 }
 
-// Stable partition by goesLeft (`leftCount` rows go left). The larger side is
+// Stable partition by isLeft(entry word) (`leftCount` rows go left). The larger side is
 // compacted in place (the write index never passes the read index), the
 // smaller one waits in `buffer`, which needs min(left, right) + 1 entries. If
 // only one child is grown further, only its rows are moved, in place: left
 // rows forward, or right rows backward from the end.
+template <class IsLeft>
 void CpuTreeBuilder::partitionFeature(Entry *entries, std::uint32_t count,
-                                      std::uint32_t leftCount, Entry *buffer, Keep keep) const {
-  auto isLeft = [this](std::uint64_t word) { return goesLeft_[codec_.row(packedOf(word))]; };
+                                      std::uint32_t leftCount, Entry *buffer, Keep keep,
+                                      IsLeft isLeft) const {
   if (keep == Keep::Left) {
     std::uint32_t write = 0;
     for (std::uint32_t index = 0; index < count; ++index) {
