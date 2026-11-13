@@ -223,6 +223,19 @@ variant's dumps equal base's.
 Raw files: `out/pb-k-{epyc,dell}.csv` (pb1, pb2k*, `--no-prune -d 10`) and
 `out/pb-full-{epyc,dell}.csv` (pb2, pb3).
 
+**pb4 (2026-11-13, PC session; `~/opt-dt/patches/pb/0004-*.patch`, on top of pb3; built and
+`tests/check.sh` passed on the PC, NOT built or measured on the cluster yet):**
+
+* K is now the constant `kRawMarkShare = 8` (no `PB_K` env). Chosen from `out/pb-k-*.csv`: K = 4..32
+  are within noise everywhere; K = 2 is 20% slower on dell chess_100m.
+* Serial in-place nodes use the `goesLeft_` bytes again (the grower allocates them only without a
+  pool). This targets pb3's one-thread +1.7% (epyc) / +3.1% (dell) on HIGGS cartfull: a bit mark is
+  a read-modify-write of a random line, while a byte store does not load the line first. With a
+  pool, in-place nodes keep the per-thread bitmap.
+* Next: `git am` 0004 onto opt/pb, copy to `wt/pb4`, build, and A/B base/pb3/pb4 on
+  `cartfull:higgs:s`, `c45full:susy:s`, `cartfull:higgs:p`, `cart:higgs:p` (epyc + dell1, 5 reps).
+  If pb4 removes the one-thread regression, items 1 and 2 below are done.
+
 **To do:**
 
 1. Fix K. It must not stay an env var. K = 4 to 16 is fine everywhere except dell chess, where
