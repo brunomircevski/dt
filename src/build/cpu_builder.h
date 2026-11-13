@@ -128,7 +128,7 @@ private:
   // A child whose sweeps run while its parent's columns are partitioned.
   struct ChildSweep {
     std::uint32_t count = 0;
-    std::uint32_t total[2] = {0, 0}; // class counts (two classes only)
+    const std::uint32_t *total = nullptr; // class counts (the NodeStore's)
     double parentWeighted = 0.0;
     std::uint32_t minChild = 0;
     FeatureCuts *out = nullptr;
@@ -161,7 +161,13 @@ private:
                                            int winner, std::uint32_t leftCount, Keep keep,
                                            const std::uint64_t *leftBits, bool outOfPlace,
                                            bool blocked, ChildSweep *const *children);
+  // partitionAndSweep() with the sweep for the class count (as scanFeatureFor()).
   template <Criterion Crit, bool HasGap>
+  void partitionAndSweepFor(const Entry *source, Entry *target, std::uint32_t count,
+                            std::uint32_t leftCount, Keep keep, const std::uint64_t *leftBits,
+                            bool isWinner, std::uint32_t feature,
+                            ChildSweep *const *children) const;
+  template <class Sweep>
   void partitionAndSweep(const Entry *source, Entry *target, std::uint32_t count,
                          std::uint32_t leftCount, Keep keep, const std::uint64_t *leftBits,
                          bool isWinner, std::uint32_t feature,

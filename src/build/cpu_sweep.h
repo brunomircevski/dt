@@ -1,9 +1,10 @@
 #pragma once
 
-// The threshold sweep of the CPU builder for two classes (TwoClassSweep) and
-// its shared pieces. Internal to src/build: cpu_sweep.cpp runs the sweeps of
-// CpuTreeBuilder::scanFeature(), cpu_builder.cpp the ones fused into the
-// partition of a node's columns (partitionAndSweep()).
+// The threshold sweeps of the CPU builder, for two classes (TwoClassSweep)
+// and for any number (KClassSweep), and their shared pieces. Internal to
+// src/build: cpu_sweep.cpp runs the sweeps of CpuTreeBuilder::scanFeature(),
+// cpu_builder.cpp the ones fused into the partition of a node's columns
+// (partitionAndSweep()).
 
 #include "algo/split_math.h"
 #include "build/cpu_builder.h"
@@ -12,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <utility>
+#include <vector>
 
 namespace dt {
 
@@ -94,6 +96,7 @@ struct SweepSetup {
   double gap = 0.0;                // SplitRules::minValueGap()
   LogTable logs;
   bool divide = false;             // see kDividingSweepRows
+  int classCount = 2;
 };
 
 template <Criterion Crit, bool HasGap> class TwoClassSweep {
@@ -331,6 +334,265 @@ private:
   std::uint32_t bestCut_ = 0;
   std::uint32_t bestLeft_[2] = {0, 0};
   std::pair<float, float> bestValues_{0.0f, 0.0f};
+};
+
+// The sweep of scanFeatureK() for any number of classes: FixedK of them, or
+// 0 for setup.classCount. Cut i sits between entries i-1 and i and sends the
+// first i rows left. Rows are moved left one by one, which only updates the
+// class counts (most rows of discrete features sit inside runs of equal
+// values, which a tight loop moves). Every cut with a threshold that the
+// boundary-point shortcut leaves gets cutGain(), and a cut is kept when its
+// gain beats the best so far by more than kTieEps. After a cut far below the
+// best, the next cuts that provably cannot reach it (maxGainStep) only move
+// their rows.
+//
+// It runs in pieces like TwoClassSweep (same interface): a piece stops before
+// a cut whose entries are not all available (cut i reads entries i-2 to i+1,
+// a run or a skip up to the cut it stops at) and the next one goes on in the
+// same state, so the cuts, their order and the result do not depend on the
+// pieces. `total` must stay valid until finish().
+template <int FixedK, Criterion Crit> class KClassSweep {
+public:
+  using Setup = SweepSetup;
+
+  KClassSweep(const Setup &setup, std::uint32_t count, const std::uint32_t *total,
+              double parentWeighted, std::uint32_t minChild)
+      : setup_(setup), count_(count), total_(total), parentWeighted_(parentWeighted),
+        minChild_(minChild), classCount_(FixedK > 0 ? FixedK : setup.classCount),
+        empty_(count < 2 * minChild), lastCut_(empty_ ? 0 : count - minChild), cut_(minChild) {
+    const double rows = static_cast<double>(count);
+    // Bound on the rounding of cutGain(): a generous count of roundings times
+    // the size of the terms (Gini: at most n; entropy: at most n * log2(n)),
+    // divided by n.
+    if constexpr (Crit == Criterion::Gini) {
+      margin_ = 256.0 * kRoundoff;
+    } else {
+      const double scale = std::max(1.0, setup.logs.xlog2x(count)) / rows;
+      margin_ = 2.0 * ((4.0 * classCount_ + 16.0) * scale + 64.0) * kRoundoff;
+    }
+    rowsPerGain_ = rows / maxGainStep<Crit>(count);
+    if constexpr (FixedK == 0) {
+      dynamic_.assign(2 * static_cast<std::size_t>(classCount_), 0u);
+    }
+  }
+
+  // The first entry that later advance() calls still read.
+  std::uint32_t from() const { return started_ && cut_ >= 2 ? cut_ - 2 : 0; }
+
+  // Takes the cuts whose entries are among the first `available` (all cuts if
+  // available == count). entries[i] must be readable for i in
+  // [from(), available).
+  void advance(const Entry *entries, std::uint32_t available) {
+    if (empty_) {
+      return;
+    }
+    // A constant for FixedK (the class loops unroll; with the member, 7
+    // classes ran 35% more instructions than a sweep in one function).
+    const int classCount = FixedK > 0 ? FixedK : classCount_;
+    const std::size_t classes = static_cast<std::size_t>(classCount);
+    // left: class counts of the rows moved left so far (fixed K: a local
+    // copy, which the entries cannot alias).
+    std::uint32_t fixedLeft[kFixedClasses];
+    std::uint32_t *left = fixedLeft;
+    if constexpr (FixedK == 0) {
+      left = dynamic_.data();
+    } else {
+      std::copy_n(fixed_, FixedK, fixedLeft);
+    }
+    std::uint32_t *const bestLeft = FixedK > 0 ? fixed_ + kFixedClasses : left + classes;
+    const EntryCodec codec = setup_.codec;
+    if (!started_) {
+      if (available < minChild_ + 1 && available < count_) {
+        return;
+      }
+      for (std::uint32_t index = 0; index + 1 < minChild_; ++index) {
+        ++left[codec.cls(entries[index].packed)];
+      }
+      started_ = true;
+    }
+
+    const double gap = setup_.gap;
+    const LogTable logs = setup_.logs;
+    const std::uint32_t count = count_;
+    const std::uint32_t minChild = minChild_;
+    const std::uint32_t lastCut = lastCut_;
+    const std::uint32_t *const total = total_;
+    const double parentWeighted = parentWeighted_;
+    const double margin = margin_;
+    const double rowsPerGain = rowsPerGain_;
+    std::uint32_t tries = tries_;
+    double bestGain = bestGain_;
+    std::uint32_t bestCut = bestCut_;
+    std::pair<float, float> bestValues = bestValues_;
+    double skipThreshold = skipThreshold_;
+    std::uint32_t skipEnd = skipEnd_;
+    // Cuts below `limit` have all their entries (cut i reads up to i + 1).
+    const std::uint32_t limit =
+        available >= count ? lastCut + 1 : std::min(lastCut + 1, available - 1);
+
+    constexpr std::size_t kLanes = 4;
+    constexpr std::uint32_t kRunStep = 16; // see moveRows
+    std::uint32_t fixedLaneCounts[kLanes * kFixedClasses];
+    std::uint32_t *laneCounts = fixedLaneCounts;
+    if constexpr (FixedK == 0) {
+      thread_local std::vector<std::uint32_t> dynamicLaneCounts;
+      dynamicLaneCounts.resize(kLanes * classes);
+      laneCounts = dynamicLaneCounts.data();
+    }
+    // Moves the rows of the cuts from `cut` on left, up to `end` or, with
+    // `untilThreshold`, up to the first cut with a threshold, into interleaved
+    // counters (rows of the same class in a row then do not wait for each
+    // other's increment). Returns where it stopped and how many of the passed
+    // cuts have a threshold.
+    auto moveRows = [&](std::uint32_t cut, std::uint32_t end, bool untilThreshold) {
+      std::fill_n(laneCounts, kLanes * classes, 0u);
+      std::uint32_t thresholds = 0;
+      if (untilThreshold) {
+        // Long runs (discrete features) without comparing every pair: the
+        // values are sorted, so if entry `last` is too close to entry
+        // `safe - 1` for a threshold, no cut in [safe, last] has one. The step
+        // doubles while that holds and halves when it does not. (So where
+        // `end` cuts a run does not change where it stops.)
+        std::uint32_t safe = cut; // the cuts in [cut, safe) have no threshold
+        for (std::uint32_t step = kRunStep; step >= kRunStep;) {
+          const std::uint32_t last = safe - 1 + step;
+          if (last < end && !isCut(entries[safe - 1].value, entries[last].value, gap)) {
+            safe = last + 1;
+            step *= 2;
+          } else {
+            step /= 2;
+          }
+        }
+        std::uint32_t *const lane[kLanes] = {laneCounts, laneCounts + classes,
+                                             laneCounts + 2 * classes, laneCounts + 3 * classes};
+        for (; cut + kLanes <= safe; cut += kLanes) {
+          for (std::size_t k = 0; k < kLanes; ++k) {
+            ++lane[k][codec.cls(entries[cut - 1 + k].packed)];
+          }
+        }
+        for (; cut < safe; ++cut) {
+          ++laneCounts[codec.cls(entries[cut - 1].packed)];
+        }
+      }
+      for (; cut < end; ++cut) {
+        const bool threshold = isCut(entries[cut - 1].value, entries[cut].value, gap);
+        if (untilThreshold && threshold) {
+          break;
+        }
+        ++laneCounts[(cut & (kLanes - 1)) * classes + codec.cls(entries[cut - 1].packed)];
+        thresholds += threshold;
+      }
+      for (std::size_t lane = 0; lane < kLanes; ++lane) {
+        for (std::size_t k = 0; k < classes; ++k) {
+          left[k] += laneCounts[lane * classes + k];
+        }
+      }
+      return std::pair<std::uint32_t, std::uint32_t>{cut, thresholds};
+    };
+
+    std::uint32_t cut = cut_;
+    if (cut < skipEnd) { // a skip the last piece left unfinished
+      const std::uint32_t end = std::min(skipEnd, limit);
+      tries += moveRows(cut, end, false).second;
+      cut = end;
+    }
+    for (; cut < limit; ++cut) {
+      const Entry previous = entries[cut - 1];
+      const float value = entries[cut].value;
+      const std::uint32_t cls = codec.cls(previous.packed);
+      ++left[cls];
+      if (!isCut(previous.value, value, gap)) {
+        // (Nearly) equal values: no threshold fits between them. Move the
+        // rest of the run in a tight loop. The loop goes on with the next cut
+        // with a threshold (or the end).
+        cut = moveRows(cut + 1, limit, true).first - 1;
+        continue;
+      }
+      ++tries;
+      const bool leftDistinct = cut < 2 || isCut(entries[cut - 2].value, previous.value, gap);
+      const bool rightDistinct = cut + 1 >= count || isCut(value, entries[cut + 1].value, gap);
+      const bool skippable = (cls == codec.cls(entries[cut].packed)) & leftDistinct &
+                             rightDistinct & (cut > minChild) & (cut + minChild < count);
+      if (skippable) {
+        continue;
+      }
+      const double gain =
+          cutGain(total, left, classCount, count, cut, parentWeighted, Crit, logs);
+      if (gain > bestGain + kTieEps) {
+        bestGain = gain;
+        bestCut = cut;
+        std::copy_n(left, classes, bestLeft);
+        bestValues = {previous.value, value};
+        skipThreshold = skipBelow(bestGain, margin, rowsPerGain);
+      }
+      if (!(gain < skipThreshold)) {
+        continue;
+      }
+      // The next cuts cannot beat the best cut while their gain provably
+      // stays below it: only move their rows and count their thresholds.
+      skipEnd = cut + 1 + skippableSteps(bestGain, gain, margin, rowsPerGain, lastCut - cut);
+      const std::uint32_t end = std::min(skipEnd, limit);
+      tries += moveRows(cut + 1, end, false).second;
+      cut = end - 1;
+    }
+
+    if constexpr (FixedK > 0) {
+      std::copy_n(fixedLeft, FixedK, fixed_);
+    }
+    cut_ = cut;
+    tries_ = tries;
+    bestGain_ = bestGain;
+    bestCut_ = bestCut;
+    bestValues_ = bestValues;
+    skipThreshold_ = skipThreshold;
+    skipEnd_ = skipEnd;
+  }
+
+  // The best cut, after advance(..., count); `bestLeft` receives its class
+  // counts.
+  CutCandidate finish(std::uint32_t *bestLeft) {
+    CutCandidate best;
+    if (empty_) {
+      return best;
+    }
+    best.tries = tries_;
+    if (bestCut_ > 0) {
+      best.gain = bestGain_;
+      best.leftCount = bestCut_;
+      best.leftValue = bestValues_.first;
+      best.rightValue = bestValues_.second;
+      const std::uint32_t *counts = FixedK > 0 ? fixed_ + kFixedClasses : dynamic_.data() + classCount_;
+      std::copy_n(counts, classCount_, bestLeft);
+    }
+    return best;
+  }
+
+private:
+  static constexpr std::size_t kFixedClasses = FixedK > 0 ? FixedK : 1;
+
+  Setup setup_;
+  std::uint32_t count_;
+  const std::uint32_t *total_;
+  double parentWeighted_;
+  std::uint32_t minChild_;
+  int classCount_;
+  double margin_;
+  double rowsPerGain_;
+  bool empty_;
+  std::uint32_t lastCut_;
+
+  bool started_ = false;
+  std::uint32_t cut_; // next cut to take
+  std::uint32_t tries_ = 0;
+  double bestGain_ = -INFINITY;
+  std::uint32_t bestCut_ = 0;
+  std::pair<float, float> bestValues_{0.0f, 0.0f};
+  double skipThreshold_ = -INFINITY; // gains below it start a skip
+  std::uint32_t skipEnd_ = 0;        // cuts below it are skipped
+  // Class counts left of cut_ - 1, then the best cut's: in fixed_ for FixedK
+  // classes, else in dynamic_.
+  std::uint32_t fixed_[2 * kFixedClasses] = {};
+  std::vector<std::uint32_t> dynamic_;
 };
 
 } // namespace dt

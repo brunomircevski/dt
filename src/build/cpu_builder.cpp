@@ -396,7 +396,11 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   }
   marking.reset();
   const Keep keep = leftTerminal ? Keep::Right : rightTerminal ? Keep::Left : Keep::Both;
-  // Big children (two classes) are swept while the columns are partitioned.
+  // Big children are swept while the columns are partitioned; with more than
+  // two classes only on a pool, where the second read of the columns costs
+  // memory bandwidth (MNIST8M 21-23% faster on 48 threads). On one thread it
+  // depends on the CPU (MNIST8M 3% slower on an EPYC 9255, 6% faster on a
+  // Xeon 6542Y), so there they keep main's separate sweeps.
   ChildSweep sweeps[2];
   ChildSweep *swept[2] = {nullptr, nullptr};
   std::shared_ptr<FeatureCuts> childCuts[2];
@@ -409,18 +413,20 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   const bool blocked = outOfPlace && pool_ && count >= kBlockedRows &&
                        (freeSlots < std::min(moved, threads) ||
                         (moved > 0 && moved * kFewColumns <= threads));
-  if (outOfPlace && !blocked && classCount_ == 2) {
+  if (outOfPlace && !blocked && (classCount_ == 2 || pool_)) {
     for (int child = 0; child < 2; ++child) {
-      const std::uint32_t *total = child == 0 ? leftCounts : rightCounts;
+      const std::uint32_t *total = store_.counts(child == 0 ? leftId : rightId);
       const std::uint32_t rows = child == 0 ? leftCount : rightCount;
       const std::uint32_t childMin = rules_.minChildRows(rows);
+      // The stage keeps up to childMin + 2 entries for the sweep (see
+      // partitionAndSweep()); TwoClassSweep needs the count tables.
       if ((child == 0 ? leftTerminal : rightTerminal) || rows < kSweptChildRows ||
-          rows >= tables_.size || childMin + 64 > kStageEntries) {
+          (classCount_ == 2 && rows >= tables_.size) || childMin + 64 > kStageEntries) {
         continue;
       }
       childCuts[child] = std::make_shared<FeatureCuts>(featureCount_, classes);
       sweeps[child] = {rows,
-                       {total[0], total[1]},
+                       total,
                        weightedImpurity(total, classCount_, rows, rules_.criterion(),
                                         rules_.logTable()),
                        childMin,
@@ -536,13 +542,13 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
                   if (sweep) {
                     // CART: Gini, values must differ; C4.5: entropy, gap.
                     if (gini) {
-                      partitionAndSweep<Criterion::Gini, false>(source, target, count,
-                                                                leftCount, keep, leftBits,
-                                                                isWinner, feature, children);
+                      partitionAndSweepFor<Criterion::Gini, false>(
+                          source, target, count, leftCount, keep, leftBits, isWinner,
+                          feature, children);
                     } else {
-                      partitionAndSweep<Criterion::Entropy, true>(source, target, count,
-                                                                  leftCount, keep, leftBits,
-                                                                  isWinner, feature, children);
+                      partitionAndSweepFor<Criterion::Entropy, true>(
+                          source, target, count, leftCount, keep, leftBits, isWinner,
+                          feature, children);
                     }
                   } else if (!isWinner) {
                     partitionFeatureOutOfPlace(source, target, count, leftCount, keep,
@@ -734,29 +740,75 @@ void CpuTreeBuilder::partitionFeature(Entry *entries, std::uint32_t count,
   std::memcpy(entries + leftWrite, buffer, rightWrite * sizeof(Entry));
 }
 
+template <Criterion Crit, bool HasGap>
+void CpuTreeBuilder::partitionAndSweepFor(const Entry *source, Entry *target,
+                                          std::uint32_t count, std::uint32_t leftCount,
+                                          Keep keep, const std::uint64_t *leftBits,
+                                          bool isWinner, std::uint32_t feature,
+                                          ChildSweep *const *children) const {
+  auto run = [&]<class Sweep>() {
+    partitionAndSweep<Sweep>(source, target, count, leftCount, keep, leftBits, isWinner,
+                             feature, children);
+  };
+  switch (classCount_) {
+  case 2: return run.template operator()<TwoClassSweep<Crit, HasGap>>();
+  case 3: return run.template operator()<KClassSweep<3, Crit>>();
+  case 4: return run.template operator()<KClassSweep<4, Crit>>();
+  case 5: return run.template operator()<KClassSweep<5, Crit>>();
+  case 6: return run.template operator()<KClassSweep<6, Crit>>();
+  case 7: return run.template operator()<KClassSweep<7, Crit>>();
+  case 8: return run.template operator()<KClassSweep<8, Crit>>();
+  default: return run.template operator()<KClassSweep<0, Crit>>();
+  }
+}
+
 // Out-of-place partition of one column (see partitionFeatureOutOfPlace())
 // that also sweeps the column for the children in `children`: entries go
 // through a small staging buffer per child (in L1), where the child's sweep
 // reads them, and from there to the target with non-temporal stores. So a big
 // node's columns are read once per level instead of twice (partition, then
 // the children's sweeps). The winner's column is already in order: it stays
-// where it is (no target), and the sweeps read it there.
-template <Criterion Crit, bool HasGap>
+// where it is (no target), and the sweeps read it there. Sweep: TwoClassSweep
+// or KClassSweep, as partitionAndSweepFor() picks it.
+template <class Sweep>
 void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::uint32_t count,
                                        std::uint32_t leftCount, Keep keep,
                                        const std::uint64_t *leftBits, bool isWinner,
                                        std::uint32_t feature,
                                        ChildSweep *const *children) const {
-  using Sweep = TwoClassSweep<Crit, HasGap>;
   const SweepSetup setup = sweepSetup();
   // --profile: the sweeps count as Sweep, the rest as PartitionSweep.
   const bool traced = trace::on();
   const bool kept[2] = {keep != Keep::Right, keep != Keep::Left};
   const std::uint32_t childBegin[2] = {0, leftCount};
   const std::uint32_t childCount[2] = {leftCount, count - leftCount};
+  const double gap = rules_.minValueGap();
+  // A child whose values of this column are all (nearly) equal is not swept:
+  // its split drops the feature (FeatureCuts::constant), as split() does
+  // before its own sweeps. Its first and last entries tell; they are usually
+  // within a few entries of the column's ends.
+  auto constantIn = [&](int child) {
+    if (isWinner) {
+      const Entry *entries = source + childBegin[child];
+      return !isCut(entries[0].value, entries[childCount[child] - 1].value, gap);
+    }
+    constexpr std::uint32_t kEndScan = 64;
+    const std::uint32_t wanted = child == 0;
+    const std::uint32_t scan = std::min(count, kEndScan);
+    std::uint32_t first = 0;
+    while (first < scan && leftBit(leftBits, codec_, entryWord(source[first])) != wanted) {
+      ++first;
+    }
+    std::uint32_t last = count - 1;
+    while (last >= count - scan && leftBit(leftBits, codec_, entryWord(source[last])) != wanted) {
+      --last;
+    }
+    return first < scan && last >= count - scan &&
+           !isCut(source[first].value, source[last].value, gap);
+  };
   std::optional<Sweep> sweeps[2];
   for (int child = 0; child < 2; ++child) {
-    if (children[child]) {
+    if (children[child] && !constantIn(child)) {
       const ChildSweep &info = *children[child];
       sweeps[child].emplace(setup, info.count, info.total, info.parentWeighted, info.minChild);
     }
@@ -869,14 +921,15 @@ void CpuTreeBuilder::partitionAndSweep(const Entry *source, Entry *target, std::
 #if defined(__SSE2__)
   _mm_sfence(); // the stores are visible before another thread reads them
 #endif
-  const double gap = rules_.minValueGap();
   for (int child = 0; child < 2; ++child) {
-    if (!sweeps[child]) {
+    if (!children[child]) {
       continue;
     }
     FeatureCuts &out = *children[child]->out;
     const std::size_t classes = static_cast<std::size_t>(classCount_);
-    out.cuts[feature] = sweeps[child]->finish(out.lefts.data() + feature * classes);
+    if (sweeps[child]) {
+      out.cuts[feature] = sweeps[child]->finish(out.lefts.data() + feature * classes);
+    }
     const Entry *entries = (isWinner ? source : target) + childBegin[child];
     out.constant[feature] = !isCut(entries[0].value, entries[childCount[child] - 1].value, gap);
   }
