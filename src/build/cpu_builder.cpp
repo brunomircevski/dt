@@ -179,15 +179,23 @@ void markByValue(const float *values, std::size_t rows, float leftValue, std::ui
 
 } // namespace
 
-void fillCountTables(std::size_t size, CountTable &xlog, CountTable &inverse, ThreadPool *pool) {
-  xlog.resize(size);
-  inverse.resize(size);
+void fillCountTables(std::size_t size, CountTable *xlog, CountTable *inverse, ThreadPool *pool) {
+  if (xlog) {
+    xlog->resize(size);
+  }
+  if (inverse) {
+    inverse->resize(size);
+  }
   constexpr std::size_t kChunks = 64;
   parallelFor(pool, kChunks, [&](std::size_t chunk) {
     const std::size_t end = size * (chunk + 1) / kChunks;
     for (std::size_t c = size * chunk / kChunks; c < end; ++c) {
-      xlog[c] = xlog2x(static_cast<double>(c));
-      inverse[c] = 1.0 / static_cast<double>(c); // inverse[0] is never used
+      if (xlog) {
+        (*xlog)[c] = xlog2x(static_cast<double>(c));
+      }
+      if (inverse) {
+        (*inverse)[c] = 1.0 / static_cast<double>(c); // inverse[0] is never used
+      }
     }
   });
 }
@@ -197,7 +205,7 @@ namespace {
 CountTables defaultCountTables() {
   static const auto tables = [] {
     std::pair<CountTable, CountTable> both;
-    fillCountTables(kLogTableSize, both.first, both.second, nullptr);
+    fillCountTables(kLogTableSize, &both.first, &both.second, nullptr);
     return both;
   }();
   return {tables.first.data(), tables.second.data(), kLogTableSize};
@@ -212,7 +220,7 @@ CpuTreeBuilder::CpuTreeBuilder(const SplitRules &rules, const EntryCodec &codec,
                                std::uint32_t *leafOfRow)
     : rules_(rules), codec_(codec), featureCount_(featureCount),
       classCount_(rules.classCount()), store_(store), goesLeft_(goesLeft), pool_(pool),
-      options_(options), tables_(tables.xlog ? tables : defaultCountTables()),
+      options_(options), tables_(tables.size > 0 ? tables : defaultCountTables()),
       leafOfRow_(leafOfRow) {}
 
 void CpuTreeBuilder::recordLeaf(const Entry *entries, std::uint32_t count,

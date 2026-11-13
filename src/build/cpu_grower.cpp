@@ -63,7 +63,7 @@ public:
       leafOfRow->map.clear();
     }
     CpuTreeBuilder builder(rules, codec_, features_, store, goesLeft_.get(), pool_,
-                           options_.parallel, countTables(),
+                           options_.parallel, countTables(rules.criterion()),
                            leafOfRow ? leafOfRow->ids.data() : nullptr);
     builder.grow(Columns{work_.get(), count, slots_, &train_}, std::move(root));
     if (pool_) {
@@ -93,14 +93,18 @@ private:
     return std::max<std::size_t>(1, std::min(features > 0 ? features - 1 : 0, threads));
   }
 
-  // The sweep's per-count tables, for every count up to the number of
-  // training rows (the builder's default tables cover small training sets).
-  CountTables countTables() {
+  // The sweep's per-count table for `criterion`, for every count up to the
+  // number of training rows (the builder's default tables cover small
+  // training sets). Only that one: on 100M rows (chess) each table is 800 MB,
+  // and filling both made the build 9% slower on 48 threads.
+  CountTables countTables(Criterion criterion) {
     if (rows_ < kLogTableSize) {
       return {};
     }
-    if (countXlog_.empty()) {
-      fillCountTables(rows_ + 1, countXlog_, countInverse_, pool_);
+    const bool gini = criterion == Criterion::Gini;
+    CountTable &table = gini ? countInverse_ : countXlog_;
+    if (table.empty()) {
+      fillCountTables(rows_ + 1, gini ? nullptr : &table, gini ? &table : nullptr, pool_);
     }
     return {countXlog_.data(), countInverse_.data(), static_cast<std::uint32_t>(rows_ + 1)};
   }

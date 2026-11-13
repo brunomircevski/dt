@@ -77,7 +77,8 @@ struct FeatureCuts {
 // Per-count tables for the sweep's gain estimates, for counts below `size`:
 // c * log2(c) (the same values as LogTable and dt::xlog2x) and 1 / c. Above
 // `size` the values are computed. The CPU grower passes tables that cover all
-// training rows; the default ones cover counts below kLogTableSize.
+// training rows, only the one its criterion reads (entropy: xlog, Gini:
+// inverse); the default ones cover counts below kLogTableSize.
 struct CountTables {
   const double *xlog = nullptr;
   const double *inverse = nullptr;
@@ -96,8 +97,9 @@ struct CountTables {
 // doubles took 0.28 s on one thread).
 using CountTable = std::vector<double, UninitializedAllocator<double>>;
 
-// Fill `xlog` and `inverse` with the tables for counts 0 .. size - 1.
-void fillCountTables(std::size_t size, CountTable &xlog, CountTable &inverse, ThreadPool *pool);
+// Fill `xlog` and `inverse` (each unless null) with the tables for counts
+// 0 .. size - 1.
+void fillCountTables(std::size_t size, CountTable *xlog, CountTable *inverse, ThreadPool *pool);
 
 struct SweepSetup; // what a threshold sweep needs from the builder (cpu_builder.cpp)
 
