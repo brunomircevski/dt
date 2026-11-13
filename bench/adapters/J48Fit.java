@@ -255,9 +255,12 @@ public class J48Fit {
             out.append(", \"check\": \"same tree as J48\"");
         }
         if (args.get("eval").equals("1")) {
-            Instances test = load("test", Integer.parseInt(args.get("n_test")), features, classes);
-            out.append(String.format(Locale.ROOT, ", \"train_accuracy\": %.9f, \"test_accuracy\": %.9f",
-                    accuracy(model, train), accuracy(model, test)));
+            out.append(String.format(Locale.ROOT, ", \"train_accuracy\": %.9f", accuracy(model, train)));
+            int testRows = Integer.parseInt(args.get("n_test"));
+            if (testRows > 0) { // 0: no test set
+                Instances test = load("test", testRows, features, classes);
+                out.append(String.format(Locale.ROOT, ", \"test_accuracy\": %.9f", accuracy(model, test)));
+            }
         }
         System.out.println(out.append("}"));
     }

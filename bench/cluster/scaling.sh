@@ -21,7 +21,7 @@ done
 DIR=cluster-cpu-scaling
 
 cd "$(dirname "$0")/../.."  # repository root: the jobs start here (SLURM_SUBMIT_DIR)
-for f in tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$DATASET/train.csv"; do
+for f in tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$DATASET/meta.json"; do
   [ -e "$f" ] || { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 git diff --quiet HEAD -- src bench Makefile ||

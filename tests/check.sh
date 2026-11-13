@@ -112,6 +112,28 @@ for dataset in "${datasets[@]}"; do
   done
 done
 
+# --rows N must give what a file of the first N rows gives (here every
+# backend's tree is the same, so one backend is enough).
+for dataset in "${datasets[@]}"; do
+  base=$(basename "$dataset" .csv)
+  rows=$(($(awk 'END { print NR }' "$dataset") - 1))
+  half=$(((rows + 1) / 2))
+  head -n $((half + 1)) "$dataset" > "$WORK/head.csv"
+  for algorithm in --cart --c45; do
+    "$TREE_BIN" --parallel --threads 3 $algorithm --rows "$half" "$dataset" --dump "$WORK/a.txt" |
+      grep 'rows ' > "$WORK/a.log"
+    "$TREE_BIN" --parallel --threads 3 $algorithm "$WORK/head.csv" --dump "$WORK/b.txt" |
+      grep 'rows ' > "$WORK/b.log"
+    if cmp -s "$WORK/a.txt" "$WORK/b.txt" && cmp -s "$WORK/a.log" "$WORK/b.log"; then
+      result=ok
+    else
+      result=DIFFERENT
+      failures=$((failures + 1))
+    fi
+    printf '%-9s %-22s %-52s %s\n' "$result" "$base" "$algorithm --rows $half" "= its first rows' file"
+  done
+done
+
 if ((failures > 0)); then
   echo "$failures check(s) failed"
   exit 1

@@ -77,7 +77,7 @@ When a chain is done, copy its run folders into this repository's
 bench/results (scp) and redraw the charts on the PC:
 
 ```bash
-for d in susy higgs mnist8m ecbdl sorel chess; do bench/.venv/bin/python bench/testset_chart.py bench/results/cluster-$d; done
+for d in susy higgs mnist8m ecbdl sorel; do bench/.venv/bin/python bench/testset_chart.py bench/results/cluster-$d; done
 bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling
 bench/.venv/bin/python bench/vs_chart.py cpu
 bench/.venv/bin/python bench/vs_chart.py gpu   # after copying ~/gpu-dt-bench/results-final/<data>/<node>/
@@ -204,7 +204,7 @@ The data and measurements are those of the other benchmarks
   the sockets (ECBDL presort 1.6 → 2.3 s). Each run records its free memory
   per node in `results.jsonl` (`mem_free_node*_kb`).
 - **Jobs leave nothing on the node.** The datasets live only in
-  `bench/data` on the login node (the other checkouts symlink it). `job.sh`
+  `~/datasets` on the login node's /home (every checkout links to it). `job.sh`
   and `build.sh` point `TMPDIR` at a folder of the job (`/tmp/dt-<job>.*`;
   /tmp is tmpfs, so leftovers hold RAM) and at exit, also a failed or
   timed-out one, `cleanup.sh` removes it and drops the datasets from the
@@ -215,24 +215,31 @@ The data and measurements are those of the other benchmarks
 
 ## Data
 
-On mordor3 every dataset lives once, in `~/datasets`, outside the clones, and
-that folder holds only the CSVs (`~/dt/datasets` is a link to it). Everything
-derived or downloaded is in `~/dt/bench/data` (other clones link to it):
+On mordor3 every dataset lives once, in `~/datasets`, outside the clones
+(since 2026-11-13). A checkout links to it twice: `datasets -> ~/datasets` and
+`bench/data -> ~/datasets/bench`.
 
 ```
 ~/datasets/
   higgs.csv  supersymmetry.csv  airline.csv  covertype.csv
   ecbdl/   ecbdl.csv (training set), ecbdl_test.csv (the competition's test set)
-  chess/   chess_{1m,10m,100m,1b,2b}.csv, chess_{1m,10m,100m,1b}_test.csv
-~/dt/bench/data/
-  <name>/                 bench/prepare.py's output, one folder per datasets.toml entry
-  downloads/              the downloads make_datasets.py reads (ecbdl: a link to /home/Datasets/ECBDL)
-  supersymmetry_20k.csv   the golden tests' sample (tests/check.sh)
+  sorel/   sorel_full.csv (training set), sorel_test.csv
+  mnist8m/ mnist8m.csv, mnist8m_test.csv
+  chess/   chess_1b.csv, chess_2b.csv (no test sets: synthetic)
+  bench/
+    <name>/                 bench/prepare.py's output, one folder per datasets.toml entry
+    downloads/              the downloads make_datasets.py reads (ecbdl: a link to /home/Datasets/ECBDL)
+    supersymmetry_20k.csv   the golden tests' sample (tests/check.sh)
 ```
 
-A prepared folder holds the split in each tool's format. A chess set's
-`train.csv` is a link to its CSV in `~/datasets/chess/`; `chess_50m` and
-`chess_500m` take only the first rows of a bigger set, so theirs are files.
+A prepared folder holds the split in each tool's format; its `train.csv` is a
+link to the source CSV when the set takes all of the CSV's rows in the CSV's own
+format (ecbdl, sorel, mnist8m, the chess sets). A set that is another set's
+first rows (`prefix_of` in `datasets.toml`: `ecbdl_15m`, `sorel_4m`, and
+`chess_1m` to `chess_500m` of `chess_2b`) holds only `meta.json`: ./tree reads
+the parent's `train.csv` with `--rows N`, the other tools the first N rows of
+the parent's binary files, and `run.py` hashes and checks just those bytes. So
+no rows are stored twice; until 2026-11-13 these sets were copies (165 GB).
 
 HIGGS and SUSY are in UCI's row order, so their last 500,000 rows are the
 published test set: `datasets.toml` takes them with `split = "tail"`, and
@@ -270,8 +277,8 @@ which keeps its own feature names and labels 0/1; `prepare.py` records them in
 `meta.json` as `csv_features`/`csv_classes`) and `ecbdl_test.csv` as the test
 set. It writes no YaDT files. The CUDA backend needs 8 bytes per value
 (one copy of the presorted columns, plus one spare column), about 160 GB for the
-full set, so the GPUs get `ecbdl_15m`: a random 15M of the training rows (9.5 G
-values, about 72 GiB of GPU memory). `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
+full set, so the GPUs get `ecbdl_15m`: the first 15M training rows (9.5 G
+values, about 72 GiB of GPU memory; until 2026-10-23 a random 15M). `ecbdl.csv`: 59,533,971,938 bytes, SHA-256
 `5bc39aec…` (first build). The pre-converted `.bin` files under
 `/home/Datasets/IMM` lack the label and the nominal attributes.
 
@@ -286,8 +293,7 @@ training ARFF's first 1,000 rows into `ecbdl.csv`'s exact bytes). The result has
 5,423,008,790 bytes, SHA-256 `3d838532…`, and the same header as `ecbdl.csv`. To rebuild it:
 `xz -dk test_set.arff.xz`, then `bench/.venv/bin/python -I
 bench/cluster/ecbdl_test.py /home/Datasets/ECBDL/training_set.arff
-test_set.arff datasets/ecbdl/ecbdl_test.csv` on a compute node. It is `ecbdl`'s test set (see above);
-`ecbdl_15m` keeps its 100,000 random training rows.
+test_set.arff datasets/ecbdl/ecbdl_test.csv` on a compute node. It is the test set of `ecbdl` and `ecbdl_15m`.
 
 The **chess** sets are a 3×3 checkerboard: x and y uniform on a grid of 32,768
 values in [0, 3] (3k/32767 for k = 0..32767 to six decimals, a C `rand()` with
@@ -297,7 +303,8 @@ noise; a tree of 9 leaves and depth 4 is exact. They came as C4.5 files
 (`.names`, `.data`, `.test`) in mordor3's `~/chess`, not public:
 `chess3x3x001M`, `010M`, `100M` and `001MM` (1M, 10M, 100M and 1000M rows).
 `make_datasets.py` turned them into `datasets/chess/chess_*.csv` and `chess_*_test.csv`
-(the class without C4.5's closing period). The sources were uneven: 10M and up
+(the class without C4.5's closing period; the test files are deleted since
+2026-11-13: synthetic data needs no test set, and the accuracies were 100% or close). The sources were uneven: 10M and up
 had CRLF line ends, 100M ended with DOS's Ctrl-Z (byte 0x1a, which ./tree cannot
 parse), and their shared test file spaced its fields (`0.182, 0.025, B.`). The
 sizes nest: 1M is the first million rows of 10M, 10M the first 10M of 100M, and
@@ -315,8 +322,11 @@ sets prepared before keep `x`, `y`, `A`, `B` in `meta.json`). `make_datasets.py`
 rows; ./tree's limit for two classes is 2^31): the 100M rows of `chess_100m`,
 then 1.9G rows drawn the same way (k uniform on the grid, numpy's
 `default_rng([20261022, chunk])` per 10M rows), after checking that every row of
-`chess_100m` is on the grid and follows the squares' rule. `datasets.toml` adds
-`chess_50m` (the first 50M rows of `chess_100m`) and `chess_500m` (the first
-500M of `chess_2b`), with `chess_100m`'s test file, as `chess_2b` has. Each set
-takes its own test file (`test_source`), and none writes YaDT files from 50M on.
+`chess_100m` is on the grid and follows the squares' rule. So `chess_2b.csv`
+begins with `chess_100m.csv`, which begins with `chess_10m.csv` and
+`chess_1m.csv` (checked byte for byte on 2026-11-13): since then 1M, 10M, 50M,
+100M and 500M are `prefix_of` sets of `chess_2b` in `datasets.toml`, and their
+own CSVs are deleted (`chess_100m.csv` stays until the A/B kits of 2026-11
+that run binaries without `--rows` are done). No chess set has a test set or
+YaDT files.
 CSVs: about 20.8 bytes per row, 20.8 GB for 1000M, 41.6 GB for 2b (generated in 164 s on dell1).

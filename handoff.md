@@ -49,17 +49,25 @@ The rules:
 | Raw results (CSV from tune.sh) | `~/opt-dt/out/*.csv` |
 | `--profile` JSONs | `~/opt-dt/prof/*.json` |
 | Dumps of every case run | `~/opt-dt/dumps/<case>-<variant>.dump` |
-| Datasets | `~/datasets/bench/<ds>/train.csv` (higgs, susy, mnist8m, ecbdl_15m, covertype, chess_100m, chess_1b, sorel_4m, ...) |
+| Datasets | `~/datasets/bench/<ds>/train.csv` (higgs, susy, mnist8m, covertype, chess_1b, ...); ecbdl_15m, sorel_4m and chess_100m: see below |
 | SLURM | `/opt/slurm-25.05.8/bin`. It is not in PATH for non-login shells, so run `export PATH=/opt/slurm-25.05.8/bin:$PATH` first. |
 
-Datasets moved on 2026-11-13: the prepared ones (what `bench/data` used to hold) are now in
-`~/datasets/bench/<ds>/`, next to the raw CSVs in `~/datasets/`. `~/dt` was removed. The kit's
-scripts and case files already point at the new place. A checkout that needs `bench/data`
-symlinks it to `~/datasets/bench`. Make a fresh clone for the code:
+Datasets (2026-11-13): every dataset lives in `~/datasets` (raw CSVs) and `~/datasets/bench/<ds>/`
+(prepared). A checkout links `datasets -> ~/datasets` and `bench/data -> ~/datasets/bench`.
+
+**Subsets are no longer copies** (main since this commit): `./tree --rows N` reads only the first N
+rows of a CSV, and `datasets.toml`'s `prefix_of` sets (ecbdl_15m, sorel_4m, chess_1m to chess_500m)
+hold only `meta.json`; `bench/run.py` passes the parent's `train.csv` with `--rows`. The kit's
+binaries (base `55d83a48` and the variants) have no `--rows`, so the kit reads copies kept only for
+it: `~/datasets/ecbdl/ecbdl_15m.csv`, `~/datasets/sorel/sorel_4m.csv` and
+`~/datasets/chess/chess_100m.csv` (the same bytes as before). `gen.sh` and the case files in
+`cases/` already point there. The chess sets have no test set any more.
+
+`~/dt` is a clone of main (with both links): make the experiment branches there, or in a worktree
+of it, instead of another clone:
 
 ```bash
-git clone https://github.com/brunomircevski/dt.git ~/dt-opt
-cd ~/dt-opt && ln -s ~/datasets/bench bench/data   # only if you need bench scripts
+cd ~/dt
 for x in wc pb kf cs; do git switch -c opt/$x 55d83a48 && git am ~/opt-dt/patches/$x/*.patch; done
 git switch main
 ```
@@ -70,7 +78,7 @@ git switch main
 
 `AGENT.md` and `push.sh` assume the desktop. `push.sh` tars a desktop worktree to
 `~/opt-dt/wt/<variant>`. On mordor3, copy the sources yourself:
-`rm -rf ~/opt-dt/wt/<v> && mkdir -p ~/opt-dt/wt/<v> && git -C ~/dt-opt archive opt/<x> src Makefile tests | tar x -C ~/opt-dt/wt/<v>`.
+`rm -rf ~/opt-dt/wt/<v> && mkdir -p ~/opt-dt/wt/<v> && git -C ~/dt archive opt/<x> src Makefile tests | tar x -C ~/opt-dt/wt/<v>`.
 
 * `build_cpu.sh "<v>[+tag:CXXFLAGS]"` builds `bin/tree_cpu_<v>` (g++ 13.3) from `wt/<v>`. Run it as a job:
   `sbatch --wait -p dell -w dell4 -c 16 -t 20 -o out/build-<v>.out build_cpu.sh <v>`
@@ -347,3 +355,13 @@ was merged.
    to `docs/PERFORMANCE.md` on the experiment branch. The user merges.
 
 No cluster jobs of this session were running at handoff (`squeue` empty).
+
+## Cleanup when this work is merged (or dropped)
+
+Delete, after the user decides and nothing of the kit runs any more:
+
+* `~/opt-dt` (binaries, worktree copies, dumps; its `patches/` are the only copy of unmerged work).
+* The copies kept for the kit, if the numa-gpu A/Bs are done too: `~/datasets/ecbdl/ecbdl_15m.csv`
+  (28 GB), `~/datasets/sorel/sorel_4m.csv` (43 GB), `~/datasets/chess/chess_100m.csv` (2 GB, a prefix
+  of `chess_2b.csv`).
+* The `opt/*` branches in `~/dt`.

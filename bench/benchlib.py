@@ -10,6 +10,12 @@ Data layout (bench/data/<dataset>/, made by prepare.py):
                              meta.json's csv_features / csv_classes
   yadt.names, train.yadt.csv, test.yadt.csv   headerless CSV + metadata  (YaDT)
 
+A dataset without a test set (split = "none": the synthetic chess sets) has
+n_test 0 and no test files. A dataset that is another one's first rows
+(prefix_of in datasets.toml: sorel_4m, ecbdl_15m, chess_100m) has only its
+meta.json: every tool reads its parent's files (folder()), ./tree its train.csv
+with --rows (tree_input()), the others the binary files' first n_train rows.
+
 Every tool sees the same float32 values: the CSVs print them exactly (9
 significant digits), the binary files hold them as they are.
 """
@@ -205,59 +211,117 @@ def csv_names(m):
     return (m.get("csv_features", m["features"]), m.get("csv_classes", m["classes"]))
 
 
+def folder(dataset):
+    """The folder of the dataset's files: its parent's for a prefix_of set."""
+    return DATA / meta(dataset).get("prefix_of", dataset)
+
+
+def tree_input(dataset):
+    """./tree's arguments for the training rows: the CSV, after --rows N for a
+    prefix_of set (the first N rows of its parent's train.csv)."""
+    m = meta(dataset)
+    rows = ["--rows", str(m["n_train"])] if "prefix_of" in m else []
+    return rows + [str(folder(dataset) / "train.csv")]
+
+
 def load(dataset, part):
     m = meta(dataset)
-    rows = m[f"n_{part}"]
-    X = np.fromfile(DATA / dataset / f"{part}.f32", dtype="<f4").reshape(rows, len(m["features"]))
-    y = np.fromfile(DATA / dataset / f"{part}.y.i32", dtype="<i4")
-    return X, y
+    rows, F = m[f"n_{part}"], len(m["features"])
+    if rows == 0:  # no test set
+        return np.empty((0, F), "<f4"), np.empty(0, "<i4")
+    # count: a prefix_of set is the first rows of its parent's files
+    X = np.fromfile(folder(dataset) / f"{part}.f32", dtype="<f4", count=rows * F)
+    y = np.fromfile(folder(dataset) / f"{part}.y.i32", dtype="<i4", count=rows)
+    if len(y) != rows or X.size != rows * F:
+        raise AssertionError(f"{dataset} {part}: the files have fewer than {rows} rows")
+    return X.reshape(rows, F), y
 
 
-def check_csv(path, X, y, header, classes=None):
-    """Every row of a prepared CSV must read back as exactly the binary files'
-    float32 values and class indices (labels `classes`, by default c0..c{K-1}).
-    Raises otherwise."""
+def check_csv(path, X, y, header, classes=None, prefix=False):
+    """Every row of a prepared CSV (prefix: its first len(y) rows, for a
+    prefix_of set) must read back as exactly the binary files' float32 values
+    and class indices (labels `classes`, by default c0..c{K-1}). Raises
+    otherwise. Read in batches: a whole SOREL CSV held about 135 GiB."""
     import pyarrow as pa
     import pyarrow.compute as pc
     import pyarrow.csv as pacsv
     F = X.shape[1]
     names = [f"f{j}" for j in range(F)] + ["class"]
-    table = pacsv.read_csv(
-        path, read_options=pacsv.ReadOptions(column_names=names, skip_rows=int(header)),
-        convert_options=pacsv.ConvertOptions(
-            column_types={**{f"f{j}": pa.float32() for j in range(F)}, "class": pa.string()}))
-    if table.num_rows != len(y):
-        raise AssertionError(f"{path}: {table.num_rows} rows, expected {len(y)}")
-    for j in range(F):
-        if not np.array_equal(table[f"f{j}"].to_numpy(), X[:, j]):
-            raise AssertionError(f"{path}: column f{j} differs from the binary file")
     # 64-bit offsets: 2G rows of "c0" are more than 2^31 bytes (chess_2b).
     classes = pa.array(classes or [f"c{k}" for k in range(int(y.max()) + 1)], pa.large_string())
-    if not pc.all(pc.equal(table["class"], pc.take(classes, pa.array(y)))).as_py():
-        raise AssertionError(f"{path}: class labels differ from the binary file")
-    del table
-    pa.default_memory_pool().release_unused()  # ECBDL: tens of GB, not kept while tools run
+    reader = pacsv.open_csv(
+        path, read_options=pacsv.ReadOptions(column_names=names, skip_rows=int(header),
+                                             block_size=64 << 20),
+        convert_options=pacsv.ConvertOptions(
+            column_types={**{f"f{j}": pa.float32() for j in range(F)}, "class": pa.string()}))
+    done = extra = 0  # rows checked; rows past len(y)
+    for whole in reader:
+        if done == len(y) and prefix:
+            break
+        batch = whole.slice(0, len(y) - done)
+        extra += whole.num_rows - batch.num_rows
+        rows = slice(done, done + batch.num_rows)
+        for j in range(F):
+            if not np.array_equal(batch.column(j).to_numpy(), X[rows, j]):
+                raise AssertionError(f"{path}: column f{j} differs from the binary file")
+        if not pc.all(pc.equal(batch.column(F), pc.take(classes, pa.array(y[rows])))).as_py():
+            raise AssertionError(f"{path}: class labels differ from the binary file")
+        done += batch.num_rows
+    if done != len(y) or (extra and not prefix):
+        raise AssertionError(f"{path}: {done + extra} rows, expected {len(y)}")
+    del reader
+    pa.default_memory_pool().release_unused()
+
+
+def csv_prefix_bytes(path, rows):
+    """The bytes of a CSV's header and first `rows` lines (what ./tree --rows reads)."""
+    size, lines = 0, rows + 1
+    with open(path, "rb") as handle:
+        while block := handle.read(1 << 24):
+            count = block.count(b"\n")
+            if count < lines:
+                size, lines = size + len(block), lines - count
+                continue
+            end = -1
+            for _ in range(lines):
+                end = block.index(b"\n", end + 1)
+            return size + end + 1
+    raise AssertionError(f"{path}: fewer than {rows} rows")
 
 
 def verify_dataset(dataset):
     """Prove that every tool reads the same data: SHA-256 of every file of the
-    prepared dataset, and every CSV row checked against the binary files.
+    prepared dataset (of a prefix_of set: the bytes of its parent's files that
+    the tools read), and every CSV row checked against the binary files.
     Returns {file name: sha256}."""
     import hashlib
-    folder = DATA / dataset
+    m = meta(dataset)
+    F = len(m["features"])
+    limits = {}  # file -> bytes read; the whole file if absent
+    if "prefix_of" in m:
+        limits = {"train.csv": csv_prefix_bytes(folder(dataset) / "train.csv", m["n_train"]),
+                  "train.f32": 4 * F * m["n_train"], "train.y.i32": 4 * m["n_train"]}
     hashes = {}
-    for path in sorted(folder.iterdir()):
+    for path in sorted(folder(dataset).iterdir()):
+        if "prefix_of" in m and path.name == "meta.json":
+            path = DATA / dataset / "meta.json"
         digest = hashlib.sha256()
+        left = limits.get(path.name, float("inf"))
         with open(path, "rb") as handle:
-            while chunk := handle.read(1 << 24):
+            while left > 0 and (chunk := handle.read(int(min(1 << 24, left)))):
                 digest.update(chunk)
+                left -= len(chunk)
         hashes[path.name] = digest.hexdigest()
     for part in ("train", "test"):
         X, y = load(dataset, part)
-        if (folder / f"{part}.yadt.csv").exists():  # not written for huge datasets
-            check_csv(folder / f"{part}.yadt.csv", X, y, header=False)
+        if not len(y):
+            continue
+        prefix = part == "train" and "prefix_of" in m
+        if (folder(dataset) / f"{part}.yadt.csv").exists():  # not written for huge datasets
+            check_csv(folder(dataset) / f"{part}.yadt.csv", X, y, header=False, prefix=prefix)
         if part == "train":
-            check_csv(folder / "train.csv", X, y, header=True, classes=csv_names(meta(dataset))[1])
+            check_csv(folder(dataset) / "train.csv", X, y, header=True, classes=csv_names(m)[1],
+                      prefix=prefix)
     return hashes
 
 

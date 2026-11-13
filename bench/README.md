@@ -16,7 +16,7 @@ It measures training time and peak memory, and records tree size and training an
 |---|---|
 | `setup.sh` | Builds `tree_cpu`, creates `.venv`, and downloads Weka and YaDT into `.tools/`. It also compiles the J48 adapter and the `rusage` launcher. |
 | `datasets.toml` | Dataset registry: source CSV, split, subsampling. Add new datasets here. |
-| `prepare.py` | Writes `data/<name>/`: the split as float32 binary (for the adapters), a CSV for `./tree`, and CSV plus `.names` for YaDT. Every CSV row is checked to read back as the binary values. Also writes the tiny `_baseline` dataset. |
+| `prepare.py` | Writes `data/<name>/`: the split as float32 binary (for the adapters), a CSV for `./tree`, and CSV plus `.names` for YaDT. Every CSV row is checked to read back as the binary values. Also writes the tiny `_baseline` dataset. A `prefix_of` set (another set's first rows, e.g. `sorel_4m`) gets only `meta.json`: `./tree` reads the parent's CSV with `--rows N`, the adapters the first N rows of the parent's binary files. A `split = "none"` set (the synthetic chess sets) has no test set. |
 | `benchlib.py` | The protocols (the exact settings for every tool), the implementations, the data layout and the data check. |
 | `adapters/` | One program per library (`sklearn_fit.py`, `rpart_fit.R`, `J48Fit.java`). Each loads the binary data, times only the fit, then measures accuracy and prints one JSON line. `./tree` and YaDT are run directly. `rusage.c` is the launcher every measured process runs under. |
 | `run.py` | Checks the data, then runs every case in fresh processes. It measures time inside each tool and memory from outside, and writes `results/<run-id>/`. |

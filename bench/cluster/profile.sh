@@ -39,7 +39,7 @@ shift $((OPTIND - 1))
 DIR="${OUTDIR:-cluster-${DATASET%_15m}-profile}"
 
 cd "$(dirname "$0")/../.."  # repository root: the jobs start here (SLURM_SUBMIT_DIR)
-for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$DATASET/train.csv"; do
+for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$DATASET/meta.json"; do
   [ -e "$f" ] || { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 

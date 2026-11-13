@@ -45,7 +45,8 @@
 # busy for WARMUP seconds before its timer, as a single run's CSV load does
 # (without it, a GPU tree after an idle CPU set up 10-40% slower).
 #
-# Environment: DATA (CSV), REPS (3), REPS_BY (per-implementation rounds,
+# Environment: DATA (CSV) and ROWS (its first ROWS rows, ./tree --rows; by
+# default ECBDL'14 15M: ecbdl's train.csv, ROWS 15000000), REPS (3), REPS_BY (per-implementation rounds,
 # e.g. "simple=1 serial=3"; the rest run REPS rounds), REPEAT_BY (trees per
 # process for the slow backends, e.g. "serial=2"; default 1), TARGET (120),
 # IDLE (60), STEP (0), PRE (20), ALGOS ("cart c45"), IMPLS (gpu: "cuda gpuonly",
@@ -58,7 +59,10 @@ set -uo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 KIND=$1
 OUT=$2
-DATA=${DATA:-bench/data/ecbdl_15m/train.csv}
+if [ -z "${DATA:-}" ]; then  # ecbdl_15m: a prefix of ecbdl (bench/datasets.toml)
+  DATA=bench/data/ecbdl/train.csv ROWS=${ROWS:-15000000}
+fi
+ROWS=${ROWS:-}
 REPS=${REPS:-3}
 TARGET=${TARGET:-120}
 IDLE=${IDLE:-60}
@@ -103,7 +107,7 @@ command_of() { # impl -> the command line before the algorithm flags
 {
   echo "job ${SLURM_JOB_ID:-none} on $(hostname), $(date -Is), kind $KIND"
   echo "commit ${TREE_GIT_DESCRIBE:-$(git describe --always --dirty 2>/dev/null)}"
-  echo "data $DATA, reps $REPS ${REPS_BY:-}, repeat ${REPEAT_BY:-}, target $TARGET s, idle $IDLE s, step $STEP s, pre $PRE s, algos $ALGOS, impls $IMPLS"
+  echo "data $DATA${ROWS:+ (first $ROWS rows)}, reps $REPS ${REPS_BY:-}, repeat ${REPEAT_BY:-}, target $TARGET s, idle $IDLE s, step $STEP s, pre $PRE s, algos $ALGOS, impls $IMPLS"
   echo "used_gpu $GPU (cpus $GPU_CPUS, memory node $GPU_MEM, $GPU_THREADS threads, warm-up $WARMUP s)"
   echo "protocol ${PROTOCOL[*]}"
   echo "kernel $(uname -r)"
@@ -143,7 +147,7 @@ run() { # id impl algo repeat
   local id=$1 impl=$2 algo=$3 k=$4
   mark "start $id impl=$impl algo=$algo repeat=$k"
   # shellcheck disable=SC2046
-  timeout --foreground 3h $(command_of "$impl") "--$algo" "${PROTOCOL[@]}" --repeat "$k" "$DATA" \
+  timeout --foreground 3h $(command_of "$impl") "--$algo" "${PROTOCOL[@]}" --repeat "$k" ${ROWS:+--rows "$ROWS"} "$DATA" \
     > "$OUT/out/$id.txt" 2>&1
   mark "end $id rc=$?"
 }

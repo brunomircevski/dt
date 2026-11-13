@@ -26,8 +26,9 @@ F = int(args["n_features"])
 
 
 def read(part, rows):
-    X = np.fromfile(f"{args['data']}/{part}.f32", dtype="<f4").reshape(rows, F)
-    y = np.fromfile(f"{args['data']}/{part}.y.i32", dtype="<i4")
+    # The first rows only: data= may be a bigger set's folder (prefix_of in datasets.toml).
+    X = np.fromfile(f"{args['data']}/{part}.f32", dtype="<f4", count=rows * F).reshape(rows, F)
+    y = np.fromfile(f"{args['data']}/{part}.y.i32", dtype="<i4", count=rows)
     return X, y
 
 
@@ -67,6 +68,7 @@ result = {"train_seconds": seconds, "build_seconds": build,
           "peak_rss_train_bytes": peak_kib * 1024}
 if args["eval"] == "1":
     result["train_accuracy"] = float(np.mean(model.predict(X) == y))
-    X_test, y_test = read("test", int(args["n_test"]))
-    result["test_accuracy"] = float(np.mean(model.predict(X_test) == y_test))
+    if int(args["n_test"]):  # 0: no test set
+        X_test, y_test = read("test", int(args["n_test"]))
+        result["test_accuracy"] = float(np.mean(model.predict(X_test) == y_test))
 print(json.dumps(result))

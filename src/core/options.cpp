@@ -71,6 +71,7 @@ void printUsage(const char *program) {
       << "  --min-leaf N             every child keeps at least N rows (default: 1 for\n"
       << "                           CART, 2 for C4.5)\n"
       << "  --no-prune               keep the unpruned tree (pruning is on by default)\n"
+      << "  --rows N                 use only the first N rows of dataset.csv\n"
       << "  --test FILE              test set: a CSV with the same header\n"
       << "  --test-last N            test set: the last N rows of the training file\n"
       << "  --holdout F              test set: a random fraction F of the rows\n"
@@ -245,6 +246,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.holdout = parseReal(arg, args.value(arg));
     } else if (arg == "--test") {
       options.testPath = args.value(arg);
+    } else if (arg == "--rows") {
+      options.rows = static_cast<std::size_t>(parseInteger(arg, args.value(arg), 1));
     } else if (arg == "--test-last") {
       options.testLast = parseCount(arg, args.value(arg));
     } else if (arg == "--seed") {

@@ -38,7 +38,7 @@ LoadedData loadData(const Options &options, ThreadPool &pool) {
   {
     ScopedTimer timer(data.seconds);
     NvtxRange range("load");
-    data.train = loadDataset(options.datasetPath, &pool);
+    data.train = loadDataset(options.datasetPath, &pool, options.rows);
     if (!options.testPath.empty()) {
       data.test = loadDataset(options.testPath, &pool);
       data.unseenTestRows = matchTrainingSchema(data.train, data.test);
@@ -165,8 +165,11 @@ void writeProfile(const Options &options, const Tree &tree, const LoadedData &da
 }
 
 int run(const Options &options, bool &exitWithoutCleanup) {
-  std::cout << algorithmName(options.algorithm) << " on " << options.datasetPath
-            << " (backend " << backendName(options.backend) << ")\n";
+  std::cout << algorithmName(options.algorithm) << " on " << options.datasetPath;
+  if (options.rows > 0) {
+    std::cout << " (first " << options.rows << " rows)";
+  }
+  std::cout << " (backend " << backendName(options.backend) << ")\n";
 
   // CUDA context creation is slow; do it while the CSV is being parsed. Not
   // with --repeat N > 1: a process may only fork before it uses CUDA.

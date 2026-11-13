@@ -42,8 +42,7 @@ The branch was never pushed (GitHub = main only). Its commits are in a git
 bundle on mordor3, on top of main `55d83a48` (which is on GitHub):
 
 ```bash
-git clone https://github.com/brunomircevski/dt.git ~/numa-src   # or reuse a clone at >= 55d83a48
-cd ~/numa-src
+cd ~/dt   # a clone of main (>= 55d83a48), with datasets and bench/data linked
 git fetch ~/numa-dt/numa-gpu.bundle worktree-numa-gpu:worktree-numa-gpu
 git checkout worktree-numa-gpu      # tip 5dcaae59
 ```
@@ -206,7 +205,10 @@ If the jobs are gone from `squeue` and `times.csv` has 649 lines (header +
 7. After the merge, tell the user: another session ("CART C45 benchmark suite
    for paper", on the user's PC) waits for numa-gpu on main to start the final
    benchmark rerun (`~/dt-final`, `final.sh`). That session cannot be messaged
-   from mordor3, so the user has to pass it on.
+   from mordor3, so the user has to pass it on. `~/dt-final` must be pulled to
+   main first (it has uncommitted results in `bench/results/cluster-chess`): an
+   older `bench/run.py` looks for `train.csv` in the `prefix_of` folders, which
+   have none since 2026-11-13, and expects test sets for the chess sets.
 
 ## Files on mordor3 (`~/numa-dt`)
 
@@ -227,9 +229,28 @@ If the jobs are gone from `squeue` and `times.csv` has 649 lines (header +
 | `short4.sh` | quick turing comparison with `--profile` (edit its variant list first) |
 
 Datasets: `/home/bmircevski/datasets/bench/<name>/train.csv` (higgs, susy,
-mnist8m, sorel_4m, chess_100m, ...). They moved there from `~/dt/bench/data` on
-2026-11-13, and `~/dt` was removed. The case files in `ab/` already use the new path. A
-checkout that needs `bench/data` symlinks it to `~/datasets/bench`.
+mnist8m, ...). Every dataset lives in `~/datasets` since 2026-11-13; a checkout
+links `datasets -> ~/datasets` and `bench/data -> ~/datasets/bench`.
+
+Subsets are no longer copies (main since 2026-11-13): `./tree --rows N` reads the
+first N rows of a CSV, and `sorel_4m`, `ecbdl_15m` and `chess_1m`..`chess_500m`
+are `prefix_of` sets in `bench/datasets.toml` with only a `meta.json`
+(`bench/run.py` gives `./tree` the parent's `train.csv` and `--rows`). The A/B
+binaries here (main 55d83a48, new19, ...) have no `--rows`, so `ab/cases-p5.txt`
+reads copies kept for these A/Bs: `~/datasets/sorel/sorel_4m.csv` and
+`~/datasets/chess/chess_100m.csv` (the same bytes as before). A new A/B on a
+binary built from current main can use `--rows` instead. The chess sets have no
+test set any more.
+
+## Cleanup when this work is merged
+
+* `~/numa-dt` (keep `ab/p7-*` results elsewhere first if wanted; they belong in
+  `docs/PERFORMANCE.md` by then), the `numa-gpu.bundle`, the branch in `~/dt`.
+* The copies kept for the A/Bs, once the CPU optimization kit (`handoff.md`) is
+  done too: `~/datasets/sorel/sorel_4m.csv` (43 GB), `~/datasets/ecbdl/ecbdl_15m.csv`
+  (28 GB), `~/datasets/chess/chess_100m.csv` (2 GB).
+* `~/gpu-dt-bench/dt` (an old build at b014290) once the final GPU-libs runs use a
+  build of main.
 
 ## Hardware notes
 

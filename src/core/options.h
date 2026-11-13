@@ -72,6 +72,10 @@ struct GpuOptions {
 
 struct Options {
   std::string datasetPath = "datasets/covertype.csv";
+  // --rows N: only the training file's first N rows (0 = all), e.g. sorel_4m
+  // from SOREL's CSV without a copy of its first 4M rows. --test-last and
+  // --holdout then split these rows.
+  std::size_t rows = 0;
   Backend backend = Backend::Parallel;
   Algorithm algorithm = Algorithm::Cart;
 

@@ -70,7 +70,7 @@ esac
 DIR="${OUTDIR:-$DIR}"
 
 cd "$(dirname "$0")/../.."  # repository root: the jobs start here (SLURM_SUBMIT_DIR)
-for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$DATASET/train.csv"; do
+for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "bench/data/$DATASET/meta.json"; do
   # With -a the data may still be in the making.
   [ -e "$f" ] || [ -n "$AFTER" -a "${f#bench/data/}" != "$f" ] ||
     { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }

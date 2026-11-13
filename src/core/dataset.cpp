@@ -188,6 +188,54 @@ std::size_t countRows(const char *begin, const char *end) {
   return rows;
 }
 
+// The offset just past the first `rows` rows from `bodyStart` (a line start).
+// The file is counted on the pool in pieces, a window of one piece per thread
+// at a time, so a small prefix of a big file (sorel_4m: 43 of SOREL's 136 GB)
+// is read only up to about one window past its end.
+std::size_t endOfRows(const std::string &filePath, const InputFile &file, std::size_t bodyStart,
+                      std::size_t rows, ThreadPool *pool) {
+  constexpr std::size_t kPieceBytes = std::size_t{32} << 20;
+  const unsigned threadCount = pool ? pool->workerCount() + 1 : 1;
+  std::size_t counted = 0;
+  std::size_t begin = bodyStart;
+  while (begin < file.size()) {
+    std::vector<std::pair<std::size_t, std::size_t>> pieces;
+    for (unsigned index = 0; index < threadCount && begin < file.size(); ++index) {
+      const std::size_t end = file.nextLineStart(std::min(file.size(), begin + kPieceBytes) - 1);
+      pieces.emplace_back(begin, end);
+      begin = end;
+    }
+    std::vector<std::size_t> counts(pieces.size(), 0);
+    parallelFor(pool, pieces.size(), [&](std::size_t index) {
+      const InputFile pieceFile(filePath);
+      forEachLines(pieceFile, pieces[index].first, pieces[index].second, false,
+                   [&](const char *lines, const char *end) {
+                     counts[index] += countRows(lines, end);
+                   });
+    });
+    for (std::size_t index = 0; index < pieces.size(); ++index) {
+      if (counted + counts[index] < rows) {
+        counted += counts[index];
+        continue;
+      }
+      // Row `rows` ends in this piece: walk its lines to the end of that row.
+      std::size_t left = rows - counted;
+      std::size_t offset = pieces[index].first;
+      forEachLines(file, pieces[index].first, pieces[index].second, false,
+                   [&](const char *lines, const char *end) {
+                     const char *cursor = lines;
+                     while (left > 0 && cursor < end) {
+                       left -= !lineAt(cursor, end).empty();
+                     }
+                     offset += static_cast<std::size_t>(cursor - lines);
+                   });
+      return offset;
+    }
+  }
+  throw std::runtime_error("--rows " + std::to_string(rows) + ": " + filePath + " has only " +
+                           std::to_string(counted) + " rows");
+}
+
 // Parse the whole lines in [begin, end); `row` is the dataset row of the first one.
 void parseLines(const char *begin, const char *end, Chunk &chunk, std::size_t &row,
                 std::size_t columnCount, bool skipFirstColumn, std::size_t rowCount,
@@ -252,7 +300,7 @@ void parseLines(const char *begin, const char *end, Chunk &chunk, std::size_t &r
 
 } // namespace
 
-Dataset loadDataset(const std::string &filePath, ThreadPool *pool) {
+Dataset loadDataset(const std::string &filePath, ThreadPool *pool, std::size_t maxRows) {
   const InputFile file(filePath);
 
   // Header: feature names. The last column is the label; "Id" is skipped.
@@ -274,18 +322,21 @@ Dataset loadDataset(const std::string &filePath, ThreadPool *pool) {
     dataset.featureNames.emplace_back(header[column]);
   }
 
-  // Cut the body into one chunk per thread, each starting at a line start.
+  // Cut the body (its first maxRows rows) into one chunk per thread, each
+  // starting at a line start.
+  const std::size_t bodyEnd =
+      maxRows > 0 ? endOfRows(filePath, file, bodyStart, maxRows, pool) : file.size();
   const unsigned threadCount = pool ? pool->workerCount() + 1 : 1;
-  const std::size_t bodySize = file.size() - bodyStart;
+  const std::size_t bodySize = bodyEnd - bodyStart;
   std::vector<Chunk> chunks;
   std::size_t chunkBegin = bodyStart;
-  for (unsigned index = 0; index < threadCount && chunkBegin < file.size(); ++index) {
-    std::size_t chunkEnd = file.size();
+  for (unsigned index = 0; index < threadCount && chunkBegin < bodyEnd; ++index) {
+    std::size_t chunkEnd = bodyEnd;
     if (index + 1 < threadCount) {
       chunkEnd = std::min(chunkEnd, bodyStart + bodySize * (index + 1) / threadCount);
     }
-    if (chunkEnd < file.size()) {
-      chunkEnd = file.nextLineStart(std::max(chunkEnd, chunkBegin));
+    if (chunkEnd < bodyEnd) {
+      chunkEnd = std::min(bodyEnd, file.nextLineStart(std::max(chunkEnd, chunkBegin)));
     }
     if (chunkEnd > chunkBegin) {
       chunks.push_back({chunkBegin, chunkEnd, 0, 0, {}});

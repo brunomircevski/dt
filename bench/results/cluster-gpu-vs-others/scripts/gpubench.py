@@ -37,7 +37,7 @@ Environment:
 import json, os, socket, subprocess, sys, threading, time
 import numpy as np
 
-DATA_ROOT = os.environ.get("DATA_ROOT", os.path.expanduser("~/dt/bench/data"))
+DATA_ROOT = os.environ.get("DATA_ROOT", os.path.expanduser("~/datasets/bench"))
 DEPTH = 19  # set by main()
 TREES = 1   # set by main()
 CLASSES = 2  # set by main()
@@ -48,10 +48,15 @@ assert FOREST in ("identical", "default"), FOREST
 
 
 def load(dataset, part):
+    """A prefix_of set (sorel_4m, ecbdl_15m, chess_100m) is the first rows of
+    its parent's files (bench/benchlib.py)."""
     m = json.load(open(f"{DATA_ROOT}/{dataset}/meta.json"))
-    n = m["n_train"] if part == "train" else m["n_test"]
-    X = np.fromfile(f"{DATA_ROOT}/{dataset}/{part}.f32", dtype="<f4").reshape(n, len(m["features"]))
-    y = np.fromfile(f"{DATA_ROOT}/{dataset}/{part}.y.i32", dtype="<i4")
+    n, F = (m["n_train"] if part == "train" else m["n_test"]), len(m["features"])
+    if n == 0:  # no test set
+        return np.empty((0, F), np.float32), np.empty(0, np.int32)
+    folder = f"{DATA_ROOT}/{m.get('prefix_of', dataset)}"
+    X = np.fromfile(f"{folder}/{part}.f32", dtype="<f4", count=n * F).reshape(n, F)
+    y = np.fromfile(f"{folder}/{part}.y.i32", dtype="<i4", count=n)
     return X, y
 
 
@@ -237,7 +242,10 @@ def main():
     DEPTH = int(sys.argv[8]) if len(sys.argv) > 8 else 19
     fit, info, predict = IMPLS[impl]
     X, y = load(dataset, "train")
+    # No test set (chess): predict 50,000 training rows instead, no test accuracy.
     Xt, yt = load(dataset, "test")
+    if not len(yt):
+        Xt, yt = X[:50_000], None
     CLASSES = int(y.max()) + 1
     gpu = GpuMemory()
     t = time.perf_counter()
@@ -262,8 +270,10 @@ def main():
             row["n_streams"] = n_streams()
         if rep == int(reps) - 1:
             train_acc, pred, nodes, d, root = info(model, X, y, Xt)
-            np.save(f"{pred_dir}/{impl}-{case}-{TREES}-{FOREST}.npy", pred)
-            row.update(train_accuracy=train_acc, test_accuracy=float(np.mean(pred == yt)),
+            if yt is not None:
+                np.save(f"{pred_dir}/{impl}-{case}-{TREES}-{FOREST}.npy", pred)
+            row.update(train_accuracy=train_acc,
+                       test_accuracy=float(np.mean(pred == yt)) if yt is not None else None,
                        nodes=nodes, depth=d, root=root, gpu_peak_mib=gpu.stop())
         print(json.dumps(row), flush=True)
         with open(out, "a") as f:

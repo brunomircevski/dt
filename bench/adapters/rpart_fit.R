@@ -74,7 +74,9 @@ accuracy <- function(frame) {
 }
 if (args$eval == "1") {
   result <- paste0(result, sprintf(', "train_accuracy": %.9f', accuracy(train)))
-  test <- read_part("test", as.integer(args$n_test))
-  result <- paste0(result, sprintf(', "test_accuracy": %.9f', accuracy(test)))
+  if (as.integer(args$n_test) > 0) {  # 0: no test set
+    test <- read_part("test", as.integer(args$n_test))
+    result <- paste0(result, sprintf(', "test_accuracy": %.9f', accuracy(test)))
+  }
 }
 cat("{", result, "}\n", sep = "")

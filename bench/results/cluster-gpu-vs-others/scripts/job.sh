@@ -33,7 +33,7 @@ export TMPDIR=$SCRATCH  # every temp file of the job, removed with it
 # Leave the node as we found it, also when the job fails or SLURM ends it:
 # no temp files, and the datasets (only on the login node's disk, over NFS)
 # out of the page cache (dd iflag=nocache count=0 = posix_fadvise DONTNEED).
-trap 'rm -rf "$SCRATCH"; find -L "${DATA_ROOT:-$HOME/dt/bench/data}" -type f -exec dd if={} iflag=nocache count=0 status=none \; 2>/dev/null' EXIT
+trap 'rm -rf "$SCRATCH"; find -L "${DATA_ROOT:-$HOME/datasets/bench}" -type f -exec dd if={} iflag=nocache count=0 status=none \; 2>/dev/null' EXIT
 trap 'exit 143' TERM INT
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1
 if [ -z "${NUMA_NODE:-}" ]; then  # the GPU on the node with the most free memory

@@ -29,6 +29,11 @@ def split_rows(n, spec, n_source, column=None):
     rows are those read from it, after the source's n_source rows. test_from
     [name, value] (split "tail"): the test set is every row from the first whose
     feature `name` (`column`, its values) is >= value, and no row before it is."""
+    if spec.get("split") == "none":  # no test set
+        train, test = np.arange(n), np.arange(0)
+        if spec.get("train_rows"):
+            train = train[:spec["train_rows"]]
+        return train, test
     if "test_source" in spec:
         train, test = np.arange(n_source), np.arange(n_source, n)
         if spec.get("train_rows"):
@@ -122,7 +127,7 @@ def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, s
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     F = X.shape[1]
-    parts = {"train": train, "test": test}
+    parts = {"train": train, "test": test} if len(test) else {"train": train}
     own_names = {}  # train.csv's own names, if it is a link to a source that has them
     # 64-bit offsets: 2G rows of "c0" are more than 2^31 bytes (chess_2b).
     labels = pa.array([f"c{k}" for k in range(len(classes))], pa.large_string())
@@ -161,6 +166,26 @@ def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, s
     tmp.rename(out)
 
 
+def write_prefix(name, spec, specs):
+    """A prefix_of set: its parent's first train_rows training rows and its test
+    set, with nothing of its own but meta.json (benchlib.folder, tree_input)."""
+    parent = spec["prefix_of"]
+    if "prefix_of" in specs.get(parent, {}) or not (DATA / parent / "meta.json").exists():
+        raise ValueError(f"{name}: prefix_of {parent!r} must be a prepared set of its own")
+    if set(spec) != {"prefix_of", "train_rows"}:
+        raise ValueError(f"{name}: a prefix_of set has only prefix_of and train_rows")
+    m = json.load(open(DATA / parent / "meta.json"))
+    if not 0 < spec["train_rows"] <= m["n_train"]:
+        raise ValueError(f"{name}: {parent} has {m['n_train']:,} training rows")
+    for kept in ("yadt.names", "train.yadt.csv"):  # YaDT reads whole files
+        if (DATA / parent / kept).exists():
+            raise ValueError(f"{name}: {parent} has YaDT files, which a prefix cannot share")
+    m.update(name=name, n_train=spec["train_rows"], prefix_of=parent, spec=spec)
+    shutil.rmtree(DATA / name, ignore_errors=True)
+    (DATA / name).mkdir(parents=True)
+    json.dump(m, open(DATA / name / "meta.json", "w"), indent=1)
+
+
 def make_baseline():
     """200 + 50 rows, 4 features, 2 classes: training takes microseconds, so peak
     memory is what the tool needs to start, load and fit at all."""
@@ -184,10 +209,15 @@ def main():
     if args.force or not (DATA / BASELINE / "meta.json").exists():
         make_baseline()
     sources = {}
-    for name in args.datasets or list(specs):
+    # prefix_of sets after the others: their parents first
+    for name in sorted(args.datasets or list(specs), key=lambda name: "prefix_of" in specs[name]):
         spec = specs[name]
         if (DATA / name / "meta.json").exists() and not args.force:
             print(f"{name}: already prepared")
+            continue
+        if "prefix_of" in spec:
+            write_prefix(name, spec, specs)
+            print(f"{name}: the first {spec['train_rows']:,} training rows of {spec['prefix_of']}")
             continue
         if not (ROOT / spec["source"]).exists():
             print(f"{name}: skipped, {spec['source']} not found")
@@ -201,7 +231,8 @@ def main():
         features, classes, X, y, n_source = sources[key]
         column = X[:, features.index(spec["test_from"][0])] if "test_from" in spec else None
         train, test = split_rows(len(y), spec, n_source, column)
-        whole = "test_source" in spec and len(train) == n_source  # all its rows, in order
+        # all its rows, in order
+        whole = ("test_source" in spec or spec.get("split") == "none") and len(train) == n_source
         write_dataset(name, features, classes, X, y, train, test, {"spec": spec},
                       yadt=spec.get("yadt", True), source=ROOT / spec["source"] if whole else None)
         print(f"{name}: {len(train):,} train / {len(test):,} test rows, {len(features)} features, "

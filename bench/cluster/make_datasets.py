@@ -43,6 +43,8 @@ Sources, in <downloads>:
                            Written in ./tree's format (f0,f1 and c0/c1, as prepare.py's
                            train.csv) since 2026-10-22
   (none)                   chess_2b: chess_100m's rows, then 1.9G rows drawn from a fixed seed
+                           (it needs datasets/chess/chess_100m.csv, deleted once the A/B kits
+                           of 2026-11 are done: chess_2b.csv is the copy to keep)
 
 A file whose SHA-256 differs from the expected one is left as <name>.csv.mismatch
 and the script fails.
@@ -75,13 +77,9 @@ EXPECTED = {
     # chess: ./tree's format (2026-10-22) of the first build
     # (mordor3, 2026-10-19), from files that no longer exist; chess_2b: its first build.
     "chess_1m": "e627a390685d94edf73cec0fe90ff3bfcdbda6e4fb0f20c9bfb33eb895cee18a",
-    "chess_1m_test": "4fcfc226655dec9b32b021f7936dfdeb61e8311413d7d58466cd47b8d060bfee",
     "chess_10m": "68d6c5d4fc84f059955255f6197a26863f356161433774a43d1028e1f4d9443c",
-    "chess_10m_test": "1feb48d239d7534f47d3d7bdbbacfddbdc062c21794156a7a78f38578605704d",
     "chess_100m": "944a3be648eb70de844473dc64abf164b84e56de67eec7b0c209b4caf0b630fe",
-    "chess_100m_test": "1feb48d239d7534f47d3d7bdbbacfddbdc062c21794156a7a78f38578605704d",
     "chess_1b": "124073b81a26e28a693ce3ce4a5e3ccf8edc41d8dcdcd7a2431fb642fb42fca1",
-    "chess_1b_test": "4fcfc226655dec9b32b021f7936dfdeb61e8311413d7d58466cd47b8d060bfee",
     "chess_2b": "9b4e47c7f391a0cfeec85b98e42f520461aba03b1afcbcbec783ceba9220add3",
 }
 
@@ -445,8 +443,9 @@ def chess_generated(name, downloads, out):
 BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmetry,
             "supersymmetry_20k": supersymmetry_20k,
             "airline": airline, "ecbdl": ecbdl,
-            **{name: partial(chess, name, "train") for name in CHESS},
-            **{f"{name}_test": partial(chess, name, "test") for name in CHESS},
+            # chess_1m, 10m and 100m are chess_2b's first rows (prefix_of sets in
+            # datasets.toml): since 2026-11-13 no CSVs of their own, and no test files.
+            "chess_1b": partial(chess, "chess_1b", "train"),
             **{name: partial(chess_generated, name) for name in CHESS_GENERATED}}
 
 

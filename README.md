@@ -97,6 +97,7 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--alpha` with
 
 | Flag | Default | Meaning |
 |------|---------|---------|
+| `--rows N` | all | Use only the first N rows of the dataset file (an error if it has fewer). Only those rows are read, so a dataset's first N rows need no file of their own (the benchmark's `sorel_4m`, `ecbdl_15m`, `chess_500m`). `--test-last` and `--holdout` then split these N rows. |
 | `--repeat N` | 0 | Train N trees in a row on the data loaded once, printing each one's training time and Unix start and end (`repeat i/N: train X ms, unix START END`; the window ends when training ends, before the memory is freed). With N > 1 every tree is trained in a forked child process, so each one runs as a single run's tree would; the last tree is evaluated. Not with `--profile`. For energy measurements ([bench/power](bench/power/README.md)). |
 | `--dump FILE` | off | Write the tree as text. |
 | `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--cuda`). Its cost was within −1.5% to +2.0% of the run time; `bench/profile_chart.py` draws it. |

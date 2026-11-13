@@ -154,7 +154,7 @@ TREE_IMPLS = ("tree", "tree_cuda", "tree_gpu_only", "tree_simple")
 
 def adapter_args(dataset, threads, warmup_rows, evaluate):
     m = B.meta(dataset)
-    return [f"data={B.DATA / dataset}", f"n_train={m['n_train']}", f"n_test={m['n_test']}",
+    return [f"data={B.folder(dataset)}", f"n_train={m['n_train']}", f"n_test={m['n_test']}",
             f"n_features={len(m['features'])}", f"n_classes={len(m['classes'])}",
             f"threads={threads}", f"warmup={warmup_rows}", f"eval={int(evaluate)}"]
 
@@ -223,7 +223,7 @@ def build_command(case, kind, args, scratch, rep=0):
                    if args.profile and kind == "run" else [])
         argv = [str(binary)] + backend + flags \
             + (["--dump", str(dump)] if predict or args.hash_trees else []) \
-            + profile + [str(data / "train.csv")]
+            + profile + B.tree_input(dataset)
 
         def parse(stdout):
             nodes, leaves, depth = re.search(r"nodes (\d+), leaves (\d+), depth (\d+)",
@@ -254,6 +254,8 @@ def build_command(case, kind, args, scratch, rep=0):
                 printed = float(re.search(r"train accuracy\s+([\d.]+)%", stdout).group(1))
                 digest = hashlib.sha256(dump.read_bytes()).hexdigest()
                 for part in ("test",) if args.test_accuracy else ("train", "test"):
+                    if not m[f"n_{part}"]:  # no test set (chess)
+                        continue
                     # The runs of a case grow the same tree: its rows are predicted once
                     # (minutes on SOREL's test set), the repeats reuse the accuracy.
                     key = (dataset, part, digest)
@@ -273,6 +275,8 @@ def build_command(case, kind, args, scratch, rep=0):
         return argv, {}, parse
 
     if impl == "yadt":
+        if "prefix_of" in m:
+            raise ValueError(f"{dataset}: YaDT reads whole files, a prefix_of set has none")
         # The measured process only trains: it saves the tree and reports the
         # training accuracy; the test rows are classified afterwards by a second,
         # unmeasured process that loads the saved tree, so they never add to the

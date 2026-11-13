@@ -8,6 +8,7 @@
 #   test_source    CSV file of the test rows (same columns as source): then
 #                  source's rows are the training set and split is not used
 #   split          "random": shuffle with `seed`, then take the test rows
+#                  "none":   no test set, every row trains (the synthetic chess sets)
 #                  "tail":   the last rows are the test set (the published split
 #                            of SUSY and HIGGS: their rows are already random;
 #                            ./tree --test-last 500000 on the CSV is the same)
@@ -18,9 +19,16 @@
 #   seed           shuffle seed for split = "random" (default 1)
 #   yadt           write YaDT's files (default true; false for huge datasets
 #                  that YaDT never runs on)
+#   prefix_of      another entry's name: this set is that set's first
+#                  train_rows training rows, with its test set. It has only
+#                  meta.json, no copy of the rows: ./tree reads the parent's
+#                  train.csv with --rows, the other tools the first rows of the
+#                  parent's binary files (benchlib.folder, tree_input). Only
+#                  prefix_of and train_rows; the parent has no YaDT files.
 #
-# Only numeric features are supported for now. A smaller variant of a dataset
-# is just another entry with the same source and train_rows set.
+# Only numeric features are supported for now. A small variant of a dataset is
+# another entry with the same source and train_rows set (a copy of its rows);
+# a big one's is a prefix_of entry.
 
 [diabetes]
 source = "tests/data/diabetes.csv"
@@ -96,55 +104,48 @@ test_source = "datasets/ecbdl/ecbdl_test.csv"
 yadt = false
 
 [ecbdl_15m]
-source = "datasets/ecbdl/ecbdl.csv"
-test_source = "datasets/ecbdl/ecbdl_test.csv"
+prefix_of = "ecbdl"
 train_rows = 15_000_000
-yadt = false
 
 # A 3x3 checkerboard (x and y uniform on a grid of 32,768 values in [0, 3],
 # 3k/32767 to six decimals; the class alternates between
 # the nine unit squares: 5 squares B, 4 A), from C4.5-format files made by
 # bench/cluster/make_datasets.py; cluster-only. The CSVs are in train.csv's
-# format, so prepare.py links train.csv to them when a set takes all rows. Each
-# set comes with its own test file. The sizes nest: 1m is the first 1M rows of
-# 10m, 10m the first 10M of 50m, 50m the first 50M of 100m, 100m of 500m, 500m of 2b; 1b is
-# 100m ten times over (100M distinct rows, each 10 times). 2b is generated
-# (2026-10-22): 100m's rows, then 1.9G new ones.
-# No YaDT files from 50m on (no YaDT on the cluster).
-[chess_1m]
-source = "datasets/chess/chess_1m.csv"
-test_source = "datasets/chess/chess_1m_test.csv"
-
-[chess_10m]
-source = "datasets/chess/chess_10m.csv"
-test_source = "datasets/chess/chess_10m_test.csv"
-
-[chess_50m]
-source = "datasets/chess/chess_100m.csv"
-test_source = "datasets/chess/chess_100m_test.csv"
-train_rows = 50_000_000
-yadt = false
-
-[chess_100m]
-source = "datasets/chess/chess_100m.csv"
-test_source = "datasets/chess/chess_100m_test.csv"
-yadt = false
-
-[chess_500m]
+# format, so prepare.py links train.csv to them. Synthetic: no test set (since
+# 2026-11-13; until then each had a test file, its accuracy 100% or close).
+# The sizes nest: 1m, 10m, 50m, 100m and 500m are 2b's first rows (checked byte
+# for byte on 2026-11-13), so they are prefix_of entries of 2b, with no files
+# of their own. 2b is generated (2026-10-22): 100m's rows, then 1.9G new ones.
+# 1b is 100m ten times over (100M distinct rows, each 10 times).
+[chess_2b]
 source = "datasets/chess/chess_2b.csv"
-test_source = "datasets/chess/chess_100m_test.csv"
-train_rows = 500_000_000
+split = "none"
 yadt = false
 
 [chess_1b]
 source = "datasets/chess/chess_1b.csv"
-test_source = "datasets/chess/chess_1b_test.csv"
+split = "none"
 yadt = false
 
-[chess_2b]
-source = "datasets/chess/chess_2b.csv"
-test_source = "datasets/chess/chess_100m_test.csv"
-yadt = false
+[chess_1m]
+prefix_of = "chess_2b"
+train_rows = 1_000_000
+
+[chess_10m]
+prefix_of = "chess_2b"
+train_rows = 10_000_000
+
+[chess_50m]
+prefix_of = "chess_2b"
+train_rows = 50_000_000
+
+[chess_100m]
+prefix_of = "chess_2b"
+train_rows = 100_000_000
+
+[chess_500m]
+prefix_of = "chess_2b"
+train_rows = 500_000_000
 
 # MNIST8M (infinite MNIST: 8.1M distorted digits, 784 pixel features 0-255,
 # 10 classes) and SOREL-20M (malware detection, EMBER v2 features: 2381, label
@@ -166,7 +167,5 @@ test_source = "datasets/sorel/sorel_test.csv"
 yadt = false
 
 [sorel_4m]
-source = "datasets/sorel/sorel_full.csv"
-test_source = "datasets/sorel/sorel_test.csv"
+prefix_of = "sorel"
 train_rows = 4_000_000
-yadt = false
