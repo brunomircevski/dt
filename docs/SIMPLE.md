@@ -36,7 +36,7 @@ Notation: `N` training rows, `F` features, `K` classes, `n` rows of a node.
 | 7 | `maxGainStep` skip | none | skips the cuts that cannot catch up with the best | fewer `cutGain` calls |
 | 8 | Runs of equal values | one cut test per row | runs passed over, counts added in 4 lanes | constant factor on low-cardinality features |
 | 9 | Boundary points | every cut scored | `isSkippableCut`: a cut between two single same-class rows is skipped | fewer `cutGain` calls (Risk A) |
-| 10 | Log tables | `LogTable` below 65,536, `log2` above | same for `cutGain`; the bound's corners (6) use `c·log₂c` and `1/c` tabled for every count up to N | no `log2` or division in the bound |
+| 10 | Log tables | `LogTable` below 65,536, `log2` above | same for `cutGain`; the bound's corners (6) use `c·log₂c` (C4.5) or `1/c` (CART) tabled for every count up to N | no `log2` or division in the bound |
 | 11 | Class count | runtime `K` | templated for K = 3..8 | constant factor |
 | 12 | Constant features | sorted and scanned again in every node | dropped for the whole subtree | fewer features deeper down |
 | 13 | Children's class counts | counted again from the labels | taken from the winner's sweep | O(n) per node |
@@ -50,7 +50,7 @@ Notation: `N` training rows, `F` features, `K` classes, `n` rows of a node.
 | 19 | Allocation | heap vectors per node and feature | allocated once; `thread_local` buffers reused | no allocator in the hot loop |
 | 20 | Node storage | `push_back` in preorder | `NodeStore` chunks, renumbered in preorder at the end | no reallocation |
 | 21 | Recursion | recursive `growNode` | explicit stack | no stack overflow (Risk D) |
-| 22 | Footprint | row ids + one sorted copy per feature of the current node | (F+1)·8N columns, N goes-left bytes, N/8 bitmap, 16N tables, 4N leaf ids | serial needs ~8F bytes per row more |
+| 22 | Footprint | row ids + one sorted copy per feature of the current node | (F+1)·8N columns, N goes-left bytes, N/8 bitmap, 8N table, 4N leaf ids | serial needs ~8F bytes per row more |
 | **C4.5 post-processing** |||||
 | 23 | Distinct values | `distinctValues(train)`: copy and `std::sort` per feature, timed as pruning | read off the presorted columns, timed as presort | O(F·N log N) → O(F·N) |
 | 24 | Leaf of every row | pruning routes all N rows through the tree | recorded by the grower | one pass of N·depth gathers saved |
