@@ -226,8 +226,10 @@ If the jobs are gone from `squeue` and `times.csv` has 649 lines (header +
 | `summ.py`, `peaks.sh` | summaries (above) |
 | `short4.sh` | quick turing comparison with `--profile` (edit its variant list first) |
 
-Datasets: `/home/bmircevski/dt/bench/data/<name>/train.csv` (higgs, susy,
-mnist8m, sorel_4m, chess_100m, ...).
+Datasets: `/home/bmircevski/datasets/bench/<name>/train.csv` (higgs, susy,
+mnist8m, sorel_4m, chess_100m, ...). They moved there from `~/dt/bench/data` on
+2026-11-13, and `~/dt` was removed. The case files in `ab/` already use the new path. A
+checkout that needs `bench/data` symlinks it to `~/datasets/bench`.
 
 ## Hardware notes
 

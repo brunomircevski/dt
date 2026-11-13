@@ -49,15 +49,17 @@ The rules:
 | Raw results (CSV from tune.sh) | `~/opt-dt/out/*.csv` |
 | `--profile` JSONs | `~/opt-dt/prof/*.json` |
 | Dumps of every case run | `~/opt-dt/dumps/<case>-<variant>.dump` |
-| Datasets | `~/dt/bench/data/<ds>/train.csv` (higgs, susy, mnist8m, ecbdl_15m, covertype, chess_100m, chess_1b, sorel_4m, ...) |
+| Datasets | `~/datasets/bench/<ds>/train.csv` (higgs, susy, mnist8m, ecbdl_15m, covertype, chess_100m, chess_1b, sorel_4m, ...) |
 | SLURM | `/opt/slurm-25.05.8/bin`. It is not in PATH for non-login shells, so run `export PATH=/opt/slurm-25.05.8/bin:$PATH` first. |
 
-`~/dt` is an old checkout (9af61483) used only for its `bench/data`. Make a fresh clone for
-the code:
+Datasets moved on 2026-11-13: the prepared ones (what `bench/data` used to hold) are now in
+`~/datasets/bench/<ds>/`, next to the raw CSVs in `~/datasets/`. `~/dt` was removed. The kit's
+scripts and case files already point at the new place. A checkout that needs `bench/data`
+symlinks it to `~/datasets/bench`. Make a fresh clone for the code:
 
 ```bash
 git clone https://github.com/brunomircevski/dt.git ~/dt-opt
-cd ~/dt-opt && ln -s ~/dt/bench/data bench/data   # only if you need bench scripts
+cd ~/dt-opt && ln -s ~/datasets/bench bench/data   # only if you need bench scripts
 for x in wc pb kf cs; do git switch -c opt/$x 55d83a48 && git am ~/opt-dt/patches/$x/*.patch; done
 git switch main
 ```
