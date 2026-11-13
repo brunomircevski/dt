@@ -92,8 +92,18 @@ least 4,096 samples is split, one child becomes a new task and the current
 thread continues with the other. Data parallelism thus serves the few large
 nodes near the root, and task parallelism the many small subtrees below. The
 presort is parallel as well, and extra spare buffers let all threads partition
-attributes at the same time. Threads are not pinned to cores, and memory is not
-placed explicitly on NUMA nodes.
+attributes at the same time.
+
+Large nodes are memory-bound, so the builder avoids traffic between cores and
+repeated reads. The thread that splits a node marks the samples going left in
+its own bitmap, since one bitmap shared by all threads would put samples of
+every node being split into each cache line. While a large node's attributes
+are partitioned out of place, its children's sweeps read them on the way, so
+each level reads a large node's data once. When a node has fewer attributes
+than threads (SUSY, HIGGS, Chess), each attribute's sweep is cut into chunks
+for all threads; the chunks are joined in order so that the chosen cut,
+near-ties included, is exactly that of a single sweep. Threads are not pinned
+to cores, and memory is not placed explicitly on NUMA nodes.
 
 \subsection{\ImplGpu}
 \label{sec:impl-gpu}
