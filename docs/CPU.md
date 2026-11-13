@@ -43,10 +43,11 @@ anything up by row id.
 A node owns the **same index range `[begin, end)` in every column**. When the
 node splits at "feature w, first L entries go left":
 
-1. mark the rows of the first `L` entries of column `w` in a byte array
-   `goesLeft[row]`;
-2. *stable*-partition every other column's range by `goesLeft`: left rows to the
-   front, right rows to the back, each keeping its order.
+1. mark the rows of the first `L` entries of column `w` (a bit per row id in
+   the splitting thread's bitmap; one thread in place: a byte array
+   `goesLeft[row]`);
+2. *stable*-partition every other column's range by those marks: left rows to
+   the front, right rows to the back, each keeping its order.
 
 Both children again own one range in every column, still sorted. Nothing is
 ever sorted twice, and each level of the tree costs `O(F · n)` (the SLIQ /
@@ -135,8 +136,7 @@ belong to such columns.
 One thread pool (`ThreadPool`), two kinds of work:
 
 * **Big nodes** (≥ `featureParallelRows` = 32768 rows): `parallelFor` over
-  features for the sweep, and the partition runs one column per thread.
-  Marking `goesLeft` is split into blocks too. Each `parallelFor` wakes the
+  features for the sweep, and the partition runs one column per thread. Each `parallelFor` wakes the
   other threads, and below this size that costs more than they save: with
   4096 (the old default) a 48-core server spent a third of the CPU time of a
   HIGGS build in the kernel (futex wake-ups), and 16K-64K rows were best on
@@ -154,10 +154,17 @@ One thread pool (`ThreadPool`), two kinds of work:
   its columns' slots (`Subtree::slots`, shared by its descendants until the
   next move). Every entry moves once, written with non-temporal stores; the rows going
   left are marked in a bitmap (a bit per row, 1.3 MB on HIGGS) that stays in
-  the caches while the columns stream through. The row's side picks the
+  the caches while the columns stream through. Each thread has its own
+  bitmap for the nodes it splits (a shared one had the rows of every node
+  being split in each cache line: on 48 threads a mark cost 12-17x its
+  one-thread time), and a node of at least 1/8 of all rows is marked from
+  the winner's raw column (`value <= leftValue` for every row, sequential
+  reads, on all threads). The row's side picks the
   target index with a mask, not a branch (an even split would mispredict
-  every other row), and an entry moves as one 64-bit word. With two classes,
-  children of 4096+ rows are swept *during* the partition: each column passes
+  every other row), and an entry moves as one 64-bit word. Children of
+  4096+ rows are swept *during* the partition (`TwoClassSweep`, or
+  `KClassSweep` for more classes with `--parallel`, both resumable in
+  pieces): each column passes
   through a small staging buffer per child (in L1) where the child's sweep
   reads it, so a big node's columns are read once per level instead of
   twice. The entries go to the buffers in runs that cannot fill one, so the
@@ -173,6 +180,15 @@ One thread pool (`ThreadPool`), two kinds of work:
   slots do not idle the threads: a block counts its left rows, takes the count
   before it from the block before it (a chain) and writes. Their children are
   not swept on the way.
+* **Two-class nodes of 2^20+ rows with fewer features than threads** whose
+  sweeps were not fused (the root, children of nodes partitioned in blocks)
+  are swept in chunks of 32K cuts by all threads instead of a feature per
+  thread (`sweepInChunks()`; chess has 2 features, SUSY 18). Each chunk
+  sweeps its cuts on its own, from a lower bound of the best gain at its
+  start, and records the cuts it picks; then each column's chunks are joined
+  in order, sweeping a chunk again only where its first pick above the best
+  so far is within `kTieEps` of it, so ties go exactly where the sequential
+  sweep puts them.
 * **Subtrees**: after a split of a node with ≥ `nodeTaskRows` = 4096 rows, the
   left child becomes a pool task, and the current thread continues with the
   right child (an explicit stack, no recursion). Nobody waits for a task; the
@@ -203,8 +219,9 @@ because the 115 MB byte array misses the caches where the parallel build's
 14 MB bitmap does not. Making serial use the copy sped serial airline up 1.3–1.9×; on epyc1 it
 slowed HIGGS and SUSY by 6–19% ([PERFORMANCE.md](PERFORMANCE.md)).
 The sweep's
-tables of `c·log2 c` and `1/c` take another `16 · n` bytes for training sets
-of 65536 rows or more (smaller counts use shared tables).
+table of `c·log2 c` (C4.5) or `1/c` (CART) takes another `8 · n` bytes for
+training sets of 65536 rows or more (smaller counts use shared tables), and
+each thread that splits a big node a bitmap of `n / 8` bytes.
 
 Nodes are created in a `NodeStore` (fixed-size chunks, an atomic counter, safe
 for concurrent use). At the end the tree is copied into a `Tree`: flat arrays

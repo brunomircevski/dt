@@ -2,6 +2,106 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: per-thread marks, multi-class fused sweeps, chunked sweeps (mordor3 cluster)
+
+Four changes to the CPU builder, measured on whole nodes against main at
+55d83a48 (2x EPYC 9255 "epyc", 2x Xeon Gold 6542Y "dell1", 48 threads; one
+thread is `taskset -c 0 --serial`). Every `--dump` equals main's, also with
+the chunked sweep's thresholds lowered to 1K rows and 64-cut chunks (many
+near-tie resweeps; HIGGS and SUSY full depth, chess, covertype), and
+`tests/check.sh` passes for `./tree_cpu` and for `./tree` with CUDA
+(turing).
+
+* **Per-thread left bitmaps.** The rows going left of a node partitioned out
+  of place were marked with atomics in one bitmap shared by all threads, so
+  every 64-byte line held rows of all the nodes being split at once: on 48
+  threads `mark` took 12-17x its one-thread time (HIGGS 2.3 thread-seconds
+  per tree on epyc, 5.1 on dell). Now the splitting thread marks its node in
+  its own bitmap with plain stores, and a node with at least 1/8 of all rows
+  is marked from the winner's raw column (`value <= leftValue` for every row,
+  sequential reads, all threads). In-place nodes use the bitmap too with a
+  pool; one thread keeps the `goesLeft` bytes for them (a byte store does not
+  load its line, a bit does: HIGGS full depth 1.7% slower on one thread with
+  the bitmap). 4 to 32 for the 1/8 were the same within noise on HIGGS, SUSY
+  and chess_100m; 1/2 left the second level's marks on one thread (dell
+  chess_100m 20% slower).
+* **Multi-class children swept during the partition** (`KClassSweep`, the
+  resumable form of `scanFeatureK`'s loop): MNIST8M's children were swept
+  after their parent's partition, reading every column twice per level.
+  With the class count a member instead of a constant, the class loops did
+  not unroll (cachegrind: 35% more instructions in covertype's sweeps, one
+  thread 2-4% slower); it is a constant for `FixedK` now. Fused on one
+  thread too, MNIST8M was 2-3% slower on epyc but 6% faster on dell3
+  (covertype C4.5 +1.6% / -4.8%): one thread keeps main's separate sweeps,
+  so that no case is slower than main.
+* **Chunked sweeps for few features** (`sweepInChunks()`): unfused sweeps of
+  two-class nodes of 2^20+ rows ran a feature per thread, so chess (2
+  features) used 2 of 48 threads for its root, SUSY 18. Now every column is
+  cut into chunks of 32K cuts for all threads, and the chunks are joined in
+  order so that the result, near-ties included, is the sequential sweep's
+  (see the comment there). Started at -inf, a chunk got no help from the
+  sweep's bounds: chess spent 6x the sweep thread-seconds. Each chunk starts
+  from a lower bound of the best gain so far instead (an earlier chunk's
+  last cut, minus 2 kTieEps), which keeps the result and the bounds.
+* **One count table**: the sweep's table of `c·log2 c` (entropy) or `1/c`
+  (Gini), not both: on chess_100m 800 MB and 0.25 thread-seconds less
+  (train -8.5% at 48 threads, peak RSS 4.68 -> 3.96 GiB).
+
+Train ms, medians of interleaved runs in one job per node;
+`--no-prune -d 10` unless "full" (no depth limit, pruned):
+
+| case | epyc main | epyc new | dell1 main | dell1 new |
+|---|--:|--:|--:|--:|
+| chess_100m C4.5 48 threads | 405 | 269 (-33%) | 832 | 391 (-53%) |
+| chess_100m C4.5 full 48 threads | 668 | 482 (-28%) | 1442 | 997 (-31%) |
+| chess_100m CART 48 threads | 360 | 205 (-43%) | 641 | 306 (-52%) |
+| chess_100m CART full 48 threads | 339 | 224 (-34%) | 654 | 353 (-46%) |
+| covertype C4.5 48 threads | 34 | 28 (-19%) | 63 | 53 (-15%) |
+| covertype CART 48 threads | 48 | 30 (-38%) | 62 | 51 (-18%) |
+| higgs C4.5 48 threads | 485 | 366 (-25%) | 786 | 708 (-10%) |
+| higgs C4.5 full 48 threads | 1428 | 1120 (-22%) | 2088 | 1806 (-14%) |
+| higgs CART 48 threads | 481 | 338 (-30%) | 741 | 570 (-23%) |
+| higgs CART full 48 threads | 889 | 566 (-36%) | 1175 | 925 (-21%) |
+| susy C4.5 48 threads | 211 | 156 (-26%) | 312 | 272 (-13%) |
+| susy C4.5 full 48 threads | 458 | 371 (-19%) | 704 | 593 (-16%) |
+| susy CART 48 threads | 232 | 146 (-37%) | 306 | 235 (-23%) |
+| susy CART full 48 threads | 388 | 210 (-46%) | 471 | 330 (-30%) |
+| chess_100m CART 1 thread | 2868 | 2128 (-26%) | 5523 | 4128 (-25%) |
+| higgs C4.5 full 1 thread | 29480 | 29122 (-1%) | 42389 | 41936 (-1%) |
+| higgs CART 1 thread | 8048 | 7870 (-2%) | 13080 | 12606 (-4%) |
+| susy C4.5 full 1 thread | 5690 | 5589 (-2%) | 8532 | 8443 (-1%) |
+| susy CART 1 thread | 2648 | 2610 (-1%) | 3953 | 3910 (-1%) |
+| covertype C4.5 1 thread (dell3) | 344 | 339 (-2%) | 601 | 615 (+2%) |
+| covertype CART 1 thread (dell3) | 321 | 316 (-2%) | 516 | 518 (+0%) |
+| mnist8m C4.5 1 thread (dell3) | 113989 | 113827 (-0%) | 204541 | 204555 (+0%) |
+| mnist8m CART 1 thread (dell3) | 114934 | 115161 (+0%) | 201246 | 201188 (-0%) |
+| ecbdl_15m C4.5 48 threads | 5010 | 5032 (+0%) | 9329 | 9285 (-0%) |
+| ecbdl_15m CART 48 threads | 4800 | 4738 (-1%) | 8244 | 8156 (-1%) |
+| mnist8m C4.5 48 threads | 4451 | 3480 (-22%) | 7839 | 6217 (-21%) |
+| mnist8m CART 48 threads | 4271 | 3302 (-23%) | 7426 | 5730 (-23%) |
+
+Rows marked dell3: their dell columns are from dell3 (half dell1's memory
+channels), and they had 1-3 runs per node; the other rows 5 runs, MNIST8M
+and ECBDL 15M at 48 threads 3.
+
+ECBDL 15M has more features (631) than threads, and its marks were a small
+share: nothing changed. Peak RSS: HIGGS 5.6 GiB as before (the bitmaps add
+1.3 MB per thread), chess_100m 4.68 -> 3.96 GiB.
+
+Tried and dropped:
+
+* **Blocks for every 2^20+ node whose columns to move are at most the
+  threads** (`kFewColumns` 8 -> 1, or 2), now that the children's sweeps
+  would be chunked: HIGGS CART 7.5% slower (1), mixed and within noise (2).
+* **Presort write-combining** in the radix scatter for 1M+ rows, with or
+  without parts shared by idle threads for the last columns: HIGGS -6..+2%,
+  SUSY -4..+9%, one thread up to +10% (epyc). The presort is now the largest
+  part of a 48-thread HIGGS or chess tree (38% and 62%); its last 30 ms on
+  HIGGS run on 2-4 threads.
+* **`-march=x86-64-v3` / `-march=native`** (with `-ffp-contract=off`):
+  one-thread C4.5 5-7% slower on epyc, 2-5% faster on dell; within noise on
+  48 threads.
+
 ## November 2026: one exact sweep on every GPU and CPU
 
 The CUDA grower had two ways to score cuts, picked from the GPU's FP32:FP64
