@@ -25,9 +25,8 @@ them anyway. The pruned tree is the same, but those subtrees are never grown.
 \begin{table}
 \caption{The five implementations. \emph{Presort}: each attribute is sorted
 once and kept sorted by stable partitioning. \emph{Bounds}: cuts that provably
-cannot win are skipped. \emph{Filter}: the remaining cuts are scored only if a
-cheap estimate can beat the best cut so far. \ImplHybrid{} grows large nodes
-as \ImplGpu{} and small subtrees as \ImplParallel{}.}
+cannot win are skipped, and every other cut is scored. \ImplHybrid{} grows
+large nodes as \ImplGpu{} and small subtrees as \ImplParallel{}.}
 \label{tab:impl}
 \centering
 \small
@@ -37,10 +36,10 @@ as \ImplGpu{} and small subtrees as \ImplParallel{}.}
  & Sorting & Scoring & Hardware & Parallelism & Node order \\
 \midrule
 \ImplSerialBase{} & each node & all cuts        & 1 core      & none      & depth-first \\
-\ImplSerialOpt{}  & presort   & bounds, filter  & 1 core      & none      & depth-first \\
-\ImplParallel{}   & presort   & bounds, filter  & cores       & data, task & depth-first \\
+\ImplSerialOpt{}  & presort   & bounds          & 1 core      & none      & depth-first \\
+\ImplParallel{}   & presort   & bounds          & cores       & data, task & depth-first \\
 \ImplGpu{}        & presort   & bounds          & GPU         & data      & breadth-first \\
-\ImplHybrid{}     & presort   & both            & GPU + cores & data, task & both \\
+\ImplHybrid{}     & presort   & bounds          & GPU + cores & data, task & both \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -70,14 +69,14 @@ match, which keeps both children sorted, as in SLIQ and
 SPRINT~\cite{mehta1996sliq,shafer1996sprint}. An attribute that is constant on
 a node is dropped for the node's entire subtree.
 
-\emph{Score few cuts.} The sweep over a sorted attribute skips cuts that
-provably cannot win. A cut between two samples of the same class with unique
-values is never optimal~\cite{fayyad1992continuous}, and with two classes the
-gain is convex in the class counts, so an upper bound can rule out a whole
-block of consecutive cuts. For the remaining cuts, the sweep maintains a cheap
-gain estimate with a bounded error, and only cuts whose estimate can still beat
-the best cut so far are scored by the exact routine. The winning sweep also
-yields the class counts of both children.
+\emph{Skip cuts that cannot win.} The sweep over a sorted attribute skips cuts
+that provably cannot beat the best cut so far. A cut between two samples of the
+same class with unique values is never optimal~\cite{fayyad1992continuous}.
+With two classes, the gain is convex in the class counts, so an upper bound can
+rule out a whole block of consecutive cuts. Because moving one sample changes
+the gain by a bounded amount, a cut far below the best also rules out the next
+few cuts. Every remaining cut is scored by the exact routine. The winning sweep
+also yields the class counts of both children.
 
 Memory is allocated once: every attribute has a buffer of fixed size, and one
 spare buffer lets large nodes be partitioned out of place.
@@ -110,10 +109,9 @@ every node and attribute. Only these results go to the CPU, which applies the
 shared CART or C4.5 rule and turns children that cannot be split into leaves.
 The GPU then partitions the split nodes and, in the same pass, collects the
 class counts for the next level. Each level therefore needs a single round
-trip between CPU and GPU. The sweeps skip cuts with the same bounds as
-\ImplSerialOpt{}, applied to whole tiles, but score every remaining cut with
-the exact routine: a sweep in which all cuts are processed at once has no best
-cut so far to filter against. Data is uploaded through page-locked staging buffers, placed on
+trip between CPU and GPU. As on the CPU, the sweeps skip cuts with the
+boundary-point rule and, for two classes, with a bound over each whole tile,
+and score every remaining cut with the exact routine. Data is uploaded through page-locked staging buffers, placed on
 the GPU's NUMA node.
 
 \subsection{\ImplHybrid}
