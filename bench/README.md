@@ -51,6 +51,9 @@ Finished benchmarks, one directory per backend, machine and dataset: see [result
 - Thermal rest: `--cooldown` sets seconds of rest between processes.
 - JVM: `--java-heap` sets its maximum heap.
 - `--no-baseline` leaves out the runtime-footprint runs.
+- Output: `--run-id` names the directory in `bench/results/` (default host-date); `--dry-run` prints the plan and exits; `--seed` seeds the shuffled order of the cases.
+- NUMA and cache: `--membind NODES` runs every process under `numactl --membind`; `--drop-cache` drops the datasets from the page cache before each process.
+- `./tree` only: `--train-accuracy-only`, `--test-accuracy` (skip or limit predicting the dumped tree), `--hash-trees` (SHA-256 of every dumped tree), `--profile` (write `--profile` JSON per run), `--gpu-min-rows`.
 
 ## Protocols (what is compared)
 

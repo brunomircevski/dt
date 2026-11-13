@@ -110,8 +110,8 @@ targets the bounds directly (e.g. adversarial near-ties in large nodes).
 of levels deep could overflow the 8 MB stack. Not seen on any dataset; the
 frame size was not measured.
 
-**E. Float order.** `operator<` on floats and the radix key agree without NaN;
-`--multiply` only repeats the rows.
+**E. Float order.** `operator<` on floats and the radix key agree as long as
+there is no NaN.
 
 **F. Timing attribution.** Item 23 puts the distinct-value sort into
 `--simple`'s prune time. It does not change a tree; it matters when build and

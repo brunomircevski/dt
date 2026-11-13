@@ -40,6 +40,7 @@ make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,cod
 ## Run
 
 ```bash
+./tree --cart tests/data/iris.csv                    # smoke test: a file that is in the repository
 ./tree --cart datasets/covertype.csv                # CART: Gini, cost-complexity pruning with alpha 1e-5
 ./tree --cart --alpha 1e-4 datasets/covertype.csv   # prune with another fixed alpha
 ./tree --cart --no-prune datasets/covertype.csv     # only grow the maximal tree
@@ -49,6 +50,9 @@ make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,cod
 ./tree --c45 --cuda --holdout 0.2 datasets/higgs.csv  # a random 20% of the rows as the test set
 ./tree --help
 ```
+
+`datasets/` is not in the repository (the examples below use CSVs you put
+there); `tests/data/` has three small ones.
 
 The CSV needs a header; the last column is the class, a first column called
 `Id` is ignored, every other column must be numeric.
@@ -99,6 +103,7 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--alpha` with
 |------|---------|---------|
 | `--rows N` | all | Use only the first N rows of the dataset file (an error if it has fewer). Only those rows are read, so a dataset's first N rows need no file of their own (the benchmark's `sorel_4m`, `ecbdl_15m`, `chess_500m`). `--test-last` and `--holdout` then split these N rows. |
 | `--repeat N` | 0 | Train N trees in a row on the data loaded once, printing each one's training time and Unix start and end (`repeat i/N: train X ms, unix START END`; the window ends when training ends, before the memory is freed). With N > 1 every tree is trained in a forked child process, so each one runs as a single run's tree would; the last tree is evaluated. Not with `--profile`. For energy measurements ([bench/power](bench/power/README.md)). |
+| `--repeat-warmup S` | 0 | With `--repeat`: each tree's child keeps its threads busy for S seconds before its timer starts, as a single run's CSV load does, so an idle socket's power state does not slow the tree (the energy benchmark uses 2 to 15 s). |
 | `--dump FILE` | off | Write the tree as text. |
 | `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--cuda`). Its cost was within −1.5% to +2.0% of the run time; `bench/profile_chart.py` draws it. |
 
@@ -209,6 +214,8 @@ detected" and an incomplete `.tree` file).
 | `src/core/options.*` | All settings, grouped by algorithm and backend. |
 | `src/core/dataset.*` | Column-major dataset, parallel CSV loader. |
 | `src/core/tree.*` | The tree (flat arrays in preorder), prediction, printing. |
+| `src/core/memory.cpp` | Large blocks on 2 MiB transparent huge pages (replaces global `operator new`). |
+| `src/core/trace.*`, `nvtx.h` | `--profile`: where the training time goes; NVTX ranges (`make NVTX=1`). |
 | `src/core/thread_pool.*` | Work queue with deadlock-free nested `parallelFor`. |
 | `src/algo/split_math.h` | Impurity / gain / tie rules shared by CPU and GPU. |
 | `src/algo/split_rules.*` | CART vs C4.5: stopping, minimum child size, feature choice. |
@@ -220,5 +227,6 @@ detected" and an incomplete `.tree` file).
 | `src/build/cpu_sweep.*` | The threshold sweeps of the CPU builder. |
 | `src/build/simple_grower.cpp` | Textbook tree growing without optimizations (`--simple`). |
 | `src/build/gpu_grower.cu` | GPU tree growing (host side), with `gpu_kernels.cuh` (the kernels) and `gpu_host.cuh` (device memory, staging, kernel timing). |
+| `src/build/gpu_grower_stub.cpp` | Stands in for the GPU grower in `./tree_cpu`. |
 | `src/build/node_store.*` | Thread-safe node storage used while growing. |
 | `tests/`, `bench/`, `tools/` | Golden-tree tests, CPU benchmark and reference comparison. |

@@ -132,8 +132,8 @@ CPU keeping every decision, the GPU only routing and counting) was tried and
 removed in November 2026: each call cost about 0.45 ms on the host side, the
 columns the tree uses had to be uploaded first unless the raw values were kept
 (ECBDL: 631 columns, 2.5 s), and the CPU was faster on every dataset and
-threshold tried (`cluster-gpu-prune`, a benchmark that was never committed).
-It is in the git history before the commit that removed `--gpu-prune`.
+threshold tried. The code is in the git history before the commit that removed
+`--gpu-prune`.
 
 ### Inside the sweep (kernel 3)
 
