@@ -150,6 +150,16 @@ private:
   CutCandidate scanTwoClasses(const Entry *entries, std::uint32_t count,
                               const std::uint32_t *total, double parentWeighted,
                               std::uint32_t minChild, std::uint32_t *bestLeft) const;
+  // The sweeps of a big two-class node with few features, in chunks of cuts
+  // on all threads: the best cut of every feature of `item` into
+  // cuts[feature], its class counts left into lefts[2 * feature].
+  void sweepInChunks(const Columns &columns, const Subtree &item, const std::uint32_t *total,
+                     double parentWeighted, std::uint32_t minChild, CutCandidate *cuts,
+                     std::uint32_t *lefts) const;
+  template <Criterion Crit, bool HasGap>
+  void sweepInChunksFor(const Columns &columns, const Subtree &item, const std::uint32_t *total,
+                        double parentWeighted, std::uint32_t minChild, CutCandidate *cuts,
+                        std::uint32_t *lefts) const;
   template <int FixedK, Criterion Crit>
   CutCandidate scanFeatureK(const Entry *entries, std::uint32_t count,
                             const std::uint32_t *total, double parentWeighted,

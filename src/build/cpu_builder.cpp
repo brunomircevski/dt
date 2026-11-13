@@ -92,6 +92,13 @@ std::uint32_t waitNonZero(const std::atomic<std::uint32_t> &value) {
 // sweeps. Between 1 and 12 columns the cut-off is not measured.
 constexpr std::size_t kFewColumns = 8;
 
+// Two-class nodes with at least this many rows whose sweeps were not fused
+// into the parent's partition (the root, children of nodes partitioned in
+// blocks) and with fewer features than threads are swept in chunks of
+// kSweepChunk cuts by all threads (sweepInChunks()), not a feature per thread.
+constexpr std::uint32_t kChunkedSweepRows = 1u << 20;
+constexpr std::uint32_t kSweepChunk = 1u << 15;
+
 // Children with at least this many rows are swept during the out-of-place
 // partition of their parent, through staging buffers that are flushed when
 // they hold kStageEntries (partitionAndSweep()).
@@ -301,6 +308,12 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
                   cutLefts.data() + feature * classes);
     }
     item.cuts.reset();
+  } else if (pool_ && classCount_ == 2 && count >= kChunkedSweepRows && count < tables_.size &&
+             count >= 2 * minChild &&
+             features.size() < pool_->workerCount() + 1) {
+    // Fewer features than threads: chunks of every column on all threads.
+    trace::Doing doing(trace::Work::Sweep);
+    sweepInChunks(columns, item, counts, parentWeighted, minChild, cuts.data(), cutLefts.data());
   } else {
     trace::Doing doing(trace::Work::Sweep);
     parallelFor(widePool, features.size(), [&](std::size_t index) {
@@ -681,6 +694,162 @@ void CpuTreeBuilder::partitionInBlocks(const std::vector<const Entry *> &sources
     if (read[column].fetch_add(1, std::memory_order_acq_rel) + 1 == blocks) {
       read[column].notify_all();
     }
+  });
+}
+
+void CpuTreeBuilder::sweepInChunks(const Columns &columns, const Subtree &item,
+                                   const std::uint32_t *total, double parentWeighted,
+                                   std::uint32_t minChild, CutCandidate *cuts,
+                                   std::uint32_t *lefts) const {
+  // CART: Gini, values must differ; C4.5: entropy, gap.
+  if (rules_.criterion() == Criterion::Gini) {
+    sweepInChunksFor<Criterion::Gini, false>(columns, item, total, parentWeighted, minChild, cuts,
+                                             lefts);
+  } else {
+    sweepInChunksFor<Criterion::Entropy, true>(columns, item, total, parentWeighted, minChild,
+                                               cuts, lefts);
+  }
+}
+
+// The sweep of a column is a chain: a cut is picked when its gain beats the
+// best one so far by kTieEps, so near-ties go to the earlier cut. Every chunk
+// of kSweepChunk cuts is swept on its own first (phase A), as if the column
+// started there with a best gain L that is at most the sequential sweep's
+// best b at that point (-inf, or see `floors`): it counts its class-1
+// entries, takes the count before it from the chunk before it (a chain, as in
+// partitionInBlocks()) and records its picks, whose gains grow by more than
+// kTieEps each; a cut before the first pick is at most L + kTieEps <= b +
+// kTieEps, one between two picks at most kTieEps above the earlier one. Then
+// each column's chunks are joined in order (phase B) with the chain's best
+// gain b:
+//
+// * a chunk whose picks are all at most b cannot beat b by kTieEps anywhere;
+// * otherwise its cuts before its first pick p above b are at most kTieEps
+//   above b. If p beats b by kTieEps, the sequential sweep picks p too (no
+//   bound skips it), and from there on both make the same picks: the chunk's
+//   own best stands;
+// * else (b < gain(p) <= b + kTieEps) the cuts after p are swept again from b
+//   until they pick a cut the chunk picked too (the same state again), or to
+//   the chunk's end.
+//
+// So the result is the sequential sweep's, near-ties included.
+template <Criterion Crit, bool HasGap>
+void CpuTreeBuilder::sweepInChunksFor(const Columns &columns, const Subtree &item,
+                                      const std::uint32_t *total, double parentWeighted,
+                                      std::uint32_t minChild, CutCandidate *cuts,
+                                      std::uint32_t *lefts) const {
+  using Sweep = TwoClassSweep<Crit, HasGap, true>;
+  using Pick = typename Sweep::Pick;
+  const std::vector<std::uint32_t> &features = item.features;
+  const std::uint32_t count = item.count;
+  const std::uint32_t endCut = count - minChild + 1; // cuts [minChild, endCut)
+  const std::size_t chunks = (endCut - minChild + kSweepChunk - 1) / kSweepChunk;
+  struct Chunk {
+    CutCandidate best;
+    std::uint32_t left[2] = {0, 0};
+    std::vector<Pick> picks;
+  };
+  std::vector<Chunk> found(features.size() * chunks);
+  // Class-1 entries up to the end of each chunk, plus one (0: not yet known).
+  std::unique_ptr<std::atomic<std::uint32_t>[]> ones(
+      new std::atomic<std::uint32_t>[features.size() * chunks]());
+  // The largest gain of a cut that the sequential sweep takes (or provably
+  // skips) up to the end of each chunk, written before its `ones`.
+  std::unique_ptr<double[]> floors(new double[features.size() * chunks]);
+  const double gap = rules_.minValueGap();
+  const LogTable logs = rules_.logTable();
+  const SweepSetup setup = sweepSetup();
+  const EntryCodec codec = codec_;
+  auto cutsOf = [&](std::size_t chunk) {
+    const std::uint32_t first = minChild + static_cast<std::uint32_t>(chunk) * kSweepChunk;
+    return std::pair<std::uint32_t, std::uint32_t>{first, std::min(first + kSweepChunk, endCut)};
+  };
+  pool_->parallelFor(features.size() * chunks, [&](std::size_t index) {
+    const std::size_t column = index / chunks;
+    const std::size_t chunk = index % chunks;
+    const Entry *entries = columnOf(columns, item, features[column]) + item.begin;
+    const auto [first, end] = cutsOf(chunk);
+    // The sweep at cut c has counted the class-1 entries of [0, c - 1).
+    std::uint32_t mine = 0;
+    for (std::uint32_t entry = first - 1; entry + 1 < end; ++entry) {
+      mine += codec.cls(entries[entry].packed);
+    }
+    std::uint32_t before = 0;
+    double floor = -INFINITY;
+    if (chunk > 0) {
+      before = waitNonZero(ones[index - 1]) - 1; // (it is counting)
+      floor = floors[index - 1];
+    } else {
+      for (std::uint32_t entry = 0; entry + 1 < first; ++entry) {
+        before += codec.cls(entries[entry].packed);
+      }
+    }
+    // The chunk's last cut, unless the boundary-point shortcut skips it.
+    const std::uint32_t last = end - 1;
+    const Entry previous = entries[last - 1];
+    const Entry current = entries[last];
+    auto distinct = [&](float lower, float upper) {
+      return HasGap ? isCut(lower, upper, gap) : lower < upper;
+    };
+    if (distinct(previous.value, current.value) &&
+        !(codec.cls(previous.packed) == codec.cls(current.packed) &&
+          (last < 2 || distinct(entries[last - 2].value, previous.value)) &&
+          (last + 1 >= count || distinct(current.value, entries[last + 1].value)) &&
+          last > minChild && last + minChild < count)) {
+      const std::uint32_t lefts[2] = {last - (before + mine), before + mine};
+      const std::uint32_t totals[2] = {total[0], total[1]};
+      floor = std::max(floor, cutGain(totals, lefts, 2, count, last, parentWeighted, Crit, logs));
+    }
+    floors[index] = floor;
+    ones[index].store(before + mine + 1, std::memory_order_release);
+    Chunk &out = found[index];
+    Sweep sweep(setup, count, total, parentWeighted, minChild);
+    // A cut the sequential sweep takes, or provably skips, is at most kTieEps
+    // above its best one so far (up to the rounding of best + kTieEps), so
+    // the best gain at the start of this chunk is above floor - 2 kTieEps.
+    // Starting there instead of at -inf drops only picks that cannot beat
+    // it, and the bounds skip most of the chunk.
+    sweep.restrict(first, end, before, floor - 2.0 * kTieEps, &out.picks);
+    sweep.advance(entries, count);
+    out.best = sweep.finish(out.left);
+  });
+  pool_->parallelFor(features.size(), [&](std::size_t column) {
+    const Entry *entries = columnOf(columns, item, features[column]) + item.begin;
+    CutCandidate best;
+    std::uint32_t left[2] = {0, 0};
+    std::uint32_t tries = 0; // C4.5: every cut with a threshold, once
+    for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+      const Chunk &own = found[column * chunks + chunk];
+      tries += own.best.tries;
+      const std::vector<Pick> &picks = own.picks;
+      const auto above = std::find_if(picks.begin(), picks.end(),
+                                      [&](const Pick &pick) { return pick.gain > best.gain; });
+      if (above == picks.end()) {
+        continue;
+      }
+      if (above->gain > best.gain + kTieEps) {
+        best = own.best;
+        std::copy_n(own.left, 2, left);
+        continue;
+      }
+      Sweep sweep(setup, count, total, parentWeighted, minChild);
+      sweep.restrict(above->cut + 1, cutsOf(chunk).second, above->ones, best.gain, nullptr,
+                     picks.data() + (above - picks.begin()) + 1, picks.data() + picks.size());
+      sweep.advance(entries, count);
+      std::uint32_t again[2];
+      const CutCandidate picked = sweep.finish(again);
+      if (sweep.stopped()) {
+        best = own.best;
+        std::copy_n(own.left, 2, left);
+      } else if (picked.valid()) {
+        best = picked;
+        std::copy_n(again, 2, left);
+      }
+    }
+    best.tries = tries;
+    const std::uint32_t feature = features[column];
+    cuts[feature] = best;
+    std::copy_n(left, 2, lefts + 2 * std::size_t{feature});
   });
 }
 

@@ -99,7 +99,7 @@ struct SweepSetup {
   int classCount = 2;
 };
 
-template <Criterion Crit, bool HasGap> class TwoClassSweep {
+template <Criterion Crit, bool HasGap, bool InChunks = false> class TwoClassSweep {
 public:
   using Setup = SweepSetup;
 
@@ -116,6 +116,35 @@ public:
 
   // The first entry that later advance() calls still read.
   std::uint32_t from() const { return started_ && cut_ >= 2 ? cut_ - 2 : 0; }
+
+  // InChunks: a chunk of a chunked sweep (CpuTreeBuilder::sweepInChunks()).
+  // It takes only the cuts [firstCut, endCut) (within [minChild, count -
+  // minChild]), as if the sweep had reached firstCut with `ones` class-1
+  // entries before entry firstCut - 1 and `bestGain` as the best gain so far;
+  // then advance(entries, count). It appends every pick to `record` if not
+  // null, else it stops at its first pick that is one of [stopFrom, stopEnd)
+  // (increasing cuts).
+  struct Pick {
+    double gain;
+    std::uint32_t cut;
+    std::uint32_t ones; // class-1 entries left of the cut
+  };
+  void restrict(std::uint32_t firstCut, std::uint32_t endCut, std::uint32_t ones, double bestGain,
+                std::vector<Pick> *record, const Pick *stopFrom = nullptr,
+                const Pick *stopEnd = nullptr) {
+    static_assert(InChunks);
+    cut_ = firstCut;
+    lastCut_ = endCut - 1;
+    ones_ = ones;
+    bestGain_ = bestGain;
+    started_ = true;
+    record_ = record;
+    stop_ = stopFrom;
+    stopEnd_ = stopEnd;
+  }
+
+  // Whether advance() stopped at a pick of [stopFrom, stopEnd).
+  bool stopped() const { return stopped_; }
 
   // Takes the cuts whose entries are among the first `available` (all cuts if
   // available == count). entries[i] must be readable for i in
@@ -280,6 +309,20 @@ public:
           bestLeft_[0] = counts[0];
           bestLeft_[1] = counts[1];
           bestValues_ = {previous.value, current.value};
+          if constexpr (InChunks) {
+            if (record_) {
+              record_->push_back({gain, cut, ones});
+            } else {
+              while (stop_ != stopEnd_ && stop_->cut < cut) {
+                ++stop_;
+              }
+              if (stop_ != stopEnd_ && stop_->cut == cut) {
+                stopped_ = true;
+                cut = lastCut + 1;
+                break;
+              }
+            }
+          }
         }
       }
     }
@@ -334,6 +377,11 @@ private:
   std::uint32_t bestCut_ = 0;
   std::uint32_t bestLeft_[2] = {0, 0};
   std::pair<float, float> bestValues_{0.0f, 0.0f};
+  // InChunks (see restrict()).
+  std::vector<Pick> *record_ = nullptr;
+  const Pick *stop_ = nullptr;
+  const Pick *stopEnd_ = nullptr;
+  bool stopped_ = false;
 };
 
 // The sweep of scanFeatureK() for any number of classes: FixedK of them, or
