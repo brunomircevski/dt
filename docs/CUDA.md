@@ -158,7 +158,7 @@ on consumer GPUs, whose double precision is about 64× slower than single
 precision, and was picked from the device's FP32:FP64 ratio. ./tree now
 targets data-center GPUs only (the cluster's H100 and A100, FP32:FP64 = 2:1),
 where one exact sweep was as fast or faster
-([PERFORMANCE.md](PERFORMANCE.md#november-2026-one-exact-sweep-on-every-gpu)),
+([PERFORMANCE.md](PERFORMANCE.md#november-2026-one-exact-sweep-on-every-gpu-and-cpu)),
 so the two-pass kernels and the `--gpu-sweep` option were removed; they are in
 the git history before that commit. Every GPU now runs the same kernels.
 

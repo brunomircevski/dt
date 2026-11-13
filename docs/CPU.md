@@ -76,10 +76,10 @@ and the sweep is that loop: every cut that the boundary-point shortcut
 leaves gets `cutGain`, in double precision, as on the GPU. Until November
 2026 the CPU first computed a cheap running estimate of every cut (no loop
 over the classes, no division) and buffered only the cuts whose estimate
-could beat the best for `cutGain`; scoring every cut exactly turned out as
-fast overall (within a few percent either way on HIGGS and MNIST8M, see
-[PERFORMANCE.md](PERFORMANCE.md#november-2026-one-exact-sweep-on-every-gpu)),
-so the estimate was removed.
+could beat the best for `cutGain`. Scoring every cut exactly costs little
+(HIGGS up to 6% slower, MNIST8M up to 4% faster, see
+[PERFORMANCE.md](PERFORMANCE.md#november-2026-one-exact-sweep-on-every-gpu-and-cpu)),
+so the simpler sweep was kept.
 
 Three more shortcuts never change the result:
 

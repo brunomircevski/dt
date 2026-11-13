@@ -2,7 +2,7 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
-## November 2026: one exact sweep on every GPU
+## November 2026: one exact sweep on every GPU and CPU
 
 The CUDA grower had two ways to score cuts, picked from the GPU's FP32:FP64
 ratio: one exact double-precision sweep (H100, A100: every result so far), or
@@ -30,6 +30,36 @@ tiles again, which costs C4.5 210–440 ms. Over all 16 cases one-pass was 1.3%
 faster on the H100 and 0.4% slower on the A100. Two-pass was removed (its
 kernels, buffers and `--gpu-sweep`), so every GPU runs the same, simpler
 code.
+
+The CPU sweep then went the same way: until 7a7aae20 it computed a cheap
+running estimate of every cut (tabled reciprocals, running sums of
+`c·log2 c`) and gave `cutGain` only to buffered candidates within a proven
+error bound of the best. Now every cut that the boundary-point rule leaves
+gets `cutGain` in double precision, as on the GPU; the two-class block bound
+(the CPU's `tileBoundKernel`), blocks without a threshold and the
+`maxGainStep` skip stay, since they only rule out cuts. Against main at
+e1cb9498 (c45-perf merged), 5 interleaved runs per case, build ms median;
+serial is `taskset -c 0 --serial`, parallel `--parallel --threads 48`,
+`--no-prune -d 10` unless "full" (full depth, pruned); all 20 trees
+identical:
+
+| case | epyc main | epyc exact | dell main | dell exact |
+|---|--:|--:|--:|--:|
+| HIGGS CART serial | 5933 | 6202 (+4.5%) | 9297 | 9481 (+2.0%) |
+| HIGGS C4.5 serial | 5538 | 5564 (+0.5%) | 8806 | 8862 (+0.6%) |
+| HIGGS CART parallel | 353 | 364 (+3.1%) | 523 | 523 (0.0%) |
+| HIGGS C4.5 parallel | 329 | 333 (+1.4%) | 548 | 534 (−2.5%) |
+| HIGGS CART full parallel | 740 | 761 (+2.8%) | 925 | 949 (+2.6%) |
+| HIGGS C4.5 full parallel | 1053 | 1093 (+3.8%) | 1421 | 1504 (+5.8%) |
+| MNIST8M CART serial | 87115 | 85308 (−2.1%) | 155099 | 148931 (−4.0%) |
+| MNIST8M C4.5 serial | 83250 | 81562 (−2.0%) | 152741 | 146024 (−4.4%) |
+| MNIST8M CART parallel | 3562 | 3547 (−0.4%) | 6049 | 5882 (−2.8%) |
+| MNIST8M C4.5 parallel | 3494 | 3447 (−1.4%) | 5983 | 5815 (−2.8%) |
+
+With two classes the estimate still paid a little (the exact Gini needs two
+divisions per cut, entropy `log2` above 65,536), with more classes the
+exact sweep is faster (no running sums to keep, no candidate copies). The
+differences are small either way, so the simpler sweep was kept.
 
 ## November 2026: the CPU sweeps and partitions after the grower split (mordor3 cluster)
 
