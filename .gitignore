@@ -46,6 +46,6 @@ __pycache__
 /bench/cluster/plans/
 *.nsys-rep
 /tree_cpu_main
-#
- Reference PDFs (kept locally, listed in refs/REFERENCES.md)
+
+# Reference PDFs (kept locally, listed in refs/REFERENCES.md)
 /refs/*.pdf
