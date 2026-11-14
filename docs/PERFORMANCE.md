@@ -2,6 +2,58 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: CUDA kernels for small nodes (mordor3 cluster)
+
+The small-node work of `worktree-numa-gpu` (docs/CUDA.md, "Small nodes"):
+a warp instead of a block per segment on levels whose segments have at most
+32 tiles, one warp per tile and per partition unit for nodes of at most 256
+rows (their tiles numbered last in the level, so the block kernels read no
+list of tiles), the level loop's host work in parts on the pool with
+page-locked buffers that grow in place, and the GPU code loaded with the
+context. Its NUMA placement of the hybrid's CPU side was dropped (within
+noise, see CUDA.md). Measured against main at dbc2b2a7 on GPU 2 of each node
+(an H100 PCIe on socket 1, an A100 40 GB on socket 1; the A100 is too small
+for SOREL and MNIST8M), 3 rounds x 3 trees, interleaved; train ms, medians;
+`--no-prune` everywhere, "d10" is `-d 10`. Every tree is main's.
+
+| case | H100 hybrid | A100 hybrid | H100 GPU-only | A100 GPU-only |
+|---|--:|--:|--:|--:|
+| HIGGS CART d10 | 127 → 124 (-2%) | 260 → 259 (-0%) | 125 → 124 (-1%) | 257 → 243 (-6%) |
+| HIGGS C4.5 d10 | 135 → 132 (-3%) | 268 → 272 (+2%) | 135 → 133 (-2%) | 272 → 258 (-5%) |
+| HIGGS CART full | 710 → 707 (-0%) | 978 → 982 (+0%) | 3203 → 1138 (-64%) | 4031 → 1636 (-59%) |
+| HIGGS C4.5 full | 607 → 611 (+1%) | 823 → 809 (-2%) | 2083 → 1271 (-39%) | 2901 → 1580 (-46%) |
+| SUSY CART full | 220 → 219 (-0%) | 323 → 318 (-2%) | 819 → 464 (-43%) | 1204 → 654 (-46%) |
+| SUSY C4.5 full | 110 → 106 (-4%) | 211 → 215 (+2%) | 129 → 121 (-6%) | 246 → 235 (-4%) |
+| chess_100m CART d10 | 58 → 56 (-3%) | 119 → 121 (+1%) | 58 → 56 (-3%) | 119 → 116 (-2%) |
+| chess_100m C4.5 d10 | 64 → 57 (-10%) | 131 → 123 (-6%) | 63 → 56 (-12%) | 129 → 117 (-9%) |
+| covertype C4.5 full | 59 → 58 (-2%) | 91 → 96 (+6%)¹ | 73 → 64 (-12%) | 126 → 106 (-16%) |
+| covertype CART full | 54 → 55 (+1%) | 85 → 88 (+3%)¹ | 70 → 55 (-21%) | 112 → 90 (-20%) |
+| SOREL 4M C4.5 d10 | 3286 → 3451 (+5%)² | | 3284 → 3222 (-2%) | |
+| SOREL 4M CART d10 | 2788 → 2759 (-1%) | | 2833 → 2780 (-2%) | |
+| MNIST8M C4.5 d10 | 3733 → 3695 (-1%) | | 3773 → 3722 (-1%) | |
+| MNIST8M CART d10 | 3600 → 3589 (-0%) | | 3606 → 3584 (-1%) | |
+
+¹ Runs spread ±6%; 8 rounds x 5 trees of covertype alone: C4.5 93 → 94
+(+2%), CART 89 → 88 (-1%).
+² The GPU setup (the upload of the CSV's values) of single runs, 1.04-1.36 s
+for both; the build was 2.18-2.19 s against main's 2.20-2.22 s.
+
+Tried on the way:
+
+* **The NUMA placement** of the branch (pool workers pinned by node with a
+  queue per node, the level loop and CUDA's callback thread on the GPU's
+  node, a hand-off arena per node), about 400 lines: hybrid -3.5..+2.2%
+  (H100) and -1.5..+0.6% (A100) with against without; GPU-only HIGGS and
+  SUSY full depth 5-8% faster with it on the A100 but 4-7% slower on the
+  H100. Pinning only the level loop to the GPU's node: within noise.
+* **A list of tiles** for the block kernels (the large nodes' tiles of a
+  level with small ones): `tileExactKernel` 69 registers instead of 62 for
+  two classes, and SOREL's depth-10 trees 3% (hybrid) and 7-10% (GPU-only)
+  slower on the H100; taking the warp path only when small nodes hold half
+  a level's tiles fixed SOREL but left MNIST8M's GPU-only CART 3% slower and
+  SUSY C4.5 on the A100 9%. Numbering the small nodes' tiles last needs no
+  list.
+
 ## November 2026: per-thread marks, multi-class fused sweeps, chunked sweeps (mordor3 cluster)
 
 Four changes to the CPU builder, measured on whole nodes against main at

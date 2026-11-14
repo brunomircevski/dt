@@ -121,8 +121,13 @@ The GPU then partitions the split nodes and, in the same pass, collects the
 class counts for the next level. Each level therefore needs a single round
 trip between CPU and GPU. As on the CPU, the sweeps skip cuts with the
 boundary-point rule and, for two classes, with a bound over each whole tile,
-and score every remaining cut with the exact routine. Data is uploaded through page-locked staging buffers, placed on
-the GPU's NUMA node.
+and score every remaining cut with the exact routine. Deep levels hold mostly
+tiny nodes, for which a block of 256 threads per tile would leave seven of its
+eight warps idle. A level therefore numbers the tiles of nodes with at most 256
+samples last, and one warp sweeps and partitions each of them; when no
+attribute of a node spans more than 32 tiles, the reductions per node and
+attribute also take a warp instead of a block. Data is uploaded through
+page-locked staging buffers, placed on the GPU's NUMA node.
 
 \subsection{\ImplHybrid}
 \label{sec:impl-hybrid}

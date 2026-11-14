@@ -79,11 +79,11 @@ anything.
 |---|--------|------|
 | 0 | `segmentConstantKernel` | Segments whose values are all equal (first vs last entry). Every later kernel skips their tiles, they are not partitioned, and the feature is dropped for the node's whole subtree (see CPU.md). |
 | 1 | `tileHistogramKernel` | Class counts of each tile (one `__ballot_sync` per class per 32 entries), and C4.5's cut counts. Only at the root: below it, the parent level's partition (5) counts them while it writes the children. |
-| 2 | `segmentPrefixKernel` | Per segment, exclusive scan over its tiles: each tile learns the class counts *before* it. |
+| 2 | `segmentPrefixKernel` | Per segment, exclusive scan over its tiles: each tile learns the class counts *before* it. This and the other per-segment kernels (2b's `segmentMaxKernel`, 4) run a warp per segment on levels whose segments all have at most 32 tiles (below the first levels most have one), else a block per segment. |
 | 2b | `tileBoundKernel`, `segmentMaxKernel` | Two classes only: an upper bound of every tile's gains and the exact gain of one of its cuts. The gain is convex in the left class counts, and a tile's cuts lie in the box between the counts before and after it, so none beats the largest of the box's four corners. The sweep (3) skips a tile whose bound is more than `kTileBoundGap = 1e-8` below the best of those exact gains in its segment: most tiles of a big node. |
-| 3 | `tileExactKernel` | Score every cut of the tile that the boundary-point rule leaves with the exact **double-precision** gain (`dt::cutGain`, the CPU's function), and count C4.5's `tries` of single-tile segments. One sweep, on every GPU: the H100 and the A100 run double precision at half the single-precision rate, so a single-precision pre-filter does not pay (see [One exact pass](#one-exact-pass)). |
+| 3 | `tileExactKernel` | Score every cut of the tile that the boundary-point rule leaves with the exact **double-precision** gain (`dt::cutGain`, the CPU's function), and count C4.5's `tries` of single-tile segments. One sweep, on every GPU: the H100 and the A100 run double precision at half the single-precision rate, so a single-precision pre-filter does not pay (see [One exact pass](#one-exact-pass)). The tiles of nodes with at most 256 rows go to `tileExactSmallKernel`, one warp per tile (see Small nodes). |
 | 4 | `segmentBestKernel` | Best cut per (node, feature), and the class counts left of it. **Host** (the level's only round trip): `SplitRules::choose` picks each node's split exactly like the CPU; the winning feature's left counts give both children's class counts, so children that are leaves (pure, too small, depth limit) are finished on the spot. |
-| 5 | `markGoesLeftKernel`, `partitionKernel` | Stable partition of every non-constant column of every split node into a free slot (skipped for nodes whose children are both leaves), in **one pass**: each tile learns how many left and right entries come before it by decoupled look-back on its predecessors' published counts, then writes its entries coalesced. While writing, it counts the class histograms (and C4.5 cut counts) of the next level's tiles, so step 1 is not needed below the root. |
+| 5 | `markGoesLeftKernel`, `partitionKernel` | Stable partition of every non-constant column of every split node into a free slot (skipped for nodes whose children are both leaves), in **one pass**: each tile learns how many left and right entries come before it by decoupled look-back on its predecessors' published counts, then writes its entries coalesced. While writing, it counts the class histograms (and C4.5 cut counts) of the next level's tiles, so step 1 is not needed below the root. On levels with nodes of at most 256 rows, a block takes up to 8 of their (one-tile) segments instead, one per warp (see Small nodes). |
 | 6 | `copyKernel` | Children with fewer than `--gpu-min-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer; only the columns that can still split them. |
 
 Small children become `CpuTreeBuilder` tasks on the thread pool, which grow them
@@ -172,6 +172,67 @@ the git history before that commit. Every GPU now runs the same kernels.
 * So the trees are byte-identical across `--simple`, `--serial`,
   `--parallel` and `--cuda`, and across the H100 and the A100
   (`tests/check.sh`).
+
+### Small nodes
+
+Every kernel used to run one 256-thread block per tile or per segment. Deep
+levels of a GPU-only tree are mostly tiny nodes (HIGGS at depth 24: 99k nodes
+of 78 rows on average): a block then had one warp of work and seven idle
+ones, and a GPU holds only so many blocks at once. Now:
+
+* the per-segment kernels (2, 2b, 4) run one warp per segment, 8 per
+  block, on levels whose segments have at most 32 tiles (`kWarpSegmentTiles`;
+  a level with longer ones keeps a block per segment: a warp took 5x longer
+  over the 49k tiles of a chess_100m root segment, and short depth-10 trees
+  were up to 18% slower);
+* a level numbers the tiles of nodes with more than 256 rows first and
+  those of the others last (`tileOrder()`, also for the next level's
+  histograms in the partition), so the small nodes' tiles are one range at
+  the end: `tileExactSmallKernel` sweeps them one warp per tile
+  (`kSmallTile`, one warp's 8 steps of 32), and `tileExactKernel` takes the
+  range before it as it took all tiles;
+* the partition runs `partitionKernel<false>` over the large nodes' tiles as
+  before, then `partitionKernel<true>` over *units* (`PartitionUnit`): up to
+  8 one-tile segments of a small node, a warp each. A segment only waits for
+  segments of its own node (the in-place moves), and a node's tiles stay
+  together and in order, so a tile still waits only for tiles that started
+  before it. A kernel of its own: with the warp path in it, the ordinary
+  partition was 17% slower even where no node is small;
+* no kernel reads a list of tiles: `tileExactKernel` with one took 69
+  registers instead of 62 for two classes (3 blocks per SM instead of 4) and
+  a partition with both kinds of blocks 64 instead of 48; whenever a level
+  had a small node among large ones (SOREL at depth 3-9), its sweep and
+  partition were 18% and 12% slower, and SOREL's depth-10 trees 3% (hybrid)
+  and 10% (GPU-only) on the H100;
+* `tileExact` does not skip the warps past a tile's end: that early return
+  (and a loop that stopped at the warp's last step) took its two-class sweep
+  from 64 to 80 (126) registers, 3 (2) blocks per SM instead of 4, and the
+  hybrid's levels slower.
+
+The GPU code is loaded with the CUDA context, while the CSV is parsed
+(`CUDA_MODULE_LOADING=EAGER` unless the environment sets it): loaded lazily,
+at the first launch, it cost 24 ms of every tree's timed setup on the RTX 2080
+Ti node.
+
+The level loop's own host work (planning the level, choosing the splits,
+the partition's targets and moves) runs in parts on the pool when a level
+has thousands of nodes, and its buffers (`PinnedBuffer`) are page-locked and
+kept from level to level: each grows in place (its address range reserved
+once, the new part page-locked with `cudaHostRegister`, huge pages), nothing
+copied or freed. Pageable buffers were faster on the RTX 2080 Ti node and
+16% slower on the A100 and H100 nodes; page-locked `std::vector`s kept every
+outgrown copy (1.1 GB more for GPU-only HIGGS) or cost 0.3 ms per MB to free.
+
+GPU-only HIGGS (10.5M × 28, no depth limit, `--no-prune`): CART 3.20 → 1.14 s
+on the H100, 4.03 → 1.64 s on the A100; C4.5 2.08 → 1.27 s and 2.90 → 1.58 s
+(PERFORMANCE.md, "CUDA kernels for small nodes").
+
+Placing the hybrid's CPU side by NUMA node (the level loop and the CUDA
+callback thread on the GPU's node, the pool's workers pinned by node with a
+queue per node, a hand-off arena per node) was tried and dropped: with and
+without it, hybrid HIGGS, SUSY and chess_100m trees were -3.5..+2.2% apart on
+the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
+5-8% faster with it on the A100 node but 4-7% slower on the H100 node.
 
 ## Tuning
 
