@@ -3,9 +3,9 @@
 (rows) by CART and C4.5 (columns), one tree at depth <= 10 without pruning:
 
   cpu  cluster-cpu-vs-others/chart.png: ./tree --simple, --serial and
-       --parallel (48 threads) on epyc against scikit-learn (CART) and Weka J48
+       --multicore (48 threads) on epyc against scikit-learn (CART) and Weka J48
        (C4.5), one thread each
-  gpu  cluster-gpu-vs-others/chart.png: ./tree CUDA hybrid and --gpu-only
+  gpu  cluster-gpu-vs-others/chart.png: ./tree --hybrid and --gpu
        against cuML (1 tree, and a default forest of 10 / 10) and XGBoost (the
        same, CART only), on the H100 (hopper) and the A100 (ampere); also
        cluster-gpu-vs-others/summary.csv
@@ -135,7 +135,7 @@ def cpu_bars(res, dataset, algo):
              else ("Weka J48, one thread", "j48", f"vs-epyc-{dataset}-j48-c45"))
     return [("./tree --simple, one thread", CPU_COLORS["simple"], summary(d / f"simple-epyc-{dataset}", protocol)),
             ("./tree --serial, one thread", CPU_COLORS["serial"], summary(d / f"serial-epyc-{dataset}", protocol)),
-            ("./tree --parallel, 48 threads", CPU_COLORS["cpu"], summary(d / f"cpu-epyc-{dataset}", protocol)),
+            ("./tree --multicore, 48 threads", CPU_COLORS["cpu"], summary(d / f"cpu-epyc-{dataset}", protocol)),
             (other[0], CPU_COLORS[other[1]], summary(res / "cluster-cpu-vs-others" / other[2], protocol))]
 
 
@@ -178,14 +178,14 @@ def draw(kind, res, out):
         head = ("./tree against scikit-learn and Weka J48 on the CPU: one tree, depth ≤ 10, no pruning, "
                 "all rows and features; epyc (2× AMD EPYC 9255, 48 cores, DDR5-6400)")
         note = ("scikit-learn DecisionTreeClassifier (gini, max_depth 10); Weka J48 (-U -M 2, its adapter's "
-                "depth limit 10); every tool one tree on the same float32 data. ./tree --parallel uses both sockets.")
+                "depth limit 10); every tool one tree on the same float32 data. ./tree --multicore uses both sockets.")
     else:
         head = ("./tree against cuML and XGBoost on the GPU: one tree, depth ≤ 10, no pruning, all rows and features; "
                 "one GPU and every CPU of the node")
         note = ("cuML RandomForestClassifier, 1 tree on every row and feature (128 bins; C4.5: entropy); XGBoost hist, "
                 "squared error, λ 0 (256 bins; = Gini; MNIST8M: one multi-output tree on the one-hot labels).\n"
                 "Forest of 10 / 10: the library's random-forest defaults (cuML bootstrap and √features; XGBoost RF 0.8 "
-                "of rows and features), its time divided by 10. ./tree hybrid: --cuda, GPU only: --cuda --gpu-only.")
+                "of rows and features), its time divided by 10. ./tree hybrid: --hybrid, GPU only: --gpu.")
         fig.legend(handles=[Patch(color=c, label=GPU_NAMES[n]) for n, c in GPU_COLORS.items()],
                    loc="upper right", ncol=2, frameon=False, fontsize=9)
     fig.suptitle(head, x=0.01, y=0.995, ha="left", fontsize=11.5, color=INK, fontweight="bold")

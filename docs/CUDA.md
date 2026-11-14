@@ -84,7 +84,7 @@ anything.
 | 3 | `tileExactKernel` | Score every cut of the tile that the boundary-point rule leaves with the exact **double-precision** gain (`dt::cutGain`, the CPU's function), and count C4.5's `tries` of single-tile segments. One sweep, on every GPU: the H100 and the A100 run double precision at half the single-precision rate, so a single-precision pre-filter does not pay (see [One exact pass](#one-exact-pass)). The tiles of nodes with at most 256 rows go to `tileExactSmallKernel`, one warp per tile (see Small nodes). |
 | 4 | `segmentBestKernel` | Best cut per (node, feature), and the class counts left of it. **Host** (the level's only round trip): `SplitRules::choose` picks each node's split exactly like the CPU; the winning feature's left counts give both children's class counts, so children that are leaves (pure, too small, depth limit) are finished on the spot. |
 | 5 | `markGoesLeftKernel`, `partitionKernel` | Stable partition of every non-constant column of every split node into a free slot (skipped for nodes whose children are both leaves), in **one pass**: each tile learns how many left and right entries come before it by decoupled look-back on its predecessors' published counts, then writes its entries coalesced. While writing, it counts the class histograms (and C4.5 cut counts) of the next level's tiles, so step 1 is not needed below the root. On levels with nodes of at most 256 rows, a block takes up to 8 of their (one-tile) segments instead, one per warp (see Small nodes). |
-| 6 | `copyKernel` | Children with fewer than `--gpu-min-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer; only the columns that can still split them. |
+| 6 | `copyKernel` | Children with fewer than `--handoff-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer; only the columns that can still split them. |
 
 Small children become `CpuTreeBuilder` tasks on the thread pool, which grow them
 while the GPU continues with the next level. The host buffer they read from
@@ -170,7 +170,7 @@ the git history before that commit. Every GPU now runs the same kernels.
   lower feature, in a fixed reduction order; `c·log2 c` comes from the table
   the CPU uses ([ALGORITHMS.md](ALGORITHMS.md#ties-and-cpugpu-agreement)).
 * So the trees are byte-identical across `--simple`, `--serial`,
-  `--parallel` and `--cuda`, and across the H100 and the A100
+  `--multicore` and `--hybrid`, and across the H100 and the A100
   (`tests/check.sh`).
 
 ### Small nodes
@@ -223,7 +223,7 @@ copied or freed. Pageable buffers were faster on the RTX 2080 Ti node and
 16% slower on the A100 and H100 nodes; page-locked `std::vector`s kept every
 outgrown copy (1.1 GB more for GPU-only HIGGS) or cost 0.3 ms per MB to free.
 
-GPU-only HIGGS (10.5M × 28, no depth limit, `--no-prune`): CART 3.20 → 1.14 s
+GPU-only HIGGS (10.5M × 28, no depth limit, unpruned): CART 3.20 → 1.14 s
 on the H100, 4.03 → 1.64 s on the A100; C4.5 2.08 → 1.27 s and 2.90 → 1.58 s
 (PERFORMANCE.md, "CUDA kernels for small nodes").
 
@@ -236,7 +236,7 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
 
 ## Tuning
 
-* `--gpu-min-rows N` (default: CART training rows / 8192, between 1024 and
+* `--handoff-rows N` (default: CART training rows / 8192, between 1024 and
   2048; C4.5 rows / 4096, between 1024 and 4096): nodes smaller than this are
   finished on the CPU. Lower values keep more of the tree on the GPU (more,
   smaller levels); higher values hand over earlier and keep the CPU pool
@@ -248,7 +248,7 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
   still waited on the node store; see docs/PERFORMANCE.md.) On the test laptop
   (power-limited GPU) full CART trees on SUSY were fastest around 512,
   covertype (54 features, 7 classes) around 4096.
-* `--gpu-only`: no node goes to the CPU; the GPU grows every level down to
+* `--gpu`: no node goes to the CPU; the GPU grows every level down to
   the leaves, and the host arena for the hand-offs (8 bytes per value) is not
   allocated. Everything else stays as without it: the CPU threads
   (`--threads`, by default every CPU the process may run on) count the
@@ -260,7 +260,7 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
   the process may run on. For comparing the GPU alone with the GPU + CPU split
   (the depth-19 cluster-gpu-vs-others run of 2026-10-20, in the git history
   before 325039f; the gpuonly-* runs of the cluster-* benchmarks).
-* `./tree --cuda --profile FILE ...` records per-level rows, every kernel and
+* `./tree --hybrid --profile FILE ...` records per-level rows, every kernel and
   copy, and the setup phases (context, allocation, upload);
   `bench/profile_chart.py` draws it.
 
@@ -270,7 +270,7 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
   3 instead of 4 blocks per SM, 15% slower; reloading them from cache is
   faster.
 * 4 or 16 entries per thread instead of 8: slower.
-* More GPU levels (a smaller `--gpu-min-rows`): the CPU threads finish small
+* More GPU levels (a smaller `--handoff-rows`): the CPU threads finish small
   subtrees faster than a GPU level of tiny nodes.
 * The partition's traps (tile order, local memory, move records) are in
   [PERFORMANCE.md](PERFORMANCE.md#october-2026-one-copy-of-the-columns-cuda-serial-parallel).
@@ -282,7 +282,7 @@ Device: one copy of the columns in `features + 1` slots (`8 × rows ×
 the CPU, with C4.5 pruning a copy of the raw values if it fits (for `arrangeRows`),
 plus small per-level arrays (the largest: the tile histograms, 4·K bytes per
 tile with K the class count, e.g. about 124 MB at MNIST8M's root level). The builder checks free memory first and
-suggests `--parallel` if it does not fit.
+suggests `--multicore` if it does not fit.
 
 * **Presort** in the slots too: the raw values are uploaded into the last
   slots; each feature is gathered into a free slot and radix-sorted (CUB, by

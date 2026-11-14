@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Who is working during hybrid-vs-gpu-only's training: ./tree --cuda (hybrid)
-and --cuda --gpu-only, by depth limit, as shares of the training wall time.
+"""Who is working during hybrid-vs-gpu-only's training: ./tree --hybrid
+and --gpu, by depth limit, as shares of the training wall time.
 One panel per algorithm (CART, C4.5, both unpruned), one group per depth (5 ..
 30, no limit), two stacked bars per group: hybrid, GPU only. Each bar is the
 average of the case's profiled runs (./tree --profile, src/core/trace.h), from
@@ -231,10 +231,10 @@ def chart(cases, machine, shallow, node, dataset, out, modes=MODES, seconds=Fals
         threads = sorted({r["threads"] for r in some})
         m = shallow if label == "depth 5 and 10" else machine
         where = "the GPU's socket" if label == "depth 5 and 10" else "both sockets"
-        rows_used = sorted({v for r in hybrid for v in re.findall(r"--gpu-min-rows (\d+)", r.get("command", ""))}, key=int)
+        rows_used = sorted({v for r in hybrid for v in re.findall(r"--(?:handoff-rows|gpu-min-rows) (\d+)", r.get("command", ""))}, key=int)
         parts.append((f"{label}: " if label else "") + f"{'/'.join(map(str, threads))} CPU threads ({where}), ./tree "
                      f"{(m or {}).get('versions', {}).get('tree_git', '?')}, {(m or {}).get('started', '?')[:10]}"
-                     + (f", hybrid at --gpu-min-rows {', '.join(f'{int(v):,}' for v in rows_used)}" if rows_used else ""))
+                     + (f", hybrid at --handoff-rows {', '.join(f'{int(v):,}' for v in rows_used)}" if rows_used else ""))
     placement = ";\n".join(parts)
     counts = sorted({c["runs"] for c in cases.values()})
     what = "CUDA hybrid" if single else "CUDA hybrid vs GPU only"
@@ -262,7 +262,7 @@ def chart(cases, machine, shallow, node, dataset, out, modes=MODES, seconds=Fals
              "when CPU threads grow subtrees then) if a kernel runs; else transfer if a host↔GPU copy "
              "runs;\nelse CPU alone if CPU threads grow subtrees; else transfer if the host stages "
              "copies; else host (launching kernels, waiting, assembling the tree, C4.5's tidy-up). "
-             "CPU threads are sampled every 5 ms.\nHybrid: nodes with fewer rows than --gpu-min-rows "
+             "CPU threads are sampled every 5 ms.\nHybrid: nodes with fewer rows than --handoff-rows "
              "are copied to the host and grown by the CPU threads while the GPU goes on with the "
              "next level." + ("" if single else " GPU only: every node on the GPU; the CPU only drives it."),
              fontsize=9.2, color=MUTED, va="bottom", linespacing=1.4)

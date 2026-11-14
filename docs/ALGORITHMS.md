@@ -55,9 +55,9 @@ training misclassification rate and `|T|` its number of leaves. For a given
 `α`, `T(α)` is the smallest subtree minimising `R(T) + α|T|`
 (`cartCostComplexityPrune`, a bottom-up dynamic program).
 
-* `α` is fixed (`--alpha X`, default 0.00001), as in scikit-learn and rpart:
+* `α` is fixed (`--prune X`; the benchmarks use 0.00001), as in scikit-learn and rpart:
   one tree, grown on all training rows. `α` is a rate, so it does not
-  depend on the dataset size. `--no-prune` keeps the maximal tree. The values
+  depend on the dataset size. Without `--prune` the maximal tree is kept. The values
   are not interchangeable with theirs: scikit-learn's `ccp_alpha` weighs the
   leaves' Gini impurity instead of `R(T)`, and rpart's `cp` is `α / R(root)`.
 * With a fixed `α` a node that misclassifies fewer than `α · n` training rows
@@ -116,7 +116,7 @@ not change how training rows are split, only unseen values in the gap.
 
 **Pruning: error-based pruning (`prune.c`).** Every leaf's error count `e` out
 of `n` is replaced by the upper limit of a binomial confidence interval at
-confidence `CF` (`--cf`, default 0.25; normal deviate interpolated from C4.5's
+confidence `CF` (`--prune CF`; the c4.5 program's default is 0.25; normal deviate interpolated from C4.5's
 table, `AddErrs`). Bottom-up, a subtree is replaced by
 
 * a leaf, if the leaf's estimate is no worse (+0.1) than the subtree's and than
@@ -127,7 +127,7 @@ table, `AddErrs`). Bottom-up, a subtree is replaced by
 
 **Verified against** Quinlan's own `c4.5` binary (`tools/compare_reference.py
 c45`): iris, diabetes, covertype (up to its full 465k-row training set) and
-supersymmetry samples, `--min-leaf` 1 to 300 and `--cf` 0.05 to 0.5. The trees
+supersymmetry samples, `--min-leaf` 1 to 300 and `--prune` 0.05 to 0.5. The trees
 are identical node by node (thresholds, row counts, classes) except where
 C4.5's single-precision arithmetic decides:
 

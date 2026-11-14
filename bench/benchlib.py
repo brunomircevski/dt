@@ -42,7 +42,7 @@ BASELINE = "_baseline"  # tiny synthetic dataset: each tool's runtime footprint
 # and a tree that only one tool may grow deeper is not the same work.
 CART_DEPTH = 30
 
-# The fixed alpha of cart_alpha (run.py --alpha overrides it). Every CART tool
+# The fixed alpha of cart_alpha (run.py --alpha overrides it; ./tree gets it as --prune). Every CART tool
 # gets this same number; nothing tunes it per tool or per dataset, and no
 # tool's tree is forced to another tool's size: each reports the tree it builds.
 # No cross-validation anywhere in the benchmark: every case grows one tree.
@@ -61,7 +61,7 @@ PROTOCOLS = {
     "cart_full": {
         "title": "CART, grown to pure leaves (depth <= 30), no pruning",
         "impls": {
-            "tree": ["--cart", "--no-prune", "-d", str(CART_DEPTH)],
+            "tree": ["--cart", "-d", str(CART_DEPTH)],
             "sklearn": {"mode": "fit", "max_depth": CART_DEPTH},
             "rpart": {"mode": "fit", "maxdepth": CART_DEPTH},
         },
@@ -69,7 +69,7 @@ PROTOCOLS = {
     "cart_depth12": {
         "title": "CART, grown to depth 12, no pruning",
         "impls": {
-            "tree": ["--cart", "--no-prune", "-d", "12"],
+            "tree": ["--cart", "-d", "12"],
             "sklearn": {"mode": "fit", "max_depth": 12},
             "rpart": {"mode": "fit", "maxdepth": 12},
         },
@@ -77,7 +77,7 @@ PROTOCOLS = {
     "cart_alpha": {
         "title": "CART, one tree pruned at a fixed alpha (cost-complexity)",
         "impls": {
-            "tree": ["--cart", "-d", str(CART_DEPTH), "--alpha", "{alpha}"],
+            "tree": ["--cart", "-d", str(CART_DEPTH), "--prune", "{alpha}"],
             "sklearn": {"mode": "fit", "max_depth": CART_DEPTH, "ccp_alpha": "{alpha}"},
             "rpart": {"mode": "alpha", "maxdepth": CART_DEPTH, "alpha": "{alpha}"},
         },
@@ -88,14 +88,14 @@ PROTOCOLS = {
     "cart_alpha_nodepth": {
         "title": "CART, one tree pruned at a fixed alpha (cost-complexity), no depth limit",
         "impls": {
-            "tree": ["--cart", "--alpha", "{alpha}"],
+            "tree": ["--cart", "--prune", "{alpha}"],
             "sklearn": {"mode": "fit", "ccp_alpha": "{alpha}"},
         },
     },
     "cart_full_nodepth": {
         "title": "CART, grown to pure leaves, no pruning, no depth limit",
         "impls": {
-            "tree": ["--cart", "--no-prune"],
+            "tree": ["--cart"],
         },
     },
     # Growing only, to depth 10 (the profiling benchmark, cluster-profiling; the
@@ -103,14 +103,14 @@ PROTOCOLS = {
     "cart_depth10": {
         "title": "CART, grown to depth 10, no pruning",
         "impls": {
-            "tree": ["--cart", "--no-prune", "-d", "10"],
+            "tree": ["--cart", "-d", "10"],
             "sklearn": {"mode": "fit", "max_depth": 10},
         },
     },
     "c45_depth10_unpruned": {
         "title": "C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)",
         "impls": {
-            "tree": ["--c45", "--no-prune", "-d", "10"],
+            "tree": ["--c45", "-d", "10"],
             # J48 has no depth limit: the adapter's own (J48Fit max_depth).
             "j48": {"options": "-U -M 2", "max_depth": 10},
             # Not C4.5: scikit-learn's nearest tree, entropy, with C4.5's
@@ -124,19 +124,19 @@ PROTOCOLS = {
     "cart_depth10_alpha": {
         "title": "CART, grown to depth 10, pruned at a fixed alpha (cost-complexity)",
         "impls": {
-            "tree": ["--cart", "-d", "10", "--alpha", "{alpha}"],
+            "tree": ["--cart", "-d", "10", "--prune", "{alpha}"],
         },
     },
     "c45_depth10": {
         "title": "C4.5, grown to depth 10, error-based pruning (CF 0.25, subtree raising)",
         "impls": {
-            "tree": ["--c45", "-d", "10"],
+            "tree": ["--c45", "-d", "10", "--prune", "0.25"],
         },
     },
     "c45": {
         "title": "C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows",
         "impls": {
-            "tree": ["--c45"],
+            "tree": ["--c45", "--prune", "0.25"],
             "j48": {"options": "-C 0.25 -M 2"},
             "yadt": ["-ebpg", "-c", "0.25", "-m", "2"],
             # Not C4.5: scikit-learn's nearest tree, entropy, pruned the only
@@ -147,7 +147,7 @@ PROTOCOLS = {
     "c45_unpruned": {
         "title": "C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows",
         "impls": {
-            "tree": ["--c45", "--no-prune"],
+            "tree": ["--c45"],
             "j48": {"options": "-U -M 2"},
             "yadt": ["-np", "-m", "2"],
         },
@@ -159,14 +159,14 @@ PROTOCOLS = {
 for _depth in (5, 15, 20, 25, 30):
     PROTOCOLS[f"cart_depth{_depth}"] = {
         "title": f"CART, grown to depth {_depth}, no pruning",
-        "impls": {"tree": ["--cart", "--no-prune", "-d", str(_depth)]},
+        "impls": {"tree": ["--cart", "-d", str(_depth)]},
     }
     PROTOCOLS[f"c45_depth{_depth}_unpruned"] = {
         "title": f"C4.5, grown to depth {_depth}, unpruned (only C4.5's collapse of useless splits)",
-        "impls": {"tree": ["--c45", "--no-prune", "-d", str(_depth)]},
+        "impls": {"tree": ["--c45", "-d", str(_depth)]},
     }
 
-# ./tree on the GPU (--cuda, and --cuda --gpu-only) and ./tree --simple run
+# ./tree on the GPU (tree_cuda: --hybrid, tree_gpu_only: --gpu) and ./tree --simple run
 # every protocol ./tree runs, with the same flags.
 for _protocol in PROTOCOLS.values():
     if "tree" in _protocol["impls"]:
@@ -175,8 +175,8 @@ for _protocol in PROTOCOLS.values():
         _protocol["impls"]["tree_simple"] = _protocol["impls"]["tree"]
 
 # threads: "multi" = runs with every thread count asked for, "single" = only 1,
-#   "all" = only the largest thread count asked for (./tree --cuda: the CPU pool
-#   that grows the small subtrees gets every CPU). ./tree --cuda --gpu-only grows
+#   "all" = only the largest thread count asked for (./tree --hybrid: the CPU pool
+#   that grows the small subtrees gets every CPU). ./tree --gpu grows
 #   every node on the GPU, and its CPU threads feed the GPU and prune: "all" too.
 # warmup: True for the managed runtimes (Python, R, JVM): before the timed fit,
 #   the adapter fits one untimed tree on the first WARMUP_ROWS training rows in
@@ -184,8 +184,8 @@ for _protocol in PROTOCOLS.values():
 #   executables need none: loading is not timed, so the file cache does not matter.
 IMPLS = {
     "tree": {"label": "./tree", "threads": "multi", "warmup": False},
-    "tree_cuda": {"label": "./tree CUDA", "threads": "all", "warmup": False},
-    "tree_gpu_only": {"label": "./tree CUDA, GPU only", "threads": "all", "warmup": False},
+    "tree_cuda": {"label": "./tree Hybrid", "threads": "all", "warmup": False},
+    "tree_gpu_only": {"label": "./tree GPU", "threads": "all", "warmup": False},
     "tree_simple": {"label": "./tree simple", "threads": "single", "warmup": False},
     "sklearn": {"label": "scikit-learn", "threads": "single", "warmup": True},
     "rpart": {"label": "rpart", "threads": "single", "warmup": True},

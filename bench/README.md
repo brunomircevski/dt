@@ -43,7 +43,7 @@ Finished benchmarks, one directory per backend, machine and dataset: see [result
 
 `run.py` options:
 - Selection: `--protocols`, `--impls`.
-- CART pruning: `--alpha` sets the fixed α of `cart_alpha` (default `CART_ALPHA` = 1e-5 in `benchlib.py`).
+- CART pruning: `--alpha` sets the fixed α of `cart_alpha` (default `CART_ALPHA` = 1e-5 in `benchlib.py`); `./tree` gets it as `--prune α`.
 - Threads: `--threads 1,2,4,all` sets the thread counts tried for the multi-threaded tools.
 - Pinning: `--cpus` sets the order of logical CPUs to pin to.
 - Repetitions and limits: `--reps` (runs per case, default 1), `--timeout`.
@@ -53,7 +53,7 @@ Finished benchmarks, one directory per backend, machine and dataset: see [result
 - `--no-baseline` leaves out the runtime-footprint runs.
 - Output: `--run-id` names the directory in `bench/results/` (default host-date); `--dry-run` prints the plan and exits; `--seed` seeds the shuffled order of the cases.
 - NUMA and cache: `--membind NODES` runs every process under `numactl --membind`; `--drop-cache` drops the datasets from the page cache before each process.
-- `./tree` only: `--train-accuracy-only`, `--test-accuracy` (skip or limit predicting the dumped tree), `--hash-trees` (SHA-256 of every dumped tree), `--profile` (write `--profile` JSON per run), `--gpu-min-rows`.
+- `./tree` only: `--train-accuracy-only`, `--test-accuracy` (skip or limit predicting the dumped tree), `--hash-trees` (SHA-256 of every dumped tree), `--profile` (write `--profile` JSON per run), `--handoff-rows`.
 
 ## Protocols (what is compared)
 
@@ -61,13 +61,13 @@ Each protocol is one well-defined piece of work, done with equivalent settings i
 
 | Protocol | ./tree | scikit-learn | rpart | J48 | YaDT |
 |---|---|---|---|---|---|
-| `cart_full`: grown to pure leaves, depth ≤ 30 | `--cart --no-prune -d 30` | `max_depth=30` | `cp=0, minsplit=2, minbucket=1, maxdepth=30` | | |
+| `cart_full`: grown to pure leaves, depth ≤ 30 | `--cart -d 30` | `max_depth=30` | `cp=0, minsplit=2, minbucket=1, maxdepth=30` | | |
 | `cart_depth12` | `-d 12` | `max_depth=12` | `maxdepth=12` | | |
-| `cart_alpha`: one tree, pruned at a fixed α | `--alpha α` | `ccp_alpha=α` | `xval=0`, `prune(cp = α·n / root risk)` | | |
-| `cart_alpha_nodepth`: `cart_alpha` without the depth cap, for ./tree-only benchmarks | `--cart --alpha α` | | | | |
-| `c45`: error-based pruning, CF 0.25, subtree raising | `--c45` | | | `-C 0.25 -M 2` | `-ebpg -c 0.25 -m 2` |
-| `c45_unpruned` | `--c45 --no-prune` | | | `-U -M 2` | `-np -m 2` |
-| `cart_depth10`, `c45_depth10_unpruned`: depth ≤ 10, no pruning, every current benchmark | `-d 10 --no-prune` | `max_depth=10` | | `-U -M 2`, its depth limit | |
+| `cart_alpha`: one tree, pruned at a fixed α | `--cart -d 30 --prune α` | `ccp_alpha=α` | `xval=0`, `prune(cp = α·n / root risk)` | | |
+| `cart_alpha_nodepth`: `cart_alpha` without the depth cap, for ./tree-only benchmarks | `--cart --prune α` | | | | |
+| `c45`: error-based pruning, CF 0.25, subtree raising | `--c45 --prune 0.25` | | | `-C 0.25 -M 2` | `-ebpg -c 0.25 -m 2` |
+| `c45_unpruned` | `--c45` | | | `-U -M 2` | `-np -m 2` |
+| `cart_depth10`, `c45_depth10_unpruned`: depth ≤ 10, no pruning, every current benchmark | `-d 10` | `max_depth=10` | | `-U -M 2`, its depth limit | |
 
 **Settings that keep the comparison fair:**
 - **Same depth cap.** Every CART tool stops at depth 30, because rpart cannot grow deeper.

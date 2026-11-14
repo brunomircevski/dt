@@ -206,16 +206,16 @@ def build_command(case, kind, args, scratch, rep=0):
     if impl in TREE_IMPLS:
         flags = [fill(flag, args.alpha) for flag in spec]
         if impl == "tree_cuda":
-            binary, backend = B.TREE_CUDA, ["--cuda", "--threads", str(threads)]
-            if args.gpu_min_rows:
-                backend += ["--gpu-min-rows", str(args.gpu_min_rows)]
+            binary, backend = B.TREE_CUDA, ["--hybrid", "--threads", str(threads)]
+            if args.handoff_rows:
+                backend += ["--handoff-rows", str(args.handoff_rows)]
         elif impl == "tree_gpu_only":
-            binary, backend = B.TREE_CUDA, ["--cuda", "--gpu-only", "--threads", str(threads)]
+            binary, backend = B.TREE_CUDA, ["--gpu", "--threads", str(threads)]
         elif impl == "tree_simple":
             binary, backend = B.TREE, ["--simple"]
         else:
             binary = B.TREE
-            backend = ["--serial"] if threads == 1 else ["--parallel", "--threads", str(threads)]
+            backend = ["--serial"] if threads == 1 else ["--multicore", "--threads", str(threads)]
         dump = scratch / "tree.dump"
         dump.unlink(missing_ok=True)  # never read a previous run's tree
         predict = evaluate and (args.test_accuracy or not args.train_accuracy_only)
@@ -560,9 +560,9 @@ def main():
     parser.add_argument("--profile", action="store_true",
                         help="./tree: also write where its training time goes (--profile) to "
                              "<run dir>/profiles/<protocol>-<impl>-t<threads>-r<rep>.json")
-    parser.add_argument("--gpu-min-rows", type=int,
-                        help="./tree CUDA hybrid (tree_cuda): its --gpu-min-rows (default: "
-                             "./tree's own); --gpu-only has none")
+    parser.add_argument("--handoff-rows", type=int,
+                        help="./tree --hybrid (tree_cuda): its --handoff-rows (default: "
+                             "./tree's own); --gpu has none")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
     args.cpu_list = parse_cpus(args.cpus) if args.cpus else None

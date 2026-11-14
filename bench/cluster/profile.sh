@@ -10,7 +10,7 @@
 #   bench/cluster/profile.sh -m 3 -d higgs    # HIGGS, each case 3 times
 #   bench/cluster/profile.sh cpu-epyc-ecbdl_15m   # only the named runs
 #   bench/cluster/profile.sh -o cluster-ecbdl-profile/gpu-only \
-#       gpuonly-hopper-ecbdl_15m gpuonly-ampere-ecbdl_15m  # --gpu-only, every CPU
+#       gpuonly-hopper-ecbdl_15m gpuonly-ampere-ecbdl_15m  # --gpu, every CPU
 #                                                          # (only when named)
 #
 # -p: run.py's protocols (default cart_alpha_nodepth,cart_full_nodepth,c45);

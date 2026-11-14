@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Where ./tree's training time goes, as shares of the training wall time: one
-grid (columns: Parallel on epyc and on dell, CUDA, CUDA --gpu-only, those of
+grid (columns: Multicore on epyc and on dell, Hybrid, GPU, those of
 them that ran; rows: CART and C4.5, both
 grown to depth 10, unpruned), one stacked bar per dataset (the average of each
 case's profiled runs), from runs made with bench/cluster/profile.sh
@@ -39,10 +39,10 @@ LABELS = {"chess_10m": "chess 10M", "chess_50m": "chess 50M", "chess_100m": "che
           "chess_500m": "chess 500M", "chess_1b": "chess 1000M", "chess_2b": "chess 2000M",
           "higgs": "HIGGS", "airline": "Airline", "ecbdl_15m": "ECBDL'14 15M"}
 PROTOCOLS = [("cart_depth10", "CART"), ("c45_depth10_unpruned", "C4.5")]
-MODES = [("cpu-epyc", "Parallel (CPU only), epyc"),
-         ("cpu-dell", "Parallel (CPU only), dell"),
-         ("cuda-hopper", "CUDA hybrid (default)"),
-         ("gpuonly-hopper", "CUDA --gpu-only")]
+MODES = [("cpu-epyc", "Multicore (CPU only), epyc"),
+         ("cpu-dell", "Multicore (CPU only), dell"),
+         ("cuda-hopper", "Hybrid (--hybrid)"),
+         ("gpuonly-hopper", "GPU (--gpu)")]
 
 # The steps, in stacking order (bottom up), with the reference palette's
 # categorical slots in order; "other" is a neutral gray.
@@ -428,14 +428,14 @@ def chart(cases, datasets, out):
         "every 5 ms, idle threads ignored, the time shared among the busy ones). While the "
         "training thread drives the GPU, its time is transfer (staging copies) or other (launching, "
         "waiting). · CPU / GPU tells which processor did the step; transfer is between them.",
-        "Parallel: CPU only, every thread of both sockets (epyc: 2× EPYC 9255; dell: dell1, "
-        "2× Xeon Gold 6542Y, 1 TB). CUDA hybrid (default): the GPU grows "
-        "the big nodes level by level and hands small nodes (< --gpu-min-rows) to the CPU threads, "
+        "Multicore: CPU only, every thread of both sockets (epyc: 2× EPYC 9255; dell: dell1, "
+        "2× Xeon Gold 6542Y, 1 TB). Hybrid: the GPU grows "
+        "the big nodes level by level and hands small nodes (< --handoff-rows) to the CPU threads, "
         "which grow those subtrees meanwhile; that CPU work is hidden behind the GPU and only "
-        "shows when the GPU has finished and waits for it. CUDA --gpu-only: the GPU grows every "
+        "shows when the GPU has finished and waits for it. GPU: the GPU grows every "
         "node; the CPU only drives it.",
-        "CART = cart_depth10 (Gini, -d 10, --no-prune); C4.5 = c45_depth10_unpruned (gain ratio, "
-        "-d 10, --no-prune: only C4.5's tidy-up after growing, counted as other). Same trees in "
+        "CART = cart_depth10 (Gini, -d 10, unpruned); C4.5 = c45_depth10_unpruned (gain ratio, "
+        "-d 10, unpruned: only C4.5's tidy-up after growing, counted as other). Same trees in "
         "every mode.",
     ]
     y -= 0.004 * unit

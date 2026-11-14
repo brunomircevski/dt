@@ -14,7 +14,7 @@ context. Its NUMA placement of the hybrid's CPU side was dropped (within
 noise, see CUDA.md). Measured against main at dbc2b2a7 on GPU 2 of each node
 (an H100 PCIe on socket 1, an A100 40 GB on socket 1; the A100 is too small
 for SOREL and MNIST8M), 3 rounds x 3 trees, interleaved; train ms, medians;
-`--no-prune` everywhere, "d10" is `-d 10`. Every tree is main's.
+unpruned everywhere, "d10" is `-d 10`. Every tree is main's.
 
 | case | H100 hybrid | A100 hybrid | H100 GPU-only | A100 GPU-only |
 |---|--:|--:|--:|--:|
@@ -100,7 +100,8 @@ near-tie resweeps; HIGGS and SUSY full depth, chess, covertype), and
   (train -8.5% at 48 threads, peak RSS 4.68 -> 3.96 GiB).
 
 Train ms, medians of interleaved runs in one job per node;
-`--no-prune -d 10` unless "full" (no depth limit, pruned):
+`-d 10`, unpruned, unless "full" (no depth limit, pruned: CART `--prune 1e-5`,
+C4.5 `--prune 0.25`):
 
 | case | epyc main | epyc new | dell1 main | dell1 new |
 |---|--:|--:|--:|--:|
@@ -161,8 +162,8 @@ ratio: one exact double-precision sweep (H100, A100: every result so far), or
 a single-precision estimate of every cut followed by the exact gain of the
 cuts within a proven error bound of the node's best (two-pass, for consumer
 GPUs). Measured on the cluster with `--gpu-sweep` forcing each mode (main at
-1e65506, 7 interleaved runs per case, `--no-prune -d 10`, hybrid and
-`--gpu-only`; build time median, ms; the profiles' sweep kernels agree):
+1e65506, 7 interleaved runs per case, `-d 10`, unpruned, hybrid and
+`--gpu`; build time median, ms; the profiles' sweep kernels agree):
 
 | Dataset | Algorithm | H100 one-pass | H100 two-pass | A100 one-pass | A100 two-pass |
 |---|---|---:|---:|---:|---:|
@@ -175,7 +176,7 @@ GPUs). Measured on the cluster with `--gpu-sweep` forcing each mode (main at
 | ECBDL'14 15M | CART | 2259 | 2231 (−1%) | 3192 | 3114 (−2%) |
 | ECBDL'14 15M | C4.5 | 2273 | 2242 (−1%) | 3227 | 3142 (−3%) |
 
-(Hybrid; `--gpu-only` is within 1% of it.) The float pass saves 30–70 ms
+(Hybrid; `--gpu` is within 1% of it.) The float pass saves 30–70 ms
 of sweep kernels on the big two-class sets, but it keeps candidates only for
 up to 8 classes: on MNIST8M (10 classes) the exact pass sweeps the surviving
 tiles again, which costs C4.5 210–440 ms. Over all 16 cases one-pass was 1.3%
@@ -191,8 +192,9 @@ gets `cutGain` in double precision, as on the GPU; the two-class block bound
 (the CPU's `tileBoundKernel`), blocks without a threshold and the
 `maxGainStep` skip stay, since they only rule out cuts. Against main at
 e1cb9498 (c45-perf merged), 5 interleaved runs per case, build ms median;
-serial is `taskset -c 0 --serial`, parallel `--parallel --threads 48`,
-`--no-prune -d 10` unless "full" (full depth, pruned); all 20 trees
+serial is `taskset -c 0 --serial`, parallel `--multicore --threads 48`,
+`-d 10`, unpruned, unless "full" (full depth, pruned: CART `--prune 1e-5`,
+C4.5 `--prune 0.25`); all 20 trees
 identical:
 
 | case | epyc main | epyc exact | dell main | dell exact |
@@ -260,9 +262,9 @@ C4.5 (interleaved runs in separate jobs):
   dell HIGGS C4.5 10.1 → 8.8 s, epyc 6.6 → 5.5 s, MNIST8M epyc C4.5 95 →
   83 s.
 
-Final A/B, `--no-prune -d 10`, build ms, interleaved in one job per node
+Final A/B, `-d 10`, unpruned, build ms, interleaved in one job per node
 (HIGGS/SUSY 4 runs, MNIST8M/ECBDL 15M 3, ECBDL 15M one-thread 1); one thread
-is `taskset -c 0 --serial`, 48 is `--parallel --threads 48`; CV ≤ 1.3% for
+is `taskset -c 0 --serial`, 48 is `--multicore --threads 48`; CV ≤ 1.3% for
 one thread, ≤ 12% at 48 threads (SUSY):
 
 Build seconds; the change is against f1fe270.
@@ -302,9 +304,9 @@ Tried and dropped (same trees in every case):
 ## November 2026: C4.5's GPU setup on SOREL 4M (CUDA hybrid)
 
 C4.5's setup on SOREL 4M took 3.4 s on the A100 node against CART's 1.9 s
-and 2.2 s with `--gpu-only`. Host-side timings showed where: the download of
+and 2.2 s with `--gpu`. Host-side timings showed where: the download of
 the distinct values (1G values, 4 GB) took 1.5 s in the hybrid and 0.33 s
-with `--gpu-only`. The hybrid started the arena's toucher (76 GB of memset on
+with `--gpu`. The hybrid started the arena's toucher (76 GB of memset on
 24 threads) just before it, and both wrote to the GPU's socket at once. The
 toucher now starts after the download; it still finishes early in the build
 (0.05-0.08 s longer on SOREL 4M).
@@ -313,9 +315,9 @@ The features whose distinct values do not fit the device pool (most of them
 on SOREL 4M, 8x its size) were also downloaded one at a time, about 2000
 synchronous copies; they now go in batches (0.12-0.15 s of the setup).
 
-Both, ampere, hybrid, `--no-prune -d 10`, 3 alternating runs each, the same
+Both, ampere, hybrid, `-d 10`, unpruned, 3 alternating runs each, the same
 trees in every case: SOREL 4M C4.5 6.38 s → 5.33 s (the same as
-`--gpu-only`), HIGGS C4.5 237 → 218 ms, SUSY C4.5 111 → 100 ms; airline
+`--gpu`), HIGGS C4.5 237 → 218 ms, SUSY C4.5 111 → 100 ms; airline
 (C4.5 at depth 10 and 20, CART), chess 10M and every CART run within noise.
 
 ## November 2026: SOREL's --simple and NUMA
@@ -413,7 +415,7 @@ gain ratio needs more levels, and unlimited it beats CART on all three.
 
 The GPU's lead shrinks with depth, because small nodes go to the CPU:
 
-| Training time (s), CART: epyc / H100 hybrid / H100 `--gpu-only` | depth 5 | 10 | 15 | 20 | unlimited |
+| Training time (s), CART: epyc / H100 hybrid / H100 `--gpu` | depth 5 | 10 | 15 | 20 | unlimited |
 |---|--:|--:|--:|--:|--:|
 | HIGGS | 0.31 / 0.11 / 0.10 | 0.62 / 0.15 / 0.15 | 0.82 / 0.22 / 0.24 | 1.04 / 0.43 / 0.74 | 1.41 / 1.26 / 3.93 |
 | airline | 1.82 / 0.32 / 0.32 | 2.87 / 0.49 / 0.49 | 4.15 / 0.69 / 0.70 | 5.06 / 0.98 / 1.33 | 6.30 / 4.51 / 21.67 |
@@ -435,12 +437,12 @@ peak memory, and 28.5 s is what the fast runs took before.
 
 ## October 2026: a faster presort, and experiments that did not help (mordor3 cluster)
 
-Unpruned trees (`--no-prune -d 10`); every run's `--dump` compared with the
+Unpruned trees (`-d 10`); every run's `--dump` compared with the
 base binary's. Two CPU presort changes are in `cpu_builder.cpp`
 ([CPU.md](CPU.md)): the digit histograms of big columns are counted in chunks
 on all threads, and the radix sort covers only the key bits that vary
 (integer columns keyed by `int(v) − min`, 12-bit digits, columns of 1M+ rows).
-Same trees (`tests/check.sh`, 24 dumps). `--parallel` on dell (48 threads),
+Same trees (`tests/check.sh`, 24 dumps). `--multicore` on dell (48 threads),
 medians of 3 interleaved reps against main 8bdf641:
 
 | | presort CART | train CART | presort C4.5 | train C4.5 |
@@ -477,7 +479,7 @@ Tried and dropped (same trees in every case):
   on the H100 23.0 → 18.6 s, but C4.5 on the A100 66.5 → 68.6 s and airline C4.5
   crashed in chunk mode. Superseded by the staged hand-offs below, which do not
   page-lock the arena at all.
-* The `--parallel` hang (about 1 in 40 big runs on dell) was a lost wake-up in
+* The `--multicore` hang (about 1 in 40 big runs on dell) was a lost wake-up in
   libstdc++ 13's `atomic::notify` after a release store; `waitNonZero()` in
   `cpu_builder.cpp` avoids `atomic::wait` (a `seq_cst` store also fixed it but
   made ECBDL C4.5 7% slower).
@@ -590,7 +592,7 @@ mordor3 nodes; before = 66bd66c.
 
 * `--serial` uses one spare slot: 37% less memory on HIGGS, and 0–7% faster
   (the winner's column is no longer copied).
-* `--parallel` keeps `min(F − 1, threads)` spare slots by default, so that a
+* `--multicore` keeps `min(F − 1, threads)` spare slots by default, so that a
   big node moves all its columns at once, one per thread, with the children's
   sweeps fused in: memory drops only where the features outnumber the threads
   (airline: 6%; ECBDL's 631 features on 48 threads need 678 slots instead of
@@ -608,7 +610,7 @@ mordor3 nodes; before = 66bd66c.
 ## October 2026: the serial backend runs the parallel algorithm
 
 Until 2026-10-17 `--serial` kept no second copy of the columns, so it
-partitioned every node in place, through a byte per row, while `--parallel`
+partitioned every node in place, through a byte per row, while `--multicore`
 partitioned big nodes (≥ 32768 rows) out of place through a bitmap and swept
 the big children during the partition. Now both do the latter (commit
 4b1ced0); serial differs only in running on one thread (plain bit operations
@@ -688,7 +690,7 @@ Tried and dropped:
   sibling's rows in the raised branch): the per-call uploads, the scan of
   changed nodes and the calls serialized on one device made the big routes
   slower (0.85 → 2.4 s on hopper).
-- **More levels on the GPU** (`--gpu-min-rows` 512 or 1024 instead of 4096
+- **More levels on the GPU** (`--handoff-rows` 512 or 1024 instead of 4096
   for C4.5 and 2048 for CART): slower on both GPU nodes (ampere C4.5 build
   3.3 → 5.9 s at 512). A level of many small nodes costs the GPU nearly as
   much as one of big nodes, and the CPU threads finish small subtrees fast.
@@ -707,7 +709,7 @@ pruning steps). Then, on a GPU node (not the
 login node):
 
 ```
-nsys profile -t cuda,nvtx,osrt -o airline-c45 ./tree --cuda --c45 train.csv
+nsys profile -t cuda,nvtx,osrt -o airline-c45 ./tree --hybrid --c45 --prune 0.25 train.csv
 nsys stats -r nvtx_sum,cuda_gpu_kern_sum,cuda_gpu_mem_time_sum airline-c45.nsys-rep
 ```
 
@@ -718,8 +720,8 @@ ampere allows it. Without NVTX=1 the ranges compile to nothing.
 
 Commit `93920b9` (before) against the merge of this work (after), on airline
 (115M rows, 18 features), measured on hopper (H100 PCIe + 32 Xeon cores,
-`--cuda`), ampere (A100 80 GB + 48 EPYC 7402 cores, `--cuda`) and epyc1
-(2× EPYC 9255, 48 cores, `--parallel`). Before and after ran in the same job,
+`--hybrid`), ampere (A100 80 GB + 48 EPYC 7402 cores, `--hybrid`) and epyc1
+(2× EPYC 9255, 48 cores, `--multicore`). Before and after ran in the same job,
 interleaved, 3 runs each; times are medians of `train total` (build and prune
 in brackets). Every tree is byte-identical before and after, on all three
 nodes.
@@ -733,7 +735,7 @@ nodes.
 | CART | ampere cuda | 2.88 s (2.28) | 1.86 s (1.24) | 1.55× |
 | CART | epyc1 parallel | 7.36 s (6.66) | 7.40 s (6.69) | – |
 
-CART is `--cart --alpha 1e-5`. What changed:
+CART is `--cart --prune 1e-5`, C4.5 `--c45 --prune 0.25`. What changed:
 - **The growers record each row's leaf.** C4.5 pruning needed every row's
   leaf and routed all 115M rows through the 19.6M-node tree for it. The
   builders know a node's rows when
@@ -756,7 +758,7 @@ CART is `--cart --alpha 1e-5`. What changed:
   ahead of the hand-offs instead of all at once (0.1-0.3 s). C4.5 keeps the
   single registration: chunks registered during the levels stall the GPU
   loop and made it 0.4 s slower.
-- **`--gpu-min-rows` for CART:** rows / 8192, between 1024 and 2048 (airline:
+- **`--handoff-rows` for CART:** rows / 8192, between 1024 and 2048 (airline:
   2048 instead of 4096). C4.5 keeps rows / 4096.
 - **`chooseC45`** looks up `log2` in a table and allocates nothing.
 - **`DT_PROFILE=1`** printed where C4.5 pruning spends its time (removed in
@@ -775,7 +777,7 @@ change. The tables are in git history (this file before November 2026).
 
 - **Sweep, partition and pruning** (`d1cde64` → `be8b236`, desktop and
   laptop): 1.3-2.1× faster `train total` on SUSY and HIGGS. CPU sweep skips
-  blocks of 16 cuts by a gain bound; `--parallel` partitions big nodes out of
+  blocks of 16 cuts by a gain bound; `--multicore` partitions big nodes out of
   place and sweeps the big children while writing them; C4.5 pruning keeps
   the rows in leaf order in a row-major copy, routed 16 at a time; CUDA got a
   single-pass partition that also counts the next level's histograms and an
@@ -788,7 +790,7 @@ change. The tables are in git history (this file before November 2026).
   a fixed α does not grow nodes pruning would cut ([ALGORITHMS.md](ALGORITHMS.md));
   `--feature-parallel-rows` 4096 → 32768 (a 48-core build had spent a third of
   its CPU time in the kernel waking threads); huge pages for large blocks
-  (`src/core/memory.cpp`); `--gpu-min-rows` rows / 4096, at least 1024; a
+  (`src/core/memory.cpp`); `--handoff-rows` rows / 4096, at least 1024; a
   page-locked upload that works on the H100 node; the copy, compaction and
   C4.5 bookkeeping on all threads.
 - **Node store and GPU hand-off** (`0475249`, `f495aed`, airline on
@@ -798,8 +800,8 @@ change. The tables are in git history (this file before November 2026).
   ran half as fast on both sockets as on one. Now a thread takes a whole chunk
   (4096 nodes) and allocates it outside the lock. With the CPU subtrees
   faster, airline is fastest with nodes handed to the CPU at 2-4K rows instead
-  of 28K, so the automatic `--gpu-min-rows` is capped at 4096. Hopper's
+  of 28K, so the automatic `--handoff-rows` is capped at 4096. Hopper's
   unpruned CART went 14.6 → 5.0 → 3.9 s. Settings tried and left at their
   defaults (no consistent gain): `--task-rows` 16K-1G, `--feature-parallel-rows`
-  8K and 128K, `--gpu-min-rows` 1024 and 16384 on HIGGS (the first two options
+  8K and 128K, `--handoff-rows` 1024 and 16384 on HIGGS (the first two options
   were removed in November 2026).

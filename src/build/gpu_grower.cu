@@ -39,7 +39,7 @@
 //                          into a free slot, in one pass, skipped for nodes
 //                          whose children are both leaves
 //    so each level needs one round trip to the host (step 4).
-//  * Children with fewer than --gpu-min-rows rows are gathered into one
+//  * Children with fewer than --handoff-rows rows are gathered into one
 //    block, copied to the host (through the ring) and grown by CpuTreeBuilder tasks
 //    on the thread pool while the GPU continues with the next level.
 
@@ -185,7 +185,7 @@ public:
     std::iota(allFeatures.begin(), allFeatures.end(), 0u);
     LevelNode root{store.add(counts.data()), 0, static_cast<std::uint32_t>(stride_), 0,
                    std::move(allFeatures)};
-    minRows_ = gpuMinRows(options_, stride_);
+    minRows_ = handoffRows(options_, stride_);
     setupPhase.reset();
     if (stride_ < minRows_) {
       growOnCpu(std::move(root));
@@ -318,7 +318,7 @@ public:
 
   // The host arena: it only holds the columns of nodes handed to the CPU.
   std::span<std::byte> workspace() override {
-    if (!arena_) { // --gpu-only
+    if (!arena_) { // --gpu
       arena_.reset(new Entry[features_ * rows_]);
     }
     waitTouched(features_ * rows_ * sizeof(Entry)); // the caller writes all of it
@@ -390,7 +390,7 @@ private:
       throw std::runtime_error("Not enough GPU memory: need about " +
                                std::to_string(needed >> 20) + " MiB, " +
                                std::to_string(freeBytes >> 20) +
-                               " MiB free. Use --parallel instead.");
+                               " MiB free. Use --multicore instead.");
     }
     // C4.5's pruning starts by ordering the rows by leaf (arrangeRows()),
     // which needs the raw values again: a copy stays on the GPU if it fits.
@@ -482,14 +482,14 @@ private:
     // Host memory for the columns of nodes handed to the CPU (every row is
     // handed over at most once per grow, so features * rows entries always
     // suffice). Pageable: the hand-offs go through page-locked buffers (see
-    // handOff()). --gpu-only hands nothing over (workspace() allocates the
+    // handOff()). --gpu hands nothing over (workspace() allocates the
     // arena if the pruning asks for it).
-    if (!options_.gpu.only) {
+    if (options_.backend != Backend::Gpu) {
       arena_.reset(new Entry[total]);
     }
     // CART with a fixed alpha stops early and hands few rows to the CPU
     // (airline: 2 of 12 GB): the copies fault in the few pages they need.
-    const bool fewHandOffs = options_.gpu.only ||
+    const bool fewHandOffs = options_.backend == Backend::Gpu ||
                              (options_.algorithm == Algorithm::Cart &&
                               options_.cart.prune);
     {
@@ -1763,7 +1763,7 @@ private:
 
   // Per grow.
   std::size_t stride_ = 0; // training rows (the column stride)
-  std::size_t minRows_ = 0; // smaller nodes go to the CPU (gpu.minRows, or auto)
+  std::size_t minRows_ = 0; // smaller nodes go to the CPU (gpu.handoffRows, or auto)
   const SplitRules *rules_ = nullptr;
   NodeStore *store_ = nullptr;
   CpuTreeBuilder *cpuBuilder_ = nullptr;

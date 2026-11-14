@@ -190,7 +190,7 @@ def figure(data, out):
                    for p in pts for r in p["rows"]})
     dates = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
     fig.text(0.06, 0.012,
-             f"Speed-up: the 1-thread time (--serial) over the time with n threads (--parallel), {runs_note(data)}.\n"
+             f"Speed-up: the 1-thread time (--serial) over the time with n threads (--multicore), {runs_note(data)}.\n"
              "End label: speed-up (parallel efficiency) at 48 threads. Threads take the CPUs in the kernel's order: on "
              "epyc1 socket 0's 24 cores, then socket 1's; on dell1 the sockets alternate. Memory first-touch.\nEvery thread count grows the same tree. Training time excludes "
              f"reading the data. ./tree {', '.join(commits)}, run {dates}.",

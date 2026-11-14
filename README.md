@@ -1,14 +1,16 @@
 # Decision trees: CART and C4.5 on CPU and GPU
 
-Grows **CART** and **C4.5** decision trees on numeric data with four
-interchangeable backends that produce the *same* tree (byte for byte):
+Grows **CART** and **C4.5** decision trees on numeric data with five
+interchangeable backends, the paper's five implementations, that produce the
+*same* tree (byte for byte):
 
-| Backend | Flag | How |
-|---------|------|-----|
-| Simple | `--simple` | One thread, the textbook algorithm with no optimizations: the reference to compare the others against. |
-| Serial | `--serial` | One thread, the optimized algorithm. |
-| Parallel | `--parallel` | Thread pool: features of a big node in parallel, subtrees as tasks. |
-| Cuda | `--cuda` | GPU grows the large nodes level by level; small subtrees go to the CPU pool. |
+| Backend (paper) | Flag | How |
+|-----------------|------|-----|
+| Serial Simple | `--simple` | One thread, the textbook algorithm with no optimizations: the reference to compare the others against. |
+| Serial Optimized | `--serial` | One thread, the optimized algorithm (presorted columns). |
+| Multicore CPU | `--multicore` | Thread pool: features of a big node in parallel, subtrees as tasks. The default. |
+| GPU-Based | `--gpu` | The GPU grows every node level by level; the CPU threads feed it and prune. |
+| Hybrid | `--hybrid` | The GPU grows the large nodes level by level; small subtrees go to the CPU pool. |
 
 * [docs/ALGORITHMS.md](docs/ALGORITHMS.md) — what exactly CART and C4.5 do
   here and how it was verified against scikit-learn and Quinlan's C4.5.
@@ -16,18 +18,18 @@ interchangeable backends that produce the *same* tree (byte for byte):
 * [docs/CUDA.md](docs/CUDA.md) — the GPU builder, kernel by kernel.
 * [docs/SIMPLE.md](docs/SIMPLE.md) — every difference between `--simple`
   and `--serial`, and why the tree is the same.
-* [docs/GPU-LIBRARIES.md](docs/GPU-LIBRARIES.md) — how `--cuda` is compared
+* [docs/GPU-LIBRARIES.md](docs/GPU-LIBRARIES.md) — how `--hybrid` is compared
   with cuML and XGBoost: what is timed, fairness, caveats.
 * [bench/README.md](bench/README.md) — CPU benchmark against scikit-learn,
   rpart, Weka J48 and YaDT (time and memory).
 * [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — timings of the serial,
-  parallel and Cuda backends before and after the latest optimizations.
+  multicore and GPU backends before and after the latest optimizations.
 
 ## Build
 
 ```bash
 make          # ./tree      (CPU + CUDA; nvcc in /opt/cuda/bin, override with NVCC=..., CUDA_LIB=...)
-make cpu      # ./tree_cpu  (no CUDA needed; --cuda is unavailable)
+make cpu      # ./tree_cpu  (no CUDA needed; --gpu and --hybrid are unavailable)
 ```
 
 `make` compiles the kernels for the GPU of the build machine. For other GPUs
@@ -40,14 +42,13 @@ make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,cod
 ## Run
 
 ```bash
-./tree --cart tests/data/iris.csv                    # smoke test: a file that is in the repository
-./tree --cart datasets/covertype.csv                # CART: Gini, cost-complexity pruning with alpha 1e-5
-./tree --cart --alpha 1e-4 datasets/covertype.csv   # prune with another fixed alpha
-./tree --cart --no-prune datasets/covertype.csv     # only grow the maximal tree
-./tree --c45 datasets/covertype.csv                 # C4.5 as in Quinlan's c4.5: -m 2, CF 0.25
-./tree --c45 --test-last 500000 datasets/higgs.csv  # official split: the last 500k rows are the test set
-./tree --c45 --test test.csv train.csv              # test set in its own CSV (same header)
-./tree --c45 --cuda --holdout 0.2 datasets/higgs.csv  # a random 20% of the rows as the test set
+./tree tests/data/iris.csv                           # smoke test: CART, multicore, unpruned
+./tree datasets/covertype.csv                        # CART (Gini), grown to pure leaves, no pruning
+./tree --prune 1e-5 datasets/covertype.csv           # CART with cost-complexity pruning, alpha 1e-5
+./tree --c45 --prune 0.25 datasets/covertype.csv     # C4.5 as in Quinlan's c4.5: -m 2, CF 0.25
+./tree --c45 --test-last 500000 datasets/higgs.csv   # official split: the last 500k rows are the test set
+./tree --c45 --test test.csv train.csv               # test set in its own CSV (same header)
+./tree --c45 --hybrid --holdout 0.2 datasets/higgs.csv  # GPU + CPU; a random 20% of the rows as the test set
 ./tree --help
 ```
 
@@ -57,23 +58,24 @@ there); `tests/data/` has three small ones.
 The CSV needs a header; the last column is the class, a first column called
 `Id` is ignored, every other column must be numeric.
 
-Defaults follow the published algorithms: CART as described by Breiman et al.
-(1984) and C4.5 as in Quinlan's program (Release 8). Defaults live in
-`src/core/options.h`.
+The dataset is required. Without other flags `./tree` grows an unpruned CART
+tree with `--multicore`. The algorithms follow the published ones: CART as
+described by Breiman et al. (1984) and C4.5 as in Quinlan's program
+(Release 8). Defaults live in `src/core/options.h`.
 
 ### Options
 
-A flag that the chosen algorithm or backend would ignore (e.g. `--alpha` with
-`--c45`, `--gpu-min-rows` without `--cuda`) or that contradicts another one
-(e.g. `--alpha` or `--cf` with `--no-prune`) is an error.
+A flag that the chosen backend would ignore (`--handoff-rows` without
+`--hybrid`) or that contradicts another one (two backends, `--cart` with
+`--c45`) is an error.
 
 **Backend and algorithm**
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--simple` / `--serial` / `--parallel` / `--cuda` | `--parallel` | Where the tree is grown. All four grow the same tree. |
+| `--simple` / `--serial` / `--multicore` / `--gpu` / `--hybrid` | `--multicore` | Where the tree is grown (see the table at the top). All five grow the same tree. |
 | `--cart` / `--c45` | `--cart` | Algorithm. |
-| `--threads N` | 0 = every CPU it may run on (all cores, or those `taskset`/`numactl` allow) | CPU threads for `--parallel`, the CPU part of `--cuda`, loading and evaluation. |
+| `--threads N` | 0 = every CPU it may run on (all cores, or those `taskset`/`numactl` allow) | CPU threads for `--multicore`, the CPU side of `--gpu` and `--hybrid`, loading and evaluation. |
 
 **Pre-pruning** (stop growing early; the same two rules for both algorithms)
 
@@ -82,11 +84,11 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--alpha` with
 | `-d N`, `--max-depth N` | -1 = unlimited | Nodes at depth N become leaves. |
 | `--min-leaf N` | CART 1, C4.5 2 | A split is only allowed if both children keep at least N rows. For C4.5 this is the c4.5 program's `-m`; C4.5 also raises the limit by itself on big nodes (to 10% of the average class size, at most 25), as the original does. |
 
-**Post-pruning** (grow the full tree, then cut branches back; on by default)
+**Post-pruning** (grow the full tree, then cut branches back; off by default)
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--no-prune` | pruning on | Keep the grown tree: no CART cost-complexity pruning, no C4.5 error-based pruning. |
+| `--prune X` | off | Prune the grown tree. X is the algorithm's one pruning parameter: CART's alpha, C4.5's confidence factor (see below). |
 
 **Test set** (at most one of the three; without one, only the training accuracy is reported)
 
@@ -105,28 +107,29 @@ A flag that the chosen algorithm or backend would ignore (e.g. `--alpha` with
 | `--repeat N` | 0 | Train N trees in a row on the data loaded once, printing each one's training time and Unix start and end (`repeat i/N: train X ms, unix START END`; the window ends when training ends, before the memory is freed). With N > 1 every tree is trained in a forked child process, so each one runs as a single run's tree would; the last tree is evaluated. Not with `--profile`. For energy measurements ([bench/power](bench/power/README.md)). |
 | `--repeat-warmup S` | 0 | With `--repeat`: each tree's child keeps its threads busy for S seconds before its timer starts, as a single run's CSV load does, so an idle socket's power state does not slow the tree (the energy benchmark uses 2 to 15 s). |
 | `--dump FILE` | off | Write the tree as text. |
-| `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--cuda`). Its cost was within −1.5% to +2.0% of the run time; `bench/profile_chart.py` draws it. |
+| `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--gpu`, `--hybrid`). Its cost was within −1.5% to +2.0% of the run time; `bench/profile_chart.py` draws it. |
 
 **CART post-pruning** (splits always use the Gini index, as in Breiman et al.)
 
-| Flag | Default | Meaning |
-|------|---------|---------|
-| `--alpha X` | 0.00001 | Prune with this fixed alpha (one tree on all rows, as with scikit-learn's `ccp_alpha` and rpart's `cp`, but not the same numbers: alpha here weighs the misclassification rate as in Breiman et al., `ccp_alpha` the Gini impurity, and `cp` = alpha / root error rate). Larger prunes more: each leaf must classify about X × rows more training rows correctly to be kept (covertype: `1e-6` 44k nodes, `1e-5` 10k, `1e-4` 0.9k, `1e-3` 37). |
+| Flag | Common value | Meaning |
+|------|--------------|---------|
+| `--prune X` | 0.00001 (the benchmarks' alpha) | Cost-complexity pruning with this fixed alpha (>= 0) (one tree on all rows, as with scikit-learn's `ccp_alpha` and rpart's `cp`, but not the same numbers: alpha here weighs the misclassification rate as in Breiman et al., `ccp_alpha` the Gini impurity, and `cp` = alpha / root error rate). Larger prunes more: each leaf must classify about X × rows more training rows correctly to be kept (covertype: `1e-6` 44k nodes, `1e-5` 10k, `1e-4` 0.9k, `1e-3` 37). |
 
 **C4.5 post-pruning**
 
-| Flag | Default | Meaning |
-|------|---------|---------|
-| `--cf X` | 0.25 | Confidence factor of error-based pruning (the c4.5 program's `-c 25`); smaller prunes more. |
+| Flag | Common value | Meaning |
+|------|--------------|---------|
+| `--prune X` | 0.25 (the c4.5 program's default `-c 25`) | Error-based pruning with this confidence factor, in (0, 1); smaller prunes more. |
 
-Subtree raising is always on, as in the original program.
+Subtree raising is always on, as in the original program. Without `--prune`,
+C4.5 still collapses splits that do not reduce the training errors (as the
+c4.5 program's unpruned tree does).
 
 **Performance tuning** (the tree does not change; only the speed)
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--gpu-min-rows N` | CART: rows / 8192, between 1024 and 2048; C4.5: rows / 4096, between 1024 and 4096 | `--cuda`: nodes with fewer rows are finished by the CPU pool while the GPU grows the big ones. |
-| `--gpu-only` | off | `--cuda`: grow every node on the GPU, with no hand-offs to the CPU (and no host arena for them). The CPU threads (`--threads`) still count the classes, stage the copies to and from the GPU and run C4.5's pruning. |
+| `--handoff-rows N` | CART: rows / 8192, between 1024 and 2048; C4.5: rows / 4096, between 1024 and 4096 | `--hybrid` only: nodes with fewer rows are handed off to the CPU pool, which finishes their subtrees while the GPU grows the big ones. (`--gpu` hands nothing off: the CPU threads only count the classes, stage the copies to and from the GPU and run C4.5's pruning.) |
 
 The best values depend on the hardware and the data (`docs/CPU.md`,
 `docs/CUDA.md` explain what each threshold does). The defaults were tuned on
@@ -138,24 +141,24 @@ The best values depend on the hardware and the data (`docs/CPU.md`,
 A grown CART tree fits the training data too closely, so CART prunes it.
 Pruning has one parameter, alpha: the higher it is, the smaller the tree.
 `./tree` grows one tree on all training rows and prunes it at a fixed alpha
-(`--alpha X`, default 0.00001), as scikit-learn and rpart do. These are the
+(`--prune X`; the benchmarks use 0.00001), as scikit-learn and rpart do. These are the
 same steps as C4.5 (grow one tree, prune it), so the timings compare directly.
 Breiman et al. also describe choosing alpha by cross-validation; that is left
-to the caller (run `./tree` with several `--alpha` values and a test set).
+to the caller (run `./tree` with several `--prune` values and a test set).
 
 On covertype and SUSY with `--holdout 0.2` (the accuracy is on rows used for
-neither growing nor pruning; `--parallel`, 28 threads, i7-14700KF):
+neither growing nor pruning; `--multicore`, 28 threads, i7-14700KF):
 
 | Run | Nodes | Test accuracy | train total |
 |-----|------:|--------------:|------------:|
-| covertype CART `--no-prune` | 48,089 | 93.85% | 0.14 s |
-| covertype CART `--alpha 1e-4` | 987 | 81.52% | 0.14 s |
-| covertype CART (alpha 1e-5) | 9,721 | 91.61% | 0.14 s |
-| covertype C4.5 | 26,631 | 94.20% | 0.29 s |
-| SUSY CART `--no-prune` | 1,063,237 | 71.64% | 0.89 s |
-| SUSY CART `--alpha 1e-4` | 101 | 78.79% | 0.87 s |
-| SUSY CART (alpha 1e-5) | 769 | 79.58% | 0.89 s |
-| SUSY C4.5 | 13,889 | 79.63% | 1.03 s |
+| covertype CART (unpruned) | 48,089 | 93.85% | 0.14 s |
+| covertype CART `--prune 1e-4` | 987 | 81.52% | 0.14 s |
+| covertype CART `--prune 1e-5` | 9,721 | 91.61% | 0.14 s |
+| covertype C4.5 `--prune 0.25` | 26,631 | 94.20% | 0.29 s |
+| SUSY CART (unpruned) | 1,063,237 | 71.64% | 0.89 s |
+| SUSY CART `--prune 1e-4` | 101 | 78.79% | 0.87 s |
+| SUSY CART `--prune 1e-5` | 769 | 79.58% | 0.89 s |
+| SUSY C4.5 `--prune 0.25` | 13,889 | 79.63% | 1.03 s |
 
 ### Timings
 
@@ -164,7 +167,7 @@ Every run prints:
 | Line | What it measures |
 |------|------------------|
 | `load` | Reading the CSV (not part of training). |
-| `gpu setup` | `--cuda`: allocating and uploading to the GPU. |
+| `gpu setup` | `--gpu`, `--hybrid`: allocating and uploading to the GPU. |
 | `presort` | Sorting every feature column once (needed by all backends). |
 | `build` | Growing the tree. |
 | `prune` | Pruning. CART: cost-complexity pruning at the fixed alpha. C4.5: its threshold and collapse passes and error-based pruning. |

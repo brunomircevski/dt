@@ -313,7 +313,7 @@ struct Staging {
   static constexpr std::size_t kBytes = std::size_t{32} << 20;
   static constexpr std::size_t kCopyThreads = 32;
   // At least this many copy, even with fewer --threads: the copiers only run
-  // during copies. With --gpu-only --threads 1, 1G rows of chess uploaded
+  // during copies. With --gpu --threads 1, 1G rows of chess uploaded
   // in 0.67 s on the H100 node and 0.69 s on the A100 node, with 8 in 0.26
   // and 0.49 s (all threads: 0.19 and 0.48 s).
   static constexpr std::size_t kMinCopyThreads = 8;

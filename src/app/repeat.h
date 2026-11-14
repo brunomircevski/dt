@@ -29,7 +29,7 @@ void printRepeatWindow(const Options &options, std::size_t run, const TrainTimin
 // same process took up to 40% longer to set up, and so did a tree trained by
 // a process after forking). A child gets what a single run has when its timer
 // starts: the loaded data (shared with the parent), its own threads (fork
-// copies only the calling one) and, with --cuda, the CUDA context and the
+// copies only the calling one) and, with --gpu or --hybrid, the CUDA context and the
 // staging buffers. With --repeat-warmup S its threads spin for S seconds
 // first, as a single run's CSV load does right before its tree.
 //

@@ -37,20 +37,20 @@ for name in covertype supersymmetry; do
   fi
 done
 
-configs=("--cart --alpha 1e-4"
-         "--cart --alpha 1e-5 --holdout 0.3"
-         "--cart --no-prune"
-         "--cart --min-leaf 3 --no-prune"
-         "--cart -d 8 --alpha 0.001"
+configs=("--cart --prune 1e-4"
+         "--cart --prune 1e-5 --holdout 0.3"
+         "--cart"
+         "--cart --min-leaf 3"
+         "--cart -d 8 --prune 0.001"
+         "--c45 --prune 0.25"
+         "--c45 --prune 0.1 --min-leaf 5"
          "--c45"
-         "--c45 --cf 0.1 --min-leaf 5"
-         "--c45 --no-prune"
-         "--c45 -d 6 --holdout 0.3")
+         "--c45 -d 6 --prune 0.25 --holdout 0.3")
 
-backends=(--simple --serial --parallel "--parallel --threads 3")
-if "$TREE_BIN" --cuda -d 0 tests/data/iris.csv > /dev/null 2>&1; then
-  backends+=("--cuda --gpu-min-rows 2" "--cuda --gpu-min-rows 5000" "--cuda"
-             "--cuda --gpu-only --threads 1")
+backends=(--simple --serial --multicore "--multicore --threads 3")
+if "$TREE_BIN" --hybrid -d 0 tests/data/iris.csv > /dev/null 2>&1; then
+  backends+=("--hybrid --handoff-rows 2" "--hybrid --handoff-rows 5000" "--hybrid"
+             "--gpu" "--gpu --threads 1")
 fi
 
 slug() { echo "$*" | tr -s ' -' '_' | sed 's/^_//'; }
@@ -120,9 +120,9 @@ for dataset in "${datasets[@]}"; do
   half=$(((rows + 1) / 2))
   head -n $((half + 1)) "$dataset" > "$WORK/head.csv"
   for algorithm in --cart --c45; do
-    "$TREE_BIN" --parallel --threads 3 $algorithm --rows "$half" "$dataset" --dump "$WORK/a.txt" |
+    "$TREE_BIN" --multicore --threads 3 $algorithm --rows "$half" "$dataset" --dump "$WORK/a.txt" |
       grep 'rows ' > "$WORK/a.log"
-    "$TREE_BIN" --parallel --threads 3 $algorithm "$WORK/head.csv" --dump "$WORK/b.txt" |
+    "$TREE_BIN" --multicore --threads 3 $algorithm "$WORK/head.csv" --dump "$WORK/b.txt" |
       grep 'rows ' > "$WORK/b.log"
     if cmp -s "$WORK/a.txt" "$WORK/b.txt" && cmp -s "$WORK/a.log" "$WORK/b.log"; then
       result=ok

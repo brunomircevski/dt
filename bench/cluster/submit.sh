@@ -5,12 +5,12 @@
 # this is for single reruns. Results go to bench/results/cluster-<dataset>/
 # (ecbdl and ecbdl_15m in cluster-ecbdl, sorel and sorel_4m in cluster-sorel,
 # chess_* in cluster-chess):
-#   cuda-hopper-<data>     H100 PCIe, 2x Xeon Gold 6444Y     --cuda, every CPU
-#   cuda-ampere-<data>     A100 80GB PCIe, 2x EPYC 7402      --cuda, every CPU
-#   cpu-epyc-<data>        epyc1: 2x EPYC 9255               --parallel, 48 threads
-#   cpu-dell-<data>        dell1: 2x Xeon Gold 6542Y         --parallel, 48 threads
+#   cuda-hopper-<data>     H100 PCIe, 2x Xeon Gold 6444Y     --hybrid, every CPU
+#   cuda-ampere-<data>     A100 80GB PCIe, 2x EPYC 7402      --hybrid, every CPU
+#   cpu-epyc-<data>        epyc1: 2x EPYC 9255               --multicore, 48 threads
+#   cpu-dell-<data>        dell1: 2x Xeon Gold 6542Y         --multicore, 48 threads
 #   (only when named:)
-#   gpuonly-hopper-<data>, gpuonly-ampere-<data>             --cuda --gpu-only, every CPU
+#   gpuonly-hopper-<data>, gpuonly-ampere-<data>             --gpu, every CPU
 #   serial-epyc-<data>, serial-dell-<data>                   --serial, one thread
 #   simple-epyc-<data>, simple-dell-<data>                   --simple, one thread
 #   vs-epyc-<data>-<tool>-<algorithm>   scikit-learn (sklearn-cart) or Weka J48

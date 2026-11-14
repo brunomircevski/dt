@@ -54,10 +54,10 @@ bench/cluster/final.sh      # submit
 
 | Node | Jobs, in order | Runs | Expected |
 |---|---|---|---|
-| hopper, ampere | `--cuda` and `--gpu-only` on SUSY, HIGGS, MNIST8M, ECBDL'14 15M, SOREL 4M, chess 1M–1000M; then cuML and XGBoost (one tree, then the default forest of 10) on HIGGS and MNIST8M from `~/gpu-dt-bench` into `results-final/` | 10 | half a day each |
-| epyc1 | `--parallel` 48 threads on every dataset, thread scaling (HIGGS, MNIST8M), `--serial` on every dataset, `--simple` on all but ECBDL'14, SOREL and SOREL 4M | 10 | about 2.7 days |
+| hopper, ampere | `--hybrid` and `--gpu` on SUSY, HIGGS, MNIST8M, ECBDL'14 15M, SOREL 4M, chess 1M–1000M; then cuML and XGBoost (one tree, then the default forest of 10) on HIGGS and MNIST8M from `~/gpu-dt-bench` into `results-final/` | 10 | half a day each |
+| epyc1 | `--multicore` 48 threads on every dataset, thread scaling (HIGGS, MNIST8M), `--serial` on every dataset, `--simple` on all but ECBDL'14, SOREL and SOREL 4M | 10 | about 2.7 days |
 | epyc2 | scikit-learn and Weka J48 on HIGGS and MNIST8M (cluster-cpu-vs-others), then `--simple` on ECBDL'14, SOREL and SOREL 4M | 10; J48 on MNIST8M and `--simple` on full ECBDL'14 and SOREL 3 | about 3 days |
-| dell1 (dell-long) | `--parallel` 48 threads, thread scaling, `--serial`, then `--simple` on full SOREL | as epyc | about 2.5 days |
+| dell1 (dell-long) | `--multicore` 48 threads, thread scaling, `--serial`, then `--simple` on full SOREL | as epyc | about 2.5 days |
 | dell2, dell3 (dell-long) | `--simple` on ECBDL'14 and SOREL 4M (dell2), on the other datasets (dell3), moved there from dell1 on 2026-11-10 | as epyc | about 1.5 days |
 
 dell2 and dell3 have half of dell1's memory channels, but one thread does not
@@ -128,7 +128,7 @@ Two protocols, depth ≤ 10, no pruning: `cart_depth10` and
 `c45_depth10_unpruned`. (Until 2026-10-27 also `cart_depth10_alpha`, α = 1e-5,
 and `c45_depth10`, CF 0.25; those runs are in git at 96705a7.) Every dataset
 runs CUDA hybrid (`cuda-*`) and GPU only (`gpuonly-*`) on hopper and ampere, and
-on epyc and dell `--parallel` with 48 threads on both sockets (`cpu-*`),
+on epyc and dell `--multicore` with 48 threads on both sockets (`cpu-*`),
 `--serial` (`serial-*`) and `--simple` (`simple-*`); the chess sets too. Not
 run: the GPUs on full SOREL and full ECBDL (they do not fit in 80 GB of VRAM;
 the GPUs get `sorel_4m` and `ecbdl_15m`). Runs per case: 10, and 3 where one
@@ -157,8 +157,8 @@ The data and measurements are those of the other benchmarks
 
 | Backend | Command | Threads |
 |---|---|---|
-| Parallel (epyc1, dell1) | `./tree_cpu --parallel --threads N` | N = every CPU (48) |
-| CUDA (hopper, ampere) | `./tree --cuda --threads N` | one GPU, plus N CPU threads on both sockets (hopper 32, ampere 48) for the small subtrees and pruning |
+| Parallel (epyc1, dell1) | `./tree_cpu --multicore --threads N` | N = every CPU (48) |
+| CUDA (hopper, ampere) | `./tree --hybrid --threads N` | one GPU, plus N CPU threads on both sockets (hopper 32, ampere 48) for the small subtrees and pruning |
 
 - **Whole nodes.** SLURM on mordor3 hands out cores only: it tracks no GPUs
   (no GRES) and no memory. Every job therefore takes its node with

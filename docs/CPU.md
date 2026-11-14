@@ -53,7 +53,7 @@ Both children again own one range in every column, still sorted. Nothing is
 ever sorted twice, and each level of the tree costs `O(F · n)` (the SLIQ /
 SPRINT idea). Small nodes are partitioned in place with a small per-thread
 scratch buffer for the right rows; big nodes are partitioned out of place
-instead, with `--serial` as with `--parallel` (see Parallelism). The children's class counts come from the
+instead, with `--serial` as with `--multicore` (see Parallelism). The children's class counts come from the
 sweep of column `w` (it returns the counts left of its best cut); when both
 children are leaves anyway (pure, too small, at the depth limit — common at the
 bottom of the tree), steps 1–2 are skipped, and when one of them is, only the
@@ -163,7 +163,7 @@ One thread pool (`ThreadPool`), two kinds of work:
   target index with a mask, not a branch (an even split would mispredict
   every other row), and an entry moves as one 64-bit word. Children of
   4096+ rows are swept *during* the partition (`TwoClassSweep`, or
-  `KClassSweep` for more classes with `--parallel`, both resumable in
+  `KClassSweep` for more classes with `--multicore`, both resumable in
   pieces): each column passes
   through a small staging buffer per child (in L1) where the child's sweep
   reads it, so a big node's columns are read once per level instead of
@@ -174,7 +174,7 @@ One thread pool (`ThreadPool`), two kinds of work:
   goes. Their Gini sweeps (65536+ rows) divide instead of looking up `1/n` in
   the count tables, which are as large as the training set and cost more
   bandwidth than the entries when many threads read them.
-* **Nodes of 2^20+ rows with fewer free slots than threads** (`--parallel`)
+* **Nodes of 2^20+ rows with fewer free slots than threads** (`--multicore`)
   are partitioned in blocks of 16K
   entries by all threads instead of a column per thread, so that the few
   slots do not idle the threads: a block counts its left rows, takes the count
@@ -201,7 +201,7 @@ tasks without deadlocks.
 ## Memory
 
 The columns take `8 · (F + spare) · n` bytes: a slot per feature and `spare`
-more (see big nodes above). `--serial` has one spare slot. `--parallel` has
+more (see big nodes above). `--serial` has one spare slot. `--multicore` has
 `min(F − 1, threads)`: a big node then moves all
 its columns at once, a column per thread, with the children's sweeps fused
 in. Fewer spare slots save `8 · n` bytes each but make big nodes wait: on

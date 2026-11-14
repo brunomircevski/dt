@@ -1,6 +1,6 @@
 # ./tree against GPU tree libraries
 
-How `./tree --cuda` is compared with cuML and XGBoost, what is timed on each
+How `./tree --hybrid` is compared with cuML and XGBoost, what is timed on each
 side and where the comparison is not even. Results, settings and the scripts
 are in
 [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
@@ -37,8 +37,8 @@ cuML should confirm it before it is stated as fact.
 Both sides: float32 training data in host RAM → finished tree. Not timed on
 either side: reading the file, prediction, accuracy.
 
-**./tree:** its `train total`, a fresh process per run, `--cuda --cart|--c45
---no-prune -d 10` with the default threads. `train total = gpu setup + presort
+**./tree:** its `train total`, a fresh process per run, `--hybrid --cart|--c45
+-d 10` (unpruned) with the default threads. `train total = gpu setup + presort
 + build + prune` (printed by `src/app/main.cpp`):
 
 | Phase | Contents |
@@ -46,7 +46,7 @@ either side: reading the file, prediction, accuracy.
 | gpu setup | streams, device allocations, upload of columns and labels through the staging buffers |
 | presort | `(value, row \| class)` entries, CUB radix sort per feature (C4.5: distinct values); overlapped with the upload |
 | build | all GPU levels, hand-offs, the CPU threads finishing small subtrees, assembling the host tree |
-| prune | C4.5 only: collapse of useless splits and training-value thresholds (part of C4.5 even with `--no-prune`) |
+| prune | C4.5 only: collapse of useless splits and training-value thresholds (part of C4.5 even without `--prune`) |
 
 Not in it: CSV parsing; the CUDA context and the pinned staging buffers (4 ×
 32 MB for uploads, 2 × 128 MB for the hand-offs), both made on a background
@@ -100,7 +100,7 @@ tree has half the nodes or fewer). No public GPU C4.5 exists. Lead with CART.
   (the H100 and A100 run FP64 at half the FP32 rate). The lead over cuML comes
   from the data layout, the partition, the two-class tile bound and the
   CPU/GPU split. Consumer GPUs (FP64 about 64× slower) are not a target.
-* **./tree is a CPU + GPU hybrid:** nodes below `--gpu-min-rows` (CART
+* **./tree is a CPU + GPU hybrid:** nodes below `--handoff-rows` (CART
   rows / 8192 within [1024, 2048], C4.5 rows / 4096 within [1024, 4096]) go to
   the CPU. Report the GPU / CPU share and a thread sweep.
 * **Memory cost of exactness:** ./tree uses more VRAM than the libraries on
@@ -115,7 +115,7 @@ tree has half the nodes or fewer). No public GPU C4.5 exists. Lead with CART.
 
 ## Experiments still missing
 
-1. **Clean ablation** on one commit and machine: a `--gpu-min-rows` sweep, a `--threads`
+1. **Clean ablation** on one commit and machine: a `--handoff-rows` sweep, a `--threads`
    sweep (1 / 4 / 8 / all); the bitmap, fused next-level histograms, tile bound
    and asynchronous hand-off ring would need compile-time switches. Only the
    2026-10-28 changes were measured on one commit

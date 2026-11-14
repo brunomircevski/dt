@@ -8,7 +8,7 @@
 #   sbatch -p epyc --exclusive -o out.csv bench/cluster/tune.sh <case file> <reps>
 #
 # A case file has one case per line, "label | environment | arguments", e.g.
-#   cart-t48 | | ./tree_cpu --parallel --threads 48 --cart -d 30 --alpha 1e-5 bench/data/higgs/train.csv
+#   cart-t48 | | ./tree_cpu --multicore --threads 48 --cart -d 30 --prune 1e-5 bench/data/higgs/train.csv
 # Lines starting with # are skipped. Arguments may use $CORES (the node's CPUs).
 # TUNE_KEEP=1 also copies ./tree's output to stderr.
 

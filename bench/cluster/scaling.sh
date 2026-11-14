@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Thread scaling of ./tree on the two CPU nodes of mordor3, --parallel with
+# Thread scaling of ./tree on the two CPU nodes of mordor3, --multicore with
 # 1, 2, 4, then every 4 threads up to the node's 48 CPUs (1 thread: --serial).
 # One whole node per job (job.sh), both released together. Results:
 # bench/results/cluster-cpu-scaling/cpu-epyc-<data>/ and cpu-dell-<data>/.

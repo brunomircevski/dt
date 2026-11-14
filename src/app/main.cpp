@@ -180,15 +180,15 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   // default, lazy): 24 ms of an A100's or an RTX 2080 Ti's training setup
   // otherwise (`CUDA_MODULE_LOADING=LAZY` keeps the default). Set while this
   // process has one thread.
-  if (options.backend == Backend::Cuda) {
+  if (usesGpu(options.backend)) {
     setenv("CUDA_MODULE_LOADING", "EAGER", 0);
   }
-  if (options.backend == Backend::Cuda && !forks) {
+  if (usesGpu(options.backend) && !forks) {
     gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options));
   }
 
   // The calling thread works too, so threads - 1 workers. Loading and
-  // evaluation always use it; training only with --parallel / --cuda.
+  // evaluation always use it; training only with --multicore, --gpu and --hybrid.
   auto pool = std::make_unique<ThreadPool>(threadCount(options) - 1);
   const LoadedData data = loadData(options, *pool);
   printDataSummary(options, data);

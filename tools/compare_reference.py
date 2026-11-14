@@ -7,7 +7,8 @@
     python3 tools/compare_reference.py c45 datasets/iris.csv --c45 /path/to/c4.5
 
 Any other arguments are passed on to ./tree (e.g. -d 5, --min-leaf 3,
---cf 0.1); --min-leaf becomes c4.5's -m. Set TREE_BIN to use another binary (e.g. ./tree_cpu).
+--prune 0.1); --min-leaf becomes c4.5's -m and --prune CF its -c (the pruned
+C4.5 comparison runs ./tree with --prune 0.25, c4.5's default, without one). Set TREE_BIN to use another binary (e.g. ./tree_cpu).
 
 Both trees are walked together. Where they pick different splits, the impurity
 decrease of both splits is recomputed on the rows of that node: if it is equal,
@@ -150,15 +151,20 @@ def run_own(dataset, algorithm, extra, dump_path):
 
 
 def unpruned(extra):
-    """`extra` with --no-prune instead of its pruning options (./tree refuses both)."""
+    """`extra` without --prune and its value."""
     kept = []
     flags = iter(extra)
     for flag in flags:
-        if flag in ("--cf", "--alpha"):
+        if flag == "--prune":
             next(flags, None)  # its value
-        elif flag != "--no-prune":
+        else:
             kept.append(flag)
-    return kept + ["--no-prune"]
+    return kept
+
+
+def pruned(extra):
+    """`extra` with --prune: c4.5's default CF 0.25 unless it has one."""
+    return extra if "--prune" in extra else extra + ["--prune", "0.25"]
 
 
 def sklearn_tree(features, X, y, extra):
@@ -196,8 +202,8 @@ def c45_trees(features, X, y, c45_binary, workdir, extra):
     command = [os.path.abspath(c45_binary), "-f", os.path.basename(stem)]
     if "--min-leaf" in extra:
         command += ["-m", extra[extra.index("--min-leaf") + 1]]
-    if "--cf" in extra:
-        command += ["-c", f"{float(extra[extra.index('--cf') + 1]) * 100:g}"]
+    if "--prune" in extra:
+        command += ["-c", f"{float(extra[extra.index('--prune') + 1]) * 100:g}"]
     subprocess.run(command, capture_output=True, text=True, check=True, cwd=workdir)
     classes = sorted(set(y))
     return (read_c45_tree(stem + ".unpruned", features, classes),
@@ -253,7 +259,7 @@ def main():
             unpruned_ref, pruned_ref = c45_trees(features, X, y, args.c45, workdir, extra)
             pairs = [("C4.5 unpruned vs c4.5", run_own(args.dataset, "c45", unpruned(extra), dump),
                       unpruned_ref, "c45"),
-                     ("C4.5 pruned   vs c4.5", run_own(args.dataset, "c45", extra, dump),
+                     ("C4.5 pruned   vs c4.5", run_own(args.dataset, "c45", pruned(extra), dump),
                       pruned_ref, "c45")]
 
     failed = False

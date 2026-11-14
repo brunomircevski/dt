@@ -48,7 +48,7 @@ constexpr std::chrono::microseconds kSleepBetweenLooks{50};
 // Waits until value is not 0 and returns it. Not with atomic::wait(): libstdc++
 // (13) notifies only if it sees a waiter, and after a release store that check
 // can run before the store is visible (x86 lets a load pass an earlier store),
-// so the waiter slept on the old value for good (about 1 in 40 --parallel runs
+// so the waiter slept on the old value for good (about 1 in 40 --multicore runs
 // on 1G rows hung on a 48-thread Xeon). A seq_cst store closes that but waits for the
 // partition's streaming stores (ECBDL 15M C4.5 7% slower). So it spins briefly,
 // then yields its CPU (the thread it waits for may be descheduled, and 47
@@ -588,7 +588,7 @@ std::shared_ptr<const SlotMap> CpuTreeBuilder::partition(const Columns &columns,
     }
   }
   // In place, for nodes below kOutOfPlaceRows (and the GPU's hand-offs, below
-  // --gpu-min-rows): a per-thread buffer (stays in cache), one column per
+  // --handoff-rows): a per-thread buffer (stays in cache), one column per
   // thread for wide nodes.
   auto partitionOne = [&](std::size_t index) {
     thread_local std::vector<Entry> buffer;

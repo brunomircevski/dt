@@ -14,7 +14,7 @@
 # the other with afterany, so a failed or killed job does not stop the next),
 # the most important runs first, so the paper's core numbers come in first:
 #
-#   hopper, ampere  CUDA hybrid and --gpu-only on every dataset that fits in
+#   hopper, ampere  --hybrid and --gpu on every dataset that fits in
 #                   80 GB, then cuML and XGBoost (cluster-gpu-vs-others, the
 #                   harness in ~/gpu-dt-bench, copied from its scripts/)
 #   epyc1           parallel (48 threads), thread scaling, --serial, then the

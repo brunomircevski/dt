@@ -16,8 +16,9 @@ const char *backendName(Backend backend) {
   switch (backend) {
   case Backend::Simple: return "simple";
   case Backend::Serial: return "serial";
-  case Backend::Parallel: return "parallel";
-  case Backend::Cuda: return "cuda";
+  case Backend::Multicore: return "multicore";
+  case Backend::Gpu: return "gpu";
+  case Backend::Hybrid: return "hybrid";
   }
   return "unknown";
 }
@@ -44,13 +45,13 @@ unsigned threadCount(const Options &options) {
   return std::max(1u, std::thread::hardware_concurrency());
 }
 
-std::size_t gpuMinRows(const Options &options, std::size_t trainingRows) {
+std::size_t handoffRows(const Options &options, std::size_t trainingRows) {
   const GpuOptions &gpu = options.gpu;
-  if (gpu.only) {
+  if (options.backend == Backend::Gpu) {
     return 1;
   }
-  if (gpu.minRows > 0) {
-    return gpu.minRows;
+  if (gpu.handoffRows > 0) {
+    return gpu.handoffRows;
   }
   return options.algorithm == Algorithm::Cart
              ? std::clamp(trainingRows / GpuOptions::kAutoMinRowsShareCart,
@@ -61,48 +62,61 @@ std::size_t gpuMinRows(const Options &options, std::size_t trainingRows) {
 
 void printUsage(const char *program) {
   std::cout
-      << "Usage: " << program << " [options] [dataset.csv]\n"
+      << "Usage: " << program << " [options] dataset.csv\n"
       << "\n"
-      << "Backend:   --simple | --serial | --parallel | --cuda\n"
-      << "Algorithm: --cart | --c45\n"
+      << "Backend (default --multicore), the paper's five implementations:\n"
+      << "  --simple                 Serial Simple: one thread, the textbook algorithm\n"
+      << "  --serial                 Serial Optimized: one thread, presorted columns\n"
+      << "  --multicore              Multicore CPU: every CPU thread (see --threads)\n"
+      << "  --gpu                    GPU-Based: every node on the GPU (the CPU threads\n"
+      << "                           feed the GPU and prune)\n"
+      << "  --hybrid                 Hybrid: large nodes on the GPU, small subtrees on\n"
+      << "                           the CPU threads\n"
       << "\n"
-      << "Common:\n"
-      << "  -d, --max-depth N        depth limit (-1 = unlimited)\n"
+      << "Algorithm (default --cart):\n"
+      << "  --cart                   CART (Gini index)\n"
+      << "  --c45                    C4.5 (gain ratio)\n"
+      << "\n"
+      << "Tree:\n"
+      << "  -d, --max-depth N        depth limit (-1 = unlimited, the default)\n"
       << "  --min-leaf N             every child keeps at least N rows (default: 1 for\n"
       << "                           CART, 2 for C4.5)\n"
-      << "  --no-prune               keep the unpruned tree (pruning is on by default)\n"
+      << "  --prune X                prune the grown tree (default: no pruning).\n"
+      << "                           CART: cost-complexity pruning, X = alpha (>= 0,\n"
+      << "                           e.g. 0.00001). C4.5: error-based pruning with\n"
+      << "                           subtree raising, X = the confidence factor (in\n"
+      << "                           (0, 1); the c4.5 program's default is 0.25).\n"
+      << "                           Unpruned C4.5 still collapses splits that do not\n"
+      << "                           reduce the training errors.\n"
+      << "\n"
+      << "Data:\n"
       << "  --rows N                 use only the first N rows of dataset.csv\n"
       << "  --test FILE              test set: a CSV with the same header\n"
       << "  --test-last N            test set: the last N rows of the training file\n"
       << "  --holdout F              test set: a random fraction F of the rows\n"
       << "  --seed N                 random seed for the holdout split (default 1)\n"
+      << "\n"
+      << "Run:\n"
+      << "  --threads N              CPU threads for loading, evaluation and (multicore,\n"
+      << "                           gpu, hybrid) training (0 = every CPU it may run on)\n"
+      << "  --handoff-rows N         --hybrid: smaller nodes go to the CPU threads\n"
+      << "                           (default: training rows / " << GpuOptions::kAutoMinRowsShare
+      << ", between " << GpuOptions::kAutoMinRows << "\n"
+      << "                           and " << GpuOptions::kAutoMaxMinRows << "; CART: rows / "
+      << GpuOptions::kAutoMinRowsShareCart << ", between " << GpuOptions::kAutoMinRows
+      << " and " << GpuOptions::kAutoMaxMinRowsCart << ")\n"
+      << "\n"
+      << "Output:\n"
+      << "  --dump FILE              write the tree as text\n"
+      << "  --profile FILE           write where the training time goes as JSON: phases,\n"
+      << "                           thread time per kind of work, GPU kernels and copies\n"
+      << "\n"
+      << "Benchmarking (energy runs):\n"
       << "  --repeat N               train N trees in a row on the loaded data, each one\n"
       << "                           as a fresh process's only tree, and print each one's\n"
-      << "                           time and Unix start/end (energy runs)\n"
+      << "                           time and Unix start/end\n"
       << "  --repeat-warmup S        with --repeat: keep the threads busy for S seconds\n"
-      << "                           before each tree (as the CSV load does)\n"
-      << "  --threads N              CPU threads (0 = every CPU it may run on)\n"
-      << "  --dump FILE              write the tree as text\n"
-      << "\n"
-      << "CART (default: cost-complexity pruning with a fixed alpha):\n"
-      << "  --alpha X                cost-complexity parameter (default 0.00001)\n"
-      << "\n"
-      << "C4.5 (default: error-based pruning with CF 0.25 and subtree raising):\n"
-      << "  --cf X                   pruning confidence factor\n"
-      << "\n"
-      << "Cuda:\n"
-      << "  --gpu-min-rows N         smaller nodes go to the CPU pool (default: training\n"
-      << "                           rows / " << GpuOptions::kAutoMinRowsShare << ", between "
-      << GpuOptions::kAutoMinRows << " and " << GpuOptions::kAutoMaxMinRows << ";\n"
-      << "                           CART: rows / " << GpuOptions::kAutoMinRowsShareCart
-      << ", between " << GpuOptions::kAutoMinRows << " and "
-      << GpuOptions::kAutoMaxMinRowsCart << ")\n"
-      << "  --gpu-only               grow every node on the GPU, no hand-offs to the CPU\n"
-      << "                           (the CPU threads still feed the GPU and prune)\n"
-      << "\n"
-      << "Profiling:\n"
-      << "  --profile FILE           write where the training time goes as JSON: phases,\n"
-      << "                           thread time per kind of work, GPU kernels and copies\n";
+      << "                           before each tree (as the CSV load does)\n";
 }
 
 namespace {
@@ -175,10 +189,9 @@ std::vector<std::string> givenOf(const std::set<std::string> &given,
 // contradict each other, is an error rather than silently dropped. Checked
 // once every flag is read, so their order does not matter.
 void checkFlagCombination(const Options &options, const std::set<std::string> &given) {
-  for (const auto &group : {givenOf(given, {"--simple", "--serial", "--parallel", "--cuda"}),
-                            givenOf(given, {"--cart", "--c45"}),
-                            givenOf(given, {"--no-prune", "--alpha"}),
-                            givenOf(given, {"--no-prune", "--cf"})}) {
+  for (const auto &group :
+       {givenOf(given, {"--simple", "--serial", "--multicore", "--gpu", "--hybrid"}),
+        givenOf(given, {"--cart", "--c45"})}) {
     if (group.size() > 1) {
       throw std::runtime_error("Options " + group[0] + " and " + group[1] +
                                " contradict each other; give only one");
@@ -191,16 +204,8 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
       throw std::runtime_error("Option " + found[0] + " " + reason);
     }
   };
-  if (options.algorithm == Algorithm::C45) {
-    refuse({"--alpha"}, "is for CART; C4.5 prunes with --cf");
-  } else {
-    refuse({"--cf"}, "is for C4.5; CART prunes with --alpha");
-  }
-  if (options.backend != Backend::Cuda) {
-    refuse({"--gpu-min-rows", "--gpu-only"}, "is for --cuda only");
-  }
-  if (options.gpu.only) {
-    refuse({"--gpu-min-rows"}, "contradicts --gpu-only (no node goes to the CPU)");
+  if (options.backend != Backend::Hybrid) {
+    refuse({"--handoff-rows"}, "is for --hybrid only");
   }
 }
 
@@ -221,23 +226,25 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.backend = Backend::Simple;
     } else if (arg == "--serial") {
       options.backend = Backend::Serial;
-    } else if (arg == "--parallel") {
-      options.backend = Backend::Parallel;
-    } else if (arg == "--cuda") {
-      options.backend = Backend::Cuda;
+    } else if (arg == "--multicore") {
+      options.backend = Backend::Multicore;
+    } else if (arg == "--gpu") {
+      options.backend = Backend::Gpu;
+    } else if (arg == "--hybrid") {
+      options.backend = Backend::Hybrid;
     } else if (arg == "--cart") {
       options.algorithm = Algorithm::Cart;
     } else if (arg == "--c45") {
       options.algorithm = Algorithm::C45;
     } else if (arg == "-d" || arg == "--max-depth") {
       options.maxDepth = static_cast<int>(parseInteger(arg, args.value(arg), -1));
-    } else if (arg.rfind("-d", 0) == 0 && arg.size() > 2 && arg[2] != '-') {
-      options.maxDepth = static_cast<int>(parseInteger("-d", arg.substr(2), -1));
     } else if (arg == "--min-leaf") {
       options.minLeaf = static_cast<std::size_t>(parseInteger(arg, args.value(arg), 1));
-    } else if (arg == "--no-prune") {
-      options.cart.prune = false;
-      options.c45.prune = false;
+    } else if (arg == "--prune") {
+      // One value for both algorithms; the chosen one reads its own.
+      const double value = parseReal(arg, args.value(arg));
+      options.cart.prune = options.c45.prune = true;
+      options.cart.alpha = options.c45.confidence = value;
     } else if (arg == "--repeat") {
       options.repeat = parseCount(arg, args.value(arg));
     } else if (arg == "--repeat-warmup") {
@@ -258,21 +265,19 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.dumpPath = args.value(arg);
     } else if (arg == "--profile") {
       options.profilePath = args.value(arg);
-    } else if (arg == "--alpha") {
-      options.cart.prune = true;
-      options.cart.alpha = parseReal(arg, args.value(arg));
-    } else if (arg == "--cf") {
-      options.c45.prune = true;
-      options.c45.confidence = parseReal(arg, args.value(arg));
-    } else if (arg == "--gpu-min-rows") {
-      options.gpu.minRows = parseCount(arg, args.value(arg));
-    } else if (arg == "--gpu-only") {
-      options.gpu.only = true;
+    } else if (arg == "--handoff-rows") {
+      options.gpu.handoffRows = parseCount(arg, args.value(arg));
     } else if (!arg.empty() && arg[0] == '-') {
       throw std::runtime_error("Unknown option: " + arg);
+    } else if (!options.datasetPath.empty()) {
+      throw std::runtime_error("Two datasets given: " + options.datasetPath + " and " + arg);
     } else {
       options.datasetPath = arg;
     }
+  }
+  if (options.datasetPath.empty()) {
+    throw std::runtime_error("No dataset given (" + std::string(argv[0]) +
+                             " [options] dataset.csv; --help lists the options)");
   }
   checkFlagCombination(options, given);
   return true;
@@ -293,11 +298,11 @@ void validateOptions(const Options &options) {
   }
   if (options.algorithm == Algorithm::Cart) {
     if (options.cart.prune && options.cart.alpha < 0.0) {
-      throw std::runtime_error("CART: --alpha must be >= 0");
+      throw std::runtime_error("CART: --prune (alpha) must be >= 0");
     }
   } else {
-    if (options.c45.confidence <= 0.0 || options.c45.confidence >= 1.0) {
-      throw std::runtime_error("C4.5: --cf must be in (0, 1)");
+    if (options.c45.prune && (options.c45.confidence <= 0.0 || options.c45.confidence >= 1.0)) {
+      throw std::runtime_error("C4.5: --prune (confidence factor) must be in (0, 1)");
     }
   }
 }

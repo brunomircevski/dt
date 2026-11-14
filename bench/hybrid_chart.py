@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The hybrid-vs-gpu-only chart: ./tree --cuda (hybrid: nodes below
---gpu-min-rows go to the CPU threads) against ./tree --cuda --gpu-only (every
+"""The hybrid-vs-gpu-only chart: ./tree --hybrid (nodes below
+--handoff-rows go to the CPU threads) against ./tree --gpu (every
 node on the GPU), on one GPU node, grown to depth 5, 10, 15, 20, 25, 30 and
 without a depth limit, no pruning. One panel per dataset, one group of bars per
 depth: CART hybrid, CART GPU only, C4.5 hybrid, C4.5 GPU only. A bar is the
 mean training time of its runs, the whisker from the fastest to
 the slowest; above each pair, GPU only / hybrid; under each group, the trees'
-nodes. The --gpu-min-rows each dataset ran with comes from
+nodes. The --handoff-rows each dataset ran with comes from
 <dir>/sweep/<node>-<dataset>.json ({"min_rows": N, ...}), written by the sweep
 (bench/cluster/hybrid_vs_gpu_only.sh).
 
@@ -43,8 +43,9 @@ def protocol(algorithm, depth):
 
 
 def min_rows(rows):
-    """The --gpu-min-rows values in these result rows' commands (empty: ./tree's default)."""
-    return sorted({int(m.group(1)) for r in rows if (m := re.search(r"--gpu-min-rows (\d+)", r.get("command", "")))})
+    """The --handoff-rows (before: --gpu-min-rows) values in these result rows' commands
+    (empty: ./tree's default)."""
+    return sorted({int(m.group(1)) for r in rows if (m := re.search(r"--(?:handoff-rows|gpu-min-rows) (\d+)", r.get("command", "")))})
 
 
 def tint(color, alpha):
@@ -123,7 +124,7 @@ def panel(ax, dataset, entry, sweep):
              if any_row else "")
     title = f"{NAMES.get(dataset, dataset)}: {shape}"
     if m:
-        title += f"; hybrid at --gpu-min-rows {m['min_rows']:,}"
+        title += f"; hybrid at --handoff-rows {m['min_rows']:,}"
         low = min_rows([r for (b, p), v in rows.items() if b == "cuda"
                         for r in v if p in {protocol(a, d) for a in ALGORITHMS for d in DEPTHS[:2]}])
         if low and low != [m["min_rows"]]:
@@ -191,11 +192,11 @@ def main():
     details = (
         f"{where} Runs per case: "
         f"{'/'.join(map(str, reps))}; bar = mean training time (load excluded), whisker = fastest to slowest.\n"
-        "Hybrid (--cuda): nodes with fewer rows than --gpu-min-rows are copied to the host and grown by the CPU "
-        "threads while the GPU goes on with the next level. GPU only (--cuda --gpu-only): every node, down to the "
+        "Hybrid (--hybrid): nodes with fewer rows than --handoff-rows are copied to the host and grown by the CPU "
+        "threads while the GPU goes on with the next level. GPU only (--gpu): every node, down to the "
         "leaves, on the GPU.\n"
         "Above each pair: GPU-only time / hybrid time (above 1: hybrid faster). Under each group: the tree's nodes "
-        "(the same in both modes). --gpu-min-rows: the fastest value of a sweep on this node (BENCHMARK.md).")
+        "(the same in both modes). --handoff-rows: the fastest value of a sweep on this node (BENCHMARK.md).")
     fig.text(0.06, 0.012, details, fontsize=7.8, color=MUTED, va="bottom", wrap=True)
     fig.tight_layout(rect=(0.02, 0.09, 1, 0.94), h_pad=3)
     out = args.folder / f"chart-{args.node}.png"

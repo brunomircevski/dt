@@ -9,9 +9,9 @@ code (`src/algo/cart_pruning.cpp`, `src/algo/c45_pruning.cpp`).
 `--simple` is the textbook algorithm: at every node, for every feature, it
 sorts the node's row ids by value (`std::sort`), scores every allowed cut with
 `cutGain`, keeps the best by the `kTieEps` rule and splits the row list into
-two new lists, recursively. `--serial` is the `--parallel` algorithm
+two new lists, recursively. `--serial` is the `--multicore` algorithm
 ([CPU.md](CPU.md)) on one thread. `tests/check.sh` runs `--simple`,
-`--serial` and `--parallel` against `tests/golden/`, and all match.
+`--serial` and `--multicore` against `tests/golden/`, and all match.
 
 This page lists every difference, why it is faster and why the tree is still
 the same. The effects are expected from the complexity alone: **none of the

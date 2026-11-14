@@ -28,8 +28,8 @@ for ((round = 1; round <= ROUNDS; ++round)); do
     for ((k = 0; k < n; ++k)); do
       v="${variants[$(( (k + round - 1) % n ))]}"
       IFS='|' read -r label bin vargs prefix <<< "$v"
-      args="$cargs"  # --gpu-min-rows contradicts --gpu-only
-      [[ " $vargs " != *" --gpu-only "* ]] || args="$(sed -E 's/--gpu-min-rows [0-9]+//' <<< "$cargs")"
+      args="$cargs"  # --handoff-rows is for --hybrid only
+      [[ " $vargs " == *" --hybrid "* ]] || args="$(sed -E 's/--handoff-rows [0-9]+//' <<< "$cargs")"
       log="$OUT/out/$label-$cname-r$round.txt"
       dump="$OUT/out/$label-$cname-r$round.tree"
       # shellcheck disable=SC2086

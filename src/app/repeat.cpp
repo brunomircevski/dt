@@ -33,7 +33,7 @@ void warmUp(const Options &options, ThreadPool &threads) {
 // What a child has before its tree: its own pool, the CUDA context, the warm-up.
 std::unique_ptr<ThreadPool> prepareChild(const Options &options) {
   auto pool = std::make_unique<ThreadPool>(threadCount(options) - 1);
-  if (options.backend == Backend::Cuda) {
+  if (usesGpu(options.backend)) {
     gpuPrepare(threadCount(options));
   }
   warmUp(options, *pool);

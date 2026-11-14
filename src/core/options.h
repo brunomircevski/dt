@@ -13,27 +13,36 @@ enum class Algorithm {
   C45   // Quinlan 1993 (Release 8): gain ratio, MDL threshold cost, EBP pruning
 };
 
-// Where the tree is grown.
+// Where the tree is grown: the paper's five implementations.
 enum class Backend {
-  Simple,   // one thread, textbook algorithm without optimizations (reference)
-  Serial,   // one thread; the optimized algorithm
-  Parallel, // CPU thread pool (feature- and node-level parallelism)
-  Cuda      // GPU for large nodes (breadth-first), CPU pool for small subtrees
+  Simple,    // Serial Simple: one thread, the textbook algorithm (reference)
+  Serial,    // Serial Optimized: one thread, the optimized algorithm
+  Multicore, // Multicore CPU: thread pool (feature- and node-level parallelism)
+  Gpu,       // GPU-Based: every node on the GPU (breadth-first)
+  Hybrid     // Hybrid: GPU for large nodes, CPU pool for small subtrees
 };
+
+// The backends that grow on the GPU (--gpu, --hybrid).
+inline bool usesGpu(Backend backend) {
+  return backend == Backend::Gpu || backend == Backend::Hybrid;
+}
 
 // CART always uses the Gini index, as in Breiman et al.
 struct CartOptions {
   // Minimal cost-complexity pruning with a fixed alpha, as scikit-learn
   // (ccp_alpha) and rpart (cp) do: the smallest subtree minimising
   // R(T) + alpha * |leaves(T)|, R(T) = training misclassification rate.
-  bool prune = true;
-  double alpha = 0.00001;
+  // Off unless --prune ALPHA is given.
+  bool prune = false;
+  double alpha = 0.0;
 };
 
-// Defaults match the original c4.5 program (-c 25, subtree raising).
+// Error-based pruning with subtree raising, as the original c4.5 program
+// (its default -c 25 is --prune 0.25). Off unless --prune CF is given; an
+// unpruned C4.5 tree still collapses splits that do not reduce the errors.
 struct C45Options {
-  bool prune = true;        // error-based pruning with subtree raising
-  double confidence = 0.25; // -c 25
+  bool prune = false;
+  double confidence = 0.25; // the confidence factor (CF)
 };
 
 struct ParallelOptions {
@@ -48,9 +57,9 @@ struct ParallelOptions {
 };
 
 struct GpuOptions {
-  // Nodes with fewer rows are copied back and finished by the CPU pool while
-  // the GPU keeps working on the large nodes of the next level. 0 = auto
-  // (gpuMinRows()): the training rows / kAutoMinRowsShare, between
+  // --hybrid: nodes with fewer rows are handed off (copied back and finished by
+  // the CPU pool) while the GPU keeps working on the large nodes of the next
+  // level. 0 = auto (handoffRows()): the training rows / kAutoMinRowsShare, between
   // kAutoMinRows and kAutoMaxMinRows (CART: rows / kAutoMinRowsShareCart,
   // between kAutoMinRows and kAutoMaxMinRowsCart).
   // A GPU level costs about the same for a thousand mid-size nodes as for a
@@ -58,25 +67,24 @@ struct GpuOptions {
   // but not much: measured on an H100 (32 CPU cores) and an A100 (48), C4.5
   // was best at about 2.5K rows on 10.5M rows and at 4K on 115M; CART, whose
   // CPU subtrees are few, at 1-2.5K and 2K.
-  std::size_t minRows = 0;
+  std::size_t handoffRows = 0;
   static constexpr std::size_t kAutoMinRows = 1024;
   static constexpr std::size_t kAutoMaxMinRows = 4096;
   static constexpr std::size_t kAutoMinRowsShare = 4096;
   static constexpr std::size_t kAutoMaxMinRowsCart = 2048;
   static constexpr std::size_t kAutoMinRowsShareCart = 8192;
-  // Grow every node on the GPU: no hand-offs to the CPU, and no host arena
-  // for them (C4.5's pruning allocates it when it needs it). With --threads 1
-  // the CPU side is one thread (the staged copies too).
-  bool only = false;
+  // --gpu grows every node on the GPU: no hand-offs to the CPU, and no host
+  // arena for them (C4.5's pruning allocates it when it needs it). With
+  // --threads 1 the CPU side is one thread (the staged copies too).
 };
 
 struct Options {
-  std::string datasetPath = "datasets/covertype.csv";
+  std::string datasetPath; // required
   // --rows N: only the training file's first N rows (0 = all), e.g. sorel_4m
   // from SOREL's CSV without a copy of its first 4M rows. --test-last and
   // --holdout then split these rows.
   std::size_t rows = 0;
-  Backend backend = Backend::Parallel;
+  Backend backend = Backend::Multicore;
   Algorithm algorithm = Algorithm::Cart;
 
   // The test set, at most one of these three (none: no test accuracy):
@@ -125,9 +133,10 @@ const char *algorithmName(Algorithm algorithm);
 // Threads to use (options.parallel.threads, or every CPU the process may run on).
 unsigned threadCount(const Options &options);
 
-// --cuda: nodes with fewer rows go to the CPU (options.gpu.minRows, or the
-// automatic value for this many training rows; 1 with --gpu-only).
-std::size_t gpuMinRows(const Options &options, std::size_t trainingRows);
+// GPU backends: nodes with fewer rows go to the CPU (--hybrid:
+// options.gpu.handoffRows, or the automatic value for this many training
+// rows; --gpu: 1, none).
+std::size_t handoffRows(const Options &options, std::size_t trainingRows);
 
 // Parse argv on top of `options`. Throws std::runtime_error on bad input.
 // Returns false if --help was requested.

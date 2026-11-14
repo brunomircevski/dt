@@ -392,7 +392,7 @@ def chart_gpu(cases, protocols, meta, out):
         ax.set_ylim(y - 0.6, -0.4)
         ax.set_xlim(0, top * 1.3)
         ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g} s"))
-    title(fig, inches, f"./tree --cuda on {NAMES.get(meta[0], meta[0])}: GPU kernels and copies "
+    title(fig, inches, f"./tree --hybrid on {NAMES.get(meta[0], meta[0])}: GPU kernels and copies "
           "during training")
     handles = ([Patch(color=kernel_palette[k], label=f"kernel · {label}") for k, label in KERNELS]
                + [Patch(color=copy_palette[k], label=f"copy · {label}") for k, label in COPIES]

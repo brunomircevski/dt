@@ -9,7 +9,7 @@
 #   sbatch -p dell -w dell4 --exclusive -t 8:00:00 -J pwr-dell \
 #     -o bench/results/power/dell/job.log bench/power/power_bench.sh cpu bench/results/power/dell
 #
-# gpu: Hybrid (--cuda) and GPU (--cuda --gpu-only) on GPU 0 with the 24 CPUs and
+# gpu: Hybrid (--hybrid) and GPU (--gpu) on GPU 0 with the 24 CPUs and
 #      the memory of its NUMA node, as in the cluster benchmarks; RAPL is read with
 #      perf (ampere allows it to users).
 # cpu: Serial-Simple (--simple), Serial-Opt (--serial) and Parallel on all cores.
@@ -74,7 +74,7 @@ GPU_MEM=${GPU_MEM:-0}
 GPU_THREADS=${GPU_THREADS:-24}
 WARMUP=${WARMUP:-15}
 ALGOS=${ALGOS:-cart c45}
-PROTOCOL=(--no-prune -d 10)
+PROTOCOL=(-d 10)
 mkdir -p "$OUT/out"
 now() { date +%s.%N | cut -c1-17; }
 mark() { echo "$(now) $*" >> "$OUT/markers.txt"; }
@@ -95,12 +95,12 @@ done
 
 command_of() { # impl -> the command line before the algorithm flags
   case $1 in
-    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --cuda --threads $GPU_THREADS --repeat-warmup $WARMUP" ;;
-    gpuonly) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --cuda --gpu-only --threads $GPU_THREADS --repeat-warmup $WARMUP" ;;
+    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --hybrid --threads $GPU_THREADS --repeat-warmup $WARMUP" ;;
+    gpuonly) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --gpu --threads $GPU_THREADS --repeat-warmup $WARMUP" ;;
     # --threads 0: loading and evaluation use every core; training is one thread
     simple) echo "./tree_cpu --simple --threads 0" ;;
     serial) echo "./tree_cpu --serial --threads 0" ;;
-    parallel) echo "./tree_cpu --parallel --threads 0" ;;
+    parallel) echo "./tree_cpu --multicore --threads 0" ;;
   esac
 }
 

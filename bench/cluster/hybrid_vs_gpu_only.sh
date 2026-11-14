@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The hybrid-vs-gpu-only benchmark on one GPU node, as one SLURM job: for each
-# dataset, first a sweep of the hybrid's --gpu-min-rows (no depth limit, CART
+# dataset, first a sweep of the hybrid's --handoff-rows (no depth limit, CART
 # and C4.5 unpruned), then the depth runs, hybrid at the sweep's fastest value
 # and GPU only, each through job.sh (the same GPU and threads, every CPU of the node).
 # Submit it from the repository root:
@@ -40,7 +40,7 @@ run() {  # <dir> <name> <dataset> <impls> <runs> <protocols> [RUN_EXTRA]
 }
 for dataset in $DATASETS; do
   for value in $VALUES; do
-    extra=; [ "$value" = default ] || extra="--gpu-min-rows $value"
+    extra=; [ "$value" = default ] || extra="--handoff-rows $value"
     run "$DIR/sweep" "cuda-$NODE-$dataset-mr$value" "$dataset" tree_cuda "$SWEEP_RUNS" "$SWEEP_PROTOCOLS" "$extra"
   done
   best="$("$PY" - "bench/results/$DIR/sweep" "$NODE" "$dataset" $VALUES <<'EOF'
@@ -66,11 +66,11 @@ best = min(numeric, key=score.get)
 print(best)
 EOF
 )" || { echo "  no sweep result for $dataset, skipping its depth runs"; failed+=("$dataset"); continue; }
-  echo "$(date '+%F %T')  $dataset: --gpu-min-rows $best"
-  run "$DIR" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS" "--gpu-min-rows $best"
+  echo "$(date '+%F %T')  $dataset: --handoff-rows $best"
+  run "$DIR" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS" "--handoff-rows $best"
   run "$DIR" "gpuonly-$NODE-$dataset" "$dataset" tree_gpu_only "$RUNS" "$PROTOCOLS"
   if [[ " $PROFILE_DATASETS " == *" $dataset "* ]]; then
-    run "$DIR/profile" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS" "--gpu-min-rows $best --profile"
+    run "$DIR/profile" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS" "--handoff-rows $best --profile"
     run "$DIR/profile" "gpuonly-$NODE-$dataset" "$dataset" tree_gpu_only "$RUNS" "$PROTOCOLS" "--profile"
   fi
 done

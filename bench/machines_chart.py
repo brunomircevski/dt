@@ -47,7 +47,7 @@ from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 
 # Categorical slots 1-3 of the reference palette (validated all-pairs, CVD dE
 # >= 9.2); slot 3 is below 3:1 on white, so every bar carries a value label.
-# Slot 4 for ./tree --cuda --gpu-only (every node on the GPU, the CPU threads feed it and prune),
+# Slot 4 for ./tree --gpu (every node on the GPU, the CPU threads feed it and prune),
 # purple for the parallel backend on one socket of a two-socket node (socket-* runs).
 COLORS = {"serial": "#2a78d6", "parallel": "#eb6834", "socket": "#8e5bd0", "cuda": "#1baf7a",
           "gpu_only": "#eda100"}
@@ -139,7 +139,7 @@ def bars(run, reference):
     out = []
     for protocol in PROTOCOLS:
         # single: one thread only (serial), or every thread count but 1; None: any
-        # (--gpu-only ran on one thread until 3ccf4ba, on all the GPU's CPUs since).
+        # (the GPU-only runs ran on one thread until 3ccf4ba, on all the GPU's CPUs since).
         for impl, single in (("tree", True), ("tree", False), ("tree_cuda", False),
                              ("tree_gpu_only", None)):
             ok = [r for r in rows if r["kind"] == "run" and r["status"] == "ok"

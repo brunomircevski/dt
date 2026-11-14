@@ -41,9 +41,9 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
               .count();
     }
   } trainEnd{timings};
-  if (options.backend == Backend::Cuda) {
+  if (usesGpu(options.backend)) {
     if (!pool) {
-      throw std::logic_error("The Cuda backend needs a thread pool");
+      throw std::logic_error("The GPU backends need a thread pool");
     }
     trace::Phase phase("gpu setup");
     trace::Doing doing(trace::Work::GpuHost);
@@ -81,7 +81,7 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
         std::cout << "  unpruned: " << tree.nodeCount() << " nodes\n";
       }
       const RowArranger arranger = [&](auto... args) { return grower->arrangeRows(args...); };
-      // (--gpu-only allocates the workspace when asked for it)
+      // (--gpu allocates the workspace when asked for it)
       const std::span<std::byte> workspace = c45PruneUsesRowMajor(train.featureCount())
                                                  ? grower->workspace()
                                                  : std::span<std::byte>{};

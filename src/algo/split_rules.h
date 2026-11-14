@@ -41,7 +41,7 @@ public:
 
   // True if the node must become a leaf without looking for a split.
   //   Both: pure, at the depth limit, or too few rows for two children.
-  //   CART with a fixed alpha (--alpha): fewer training errors than
+  //   CART with a fixed alpha (--prune ALPHA): fewer training errors than
   //   alpha * rowCount. Cost-complexity pruning would cut any subtree of
   //   such a node back to the node: a leaf costs errors + alpha * rowCount,
   //   a subtree at least 2 * alpha * rowCount (two leaves). The pruned tree
