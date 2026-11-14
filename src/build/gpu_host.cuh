@@ -12,12 +12,14 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <pthread.h>
 #include <sched.h>
 #include <stdexcept>
+#include <sys/mman.h>
 #include <string>
 #include <thread>
 #include <vector>
@@ -35,6 +37,106 @@
 namespace dt {
 
 namespace {
+
+// A growable host array that is page-locked as it grows, in place: its
+// address range is reserved once, and each growth makes the next part usable
+// and page-locks (cudaHostRegister) only that part. Nothing is copied or
+// freed until the buffer goes, so a buffer that grows level by level costs
+// about its largest size, page-locked once. (std::vector with page-locked
+// memory kept every outgrown copy until the end: 1.1 GB more for a GPU-only
+// HIGGS tree; freeing them, 0.3 ms per MB in cudaFreeHost.) Elements are
+// trivially copyable and resize() leaves new ones uninitialised. The copies
+// go range by range (copyRanges()): one page-locked range is one copy.
+template <typename T> class PinnedBuffer {
+public:
+  PinnedBuffer() = default;
+  PinnedBuffer(const PinnedBuffer &) = delete;
+  PinnedBuffer &operator=(const PinnedBuffer &) = delete;
+  ~PinnedBuffer() {
+    for (const Range &range : ranges_) {
+      if (range.locked) {
+        cudaHostUnregister(base_ + range.begin);
+      }
+    }
+    if (base_) {
+      munmap(base_, kReserve);
+    }
+  }
+
+  std::size_t size() const { return size_; }
+  bool empty() const { return size_ == 0; }
+  T *data() { return reinterpret_cast<T *>(base_); }
+  const T *data() const { return reinterpret_cast<const T *>(base_); }
+  T &operator[](std::size_t index) { return data()[index]; }
+  const T &operator[](std::size_t index) const { return data()[index]; }
+  T *begin() { return data(); }
+  T *end() { return data() + size_; }
+  const T *begin() const { return data(); }
+  const T *end() const { return data() + size_; }
+
+  void resize(std::size_t count) {
+    reserve(count);
+    size_ = count;
+  }
+
+  void reserve(std::size_t count) {
+    const std::size_t bytes = count * sizeof(T);
+    if (bytes <= committed_) {
+      return;
+    }
+    if (!base_) {
+      void *memory = mmap(nullptr, kReserve, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE,
+                          -1, 0);
+      if (memory == MAP_FAILED) {
+        throw std::bad_alloc();
+      }
+      base_ = static_cast<char *>(memory);
+      // Page-locking faults the pages in first: with huge pages 4x faster
+      // (RTX 2080 Ti node: 256 MB in 28 ms instead of 124 ms).
+      madvise(base_, kReserve, MADV_HUGEPAGE);
+    }
+    // Half again as much (fewer ranges), in whole 64 KiB: the first level's
+    // buffers are small, and each range costs about 0.5 ms per MB of 4 KiB
+    // pages (a 2 MiB first range for each of them made the root level of a
+    // hybrid HIGGS tree 40 ms longer).
+    constexpr std::size_t kGrain = std::size_t{64} << 10;
+    const std::size_t wanted = std::max(bytes + bytes / 2, kGrain);
+    const std::size_t target = std::min(kReserve, (wanted + kGrain - 1) / kGrain * kGrain);
+    if (bytes > target ||
+        mprotect(base_ + committed_, target - committed_, PROT_READ | PROT_WRITE) != 0) {
+      throw std::bad_alloc();
+    }
+    const bool locked = cudaHostRegister(base_ + committed_, target - committed_,
+                                         cudaHostRegisterDefault) == cudaSuccess;
+    if (!locked) {
+      (void)cudaGetLastError(); // stays pageable: slower copies, same results
+    }
+    ranges_.push_back({committed_, target, locked});
+    committed_ = target;
+  }
+
+  // copy(offset, bytes) for each page-locked range of the first `bytes`.
+  template <typename Copy> void copyRanges(std::size_t bytes, Copy &&copy) const {
+    for (const Range &range : ranges_) {
+      if (range.begin >= bytes) {
+        break;
+      }
+      copy(range.begin, std::min(range.end, bytes) - range.begin);
+    }
+  }
+
+private:
+  static constexpr std::size_t kReserve = std::size_t{1} << 40; // address space only
+  struct Range {
+    std::size_t begin;
+    std::size_t end;
+    bool locked;
+  };
+  char *base_ = nullptr;
+  std::size_t size_ = 0;
+  std::size_t committed_ = 0;
+  std::vector<Range> ranges_;
+};
 
 template <typename T> class DeviceArray {
 public:

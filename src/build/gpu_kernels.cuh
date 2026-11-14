@@ -20,6 +20,8 @@ namespace {
 constexpr int kThreads = 256;
 constexpr int kItems = 8; // entries per thread in a tile
 constexpr std::uint32_t kTile = kThreads * kItems;
+constexpr int kWarps = kThreads / 32;
+constexpr int kWarpSteps = kTile / kThreads; // 32-entry steps per warp
 constexpr int kMaxGpuClasses = 64;
 
 // One (node, feature) column range.
@@ -390,38 +392,86 @@ __device__ __forceinline__ bool tileRuledOut(const double *tileUpper, const doub
 }
 
 // ---------------------------------------------------------------------------
-// 2. Exclusive scan over the tiles of each segment (one block per segment),
-// `width` values per tile.
+// 2. Exclusive scan over the tiles of each segment, `width` values per tile.
 // ---------------------------------------------------------------------------
+// The per-segment kernels (2, 2b, 3b, 4) come in two kinds: WARP, a warp per
+// segment (below the first levels most segments have one tile, and a block
+// would leave 7 of its 8 warps idle), or a block per segment, for levels with
+// long segments (a warp took 5x longer than a block over the 49k tiles of a
+// chess_100m root segment). GpuGrower picks per level (LevelPlan::segmentWarps).
+constexpr std::uint32_t kWarpSegmentTiles = 32;
+
+// The segment of this warp (kWarps per block), or false past the last one.
+__device__ __forceinline__ bool warpSegment(std::uint32_t segmentCount, std::uint32_t &segment) {
+  segment = blockIdx.x * kWarps + (threadIdx.x >> 5);
+  return segment < segmentCount;
+}
+
+template <bool WARP>
 __global__ void __launch_bounds__(kThreads)
     segmentPrefixKernel(std::uint32_t *perTile, int width, const Segment *segments,
-                        const std::uint8_t *constant) {
-  using Scan = cub::BlockScan<std::uint32_t, kThreads>;
-  __shared__ typename Scan::TempStorage scanStorage;
-  const Segment segment = segments[blockIdx.x];
-  if (constant[blockIdx.x]) {
+                        const std::uint8_t *constant, std::uint32_t segmentCount) {
+  if constexpr (!WARP) {
+    using Scan = cub::BlockScan<std::uint32_t, kThreads>;
+    __shared__ typename Scan::TempStorage scanStorage;
+    const Segment segment = segments[blockIdx.x];
+    if (constant[blockIdx.x]) {
+      return;
+    }
+    for (int k = 0; k < width; ++k) {
+      std::uint32_t carry = 0;
+      for (std::uint32_t chunk = 0; chunk < segment.tileCount; chunk += kThreads) {
+        const std::uint32_t tile = chunk + threadIdx.x;
+        std::uint32_t *slot =
+            perTile + static_cast<std::size_t>(segment.firstTile + tile) * width + k;
+        const std::uint32_t value = tile < segment.tileCount ? *slot : 0;
+        std::uint32_t prefix;
+        std::uint32_t sum;
+        Scan(scanStorage).ExclusiveSum(value, prefix, sum);
+        if (tile < segment.tileCount) {
+          *slot = carry + prefix;
+        }
+        carry += sum;
+        __syncthreads();
+      }
+    }
+    return;
+  }
+  const unsigned full = 0xFFFFFFFFu;
+  const int lane = threadIdx.x & 31;
+  std::uint32_t index;
+  if (!warpSegment(segmentCount, index) || constant[index]) {
+    return; // the whole warp
+  }
+  const Segment segment = segments[index];
+  std::uint32_t *first = perTile + static_cast<std::size_t>(segment.firstTile) * width;
+  if (segment.tileCount == 1) {
+    for (int k = lane; k < width; k += 32) {
+      first[k] = 0;
+    }
     return;
   }
   for (int k = 0; k < width; ++k) {
     std::uint32_t carry = 0;
-    for (std::uint32_t chunk = 0; chunk < segment.tileCount; chunk += kThreads) {
-      const std::uint32_t tile = chunk + threadIdx.x;
-      std::uint32_t *slot =
-          perTile + static_cast<std::size_t>(segment.firstTile + tile) * width + k;
-      const std::uint32_t value = tile < segment.tileCount ? *slot : 0;
-      std::uint32_t prefix;
-      std::uint32_t sum;
-      Scan(scanStorage).ExclusiveSum(value, prefix, sum);
-      if (tile < segment.tileCount) {
-        *slot = carry + prefix;
+    for (std::uint32_t chunk = 0; chunk < segment.tileCount; chunk += 32) {
+      const std::uint32_t tile = chunk + lane;
+      const std::uint32_t value = tile < segment.tileCount ? first[std::size_t{tile} * width + k] : 0;
+      std::uint32_t sum = value; // inclusive scan over the warp
+#pragma unroll
+      for (int offset = 1; offset < 32; offset <<= 1) {
+        const std::uint32_t other = __shfl_up_sync(full, sum, offset);
+        sum += lane >= offset ? other : 0;
       }
-      carry += sum;
-      __syncthreads();
+      if (tile < segment.tileCount) {
+        first[std::size_t{tile} * width + k] = carry + sum - value;
+      }
+      carry += __shfl_sync(full, sum, 31);
     }
   }
 }
 
 // ---------------------------------------------------------------------------
+// 3. Sweep every cut of every tile (one block per tile)// ---------------------------------------------------------------------------
 // 3. Sweep every cut of every tile (one block per tile)
 // ---------------------------------------------------------------------------
 // Cut at segment position p (between entries p-1 and p) sends the first p rows
@@ -434,8 +484,6 @@ __global__ void __launch_bounds__(kThreads)
 // tileExact scores, in double precision (the exact CPU function), every cut
 // the boundary-point rule and (two classes) the tile bound leave, and counts
 // C4.5's tries.
-constexpr int kWarps = kThreads / 32;
-constexpr int kWarpSteps = kTile / kThreads; // 32-entry steps per warp
 
 template <int MAXK> struct TileSweep {
   std::uint32_t start;
@@ -504,14 +552,16 @@ __device__ __forceinline__ void loadTile(TileSweep<MAXK> &sweep, const Entry *sr
 }
 
 // Visit every cut of this lane that must be scored: onCut(step, position,
-// leftCounts, previousValue). Returns the number of real cuts.
-template <int MAXK, typename OnCut>
+// leftCounts, previousValue). Returns the number of real cuts. SMALL: the
+// warp sweeps a whole tile of at most kSmallTile entries
+// (tileExactSmallKernel), else its part of the block's tile.
+template <int MAXK, bool SMALL = false, typename OnCut>
 __device__ __forceinline__ std::uint32_t sweepTile(const TileSweep<MAXK> &sweep,
                                                    const Segment &segment, const NodeDesc &node,
                                                    const ScanParams &params, OnCut &&onCut) {
   const unsigned full = 0xFFFFFFFFu;
   const int lane = threadIdx.x & 31;
-  const int warp = threadIdx.x >> 5;
+  const int warp = SMALL ? 0 : threadIdx.x >> 5;
   const unsigned lanesBelow = (1u << lane) - 1u;
   const std::uint32_t count = segment.count;
   const std::uint32_t minChild = node.minChild;
@@ -523,6 +573,9 @@ __device__ __forceinline__ std::uint32_t sweepTile(const TileSweep<MAXK> &sweep,
     left[k] = sweep.warpLeft[k];
   }
   std::uint32_t tries = 0;
+  // No early return for a warp past the tile's end: it took the two-class
+  // sweep from 64 to 80 registers (3 blocks per SM instead of 4), and a loop
+  // that stopped at the warp's last step with entries to 126.
 #pragma unroll
   for (int step = 0; step < kWarpSteps; ++step) {
     const std::uint32_t index = warp * (kWarpSteps * 32) + step * 32 + lane;
@@ -574,25 +627,50 @@ __device__ __forceinline__ std::uint32_t sweepTile(const TileSweep<MAXK> &sweep,
   return tries;
 }
 
-template <typename T>
+// A warp or a block per segment (WARP).
+template <typename T, bool WARP>
 __global__ void __launch_bounds__(kThreads)
-    segmentMaxKernel(const Segment *segments, const T *tileMax, T *segmentMax) {
-  using Reduce = cub::BlockReduce<T, kThreads>;
-  __shared__ typename Reduce::TempStorage storage;
-  const Segment segment = segments[blockIdx.x];
+    segmentMaxKernel(const Segment *segments, const T *tileMax, T *segmentMax,
+                     std::uint32_t segmentCount) {
+  if constexpr (!WARP) {
+    using Reduce = cub::BlockReduce<T, kThreads>;
+    __shared__ typename Reduce::TempStorage storage;
+    const Segment segment = segments[blockIdx.x];
+    T best = -INFINITY;
+    for (std::uint32_t tile = threadIdx.x; tile < segment.tileCount; tile += kThreads) {
+      best = Max()(best, tileMax[segment.firstTile + tile]);
+    }
+    const T segmentBest = Reduce(storage).Reduce(best, Max());
+    if (threadIdx.x == 0) {
+      segmentMax[blockIdx.x] = segmentBest;
+    }
+    return;
+  }
+  const unsigned full = 0xFFFFFFFFu;
+  const int lane = threadIdx.x & 31;
+  std::uint32_t index;
+  if (!warpSegment(segmentCount, index)) {
+    return;
+  }
+  const Segment segment = segments[index];
   T best = -INFINITY;
-  for (std::uint32_t tile = threadIdx.x; tile < segment.tileCount; tile += kThreads) {
+  for (std::uint32_t tile = lane; tile < segment.tileCount; tile += 32) {
     best = Max()(best, tileMax[segment.firstTile + tile]);
   }
-  const T segmentBest = Reduce(storage).Reduce(best, Max());
-  if (threadIdx.x == 0) {
-    segmentMax[blockIdx.x] = segmentBest;
+#pragma unroll
+  for (int offset = 16; offset > 0; offset >>= 1) {
+    best = Max()(best, __shfl_xor_sync(full, best, offset));
+  }
+  if (lane == 0) {
+    segmentMax[index] = best;
   }
 }
 
 // The tile's best cut in double precision (one block per tile), and the
 // cuts of single-tile segments (tileHistogram skipped them). Whether the tile
 // is skipped depends only on the tile (the whole block returns early together).
+// Block i takes tile i: the tiles of nodes too large for
+// tileExactSmallKernel come first (GpuGrower::tileOrder()).
 template <int MAXK>
 __global__ void __launch_bounds__(kThreads)
     tileExactKernel(const Entry *src, const Segment *segments, const std::uint32_t *tileSegment,
@@ -649,15 +727,98 @@ __global__ void __launch_bounds__(kThreads)
   }
 }
 
-// ---------------------------------------------------------------------------
-// 4. Best cut per segment (one block per segment), with the class counts left
-//    of it (the left child's counts if this feature wins).
-// ---------------------------------------------------------------------------
+// Tiles of at most kSmallTile entries (the single tile of a small segment;
+// deep levels have hundreds of thousands): one warp per tile, kWarps tiles
+// per block, instead of a block whose other 7 warps idle. Same result as
+// tileExactKernel. They are the level's last tiles, from firstSmall on.
+constexpr std::uint32_t kSmallTile = kWarpSteps * 32;
+
+template <int MAXK>
 __global__ void __launch_bounds__(kThreads)
-    segmentBestKernel(const Entry *src, const Segment *segments, ScanParams params,
-                      const std::uint32_t *tilePrefix, const BestCut *tileBest,
-                      const std::uint32_t *tileTries, CutCandidate *segmentBest,
-                      std::uint32_t *segmentLeft) {
+    tileExactSmallKernel(const Entry *src, const Segment *segments,
+                         const std::uint32_t *tileSegment, const std::uint8_t *constant,
+                         const NodeDesc *nodes, ScanParams params, const std::uint32_t *tilePrefix,
+                         const std::uint32_t *nodeCounts, const double *tileUpper,
+                         const double *segmentLower, BestCut *tileBest, std::uint32_t *tileTries,
+                         std::uint32_t firstSmall, std::uint32_t smallCount) {
+  using CutReduce = cub::WarpReduce<BestCut>;
+  using SumReduce = cub::WarpReduce<std::uint32_t>;
+  __shared__ typename CutReduce::TempStorage cutStorage[kWarps];
+  __shared__ typename SumReduce::TempStorage sumStorage[kWarps];
+  __shared__ std::uint32_t totals[kWarps][MAXK];
+  const unsigned full = 0xFFFFFFFFu;
+  const int lane = threadIdx.x & 31;
+  const int warp = threadIdx.x >> 5;
+  const std::uint32_t item = blockIdx.x * kWarps + warp;
+  if (item >= smallCount) {
+    return; // the whole warp (no block-wide barrier below)
+  }
+  const std::uint32_t tile = firstSmall + item;
+  const std::uint32_t segmentIndex = tileSegment[tile];
+  const Segment segment = segments[segmentIndex];
+  if (constant[segmentIndex] || tileRuledOut(tileUpper, segmentLower, tile, segmentIndex)) {
+    if (lane == 0) {
+      tileBest[tile] = kNoCut;
+      tileTries[tile] = 0;
+    }
+    return;
+  }
+  const NodeDesc node = nodes[segment.node];
+  const int classCount = params.classCount;
+  for (int k = lane; k < classCount; k += 32) {
+    totals[warp][k] = nodeCounts[static_cast<std::size_t>(segment.node) * classCount + k];
+  }
+  TileSweep<MAXK> sweep;
+  tileRange(segment, tile, sweep.start, sweep.length);
+  sweep.column = src + segment.base;
+#pragma unroll
+  for (int step = 0; step < kWarpSteps; ++step) {
+    const std::uint32_t index = step * 32 + lane;
+    if (index < sweep.length) {
+      const Entry entry = sweep.column[sweep.start + index];
+      sweep.value[step] = entry.value;
+      sweep.cls[step] = params.codec.cls(entry.packed);
+    } else {
+      sweep.value[step] = 0.0f;
+      sweep.cls[step] = 0xFFFFFFFFu;
+    }
+  }
+  const std::uint32_t *prefix = tilePrefix + static_cast<std::size_t>(tile) * classCount;
+#pragma unroll
+  for (int k = 0; k < MAXK; ++k) {
+    sweep.warpLeft[k] = k < classCount ? prefix[k] : 0;
+  }
+  __syncwarp(full);
+  BestCut best = kNoCut;
+  const std::uint32_t tries = sweepTile<MAXK, true>(
+      sweep, segment, node, params,
+      [&](int step, std::uint32_t position, const std::uint32_t *left, float previous) {
+        const double gain = cutGain(totals[warp], left, classCount, segment.count, position,
+                                    node.parentWeighted, params.criterion, params.logs);
+        if (best.gain == -INFINITY || isBetterCut(gain, position, best.gain, best.position)) {
+          best = {gain, position, previous, sweep.value[step]};
+        }
+      });
+  const BestCut winner = CutReduce(cutStorage[warp]).Reduce(best, BetterCut());
+  const std::uint32_t tileTotalTries = SumReduce(sumStorage[warp]).Sum(tries);
+  if (lane == 0) {
+    tileBest[tile] = winner;
+    tileTries[tile] = tileTotalTries;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. Best cut per segment (a warp or a block per segment, as 2), with the
+//    class counts left of it (the left child's counts if this feature wins).
+// ---------------------------------------------------------------------------
+// A block per segment.
+__device__ __forceinline__ void segmentBestBlock(const Entry *src, const Segment *segments,
+                                                 const ScanParams &params,
+                                                 const std::uint32_t *tilePrefix,
+                                                 const BestCut *tileBest,
+                                                 const std::uint32_t *tileTries,
+                                                 CutCandidate *segmentBest,
+                                                 std::uint32_t *segmentLeft) {
   using CutReduce = cub::BlockReduce<BestCut, kThreads>;
   using SumReduce = cub::BlockReduce<std::uint32_t, kThreads>;
   __shared__ union {
@@ -708,6 +869,86 @@ __global__ void __launch_bounds__(kThreads)
               : 0;
     segmentLeft[static_cast<std::size_t>(blockIdx.x) * classCount + threadIdx.x] =
         before + left[threadIdx.x];
+  }
+}
+
+// A warp per segment.
+__device__ __forceinline__ void segmentBestWarp(const Entry *src, const Segment *segments,
+                                                const ScanParams &params,
+                                                const std::uint32_t *tilePrefix,
+                                                const BestCut *tileBest,
+                                                const std::uint32_t *tileTries,
+                                                CutCandidate *segmentBest,
+                                                std::uint32_t *segmentLeft,
+                                                std::uint32_t segmentCount) {
+  using CutReduce = cub::WarpReduce<BestCut>;
+  using SumReduce = cub::WarpReduce<std::uint32_t>;
+  __shared__ typename CutReduce::TempStorage cutStorage[kWarps];
+  __shared__ typename SumReduce::TempStorage sumStorage[kWarps];
+  __shared__ std::uint32_t lefts[kWarps][kMaxGpuClasses];
+  const unsigned full = 0xFFFFFFFFu;
+  const int lane = threadIdx.x & 31;
+  const int warp = threadIdx.x >> 5;
+  std::uint32_t index;
+  if (!warpSegment(segmentCount, index)) {
+    return;
+  }
+  const Segment segment = segments[index];
+  const int classCount = params.classCount;
+  BestCut best = kNoCut;
+  std::uint32_t tries = 0;
+  for (std::uint32_t tile = lane; tile < segment.tileCount; tile += 32) {
+    best = BetterCut()(best, tileBest[segment.firstTile + tile]);
+    tries += tileTries[segment.firstTile + tile];
+  }
+  BestCut winner = CutReduce(cutStorage[warp]).Reduce(best, BetterCut());
+  const std::uint32_t totalTries = SumReduce(sumStorage[warp]).Sum(tries);
+  // Lane 0 has them: to every lane.
+  winner.gain = __shfl_sync(full, winner.gain, 0);
+  winner.position = __shfl_sync(full, winner.position, 0);
+  if (lane == 0) {
+    CutCandidate result;
+    result.gain = winner.gain;
+    result.leftCount = winner.position;
+    result.tries = totalTries;
+    result.leftValue = winner.leftValue;
+    result.rightValue = winner.rightValue;
+    segmentBest[index] = result;
+  }
+  std::uint32_t *left = lefts[warp];
+  for (int k = lane; k < classCount; k += 32) {
+    left[k] = 0;
+  }
+  __syncwarp(full);
+  // Left of the cut: the counts before its tile plus the tile's entries
+  // before the cut (zeros if this feature has no cut).
+  const bool found = winner.gain != -INFINITY;
+  const std::uint32_t position = found ? winner.position : 0;
+  const std::uint32_t tile = position / kTile;
+  const Entry *entries = src + segment.base;
+  for (std::uint32_t at = tile * kTile + lane; at < position; at += 32) {
+    atomicAdd(&left[params.codec.cls(entries[at].packed)], 1u);
+  }
+  __syncwarp(full);
+  for (int k = lane; k < classCount; k += 32) {
+    const std::uint32_t before =
+        found ? tilePrefix[static_cast<std::size_t>(segment.firstTile + tile) * classCount + k] : 0;
+    segmentLeft[static_cast<std::size_t>(index) * classCount + k] = before + left[k];
+  }
+}
+
+template <bool WARP>
+__global__ void __launch_bounds__(kThreads)
+    segmentBestKernel(const Entry *src, const Segment *segments, ScanParams params,
+                      const std::uint32_t *tilePrefix, const BestCut *tileBest,
+                      const std::uint32_t *tileTries, CutCandidate *segmentBest,
+                      std::uint32_t *segmentLeft, std::uint32_t segmentCount) {
+  if constexpr (WARP) {
+    segmentBestWarp(src, segments, params, tilePrefix, tileBest, tileTries, segmentBest,
+                    segmentLeft, segmentCount);
+  } else {
+    segmentBestBlock(src, segments, params, tilePrefix, tileBest, tileTries, segmentBest,
+                     segmentLeft);
   }
 }
 
@@ -813,13 +1054,125 @@ __device__ __forceinline__ float valueOf(unsigned long long word) {
   return __uint_as_float(static_cast<std::uint32_t>(word));
 }
 
+// What one block of partitionKernel<true> does: `count` tiles of small
+// segments of one node (one tile each, at most kSmallTile entries), from
+// `tile` on, one per warp. Units are in tile order, so a tile still waits
+// only for tiles that started before it (the move's waitTile: an earlier
+// unit, or another warp of its own).
+struct PartitionUnit {
+  std::uint32_t tile;
+  std::uint32_t count;
+};
+
+// partitionKernel's work for the only tile of a segment of at most
+// kSmallTile entries, by one warp (`staged`: its kSmallTile entries of
+// shared memory). The same result as the block's.
+__device__ __forceinline__ void partitionSmallTile(
+    std::uint32_t tile, Entry *staged, const Entry *src, Entry *dst, const Segment *segments,
+    const std::uint32_t *tileSegment, const std::uint8_t *constant, const NodeDesc *nodes,
+    const ScanParams &params, const std::uint32_t *goesLeft, const PartitionTarget *targets,
+    const PartitionMove *moves, TileState *tileStates, std::uint32_t *nextHist,
+    std::uint32_t *nextTries) {
+  const unsigned full = 0xFFFFFFFFu;
+  const int lane = threadIdx.x & 31;
+  const unsigned lanesBelow = (1u << lane) - 1u;
+  const std::uint32_t segmentIndex = tileSegment[tile];
+  const Segment segment = segments[segmentIndex];
+  const NodeDesc &node = nodes[segment.node];
+  if (constant[segmentIndex] || !node.partition) {
+    return;
+  }
+  const std::uint32_t leftCount = node.leftCount;
+  const std::uint32_t flip = marksRight(node) ? 1u : 0u;
+  const bool byPosition = node.splitFeature == static_cast<std::int32_t>(segment.feature);
+  const std::uint32_t length = segment.count; // one tile: it starts at 0
+  const Entry *column = src + segment.base;
+  Entry items[kWarpSteps];
+  bool left[kWarpSteps];
+  std::uint32_t tileLefts = 0;
+#pragma unroll
+  for (int step = 0; step < kWarpSteps; ++step) {
+    const std::uint32_t index = step * 32 + lane;
+    left[step] = false;
+    if (index < length) {
+      items[step] = column[index];
+      const std::uint32_t row = params.codec.row(items[step].packed);
+      left[step] = byPosition ? index < leftCount
+                              : (((goesLeft[row >> 5] >> (row & 31)) & 1u) ^ flip) != 0;
+    }
+    tileLefts += __popc(__ballot_sync(full, left[step]));
+  }
+  TileState *state = tileStates + tile;
+  const PartitionMove move = moves[segmentIndex];
+  if (lane == 0) {
+    // Loaded: the tiles that wait for this segment's range may go on.
+    atomicExch(&state->lefts, kTileTotal | tileLefts);
+    if (move.waitTile != kNoTarget) {
+      waitForTotal(&tileStates[move.waitTile].lefts);
+    }
+  }
+  // Stage the tile in its new order (lefts first, both stable).
+  std::uint32_t leftsBefore = 0;
+#pragma unroll
+  for (int step = 0; step < kWarpSteps; ++step) {
+    const std::uint32_t index = step * 32 + lane;
+    const unsigned votes = __ballot_sync(full, left[step]);
+    const std::uint32_t mine = leftsBefore + __popc(votes & lanesBelow);
+    if (index < length) {
+      staged[left[step] ? mine : tileLefts + (index - mine)] = items[step];
+    }
+    leftsBefore += __popc(votes);
+  }
+  __syncwarp(full); // the staging, and lane 0's wait
+  const PartitionTarget target = targets[segmentIndex];
+  Entry *to = dst + (static_cast<long long>(segment.base) + move.shift);
+  const int classCount = params.classCount;
+  for (std::uint32_t base = 0; base < length; base += 32) {
+    const std::uint32_t index = base + lane;
+    const bool inTile = index < length;
+    const int side = index < tileLefts ? 0 : 1;
+    const std::uint32_t position = side == 0 ? index : index - tileLefts; // in its child
+    Entry entry{0.0f, 0u};
+    if (inTile) {
+      entry = staged[index];
+      to[side == 0 ? position : leftCount + position] = entry;
+    }
+    const bool counted = inTile && target.firstTile[side] != kNoTarget;
+    const std::uint32_t cls = params.codec.cls(entry.packed);
+    const std::uint32_t key =
+        counted ? static_cast<std::uint32_t>(side * kMaxGpuClasses) + cls : 0xFFFFFFFFu;
+    const unsigned peers = __match_any_sync(full, key);
+    if (key != 0xFFFFFFFFu && lane == __ffs(peers) - 1) {
+      atomicAdd(nextHist + static_cast<std::size_t>(target.firstTile[side]) * classCount + cls,
+                static_cast<std::uint32_t>(__popc(peers)));
+    }
+    bool cut = false;
+    if (counted && position >= 1 && position >= target.minChild[side] &&
+        position + target.minChild[side] <= target.count[side]) {
+      cut = isCut(staged[index - 1].value, entry.value, params.minGap);
+    }
+#pragma unroll
+    for (int which = 0; which < 2; ++which) {
+      const unsigned cuts = __ballot_sync(full, cut && side == which);
+      if (lane == 0 && cuts != 0) {
+        atomicAdd(nextTries + target.firstTile[which], static_cast<std::uint32_t>(__popc(cuts)));
+      }
+    }
+  }
+}
+
+// UNITS: the blocks take `units` (PartitionUnit, the small nodes' tiles)
+// instead of one tile each. (A kernel of its own: the warp path in the
+// one-tile kernel made it 17% slower on the hybrid's levels, where no node is
+// that small.)
+template <bool UNITS>
 __global__ void __launch_bounds__(kThreads)
     partitionKernel(const Entry *src, Entry *dst, const Segment *segments,
                     const std::uint32_t *tileSegment, const std::uint8_t *constant,
                     const NodeDesc *nodes, ScanParams params, const std::uint32_t *goesLeft,
                     const PartitionTarget *targets, const PartitionMove *moves,
                     TileState *tileStates, unsigned int *tileCounter, std::uint32_t *nextHist,
-                    std::uint32_t *nextTries) {
+                    std::uint32_t *nextTries, const PartitionUnit *units) {
   using Load = cub::BlockLoad<Entry, kThreads, kItems, cub::BLOCK_LOAD_WARP_TRANSPOSE>;
   using Scan = cub::BlockScan<std::uint32_t, kThreads>;
   __shared__ union {
@@ -838,6 +1191,16 @@ __global__ void __launch_bounds__(kThreads)
   }
   __syncthreads();
   const std::uint32_t tile = shared;
+  if constexpr (UNITS) {
+    const PartitionUnit unit = units[tile];
+    const unsigned warp = threadIdx.x >> 5; // a tile each (no block-wide barrier)
+    if (warp < unit.count) {
+      partitionSmallTile(unit.tile + warp, storage.staged + warp * kSmallTile, src, dst, segments,
+                         tileSegment, constant, nodes, params, goesLeft, targets, moves,
+                         tileStates, nextHist, nextTries);
+    }
+    return;
+  }
   const std::uint32_t segmentIndex = tileSegment[tile];
   const Segment segment = segments[segmentIndex];
   if (constant[segmentIndex] || !nodes[segment.node].partition) {

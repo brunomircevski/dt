@@ -10,6 +10,7 @@
 #include "core/tree.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <future>
 #include <iomanip>
@@ -175,6 +176,13 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   // with --repeat N > 1: a process may only fork before it uses CUDA.
   const bool forks = options.repeat > 1;
   std::future<void> gpuReady;
+  // Load the GPU code with the context, not at the first launch (CUDA's
+  // default, lazy): 24 ms of an A100's or an RTX 2080 Ti's training setup
+  // otherwise (`CUDA_MODULE_LOADING=LAZY` keeps the default). Set while this
+  // process has one thread.
+  if (options.backend == Backend::Cuda) {
+    setenv("CUDA_MODULE_LOADING", "EAGER", 0);
+  }
   if (options.backend == Backend::Cuda && !forks) {
     gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options));
   }

@@ -58,6 +58,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
+#include <atomic>
 #include <functional>
 #include <cctype>
 #include <optional>
@@ -69,6 +70,7 @@
 #include <cstring>
 #include <deque>
 #include <future>
+#include <iterator>
 #include <memory>
 #include <condition_variable>
 #include <thread>
@@ -890,7 +892,10 @@ private:
   }
 
   template <int MAXK> void launchScans(std::uint32_t tiles, std::size_t segmentCount) {
-    const unsigned segmentBlocks = static_cast<unsigned>(segmentCount);
+    // The per-segment kernels: one warp per segment.
+    const std::uint32_t segmentCount32 = static_cast<std::uint32_t>(segmentCount);
+    const bool warps = plan_.segmentWarps;
+    const unsigned segmentBlocks = warps ? (segmentCount32 + kWarps - 1) / kWarps : segmentCount32;
     const Entry *src = columns_.get();
     // Two classes: bound every tile, so the sweeps skip the hopeless ones.
     const double *tileUpper = nullptr;
@@ -903,24 +908,40 @@ private:
       });
       CUDA_CHECK(cudaGetLastError());
       profile_.run("segmentLower", stream_, [&]() {
-        segmentMaxKernel<double><<<segmentBlocks, kThreads, 0, stream_>>>(
-            segments_.get(), tileLower_.get(), segmentLower_.get());
+        (warps ? segmentMaxKernel<double, true> : segmentMaxKernel<double, false>)<<<
+            segmentBlocks, kThreads, 0, stream_>>>(segments_.get(), tileLower_.get(),
+                                                   segmentLower_.get(), segmentCount32);
       });
       CUDA_CHECK(cudaGetLastError());
       tileUpper = tileUpper_.get();
       segmentLower = segmentLower_.get();
     }
-    profile_.run("tileExact", stream_, [&]() {
-      tileExactKernel<MAXK><<<tiles, kThreads, 0, stream_>>>(
-          src, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
-          tileHist_.get(), nodeCounts_.get(), tileUpper, segmentLower, tileBest_.get(),
-          tileTries_.get());
-    });
-    CUDA_CHECK(cudaGetLastError());
+    // Tiles of small nodes one per warp, the others one per block.
+    const std::uint32_t small = plan_.smallCount;
+    const std::uint32_t large = tiles - small;
+    if (small > 0) {
+      profile_.run("tileExactSmall", stream_, [&]() {
+        tileExactSmallKernel<MAXK><<<(small + kWarps - 1) / kWarps, kThreads, 0, stream_>>>(
+            src, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
+            tileHist_.get(), nodeCounts_.get(), tileUpper, segmentLower, tileBest_.get(),
+            tileTries_.get(), large, small);
+      });
+      CUDA_CHECK(cudaGetLastError());
+    }
+    if (large > 0) {
+      profile_.run("tileExact", stream_, [&]() {
+        tileExactKernel<MAXK><<<large, kThreads, 0, stream_>>>(
+            src, segments_.get(), tileSegment_.get(), constant_.get(), nodes_.get(), params_,
+            tileHist_.get(), nodeCounts_.get(), tileUpper, segmentLower, tileBest_.get(),
+            tileTries_.get());
+      });
+      CUDA_CHECK(cudaGetLastError());
+    }
     profile_.run("segmentBest", stream_, [&]() {
-      segmentBestKernel<<<segmentBlocks, kThreads, 0, stream_>>>(
+      (warps ? segmentBestKernel<true> : segmentBestKernel<false>)<<<segmentBlocks, kThreads, 0,
+                                                                     stream_>>>(
           src, segments_.get(), params_, tileHist_.get(), tileBest_.get(), tileTries_.get(),
-          segmentBest_.get(), segmentLeft_.get());
+          segmentBest_.get(), segmentLeft_.get(), segmentCount32);
     });
     CUDA_CHECK(cudaGetLastError());
   }
@@ -952,7 +973,43 @@ private:
     else launchScans<64>(tiles, segmentCount);
   }
 
-  template <typename T> void upload(DeviceArray<T> &target, const std::vector<T> &source) {
+  // The level loop's host buffers (PinnedBuffer): page-locked, so that the
+  // copies run at full speed and an upload does not wait for the host to
+  // stage it (pageable ones made GPU-only HIGGS 16% slower on the A100 and
+  // the H100 node, MNIST8M's hybrid 4-7%). A buffer is written again only
+  // after the stream has read it: each level waits for the stream once
+  // (findBestCuts()) before it writes its buffers.
+  template <typename T> using LevelVector = PinnedBuffer<T>;
+
+  template <typename T> void upload(DeviceArray<T> &target, const PinnedBuffer<T> &source) {
+    target.reserve(source.size(), stream_);
+    profile_.run("uploadLevel", stream_, [&]() {
+      source.copyRanges(source.size() * sizeof(T), [&](std::size_t offset, std::size_t bytes) {
+        CUDA_CHECK(cudaMemcpyAsync(reinterpret_cast<char *>(target.get()) + offset,
+                                   reinterpret_cast<const char *>(source.data()) + offset, bytes,
+                                   cudaMemcpyHostToDevice, stream_));
+      });
+    }, "copy");
+  }
+
+  template <typename T>
+  void download(PinnedBuffer<T> &target, const DeviceArray<T> &source, std::size_t count,
+                bool wait = true) {
+    target.resize(count);
+    profile_.run("downloadLevel", stream_, [&]() {
+      target.copyRanges(count * sizeof(T), [&](std::size_t offset, std::size_t bytes) {
+        CUDA_CHECK(cudaMemcpyAsync(reinterpret_cast<char *>(target.data()) + offset,
+                                   reinterpret_cast<const char *>(source.get()) + offset, bytes,
+                                   cudaMemcpyDeviceToHost, stream_));
+      });
+    }, "copy");
+    if (wait) {
+      trace::Doing waiting(trace::Work::GpuWait);
+      CUDA_CHECK(cudaStreamSynchronize(stream_));
+    }
+  }
+
+  template <typename T, typename Vector> void upload(DeviceArray<T> &target, const Vector &source) {
     target.reserve(source.size(), stream_);
     profile_.run("uploadLevel", stream_, [&]() {
       CUDA_CHECK(cudaMemcpyAsync(target.get(), source.data(), source.size() * sizeof(T),
@@ -960,8 +1017,8 @@ private:
     }, "copy");
   }
 
-  template <typename T>
-  void download(std::vector<T> &target, const DeviceArray<T> &source, std::size_t count,
+  template <typename T, typename Vector>
+  void download(Vector &target, const DeviceArray<T> &source, std::size_t count,
                 bool wait = true) {
     target.resize(count);
     profile_.run("downloadLevel", stream_, [&]() {
@@ -974,20 +1031,46 @@ private:
     }
   }
 
+  // Run body(begin, end, part) over [0, count) in parts of at least `grain`
+  // items, on the pool's threads (in order on this thread if there is one part).
+  template <typename Body> std::size_t inParts(std::size_t count, std::size_t grain, Body &&body) {
+    const std::size_t threads = std::size_t{pool_.workerCount()} + 1;
+    const std::size_t parts =
+        std::max<std::size_t>(1, std::min(4 * threads, count / std::max<std::size_t>(1, grain)));
+    if (parts == 1) {
+      body(std::size_t{0}, count, std::size_t{0});
+      return 1;
+    }
+    pool_.parallelFor(parts, [&](std::size_t part) {
+      body(count * part / parts, count * (part + 1) / parts, part);
+    });
+    return parts;
+  }
+
   // A level as the kernels see it: one segment per (node, feature that can
   // still split it), cut into tiles of kTile entries.
   struct LevelPlan {
-    std::vector<Segment> segments;
+    LevelVector<Segment> segments;
     std::vector<std::size_t> firstSegment; // per node, and the end
-    std::vector<NodeDesc> nodes;
+    LevelVector<NodeDesc> nodes;
+    LevelVector<std::uint32_t> tileSegment;
+    LevelVector<std::uint32_t> nodeCounts;
     std::uint32_t tiles = 0;
+    // The tiles of nodes with at most kSmallTile rows, the last of the
+    // level's (tileOrder()).
+    std::uint32_t smallCount = 0;
+    // The per-segment kernels (2, 2b, 3b, 4) run a warp per segment when no
+    // segment has more than kWarpSegmentTiles tiles, else a block per segment.
+    bool segmentWarps = true;
+    // partitionKernel<true>'s blocks: the small nodes' tiles, up to kWarps each.
+    LevelVector<PartitionUnit> units;
   };
 
   // What steps 0-4 found, per segment.
   struct SegmentCuts {
-    std::vector<CutCandidate> best;     // its best cut
-    std::vector<std::uint32_t> lefts;   // segment * classes: class counts left of it
-    std::vector<std::uint8_t> constant; // all its values are (nearly) equal
+    LevelVector<CutCandidate> best;     // its best cut
+    LevelVector<std::uint32_t> lefts;   // segment * classes: class counts left of it
+    LevelVector<std::uint8_t> constant; // all its values are (nearly) equal
   };
 
   // The children of a level's splits that are not leaves.
@@ -998,11 +1081,17 @@ private:
     bool anyPartition = false;    // some node's columns must be partitioned
   };
 
+  LevelPlan plan_;
+  SegmentCuts found_;
+  LevelVector<NodeDesc> partitionNodes_; // partitionLevel()'s copy of plan_.nodes
+  LevelVector<PartitionTarget> targets_;
+  LevelVector<PartitionMove> moves_;
+
   // Split the nodes of one level. Every node in `level` has its class counts
   // set and is not terminal. Returns the children that stay on the GPU.
   std::vector<LevelNode> processLevel(const std::vector<LevelNode> &level) {
-    LevelPlan plan = planLevel(level);
-    const SegmentCuts found = findBestCuts(plan);
+    LevelPlan &plan = planLevel(level);
+    const SegmentCuts &found = findBestCuts(plan);
     LevelChildren children = splitNodes(level, plan, found);
     launchLeafJobs(); // reads this level's buffer, before handOff() reuses it
     if (!children.anyPartition) {
@@ -1016,46 +1105,111 @@ private:
     return std::move(children.next);
   }
 
+  // Nodes (or children) per part of the level loop's host work.
+  static constexpr std::size_t kHostGrain = 2048;
+
+  // The first tile of each of `nodes` (and the level's tiles at the end):
+  // the nodes of more than kSmallTile rows first, then the others, each in
+  // level order. Returns the large nodes' tiles. The small nodes' tiles (one
+  // per segment) are then the last range, for the warp kernels, and the
+  // block kernels take the range before it as they did all tiles: through a
+  // list of tiles, tileExactKernel took 69 registers instead of 62 for two
+  // classes (3 blocks per SM instead of 4), and partitionKernel with both
+  // kinds of blocks 64 instead of 48.
+  static std::uint32_t tileOrder(const std::vector<LevelNode> &nodes,
+                                 std::vector<std::uint32_t> &first) {
+    first.resize(nodes.size() + 1);
+    std::size_t total = 0;
+    std::size_t large = 0;
+    for (const bool small : {false, true}) {
+      for (std::size_t n = 0; n < nodes.size(); ++n) {
+        if ((nodes[n].count <= kSmallTile) == small) {
+          first[n] = static_cast<std::uint32_t>(total);
+          total += nodes[n].features.size() * ((nodes[n].count + kTile - 1) / kTile);
+        }
+      }
+      large = small ? large : total;
+    }
+    first[nodes.size()] = static_cast<std::uint32_t>(total);
+    return static_cast<std::uint32_t>(large);
+  }
+
   // The segments and nodes of a level, uploaded, and room for the kernels'
   // per-tile and per-segment results.
-  LevelPlan planLevel(const std::vector<LevelNode> &level) {
+  LevelPlan &planLevel(const std::vector<LevelNode> &level) {
     const std::size_t nodeCount = level.size();
     const std::size_t classes = static_cast<std::size_t>(classCount_);
-    LevelPlan plan;
-    // Segments: one per (node, feature that can still split it).
-    std::vector<Segment> &segments = plan.segments;
+    LevelPlan &plan = plan_;
+    // Segments: one per (node, feature that can still split it); first the
+    // offsets of each node's segments and tiles, then the nodes in parts.
     std::vector<std::size_t> &firstSegment = plan.firstSegment;
-    std::vector<NodeDesc> &nodes = plan.nodes;
-    firstSegment.assign(nodeCount + 1, 0);
-    nodes.resize(nodeCount);
-    std::vector<std::uint32_t> tileSegment;
-    std::vector<std::uint32_t> nodeCounts(nodeCount * classes);
+    firstSegment.resize(nodeCount + 1);
+    std::vector<std::uint32_t> firstTile;
+    const std::uint32_t largeTiles = tileOrder(level, firstTile);
+    std::vector<std::uint32_t> firstUnit(nodeCount + 1);
+    std::size_t segmentTotal = 0;
+    std::size_t unitTotal = 0;
+    std::size_t maxSegmentTiles = 0;
     for (std::size_t n = 0; n < nodeCount; ++n) {
       const LevelNode &node = level[n];
-      const std::uint32_t tilesPerSegment = (node.count + kTile - 1) / kTile;
-      firstSegment[n] = segments.size();
-      for (const std::uint32_t f : node.features) {
-        const std::uint32_t index = static_cast<std::uint32_t>(segments.size());
-        segments.push_back({columnBase(f) + node.begin, node.count, static_cast<std::uint32_t>(n),
-                            f, static_cast<std::uint32_t>(tileSegment.size()),
-                            tilesPerSegment});
-        tileSegment.insert(tileSegment.end(), tilesPerSegment, index);
+      maxSegmentTiles = std::max<std::size_t>(maxSegmentTiles, (node.count + kTile - 1) / kTile);
+      firstSegment[n] = segmentTotal;
+      segmentTotal += node.features.size();
+      firstUnit[n] = static_cast<std::uint32_t>(unitTotal);
+      if (node.count <= kSmallTile) {
+        unitTotal += (node.features.size() + kWarps - 1) / kWarps;
       }
-      const std::uint32_t *counts = store_->counts(node.node);
-      std::copy_n(counts, classes, nodeCounts.data() + n * classes);
-      nodes[n].count = node.count;
-      nodes[n].minChild = rules_->minChildRows(node.count);
-      nodes[n].parentWeighted = weightedImpurity(counts, classCount_, node.count,
-                                                 rules_->criterion(), rules_->logTable());
     }
-    firstSegment[nodeCount] = segments.size();
-    const std::size_t segmentCount = segments.size();
-    const std::uint32_t tiles = static_cast<std::uint32_t>(tileSegment.size());
+    firstSegment[nodeCount] = segmentTotal;
+    const std::size_t tileTotal = firstTile[nodeCount];
+    plan.units.resize(unitTotal);
+    plan.segments.resize(segmentTotal);
+    plan.tileSegment.resize(tileTotal);
+    plan.nodes.resize(nodeCount);
+    plan.nodeCounts.resize(nodeCount * classes);
+    inParts(nodeCount, kHostGrain, [&](std::size_t begin, std::size_t end, std::size_t) {
+      for (std::size_t n = begin; n < end; ++n) {
+        const LevelNode &node = level[n];
+        const std::uint32_t tilesPerSegment = (node.count + kTile - 1) / kTile;
+        std::size_t index = firstSegment[n];
+        std::uint32_t tile = firstTile[n];
+        for (const std::uint32_t f : node.features) {
+          plan.segments[index] = {columnBase(f) + node.begin, node.count,
+                                  static_cast<std::uint32_t>(n), f, tile, tilesPerSegment};
+          std::fill_n(plan.tileSegment.data() + tile, tilesPerSegment,
+                      static_cast<std::uint32_t>(index));
+          ++index;
+          tile += tilesPerSegment;
+        }
+        if (node.count <= kSmallTile) { // the node's partition units
+          PartitionUnit *unit = plan.units.data() + firstUnit[n];
+          for (std::uint32_t done = 0; done < tile - firstTile[n]; done += kWarps) {
+            *unit++ = {firstTile[n] + done,
+                       std::min<std::uint32_t>(kWarps, tile - firstTile[n] - done)};
+          }
+        }
+        const std::uint32_t *counts = store_->counts(node.node);
+        std::copy_n(counts, classes, plan.nodeCounts.data() + n * classes);
+        NodeDesc &desc = plan.nodes[n];
+        desc = NodeDesc{};
+        desc.count = node.count;
+        desc.minChild = rules_->minChildRows(node.count);
+        desc.parentWeighted = weightedImpurity(counts, classCount_, node.count,
+                                               rules_->criterion(), rules_->logTable());
+      }
+    });
+    const std::size_t segmentCount = segmentTotal;
+    const std::uint32_t tiles = static_cast<std::uint32_t>(tileTotal);
     plan.tiles = tiles;
-    upload(segments_, segments);
-    upload(tileSegment_, tileSegment);
-    upload(nodes_, nodes);
-    upload(nodeCounts_, nodeCounts);
+    upload(segments_, plan.segments);
+    upload(tileSegment_, plan.tileSegment);
+    upload(nodes_, plan.nodes);
+    upload(nodeCounts_, plan.nodeCounts);
+    if (unitTotal > 0) {
+      upload(partitionUnits_, plan.units);
+    }
+    plan.smallCount = tiles - largeTiles;
+    plan.segmentWarps = maxSegmentTiles <= kWarpSegmentTiles;
     constant_.reserve(segmentCount, stream_);
     tileHist_.reserve(static_cast<std::size_t>(tiles) * classes, stream_);
     tileBest_.reserve(tiles, stream_);
@@ -1065,7 +1219,7 @@ private:
       tileLower_.reserve(tiles, stream_);
       segmentLower_.reserve(segmentCount, stream_);
     }
-    tileStates_.reserve(static_cast<std::size_t>(tiles) + 1, stream_);
+    tileStates_.reserve(static_cast<std::size_t>(tiles) + 2, stream_);
     segmentBest_.reserve(segmentCount, stream_);
     segmentLeft_.reserve(segmentCount * classes, stream_);
     return plan;
@@ -1073,11 +1227,11 @@ private:
 
   // Steps 0-4: constant segments, class counts left of every tile, then the
   // best cut per segment with its left class counts.
-  SegmentCuts findBestCuts(const LevelPlan &plan) {
+  const SegmentCuts &findBestCuts(const LevelPlan &plan) {
     const std::size_t segmentCount = plan.segments.size();
     const std::size_t classes = static_cast<std::size_t>(classCount_);
     const std::uint32_t tiles = plan.tiles;
-    SegmentCuts found;
+    SegmentCuts &found = found_;
     profile_.run("segmentConstant", stream_, [&]() {
       segmentConstantKernel<<<static_cast<unsigned>((segmentCount + 255) / 256), 256, 0,
                               stream_>>>(columns_.get(), segments_.get(), segmentCount,
@@ -1089,8 +1243,11 @@ private:
     }
     histogramReady_ = false;
     profile_.run("segmentPrefix", stream_, [&]() {
-      segmentPrefixKernel<<<static_cast<unsigned>(segmentCount), kThreads, 0, stream_>>>(
-          tileHist_.get(), classCount_, segments_.get(), constant_.get());
+      const bool warps = plan_.segmentWarps;
+      (warps ? segmentPrefixKernel<true> : segmentPrefixKernel<false>)<<<
+          static_cast<unsigned>(warps ? (segmentCount + kWarps - 1) / kWarps : segmentCount),
+          kThreads, 0, stream_>>>(tileHist_.get(), classCount_, segments_.get(), constant_.get(),
+                                  static_cast<std::uint32_t>(segmentCount));
     });
     CUDA_CHECK(cudaGetLastError());
     dispatchScans(tiles, segmentCount);
@@ -1100,87 +1257,114 @@ private:
     return found;
   }
 
+  // What one part of splitNodes() makes, merged in node order.
+  struct SplitPart {
+    std::vector<LevelNode> next;
+    std::vector<std::pair<std::size_t, int>> nextParent;
+    std::vector<LevelNode> toCpu;
+    std::vector<LeafJob> leafJobs;
+    bool anyPartition = false;
+  };
+
   // The split of every node (SplitRules on the host). Children that are
   // leaves are finished right here.
   LevelChildren splitNodes(const std::vector<LevelNode> &level, LevelPlan &plan,
                            const SegmentCuts &found) {
     const std::size_t nodeCount = level.size();
     const std::size_t classes = static_cast<std::size_t>(classCount_);
-    LevelChildren children;
-    const std::vector<Segment> &segments = plan.segments;
+    const LevelVector<Segment> &segments = plan.segments;
     const std::vector<std::size_t> &firstSegment = plan.firstSegment;
-    std::vector<NodeDesc> &nodes = plan.nodes;
-    const std::vector<CutCandidate> &best = found.best;
-    const std::vector<std::uint32_t> &lefts = found.lefts;
-    const std::vector<std::uint8_t> &constant = found.constant;
-    bool &anyPartition = children.anyPartition;
-    std::vector<LevelNode> &next = children.next;
-    std::vector<std::pair<std::size_t, int>> &nextParent = children.nextParent;
-    std::vector<LevelNode> &toCpu = children.toCpu;
-    thread_local std::vector<CutCandidate> cuts;
-    for (std::size_t n = 0; n < nodeCount; ++n) {
-      const LevelNode &parent = level[n];
-      cuts.assign(features_, CutCandidate{});
-      std::vector<std::uint32_t> features; // still useful below this node
-      int winnerSegment = -1;
-      for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
-        cuts[segments[s].feature] = best[s];
-        if (!constant[s]) {
-          features.push_back(segments[s].feature);
-        }
-      }
-      const SplitRules::Decision decision =
-          rules_->choose(cuts.data(), features_, parent.count);
-      if (decision.feature < 0) {
-        addLeafJob(segments[firstSegment[n]].base, parent.count, parent.node);
-        continue;
-      }
-      for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
-        if (static_cast<int>(segments[s].feature) == decision.feature) {
-          winnerSegment = static_cast<int>(s);
-        }
-      }
-      nodes[n].splitFeature = decision.feature;
-      nodes[n].leftCount = decision.leftCount;
-      nodes[n].marksRight = 2 * std::size_t{decision.leftCount} > parent.count;
-
-      const std::uint32_t *parentCounts = store_->counts(parent.node);
+    LevelVector<NodeDesc> &nodes = plan.nodes;
+    const LevelVector<CutCandidate> &best = found.best;
+    const LevelVector<std::uint32_t> &lefts = found.lefts;
+    const LevelVector<std::uint8_t> &constant = found.constant;
+    std::vector<SplitPart> parts(4 * (std::size_t{pool_.workerCount()} + 1));
+    const std::size_t used = inParts(nodeCount, kHostGrain, [&](std::size_t begin, std::size_t end,
+                                                                std::size_t part) {
+      SplitPart &out = parts[part];
+      thread_local std::vector<CutCandidate> cuts;
       std::vector<std::uint32_t> childCounts(2 * classes);
-      std::uint32_t *leftCounts = childCounts.data();
-      std::uint32_t *rightCounts = leftCounts + classes;
-      std::copy_n(lefts.data() + static_cast<std::size_t>(winnerSegment) * classes, classes,
-                  leftCounts);
-      for (std::size_t k = 0; k < classes; ++k) {
-        rightCounts[k] = parentCounts[k] - leftCounts[k];
-      }
-      const std::uint32_t leftId = store_->add(leftCounts);
-      const std::uint32_t rightId = store_->add(rightCounts);
-      Node &node = store_->node(parent.node);
-      node.feature = decision.feature;
-      node.threshold = decision.threshold;
-      node.left = leftId;
-      node.right = rightId;
-
-      for (const bool left : {true, false}) {
-        const std::uint32_t begin = left ? parent.begin : parent.begin + decision.leftCount;
-        const std::uint32_t count =
-            left ? decision.leftCount : parent.count - decision.leftCount;
-        const int depth = parent.depth + 1;
-        if (rules_->isTerminal(left ? leftCounts : rightCounts, count, depth)) {
-          addLeafJob(segments[static_cast<std::size_t>(winnerSegment)].base + (begin - parent.begin),
-                     count, left ? leftId : rightId);
+      for (std::size_t n = begin; n < end; ++n) {
+        const LevelNode &parent = level[n];
+        cuts.assign(features_, CutCandidate{});
+        std::vector<std::uint32_t> features; // still useful below this node
+        int winnerSegment = -1;
+        for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
+          cuts[segments[s].feature] = best[s];
+          if (!constant[s]) {
+            features.push_back(segments[s].feature);
+          }
+        }
+        const SplitRules::Decision decision =
+            rules_->choose(cuts.data(), features_, parent.count);
+        if (decision.feature < 0) {
+          addLeafJob(out.leafJobs, segments[firstSegment[n]].base, parent.count, parent.node);
           continue;
         }
-        nodes[n].partition = 1;
-        LevelNode child{left ? leftId : rightId, begin, count, depth, features};
-        if (count >= minRows_) {
-          next.push_back(std::move(child));
-          nextParent.emplace_back(n, left ? 0 : 1);
-        } else {
-          toCpu.push_back(std::move(child));
+        for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
+          if (static_cast<int>(segments[s].feature) == decision.feature) {
+            winnerSegment = static_cast<int>(s);
+          }
         }
+        nodes[n].splitFeature = decision.feature;
+        nodes[n].leftCount = decision.leftCount;
+        nodes[n].marksRight = 2 * std::size_t{decision.leftCount} > parent.count;
+
+        const std::uint32_t *parentCounts = store_->counts(parent.node);
+        std::uint32_t *leftCounts = childCounts.data();
+        std::uint32_t *rightCounts = leftCounts + classes;
+        std::copy_n(lefts.data() + static_cast<std::size_t>(winnerSegment) * classes, classes,
+                    leftCounts);
+        for (std::size_t k = 0; k < classes; ++k) {
+          rightCounts[k] = parentCounts[k] - leftCounts[k];
+        }
+        const std::uint32_t leftId = store_->add(leftCounts);
+        const std::uint32_t rightId = store_->add(rightCounts);
+        Node &node = store_->node(parent.node);
+        node.feature = decision.feature;
+        node.threshold = decision.threshold;
+        node.left = leftId;
+        node.right = rightId;
+
+        for (const bool left : {true, false}) {
+          const std::uint32_t begin = left ? parent.begin : parent.begin + decision.leftCount;
+          const std::uint32_t count =
+              left ? decision.leftCount : parent.count - decision.leftCount;
+          const int depth = parent.depth + 1;
+          if (rules_->isTerminal(left ? leftCounts : rightCounts, count, depth)) {
+            addLeafJob(out.leafJobs,
+                       segments[static_cast<std::size_t>(winnerSegment)].base + (begin - parent.begin),
+                       count, left ? leftId : rightId);
+            continue;
+          }
+          nodes[n].partition = 1;
+          LevelNode child{left ? leftId : rightId, begin, count, depth, features};
+          if (count >= minRows_) {
+            out.next.push_back(std::move(child));
+            out.nextParent.emplace_back(n, left ? 0 : 1);
+          } else {
+            out.toCpu.push_back(std::move(child));
+          }
+        }
+        out.anyPartition = out.anyPartition || nodes[n].partition;
       }
-      anyPartition = anyPartition || nodes[n].partition;
+    });
+    LevelChildren children;
+    if (used == 1) {
+      children.next = std::move(parts[0].next);
+      children.nextParent = std::move(parts[0].nextParent);
+      children.toCpu = std::move(parts[0].toCpu);
+    }
+    for (std::size_t part = 0; part < used; ++part) {
+      SplitPart &out = parts[part];
+      if (used > 1) {
+        std::move(out.next.begin(), out.next.end(), std::back_inserter(children.next));
+        children.nextParent.insert(children.nextParent.end(), out.nextParent.begin(),
+                                   out.nextParent.end());
+        std::move(out.toCpu.begin(), out.toCpu.end(), std::back_inserter(children.toCpu));
+      }
+      leafJobs_.insert(leafJobs_.end(), out.leafJobs.begin(), out.leafJobs.end());
+      children.anyPartition = children.anyPartition || out.anyPartition;
     }
     return children;
   }
@@ -1191,36 +1375,51 @@ private:
   // next planLevel() lays it out (children in order, then their features).
   void partitionLevel(const LevelPlan &plan, const SegmentCuts &found,
                       const LevelChildren &children) {
-    const std::vector<Segment> &segments = plan.segments;
+    const LevelVector<Segment> &segments = plan.segments;
     const std::vector<std::size_t> &firstSegment = plan.firstSegment;
-    const std::vector<NodeDesc> &nodes = plan.nodes;
-    const std::vector<std::uint8_t> &constant = found.constant;
+    const LevelVector<NodeDesc> &nodes = plan.nodes;
+    const LevelVector<std::uint8_t> &constant = found.constant;
     const std::vector<LevelNode> &next = children.next;
     const std::vector<std::pair<std::size_t, int>> &nextParent = children.nextParent;
     const std::size_t nodeCount = nodes.size();
     const std::size_t segmentCount = segments.size();
     const std::size_t classes = static_cast<std::size_t>(classCount_);
     const std::uint32_t tiles = plan.tiles;
-    upload(nodes_, nodes);
-    std::vector<PartitionTarget> targets(
-        segmentCount, PartitionTarget{{kNoTarget, kNoTarget}, {0, 0}, {0, 0}});
-    std::size_t nextTiles = 0;
-    for (std::size_t c = 0; c < next.size(); ++c) {
-      const LevelNode &child = next[c];
-      const auto [n, side] = nextParent[c];
-      const std::uint32_t tilesPerSegment = (child.count + kTile - 1) / kTile;
-      std::size_t s = firstSegment[n];
-      for (const std::uint32_t f : child.features) { // in the order of n's segments
-        while (segments[s].feature != f) {
-          ++s;
+    // The next planLevel() writes plan.nodes before the stream reads this.
+    partitionNodes_.resize(nodes.size());
+    std::copy(nodes.begin(), nodes.end(), partitionNodes_.begin());
+    upload(nodes_, partitionNodes_);
+    // The next level's tiles: each child's first (as the next planLevel()
+    // numbers them), then the children in parts.
+    std::vector<std::uint32_t> childTile;
+    tileOrder(next, childTile);
+    const std::size_t nextTiles = childTile[next.size()];
+    targets_.resize(segmentCount);
+    inParts(segmentCount, 16 * kHostGrain, [&](std::size_t begin, std::size_t end, std::size_t) {
+      std::fill(targets_.begin() + static_cast<std::ptrdiff_t>(begin),
+                targets_.begin() + static_cast<std::ptrdiff_t>(end),
+                PartitionTarget{{kNoTarget, kNoTarget}, {0, 0}, {0, 0}});
+    });
+    inParts(next.size(), kHostGrain, [&](std::size_t begin, std::size_t end, std::size_t) {
+      for (std::size_t c = begin; c < end; ++c) {
+        const LevelNode &child = next[c];
+        const auto [n, side] = nextParent[c];
+        const std::uint32_t tilesPerSegment = (child.count + kTile - 1) / kTile;
+        std::size_t tile = childTile[c];
+        std::size_t s = firstSegment[n];
+        const std::uint32_t minChild = rules_->minChildRows(child.count);
+        for (const std::uint32_t f : child.features) { // in the order of n's segments
+          while (segments[s].feature != f) {
+            ++s;
+          }
+          targets_[s].firstTile[side] = static_cast<std::uint32_t>(tile);
+          targets_[s].count[side] = child.count;
+          targets_[s].minChild[side] = minChild;
+          tile += tilesPerSegment;
         }
-        targets[s].firstTile[side] = static_cast<std::uint32_t>(nextTiles);
-        targets[s].count[side] = child.count;
-        targets[s].minChild[side] = rules_->minChildRows(child.count);
-        nextTiles += tilesPerSegment;
       }
-    }
-    upload(partitionTargets_, targets);
+    });
+    upload(partitionTargets_, targets_);
     if (nextTiles > 0) {
       // This level is done with them (the kernels are ordered on the stream).
       tileHist_.reserve(nextTiles * classes, stream_);
@@ -1236,10 +1435,23 @@ private:
     auto partitioned = [&](std::size_t s) {
       return !constant[s] && nodes[segments[s].node].partition;
     };
+    std::vector<std::vector<char>> movedIn(4 * (std::size_t{pool_.workerCount()} + 1));
+    const std::size_t movedParts =
+        inParts(segmentCount, 16 * kHostGrain, [&](std::size_t begin, std::size_t end, std::size_t part) {
+          std::vector<char> &moved = movedIn[part];
+          moved.assign(features_, 0);
+          for (std::size_t s = begin; s < end; ++s) {
+            if (partitioned(s)) {
+              moved[segments[s].feature] = 1;
+            }
+          }
+        });
     std::vector<std::uint32_t> moveOf(features_, kNoTarget);
-    for (std::size_t s = 0; s < segmentCount; ++s) {
-      if (partitioned(s)) {
-        moveOf[segments[s].feature] = 0;
+    for (std::size_t part = 0; part < movedParts; ++part) {
+      for (std::uint32_t f = 0; f < features_; ++f) {
+        if (movedIn[part][f]) {
+          moveOf[f] = 0;
+        }
       }
     }
     std::vector<bool> occupied(slotCount_, false);
@@ -1269,28 +1481,37 @@ private:
       slot_[f] = slot;
     }
     // What each segment waits for.
-    std::vector<PartitionMove> moves(segmentCount, PartitionMove{0, kNoTarget});
-    std::vector<std::uint32_t> segmentOf(features_, kNoTarget); // of the node, by feature
-    for (std::size_t n = 0; n < nodeCount; ++n) {
-      if (!nodes[n].partition) {
-        continue;
-      }
-      for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
-        segmentOf[segments[s].feature] = partitioned(s) ? static_cast<std::uint32_t>(s) : kNoTarget;
-      }
-      for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
-        if (!partitioned(s)) {
+    moves_.resize(segmentCount);
+    inParts(nodeCount, kHostGrain, [&](std::size_t begin, std::size_t end, std::size_t) {
+      thread_local std::vector<std::uint32_t> segmentOf; // of the node, by feature
+      segmentOf.assign(features_, kNoTarget);
+      for (std::size_t n = begin; n < end; ++n) {
+        for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
+          moves_[s] = PartitionMove{0, kNoTarget};
+        }
+        if (!nodes[n].partition) {
           continue;
         }
-        const std::uint32_t f = segments[s].feature;
-        moves[s].shift = shift[f];
-        const std::uint32_t waited = leaving[f] == kNoTarget ? kNoTarget : segmentOf[leaving[f]];
-        if (waited != kNoTarget) {
-          moves[s].waitTile = segments[waited].firstTile + segments[waited].tileCount - 1;
+        for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
+          segmentOf[segments[s].feature] = partitioned(s) ? static_cast<std::uint32_t>(s) : kNoTarget;
+        }
+        for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
+          if (!partitioned(s)) {
+            continue;
+          }
+          const std::uint32_t f = segments[s].feature;
+          moves_[s].shift = shift[f];
+          const std::uint32_t waited = leaving[f] == kNoTarget ? kNoTarget : segmentOf[leaving[f]];
+          if (waited != kNoTarget) {
+            moves_[s].waitTile = segments[waited].firstTile + segments[waited].tileCount - 1;
+          }
+        }
+        for (std::size_t s = firstSegment[n]; s < firstSegment[n + 1]; ++s) {
+          segmentOf[segments[s].feature] = kNoTarget;
         }
       }
-    }
-    upload(partitionMoves_, moves);
+    });
+    upload(partitionMoves_, moves_);
     profile_.run("markGoesLeft", stream_, [&]() {
       CUDA_CHECK(cudaMemsetAsync(goesLeft_.get(), 0, (rows_ / 32 + 1) * sizeof(std::uint32_t),
                                  stream_));
@@ -1300,14 +1521,23 @@ private:
     });
     CUDA_CHECK(cudaGetLastError());
     profile_.run("partition", stream_, [&]() {
-      // Tile states and the tile counter start at zero.
-      CUDA_CHECK(cudaMemsetAsync(tileStates_.get(), 0, (tiles + 1) * sizeof(TileState), stream_));
-      partitionKernel<<<tiles, kThreads, 0, stream_>>>(
-          columns_.get(), columns_.get(), segments_.get(), tileSegment_.get(), constant_.get(),
-          nodes_.get(), params_, goesLeft_.get(), partitionTargets_.get(), partitionMoves_.get(),
-          tileStates_.get(),
-          reinterpret_cast<unsigned int *>(tileStates_.get() + tiles), tileHist_.get(),
-          tileTries_.get());
+      // Tile states and the two kernels' tile counters start at zero.
+      CUDA_CHECK(cudaMemsetAsync(tileStates_.get(), 0, (tiles + 2) * sizeof(TileState), stream_));
+      auto launch = [&](auto kernel, std::size_t blocks, int counter, const PartitionUnit *units) {
+        kernel<<<static_cast<unsigned>(blocks), kThreads, 0, stream_>>>(
+            columns_.get(), columns_.get(), segments_.get(), tileSegment_.get(), constant_.get(),
+            nodes_.get(), params_, goesLeft_.get(), partitionTargets_.get(), partitionMoves_.get(),
+            tileStates_.get(), reinterpret_cast<unsigned int *>(tileStates_.get() + tiles + counter),
+            tileHist_.get(), tileTries_.get(), units);
+      };
+      // The large nodes' tiles, then the small ones' (a segment only waits
+      // for segments of its own node: tileOrder() keeps a node's tiles together).
+      if (tiles > plan.smallCount) {
+        launch(partitionKernel<false>, tiles - plan.smallCount, 0, nullptr);
+      }
+      if (!plan.units.empty()) { // uploaded by planLevel()
+        launch(partitionKernel<true>, plan.units.size(), 1, partitionUnits_.get());
+      }
     });
     CUDA_CHECK(cudaGetLastError());
   }
@@ -1315,12 +1545,16 @@ private:
   // The rows of a leaf made on the GPU: `count` entries of one of its columns
   // at `from` in the current buffer.
   void addLeafJob(std::size_t from, std::uint32_t count, std::uint32_t leaf) {
+    addLeafJob(leafJobs_, from, count, leaf);
+  }
+  void addLeafJob(std::vector<LeafJob> &jobs, std::size_t from, std::uint32_t count,
+                  std::uint32_t leaf) {
     if (!recordLeaves_) {
       return;
     }
     constexpr std::uint32_t kPiece = 1u << 14; // entries per block
     for (std::uint32_t done = 0; done < count; done += kPiece) {
-      leafJobs_.push_back({from + done, std::min(kPiece, count - done), leaf});
+      jobs.push_back({from + done, std::min(kPiece, count - done), leaf});
     }
   }
 
@@ -1584,11 +1818,12 @@ private:
   DeviceArray<std::uint32_t> nodeCounts_; // class counts of the level's nodes
   DeviceArray<NodeDesc> nodes_;
   DeviceArray<BestCut> tileBest_;
+  DeviceArray<PartitionUnit> partitionUnits_; // LevelPlan::units
   DeviceArray<double> tileUpper_;    // two classes: tileBoundKernel
   DeviceArray<double> tileLower_;
   DeviceArray<double> segmentLower_;
   DeviceArray<std::uint32_t> tileTries_;
-  DeviceArray<TileState> tileStates_; // partition: per tile, then the tile counter
+  DeviceArray<TileState> tileStates_; // partition: per tile, then the two tile counters
   DeviceArray<PartitionTarget> partitionTargets_;
   DeviceArray<PartitionMove> partitionMoves_;
   bool histogramReady_ = false; // tileHist_ / tileTries_ hold the level's step 1
