@@ -913,6 +913,19 @@ private:
                                                    segmentLower_.get(), segmentCount32);
       });
       CUDA_CHECK(cudaGetLastError());
+      if (options_.algorithm == Algorithm::Cart) {
+        const std::size_t nodeCount = plan_.nodes.size();
+        const unsigned blocks = (segmentCount32 + 255) / 256;
+        profile_.run("nodeLower", stream_, [&]() {
+          CUDA_CHECK(cudaMemsetAsync(nodeLower_.get(), 0, nodeCount * sizeof(unsigned long long),
+                                     stream_));
+          nodeLowerKernel<<<blocks, 256, 0, stream_>>>(segments_.get(), segmentLower_.get(),
+                                                       segmentCount32, nodeLower_.get());
+          segmentNodeLowerKernel<<<blocks, 256, 0, stream_>>>(
+              segments_.get(), nodeLower_.get(), segmentCount32, segmentLower_.get());
+        });
+        CUDA_CHECK(cudaGetLastError());
+      }
       tileUpper = tileUpper_.get();
       segmentLower = segmentLower_.get();
     }
@@ -958,7 +971,9 @@ private:
   void dispatchHistogram(std::uint32_t tiles) {
     if (classCount_ <= 2) launchHistogram<2>(tiles);
     else if (classCount_ <= 4) launchHistogram<4>(tiles);
+    else if (classCount_ == 7) launchHistogram<7>(tiles);  // covertype: no ballots for an 8th class
     else if (classCount_ <= 8) launchHistogram<8>(tiles);
+    else if (classCount_ == 10) launchHistogram<10>(tiles); // MNIST8M: 10 class slots, not 16
     else if (classCount_ <= 16) launchHistogram<16>(tiles);
     else if (classCount_ <= 32) launchHistogram<32>(tiles);
     else launchHistogram<64>(tiles);
@@ -967,7 +982,9 @@ private:
   void dispatchScans(std::uint32_t tiles, std::size_t segmentCount) {
     if (classCount_ <= 2) launchScans<2>(tiles, segmentCount);
     else if (classCount_ <= 4) launchScans<4>(tiles, segmentCount);
+    else if (classCount_ == 7) launchScans<7>(tiles, segmentCount);  // covertype: no ballots for an 8th class
     else if (classCount_ <= 8) launchScans<8>(tiles, segmentCount);
+    else if (classCount_ == 10) launchScans<10>(tiles, segmentCount); // MNIST8M: 10 class slots, not 16
     else if (classCount_ <= 16) launchScans<16>(tiles, segmentCount);
     else if (classCount_ <= 32) launchScans<32>(tiles, segmentCount);
     else launchScans<64>(tiles, segmentCount);
@@ -1218,6 +1235,9 @@ private:
       tileUpper_.reserve(tiles, stream_);
       tileLower_.reserve(tiles, stream_);
       segmentLower_.reserve(segmentCount, stream_);
+      if (options_.algorithm == Algorithm::Cart) {
+        nodeLower_.reserve(nodeCount, stream_);
+      }
     }
     tileStates_.reserve(static_cast<std::size_t>(tiles) + 2, stream_);
     segmentBest_.reserve(segmentCount, stream_);
@@ -1822,6 +1842,7 @@ private:
   DeviceArray<double> tileUpper_;    // two classes: tileBoundKernel
   DeviceArray<double> tileLower_;
   DeviceArray<double> segmentLower_;
+  DeviceArray<unsigned long long> nodeLower_; // CART: nodeLowerKernel
   DeviceArray<std::uint32_t> tileTries_;
   DeviceArray<TileState> tileStates_; // partition: per tile, then the two tile counters
   DeviceArray<PartitionTarget> partitionTargets_;

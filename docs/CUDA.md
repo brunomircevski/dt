@@ -80,8 +80,8 @@ anything.
 | 0 | `segmentConstantKernel` | Segments whose values are all equal (first vs last entry). Every later kernel skips their tiles, they are not partitioned, and the feature is dropped for the node's whole subtree (see CPU.md). |
 | 1 | `tileHistogramKernel` | Class counts of each tile (one `__ballot_sync` per class per 32 entries), and C4.5's cut counts. Only at the root: below it, the parent level's partition (5) counts them while it writes the children. |
 | 2 | `segmentPrefixKernel` | Per segment, exclusive scan over its tiles: each tile learns the class counts *before* it. This and the other per-segment kernels (2b's `segmentMaxKernel`, 4) run a warp per segment on levels whose segments all have at most 32 tiles (below the first levels most have one), else a block per segment. |
-| 2b | `tileBoundKernel`, `segmentMaxKernel` | Two classes only: an upper bound of every tile's gains and the exact gain of one of its cuts. The gain is convex in the left class counts, and a tile's cuts lie in the box between the counts before and after it, so none beats the largest of the box's four corners. The sweep (3) skips a tile whose bound is more than `kTileBoundGap = 1e-8` below the best of those exact gains in its segment: most tiles of a big node. |
-| 3 | `tileExactKernel` | Score every cut of the tile that the boundary-point rule leaves with the exact **double-precision** gain (`dt::cutGain`, the CPU's function), and count C4.5's `tries` of single-tile segments. One sweep, on every GPU: the H100 and the A100 run double precision at half the single-precision rate, so a single-precision pre-filter does not pay (see [One exact pass](#one-exact-pass)). The tiles of nodes with at most 256 rows go to `tileExactSmallKernel`, one warp per tile (see Small nodes). |
+| 2b | `tileBoundKernel`, `segmentMaxKernel` | Two classes only: an upper bound of every tile's gains and the exact gain of one of its cuts. The gain is convex in the left class counts, and a tile's cuts lie in the box between the counts before and after it, so none beats the largest of the box's four corners. The sweep (3) skips a tile whose bound is more than `kTileBoundGap = 1e-8` below the best of those exact gains in its segment: most tiles of a big node. For CART that best is taken over the whole node (`nodeLowerKernel`, `segmentNodeLowerKernel`: an atomic max per node): `chooseCart` takes a feature only if it beats the others by `kTieEps`, so a feature whose every remaining cut lies 1e-8 below another feature's exact gain cannot win, whatever it reports. Not for C4.5, which averages the gains of all features. |
+| 3 | `tileExactKernel` | Score every cut of the tile that the boundary-point rule leaves with the exact **double-precision** gain (`dt::cutGain`, the CPU's function), and count C4.5's `tries` of single-tile segments. A tile of a multi-tile segment in which no position passes the rule (`tileTries` 0, counted by the histogram or the parent level's partition) returns at once: most of MNIST8M's tiles, whose pixels hold at most 255 cut positions in a long run of equal values. One sweep, on every GPU: the H100 and the A100 run double precision at half the single-precision rate, so a single-precision pre-filter does not pay (see [One exact pass](#one-exact-pass)). The tiles of nodes with at most 256 rows go to `tileExactSmallKernel`, one warp per tile (see Small nodes). |
 | 4 | `segmentBestKernel` | Best cut per (node, feature), and the class counts left of it. **Host** (the level's only round trip): `SplitRules::choose` picks each node's split exactly like the CPU; the winning feature's left counts give both children's class counts, so children that are leaves (pure, too small, depth limit) are finished on the spot. |
 | 5 | `markGoesLeftKernel`, `partitionKernel` | Stable partition of every non-constant column of every split node into a free slot (skipped for nodes whose children are both leaves), in **one pass**: each tile learns how many left and right entries come before it by decoupled look-back on its predecessors' published counts, then writes its entries coalesced. While writing, it counts the class histograms (and C4.5 cut counts) of the next level's tiles, so step 1 is not needed below the root. On levels with nodes of at most 256 rows, a block takes up to 8 of their (one-tile) segments instead, one per warp (see Small nodes). |
 | 6 | `copyKernel` | Children with fewer than `--handoff-rows` rows are gathered into one block (in the buffer that was just read, now free) and copied to the host in **one** transfer; only the columns that can still split them. |
@@ -149,6 +149,12 @@ entries one by one, and there is no shared-memory scan and no atomic. A cut
 the boundary-point rule rules out (`isSkippableCut`, shared with the CPU) is
 not scored.
 
+The kernels are instantiated for 2, 4, 7, 8, 10, 16, 32 and 64 class slots,
+and a step takes one ballot per slot: 7 (covertype) and 10 (MNIST8M) have
+their own instances, so MNIST8M does not pay for 16 (`tileExactKernel` 64
+registers instead of 80, `tileHistogramKernel` 32 instead of 40; its trees
+16-27% faster).
+
 ### One exact pass
 
 Until November 2026 the grower could also sweep in two passes: a
@@ -165,7 +171,10 @@ the git history before that commit. Every GPU now runs the same kernels.
 ### Why the result is exact
 
 * Every cut that the boundary-point rule and the two-class tile bound leave
-  is scored with the CPU's `cutGain` in double precision.
+  is scored with the CPU's `cutGain` in double precision. For CART the bound
+  may also drop the best cut of a feature that cannot win the node (it lies
+  1e-8 below another feature's exact gain), which does not change the
+  chosen split.
 * Near-ties (gains within `kTieEps = 1e-12`) go to the earlier cut, then the
   lower feature, in a fixed reduction order; `c·log2 c` comes from the table
   the CPU uses ([ALGORITHMS.md](ALGORITHMS.md#ties-and-cpugpu-agreement)).
@@ -362,6 +371,7 @@ for each tile t of segment (v, f):
     U_t ← max over the corners c ∈ {a₀, z₀} × {a₁, z₁} of Gain(total, c)   ▷ convex gain
     ℓ_t ← exact gain of one allowed cut of t                                ▷ a lower bound
 lower(v, f) ← max_t ℓ_t
+CART: lower(v, f) ← max_f' lower(v, f')                                   ▷ the node's best
 the sweep skips tile t if U_t < lower(v, f) − 1e-8
 ```
 

@@ -385,6 +385,40 @@ __global__ void tileBoundKernel(const Entry *src, const Segment *segments, std::
                             params.criterion, params.logs);
 }
 
+// CART: the best exact gain known for any feature of the node, as the lower
+// bound of each of its segments. chooseCart takes a feature whose gain beats
+// the others by kTieEps, so a feature whose every remaining cut is
+// kTileBoundGap below another feature's exact gain cannot be chosen, whatever
+// it reports instead; the features that can be chosen keep their best cut (the
+// tiles dropped in addition lie kTileBoundGap below it, as above). The max
+// goes through the order-preserving integer form of the doubles (nodeLower
+// zeroed: below every gain).
+__device__ __forceinline__ unsigned long long orderedBits(double value) {
+  const unsigned long long bits = static_cast<unsigned long long>(__double_as_longlong(value));
+  return bits & 0x8000000000000000ull ? ~bits : bits | 0x8000000000000000ull;
+}
+
+__global__ void nodeLowerKernel(const Segment *segments, const double *segmentLower,
+                                std::uint32_t segmentCount, unsigned long long *nodeLower) {
+  const std::uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < segmentCount && segmentLower[index] > -INFINITY) {
+    atomicMax(nodeLower + segments[index].node, orderedBits(segmentLower[index]));
+  }
+}
+
+__global__ void segmentNodeLowerKernel(const Segment *segments,
+                                       const unsigned long long *nodeLower,
+                                       std::uint32_t segmentCount, double *segmentLower) {
+  const std::uint32_t index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < segmentCount) {
+    const unsigned long long bits = nodeLower[segments[index].node];
+    if (bits != 0) {
+      segmentLower[index] = __longlong_as_double(static_cast<long long>(
+          bits & 0x8000000000000000ull ? bits & ~0x8000000000000000ull : ~bits));
+    }
+  }
+}
+
 // Whether tileBoundKernel ruled out every cut of the tile.
 __device__ __forceinline__ bool tileRuledOut(const double *tileUpper, const double *segmentLower,
                                              std::uint32_t tile, std::uint32_t segment) {
@@ -692,7 +726,10 @@ __global__ void __launch_bounds__(kThreads)
   const Segment segment = segments[segmentIndex];
   const bool single = segment.tileCount == 1;
   const NodeDesc node = nodes[segment.node];
-  if (constant[segmentIndex] || tileRuledOut(tileUpper, segmentLower, tile, segmentIndex)) {
+  // A tile of a multi-tile segment without a cut (tileTries, counted by the
+  // histogram or the previous level's partition) has none to score.
+  if (constant[segmentIndex] || (!single && tileTries[tile] == 0) ||
+      tileRuledOut(tileUpper, segmentLower, tile, segmentIndex)) {
     if (threadIdx.x == 0) {
       tileBest[tile] = kNoCut;
       if (single) {

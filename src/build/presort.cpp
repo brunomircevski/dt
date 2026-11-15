@@ -183,14 +183,11 @@ void radixPlan(const ColumnStats &stats, RadixHistogram &histogram) {
 
 // Sorted entries of one feature column, in `out` or `temp` (returned): the
 // first active pass reads the raw values into `out`, then the buffers
-// alternate (`temp` is needed only with more than one active pass). With
-// `parts` > 1, every pass is split into that many ranges of rows on `pool`:
-// each range counts its digits, and scatters from its own offsets (after
-// those of the earlier ranges, so the sort stays stable).
+// alternate (`temp` is needed only with more than one active pass).
 template <class KeyOf>
 Entry *sortColumnBy(const float *values, const std::uint16_t *labels, std::size_t count,
                     const EntryCodec &codec, RadixHistogram &histogram, Entry *out, Entry *temp,
-                    ThreadPool *pool, std::size_t parts, KeyOf keyOf) {
+                    KeyOf keyOf) {
   auto entryOf = [&](std::size_t row) {
     // +0.0f: -0.0 and 0.0 are the same value (no threshold between them).
     return Entry{values[row] + 0.0f, codec.pack(static_cast<std::uint32_t>(row), labels[row])};
@@ -201,7 +198,7 @@ Entry *sortColumnBy(const float *values, const std::uint16_t *labels, std::size_
     }
     return out;
   }
-  if (parts <= 1 && !histogram.counted) { // radixPlan()'s digits, in one read
+  if (!histogram.counted) { // radixPlan()'s digits, in one read
     int active[kRadixPasses] = {0, 0, 0};
     int activeCount = 0;
     for (int pass = 0; pass < kRadixPasses; ++pass) {
@@ -237,39 +234,6 @@ Entry *sortColumnBy(const float *values, const std::uint16_t *labels, std::size_
     const std::uint32_t shift = histogram.shift[pass];
     const std::uint32_t mask = histogram.mask[pass];
     const std::size_t bucketCount = histogram.buckets(pass);
-    if (parts > 1) {
-      auto digitAt = [&](std::size_t index) {
-        const float value = source ? source[index].value : values[index] + 0.0f;
-        return (keyOf(value) >> shift) & mask;
-      };
-      std::vector<std::uint32_t> buckets(parts * bucketCount, 0);
-      parallelFor(pool, parts, [&](std::size_t part) {
-        std::uint32_t *bucket = buckets.data() + part * bucketCount;
-        const std::size_t end = count * (part + 1) / parts;
-        for (std::size_t index = count * part / parts; index < end; ++index) {
-          ++bucket[digitAt(index)];
-        }
-      });
-      std::uint32_t offset = 0;
-      for (std::size_t digit = 0; digit < bucketCount; ++digit) {
-        for (std::size_t part = 0; part < parts; ++part) {
-          const std::uint32_t size = buckets[part * bucketCount + digit];
-          buckets[part * bucketCount + digit] = offset;
-          offset += size;
-        }
-      }
-      parallelFor(pool, parts, [&](std::size_t part) {
-        std::uint32_t *bucket = buckets.data() + part * bucketCount;
-        const std::size_t end = count * (part + 1) / parts;
-        for (std::size_t index = count * part / parts; index < end; ++index) {
-          const Entry entry = source ? source[index] : entryOf(index);
-          target[bucket[(keyOf(entry.value) >> shift) & mask]++] = entry;
-        }
-      });
-      source = target;
-      std::swap(target, other);
-      continue;
-    }
     std::uint32_t *bucket = histogram.counts[pass];
     std::uint32_t offset = 0;
     for (std::size_t digit = 0; digit < bucketCount; ++digit) {
@@ -297,17 +261,425 @@ Entry *sortColumnBy(const float *values, const std::uint16_t *labels, std::size_
 }
 
 Entry *sortColumn(const float *values, const std::uint16_t *labels, std::size_t count,
-                  const EntryCodec &codec, RadixHistogram &histogram, Entry *out, Entry *temp,
-                  ThreadPool *pool, std::size_t parts) {
+                  const EntryCodec &codec, RadixHistogram &histogram, Entry *out, Entry *temp) {
   if (histogram.integer) {
     const std::int32_t base = histogram.base;
-    return sortColumnBy(values, labels, count, codec, histogram, out, temp, pool, parts,
+    return sortColumnBy(values, labels, count, codec, histogram, out, temp,
                         [base](float value) {
                           return static_cast<std::uint32_t>(static_cast<std::int32_t>(value) - base);
                         });
   }
-  return sortColumnBy(values, labels, count, codec, histogram, out, temp, pool, parts,
+  return sortColumnBy(values, labels, count, codec, histogram, out, temp,
                       [](float value) { return sortKey(value); });
+}
+
+// ---------------------------------------------------------------------------
+// Columns of 1M+ rows: one scatter out of the caches, the rest in them.
+// ---------------------------------------------------------------------------
+// 1. One read of the raw values (per chunk of rows): the AND and OR of the
+//    keys, the range, and whether all are integers (ColumnStats).
+// 2. The key (as radixPlan(): sortKey(), or int(value) - min where that needs
+//    fewer bits) and the bits in which the keys differ. A column whose keys
+//    differ in at most kDirectBits bits is sorted by one counting pass over
+//    them (done).
+// 3. Otherwise the top kPrefixBits of those bits are counted per chunk, and
+//    consecutive prefixes are grouped into buckets of about kBucketEntries
+//    entries (float keys are skewed: a few exponents hold most rows, so equal
+//    digit widths would make a few huge buckets), and the raw rows are
+//    scattered once, stably, into their buckets in the column's slot.
+// 4. Each bucket is sorted where it lies by the bits in which its own keys
+//    differ (LSD through a per-thread buffer, in cache).
+// The result is a stable sort by the key, as the LSD sort's: the same column.
+constexpr std::size_t kBigColumnRows = std::size_t{1} << 20;
+constexpr int kDirectBits = 12;
+constexpr int kPrefixBits = 16;
+constexpr std::size_t kBucketEntries = std::size_t{1} << 15;
+constexpr std::size_t kMaxBuckets = 4096;
+constexpr int kBucketDigitBits = 11;
+
+struct KeyPlan {
+  bool integer = false;
+  std::int32_t base = 0;
+  int low = 0;  // lowest varying bit
+  int span = 0; // varying bits [low, low + span)
+  int prefixBits = 0;
+  int prefixShift = 0;
+  std::vector<std::uint16_t> bucketOf; // prefix -> bucket (span > kDirectBits)
+  std::size_t buckets = 0;
+  std::vector<std::uint32_t> bucketStart; // buckets + 1
+
+  std::uint32_t key(float value) const {
+    return integer ? static_cast<std::uint32_t>(static_cast<std::int32_t>(value) - base)
+                   : sortKey(value);
+  }
+  std::uint32_t prefix(std::uint32_t key) const {
+    return (key >> prefixShift) & ((1u << prefixBits) - 1);
+  }
+};
+
+void columnStats(const float *values, std::size_t begin, std::size_t end, ColumnStats &stats) {
+  std::uint32_t all = ~0u;
+  std::uint32_t any = 0;
+  float least = INFINITY;
+  float most = -INFINITY;
+  std::uint32_t integral = 1;
+  for (std::size_t index = begin; index < end; ++index) {
+    const float value = values[index] + 0.0f;
+    const std::uint32_t bits = std::bit_cast<std::uint32_t>(value);
+    const std::uint32_t key = (bits & 0x80000000u) ? ~bits : bits | 0x80000000u;
+    all &= key;
+    any |= key;
+    least = std::min(least, value);
+    most = std::max(most, value);
+    const bool inRange = value >= -0x1p30f && value <= 0x1p30f; // false for NaN
+    const float safe = inRange ? value : 0.0f;
+    integral &= static_cast<std::uint32_t>(inRange) &
+                static_cast<std::uint32_t>(static_cast<float>(static_cast<std::int32_t>(safe)) ==
+                                           value);
+  }
+  stats.all = all;
+  stats.any = any;
+  stats.low = least;
+  stats.high = most;
+  stats.integral = integral != 0;
+}
+
+void planKey(const ColumnStats &stats, KeyPlan &plan) {
+  const std::uint32_t varying = stats.any ^ stats.all;
+  if (varying == 0) {
+    return; // span 0: one value
+  }
+  plan.low = std::countr_zero(varying);
+  plan.span = 32 - std::countl_zero(varying) - plan.low;
+  if (stats.integral) {
+    const std::int64_t range =
+        static_cast<std::int64_t>(stats.high) - static_cast<std::int64_t>(stats.low);
+    const int rangeSpan = std::bit_width(static_cast<std::uint64_t>(range));
+    if (rangeSpan < plan.span) {
+      plan.integer = true;
+      plan.base = static_cast<std::int32_t>(stats.low);
+      plan.low = 0;
+      plan.span = rangeSpan;
+    }
+  }
+  plan.prefixBits = std::min(plan.span, plan.span <= kDirectBits ? kDirectBits : kPrefixBits);
+  plan.prefixShift = plan.low + plan.span - plan.prefixBits;
+}
+
+// Buckets from the prefix counts (summed over the chunks): consecutive
+// prefixes up to about rows / buckets entries each.
+void planBuckets(const std::uint32_t *prefixCounts, std::size_t rows, KeyPlan &plan) {
+  const std::size_t prefixes = std::size_t{1} << plan.prefixBits;
+  plan.bucketOf.resize(prefixes);
+  if (plan.span <= kDirectBits) { // every prefix (the whole varying key) its own bucket
+    std::iota(plan.bucketOf.begin(), plan.bucketOf.end(), std::uint16_t{0});
+    plan.buckets = prefixes;
+    return;
+  }
+  const std::size_t wanted =
+      std::clamp<std::size_t>((rows + kBucketEntries - 1) / kBucketEntries, 1, kMaxBuckets / 2);
+  const std::size_t target = (rows + wanted - 1) / wanted;
+  std::size_t bucket = 0;
+  std::size_t filled = 0;
+  for (std::size_t p = 0; p < prefixes; ++p) {
+    const std::size_t count = prefixCounts[p];
+    if (filled > 0 && filled + count > target && bucket + 1 < kMaxBuckets) {
+      ++bucket;
+      filled = 0;
+    }
+    plan.bucketOf[p] = static_cast<std::uint16_t>(bucket);
+    filled += count;
+  }
+  plan.buckets = bucket + 1;
+}
+
+using EntryBuffer = std::vector<Entry, UninitializedAllocator<Entry>>;
+
+// Stable sort of entries[0, count) by plan.key(), in cache: LSD over the bits
+// in which these keys differ, through `buffer`.
+void sortBucket(Entry *entries, std::size_t count, const KeyPlan &plan, EntryBuffer &buffer) {
+  if (count < 2) {
+    return;
+  }
+  std::uint32_t all = ~0u;
+  std::uint32_t any = 0;
+  for (std::size_t index = 0; index < count; ++index) {
+    const std::uint32_t key = plan.key(entries[index].value);
+    all &= key;
+    any |= key;
+  }
+  const std::uint32_t varying = any ^ all;
+  if (varying == 0) {
+    return;
+  }
+  if (count <= 32) { // insertion sort (stable)
+    for (std::size_t index = 1; index < count; ++index) {
+      const Entry entry = entries[index];
+      const std::uint32_t key = plan.key(entry.value);
+      std::size_t at = index;
+      while (at > 0 && plan.key(entries[at - 1].value) > key) {
+        entries[at] = entries[at - 1];
+        --at;
+      }
+      entries[at] = entry;
+    }
+    return;
+  }
+  const int low = std::countr_zero(varying);
+  const int span = 32 - std::countl_zero(varying) - low;
+  const int passes = (span + kBucketDigitBits - 1) / kBucketDigitBits;
+  int shift[kRadixPasses];
+  std::uint32_t mask[kRadixPasses];
+  int at = low;
+  for (int pass = 0; pass < passes; ++pass) {
+    const int bits = span / passes + (pass < span % passes ? 1 : 0);
+    shift[pass] = at;
+    mask[pass] = (1u << bits) - 1;
+    at += bits;
+  }
+  thread_local std::vector<std::uint32_t> countStore(std::size_t{kRadixPasses}
+                                                     << kBucketDigitBits);
+  std::uint32_t *counts[kRadixPasses];
+  for (int pass = 0; pass < passes; ++pass) {
+    counts[pass] = countStore.data() + (static_cast<std::size_t>(pass) << kBucketDigitBits);
+    std::fill_n(counts[pass], std::size_t{mask[pass]} + 1, 0u);
+  }
+  for (std::size_t index = 0; index < count; ++index) {
+    const std::uint32_t key = plan.key(entries[index].value);
+    for (int pass = 0; pass < passes; ++pass) {
+      ++counts[pass][(key >> shift[pass]) & mask[pass]];
+    }
+  }
+  if (buffer.size() < count) {
+    buffer.resize(count);
+  }
+  Entry *source = entries;
+  Entry *target = buffer.data();
+  for (int pass = 0; pass < passes; ++pass) {
+    std::uint32_t *bucket = counts[pass];
+    if (bucket[(plan.key(source[0].value) >> shift[pass]) & mask[pass]] == count) {
+      continue; // one digit throughout
+    }
+    std::uint32_t offset = 0;
+    for (std::uint32_t digit = 0; digit <= mask[pass]; ++digit) {
+      const std::uint32_t size = bucket[digit];
+      bucket[digit] = offset;
+      offset += size;
+    }
+    for (std::size_t index = 0; index < count; ++index) {
+      const Entry entry = source[index];
+      target[bucket[(plan.key(entry.value) >> shift[pass]) & mask[pass]]++] = entry;
+    }
+    std::swap(source, target);
+  }
+  if (source != entries) {
+    std::memcpy(entries, source, count * sizeof(Entry));
+  }
+}
+
+// One column on this thread (as presortBig() with one chunk), into `out`.
+void sortWholeColumn(const float *values, const std::uint16_t *labels, std::size_t rows,
+                     const EntryCodec &codec, Entry *out) {
+  ColumnStats stats;
+  columnStats(values, 0, rows, stats);
+  KeyPlan plan;
+  planKey(stats, plan);
+  auto entryOf = [&](std::size_t row, float value) {
+    return Entry{value, codec.pack(static_cast<std::uint32_t>(row), labels[row])};
+  };
+  if (plan.span == 0) {
+    for (std::size_t row = 0; row < rows; ++row) {
+      out[row] = entryOf(row, values[row] + 0.0f);
+    }
+    return;
+  }
+  thread_local std::vector<std::uint32_t> counts;
+  counts.assign(std::size_t{1} << plan.prefixBits, 0u);
+  for (std::size_t row = 0; row < rows; ++row) {
+    ++counts[plan.prefix(plan.key(values[row] + 0.0f))];
+  }
+  planBuckets(counts.data(), rows, plan);
+  thread_local std::vector<std::uint32_t> offset;
+  offset.assign(plan.buckets + 1, 0u);
+  for (std::size_t p = 0; p < counts.size(); ++p) {
+    offset[plan.bucketOf[p] + 1] += counts[p];
+  }
+  std::partial_sum(offset.begin(), offset.end(), offset.begin());
+  plan.bucketStart.assign(offset.begin(), offset.end());
+  const std::uint16_t *bucketOf = plan.bucketOf.data();
+  for (std::size_t row = 0; row < rows; ++row) {
+    const float value = values[row] + 0.0f;
+    out[offset[bucketOf[plan.prefix(plan.key(value))]]++] = entryOf(row, value);
+  }
+  if (plan.span <= kDirectBits) {
+    return;
+  }
+  thread_local EntryBuffer buffer;
+  for (std::size_t bucket = 0; bucket < plan.buckets; ++bucket) {
+    const std::uint32_t begin = plan.bucketStart[bucket];
+    sortBucket(out + begin, plan.bucketStart[bucket + 1] - begin, plan, buffer);
+  }
+}
+
+// Columns of kBigColumnRows+ rows, each into its own slot (feature f in slot
+// f). `chunks` row chunks per column for the passes over the raw values; with
+// at least as many columns as threads, a column per task (sortWholeColumn()).
+SlotMap presortBig(const Dataset &dataset, const EntryCodec &codec, Entry *data,
+                   ThreadPool *pool) {
+  const std::size_t rows = dataset.rowCount;
+  const std::size_t features = dataset.featureCount();
+  const std::size_t workers = pool ? pool->workerCount() + 1 : 1;
+  const std::size_t chunks =
+      std::clamp<std::size_t>((4 * workers + features - 1) / features, 1, rows / 65536 + 1);
+  const std::uint16_t *labels = dataset.labels.data();
+  SlotMap slotOf(features);
+  std::iota(slotOf.begin(), slotOf.end(), 0u);
+  if (chunks == 1) {
+    parallelFor(pool, features, [&](std::size_t feature) {
+      sortWholeColumn(dataset.column(feature), labels, rows, codec, data + feature * rows);
+    });
+    return slotOf;
+  }
+  auto chunkBegin = [&](std::size_t chunk) { return rows * chunk / chunks; };
+
+  // 1-2. Stats and key plans.
+  std::vector<ColumnStats> chunkStats(features * chunks);
+  parallelFor(pool, features * chunks, [&](std::size_t task) {
+    const std::size_t chunk = task % chunks;
+    columnStats(dataset.column(task / chunks), chunkBegin(chunk), chunkBegin(chunk + 1),
+                chunkStats[task]);
+  });
+  std::vector<KeyPlan> plans(features);
+  for (std::size_t feature = 0; feature < features; ++feature) {
+    ColumnStats merged = chunkStats[feature * chunks];
+    for (std::size_t chunk = 1; chunk < chunks; ++chunk) {
+      const ColumnStats &part = chunkStats[feature * chunks + chunk];
+      merged.all &= part.all;
+      merged.any |= part.any;
+      merged.low = std::min(merged.low, part.low);
+      merged.high = std::max(merged.high, part.high);
+      merged.integral = merged.integral && part.integral;
+    }
+    planKey(merged, plans[feature]);
+  }
+
+  // 3. Prefix counts per chunk, buckets, the offsets of every (bucket, chunk)
+  //    (bucket-major: the scatter is stable), and the scatter.
+  std::vector<std::vector<std::uint32_t>> chunkCounts(features * chunks);
+  parallelFor(pool, features * chunks, [&](std::size_t task) {
+    const KeyPlan &plan = plans[task / chunks];
+    if (plan.span == 0) {
+      return;
+    }
+    std::vector<std::uint32_t> &counts = chunkCounts[task];
+    counts.assign(std::size_t{1} << plan.prefixBits, 0u);
+    const float *values = dataset.column(task / chunks);
+    const std::size_t chunk = task % chunks;
+    const std::size_t end = chunkBegin(chunk + 1);
+    for (std::size_t row = chunkBegin(chunk); row < end; ++row) {
+      ++counts[plan.prefix(plan.key(values[row] + 0.0f))];
+    }
+  });
+  // offsets[task][bucket]: where the chunk's first entry of the bucket goes.
+  std::vector<std::vector<std::uint32_t>> offsets(features * chunks);
+  parallelFor(pool, features, [&](std::size_t feature) {
+    KeyPlan &plan = plans[feature];
+    if (plan.span == 0) {
+      return;
+    }
+    const std::size_t prefixes = std::size_t{1} << plan.prefixBits;
+    std::vector<std::uint32_t> total(chunkCounts[feature * chunks]);
+    for (std::size_t chunk = 1; chunk < chunks; ++chunk) {
+      const std::uint32_t *add = chunkCounts[feature * chunks + chunk].data();
+      for (std::size_t p = 0; p < prefixes; ++p) {
+        total[p] += add[p];
+      }
+    }
+    planBuckets(total.data(), rows, plan);
+    std::vector<std::uint32_t> sizes(plan.buckets * chunks, 0u); // chunk-major
+    for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+      const std::uint32_t *counts = chunkCounts[feature * chunks + chunk].data();
+      std::uint32_t *size = sizes.data() + chunk * plan.buckets;
+      for (std::size_t p = 0; p < prefixes; ++p) {
+        size[plan.bucketOf[p]] += counts[p];
+      }
+    }
+    plan.bucketStart.assign(plan.buckets + 1, 0u);
+    std::uint32_t offset = 0;
+    for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+      offsets[feature * chunks + chunk].resize(plan.buckets);
+    }
+    for (std::size_t bucket = 0; bucket < plan.buckets; ++bucket) {
+      plan.bucketStart[bucket] = offset;
+      for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
+        offsets[feature * chunks + chunk][bucket] = offset;
+        offset += sizes[chunk * plan.buckets + bucket];
+      }
+    }
+    plan.bucketStart[plan.buckets] = offset;
+  });
+  parallelFor(pool, features * chunks, [&](std::size_t task) {
+    const std::size_t feature = task / chunks;
+    const KeyPlan &plan = plans[feature];
+    const float *values = dataset.column(feature);
+    Entry *out = data + feature * rows;
+    const std::size_t chunk = task % chunks;
+    const std::size_t end = chunkBegin(chunk + 1);
+    auto entryOf = [&](std::size_t row, float value) {
+      return Entry{value, codec.pack(static_cast<std::uint32_t>(row), labels[row])};
+    };
+    if (plan.span == 0) {
+      for (std::size_t row = chunkBegin(chunk); row < end; ++row) {
+        out[row] = entryOf(row, values[row] + 0.0f);
+      }
+      return;
+    }
+    std::uint32_t *offset = offsets[task].data();
+    const std::uint16_t *bucketOf = plan.bucketOf.data();
+    for (std::size_t row = chunkBegin(chunk); row < end; ++row) {
+      const float value = values[row] + 0.0f;
+      out[offset[bucketOf[plan.prefix(plan.key(value))]]++] = entryOf(row, value);
+    }
+  });
+
+  // 4. The buckets of the columns with more varying bits than the prefix's,
+  //    in groups of about the same number of entries.
+  struct Group {
+    std::uint32_t feature;
+    std::uint32_t first; // buckets [first, last)
+    std::uint32_t last;
+  };
+  std::vector<Group> groups;
+  const std::size_t groupEntries =
+      std::max<std::size_t>(kBucketEntries, rows * features / (8 * workers) + 1);
+  for (std::size_t feature = 0; feature < features; ++feature) {
+    const KeyPlan &plan = plans[feature];
+    if (plan.span <= kDirectBits) {
+      continue;
+    }
+    std::uint32_t first = 0;
+    for (std::uint32_t bucket = 0; bucket < plan.buckets; ++bucket) {
+      if (plan.bucketStart[bucket + 1] - plan.bucketStart[first] >= groupEntries) {
+        groups.push_back({static_cast<std::uint32_t>(feature), first, bucket + 1});
+        first = bucket + 1;
+      }
+    }
+    if (first < plan.buckets) {
+      groups.push_back({static_cast<std::uint32_t>(feature), first,
+                        static_cast<std::uint32_t>(plan.buckets)});
+    }
+  }
+  parallelFor(pool, groups.size(), [&](std::size_t index) {
+    const Group &group = groups[index];
+    const KeyPlan &plan = plans[group.feature];
+    Entry *out = data + std::size_t{group.feature} * rows;
+    thread_local EntryBuffer buffer;
+    for (std::uint32_t bucket = group.first; bucket < group.last; ++bucket) {
+      const std::uint32_t begin = plan.bucketStart[bucket];
+      sortBucket(out + begin, plan.bucketStart[bucket + 1] - begin, plan, buffer);
+    }
+  });
+  return slotOf;
 }
 
 } // namespace
@@ -319,41 +691,26 @@ SlotMap presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *d
   if (rows > std::numeric_limits<std::uint32_t>::max()) {
     throw std::runtime_error("presortColumns: too many rows");
   }
+  if (slots <= features) {
+    throw std::logic_error("presortColumns: needs a slot more than features");
+  }
+  // On one thread the LSD passes below are faster (one thread does not
+  // saturate the memory: HIGGS and chess presorts 3-8% slower this way).
+  if (rows >= kBigColumnRows && pool && pool->workerCount() > 0) {
+    return presortBig(dataset, codec, data, pool);
+  }
   // Histograms first, so that the features with the most passes are sorted
   // first (features differ a lot: binary ones need one pass, continuous ones
   // three), which balances the threads.
   std::unique_ptr<RadixHistogram[]> histograms(new RadixHistogram[features]);
-  // Columns of 1M+ rows are counted in chunks on all threads (when there are
-  // fewer columns than threads: one thread per column made the counts most of
-  // the presort), and radixPlan() picks their digits. Smaller ones stay in
-  // cache, where the pass it saves costs about as much as its extra reads.
-  const bool big = rows >= (std::size_t{1} << 20);
-  const std::size_t workers = pool ? pool->workerCount() + 1 : 1;
-  const std::size_t chunks =
-      big ? std::max<std::size_t>(1, (4 * workers + features - 1) / features) : 1;
-  std::unique_ptr<RadixHistogram[]> chunkCounts(chunks > 1 ? new RadixHistogram[features * chunks]
-                                                           : nullptr);
-  parallelFor(pool, features * chunks, [&](std::size_t task) {
-    const std::size_t feature = task / chunks;
-    const std::size_t chunk = task % chunks;
-    radixCount(dataset.column(feature), rows * chunk / chunks, rows * (chunk + 1) / chunks,
-               chunks > 1 ? chunkCounts[task].counts : histograms[feature].counts);
-  });
+  // Columns of 1M+ rows (here on one thread) get their digits from
+  // radixPlan(). Smaller ones stay in cache, where the pass it saves costs
+  // about as much as its extra reads.
+  const bool big = rows >= kBigColumnRows;
   std::vector<ColumnStats> stats(features);
   parallelFor(pool, features, [&](std::size_t feature) {
     RadixHistogram &histogram = histograms[feature];
-    if (chunks > 1) {
-      for (int pass = 0; pass < kRadixPasses; ++pass) {
-        std::uint32_t *sum = histogram.counts[pass];
-        std::copy_n(chunkCounts[feature * chunks].counts[pass], kRadixBuckets, sum);
-        for (std::size_t chunk = 1; chunk < chunks; ++chunk) {
-          const std::uint32_t *add = chunkCounts[feature * chunks + chunk].counts[pass];
-          for (std::size_t digit = 0; digit < kRadixBuckets; ++digit) {
-            sum[digit] += add[digit];
-          }
-        }
-      }
-    }
+    radixCount(dataset.column(feature), 0, rows, histogram.counts);
     // The passes whose digit is not the same everywhere.
     const std::uint32_t firstKey = rows > 0 ? sortKey(dataset.column(feature)[0] + 0.0f) : 0;
     histogram.activePasses = 0;
@@ -368,24 +725,11 @@ SlotMap presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *d
   });
   if (big) {
     // Integer keys can save a pass only where there are two or more.
-    std::vector<ColumnStats> ranges(features * chunks);
-    parallelFor(pool, ranges.size(), [&](std::size_t task) {
-      const std::size_t feature = task / chunks;
-      const std::size_t chunk = task % chunks;
-      ColumnStats &range = ranges[task];
-      range.integral = histograms[feature].activePasses >= 2 &&
-                       integerRange(dataset.column(feature), rows * chunk / chunks,
-                                    rows * (chunk + 1) / chunks, range.low, range.high);
-    });
     for (std::size_t feature = 0; feature < features; ++feature) {
-      ColumnStats &merged = stats[feature];
-      for (std::size_t chunk = 0; chunk < chunks; ++chunk) {
-        const ColumnStats &range = ranges[feature * chunks + chunk];
-        merged.integral = merged.integral && range.integral;
-        merged.low = std::min(merged.low, range.low);
-        merged.high = std::max(merged.high, range.high);
-      }
-      radixPlan(merged, histograms[feature]);
+      ColumnStats &column = stats[feature];
+      column.integral = histograms[feature].activePasses >= 2 &&
+                        integerRange(dataset.column(feature), 0, rows, column.low, column.high);
+      radixPlan(column, histograms[feature]);
     }
   }
   std::vector<std::size_t> order(features);
@@ -398,13 +742,10 @@ SlotMap presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *d
   }
   // The free slots, handed out under a lock: a sort takes one for its column
   // and, with more than one pass, one more as workspace, and gives back the
-  // one that does not end up with the result. Fewer sorts at once than
-  // threads: every column is sorted in parts.
-  const std::size_t threads = pool ? pool->workerCount() + 1 : 1;
+  // one that does not end up with the result.
   SlotMap slotOf(features);
   std::vector<std::uint32_t> free(slots);
   std::iota(free.rbegin(), free.rend(), 0u); // taken from the back: lowest first
-  std::size_t sorted = 0;
   std::mutex mutex;
   std::condition_variable freed;
   parallelFor(pool, features, [&](std::size_t index) {
@@ -412,7 +753,6 @@ SlotMap presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *d
     const bool workspace = histograms[feature].activePasses > 1;
     std::uint32_t slot;
     std::uint32_t spare = 0;
-    std::size_t parts = 1;
     {
       std::unique_lock<std::mutex> lock(mutex);
       freed.wait(lock, [&]() { return free.size() >= (workspace ? 2u : 1u); });
@@ -422,25 +762,17 @@ SlotMap presortColumns(const Dataset &dataset, const EntryCodec &codec, Entry *d
         spare = free.back();
         free.pop_back();
       }
-      // Sorts that can run at once: the features left, and the slots for them.
-      const std::size_t room =
-          std::max<std::size_t>(1, std::min(features - index, (slots - sorted) / 2));
-      if (rows >= (std::size_t{1} << 20)) {
-        parts = (threads + room - 1) / room;
-      }
     }
     Entry *out = data + std::size_t{slot} * rows;
     const Entry *result =
         sortColumn(dataset.column(feature), dataset.labels.data(), rows, codec,
-                   histograms[feature], out, workspace ? data + std::size_t{spare} * rows : nullptr,
-                   pool, parts);
+                   histograms[feature], out, workspace ? data + std::size_t{spare} * rows : nullptr);
     {
       std::lock_guard<std::mutex> lock(mutex);
       slotOf[feature] = result == out ? slot : spare;
       if (workspace) {
         free.push_back(result == out ? spare : slot);
       }
-      ++sorted;
     }
     freed.notify_all();
   });

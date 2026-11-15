@@ -91,8 +91,11 @@ samples sweep and partition their attributes in parallel. When a node with at
 least 4,096 samples is split, one child becomes a new task and the current
 thread continues with the other. Data parallelism thus serves the few large
 nodes near the root, and task parallelism the many small subtrees below. The
-presort is parallel as well, and extra spare buffers let all threads partition
-attributes at the same time.
+presort is parallel as well: each attribute of a million samples or more is
+scattered once, stably, into buckets of about 32,000 entries by the top bits
+of its sort key, and each bucket is then sorted where it lies, inside the
+cache, so that only one pass of the sort misses the caches. Extra spare
+buffers let all threads partition attributes at the same time.
 
 Large nodes are memory-bound, so the builder avoids traffic between cores and
 repeated reads. The thread that splits a node marks the samples going left in
@@ -121,7 +124,12 @@ The GPU then partitions the split nodes and, in the same pass, collects the
 class counts for the next level. Each level therefore needs a single round
 trip between CPU and GPU. As on the CPU, the sweeps skip cuts with the
 boundary-point rule and, for two classes, with a bound over each whole tile,
-and score every remaining cut with the exact routine. Deep levels hold mostly
+and score every remaining cut with the exact routine. A tile in which the
+boundary-point rule leaves no cut is not swept at all: most tiles of an
+attribute with few distinct values, such as MNIST8M's pixels. For CART, a
+tile is also skipped when its bound falls clearly below the best exact gain of
+any attribute of its node, since only the node's best attribute can be
+chosen; C4.5 needs every attribute's best gain. Deep levels hold mostly
 tiny nodes, for which a block of 256 threads per tile would leave seven of its
 eight warps idle. A level therefore numbers the tiles of nodes with at most 256
 samples last, and one warp sweeps and partitions each of them; when no

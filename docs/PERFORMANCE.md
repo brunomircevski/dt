@@ -2,6 +2,115 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: four suggestions merged (mordor3 cluster)
+
+The items of SUGGESTIONS.MD (written from main at a7990141), each on its own
+branch, measured against a7990141 with `bench/cluster/ab.sh` on whole nodes,
+old and new binaries interleaved, 3 rounds x 3 trees (medians of 9 runs). Cases: `-d 10` unpruned ("d10") and full
+depth (CART `--prune 1e-5`, C4.5 `--prune 0.25`) on HIGGS, SUSY,
+chess_100m, covertype, MNIST8M, ECBDL'14 15M and SOREL-20M 4M; on the CPU
+without SOREL 4M and ECBDL 15M C4.5 at full depth. One thread is
+`taskset -c 0 --serial` on HIGGS, SUSY, chess_100m and covertype. Every
+tree's sha256 equals main's in every run, `tests/check.sh` passes for
+`./tree` and `./tree_cpu`, and no existing kernel's register count changed.
+
+Merged:
+
+* **C1, the presort's big columns in cache** (CPU.md, "Sort once"): one
+  scatter of the raw rows into buckets by the top key bits, then each bucket
+  sorted where it lies. Presort on dell3, 48 threads: HIGGS 0.27 → 0.20 s,
+  chess_100m 0.23 → 0.16 s, ECBDL 15M 2.8 → 2.2 s. Trees at 48 threads:
+  epyc1 -5.9% to -6.9% geomean, dell1 -5.8% (chess -12 to -23%, HIGGS -4 to
+  -11%, ECBDL, SOREL and MNIST8M -5 to -9% at depth 10). On one thread it was
+  1-8% slower on the presort, so one thread keeps the LSD sort; that left the
+  old code's column parts and chunked counts unreachable, and they were
+  removed. Peak RSS (epyc1, 48 threads): +0.01 to +0.07 GiB on HIGGS, SUSY and
+  covertype, +0.18 GiB on chess_100m (3.96 → 4.15 GiB, every feature in its
+  own slot), +0.4 GiB on SOREL 4M (108 GiB), unchanged on MNIST8M and ECBDL.
+* **G1, tiles without a cut** (CUDA.md, "One level"): `tileExactKernel`
+  returns at once for a tile of a multi-tile segment whose `tileTries` is 0.
+  Per item, hybrid / GPU-only: -10.3% / -10.3% geomean on the A100, -12.5% /
+  -11.5% on the H100; MNIST8M -28 to -44%, ECBDL 15M -13 to -18%, SOREL 4M
+  -10 to -16%.
+* **G2, CART's tile bound against the node's best**: the lower bound of a
+  segment is the best exact gain known for any feature of its node (two
+  small kernels, an atomic max per node). Per item, hybrid / GPU-only: -2.5%
+  / -2.9% on the A100, -3.2% / -3.8% on the H100; CART on HIGGS -8 to -17%,
+  ECBDL 15M -12 to -17%, SOREL 4M -12 to -15%, SUSY -2 to -9%.
+* **G10, kernels for 7 and 10 classes**: MNIST8M ran the 16-class kernels.
+  `tileExactKernel<10>` has 64 registers (80 for 16). MNIST8M -16 to -27%,
+  geomean -2.7% / -3.5% on the A100, -4.0% / -4.7% on the H100.
+
+All four together against main (train ms, medians of 9 runs):
+
+| case | epyc1 48 threads | dell1 48 threads | H100 hybrid | H100 GPU-only | A100 hybrid | A100 GPU-only |
+|---|--:|--:|--:|--:|--:|--:|
+| HIGGS CART d10 | 340 → 312 (-8%) | 525 → 480 (-9%) | 131 → 116 (-11%) | 124 → 108 (-13%) | 197 → 177 (-10%) | 188 → 167 (-11%) |
+| HIGGS CART full | 562 → 541 (-4%) | 830 → 775 (-7%) | 308 → 288 (-7%) | 318 → 296 (-7%) | 424 → 388 (-9%) | 464 → 440 (-5%) |
+| HIGGS C4.5 d10 | 371 → 346 (-7%) | 634 → 581 (-8%) | 135 → 130 (-3%) | 133 → 126 (-6%) | 205 → 199 (-3%) | 197 → 190 (-4%) |
+| HIGGS C4.5 full | 1090 → 1072 (-2%) | 1584 → 1528 (-4%) | 1007 → 1127 (+12%)¹ | 1796 → 1858 (+3%) | 1030 → 1026 (-0%) | 1896 → 1885 (-1%) |
+| SUSY CART d10 | 135 → 134 (-1%) | 186 → 184 (-1%) | 50 → 50 (+0%) | 49 → 46 (-7%) | 77 → 70 (-9%) | 71 → 65 (-9%) |
+| SUSY CART full | 204 → 200 (-2%) | 273 → 266 (-3%) | 128 → 122 (-5%) | 137 → 134 (-2%) | 175 → 162 (-7%) | 194 → 191 (-1%) |
+| SUSY C4.5 d10 | 152 → 147 (-3%) | 219 → 213 (-3%) | 58 → 56 (-4%) | 57 → 55 (-3%) | 85 → 82 (-4%) | 80 → 78 (-3%) |
+| SUSY C4.5 full | 348 → 344 (-1%) | 472 → 462 (-2%) | 289 → 282 (-2%) | 326 → 337 (+3%) | 342 → 342 (+0%) | 369 → 367 (-1%) |
+| chess_100m CART d10 | 167 → 159 (-5%) | 340 → 302 (-11%) | 61 → 63 (+3%) | 58 → 59 (+1%) | 101 → 102 (+1%) | 96 → 94 (-2%) |
+| chess_100m CART full | 191 → 132 (-31%) | 336 → 294 (-12%) | 58 → 59 (+2%) | 60 → 57 (-5%) | 93 → 95 (+2%) | 94 → 94 (+0%) |
+| chess_100m C4.5 d10 | 240 → 175 (-27%) | 379 → 360 (-5%) | 61 → 60 (-0%) | 58 → 55 (-4%) | 103 → 102 (-1%) | 96 → 94 (-2%) |
+| chess_100m C4.5 full | 504 → 445 (-12%) | 962 → 897 (-7%) | 412 → 404 (-2%) | 432 → 438 (+1%) | 442 → 444 (+1%) | 443 → 444 (+0%) |
+| covertype CART d10 | 24 → 26 (+11%) | 35 → 34 (-2%) | 28 → 28 (+0%) | 29 → 27 (-6%) | 41 → 40 (-1%) | 38 → 35 (-9%) |
+| covertype CART full | 38 → 38 (-1%) | 48 → 50 (+2%) | 52 → 51 (-3%) | 46 → 44 (-5%) | 68 → 70 (+3%) | 61 → 59 (-3%) |
+| covertype C4.5 d10 | 29 → 25 (-14%) | 40 → 43 (+8%) | 30 → 28 (-6%) | 30 → 28 (-9%) | 41 → 38 (-6%) | 41 → 36 (-12%) |
+| covertype C4.5 full | 107 → 108 (+0%) | 128 → 124 (-3%) | 102 → 97 (-5%) | 109 → 106 (-3%) | 192 → 186 (-3%) | 193 → 191 (-1%) |
+| MNIST8M CART d10 | 3315 → 3133 (-5%) | 5643 → 5333 (-5%) | 3639 → 1912 (-47%) | 3642 → 1911 (-48%) | 5177 → 3151 (-39%) | 5138 → 3080 (-40%) |
+| MNIST8M CART full | 10260 → 10132 (-1%) | 16937 → 16711 (-1%) | 12253 → 6284 (-49%) | 12584 → 6384 (-49%) | 15120 → 8492 (-44%) | 15450 → 8666 (-44%) |
+| MNIST8M C4.5 d10 | 3485 → 3308 (-5%) | 6222 → 5860 (-6%) | 3782 → 1897 (-50%) | 3814 → 1909 (-50%) | 5180 → 3050 (-41%) | 5198 → 3113 (-40%) |
+| MNIST8M C4.5 full | 18181 → 18195 (+0%) | 29347 → 29402 (+0%) | 22113 → 11489 (-48%) | 27864 → 16351 (-41%) | 25596 → 14900 (-42%) | 30887 → 19573 (-37%) |
+| ECBDL 15M CART d10 | 4744 → 4424 (-7%) | 7960 → 7497 (-6%) | 2946 → 2409 (-18%) | 2944 → 2407 (-18%) | 4958 → 4222 (-15%) | 4976 → 4181 (-16%) |
+| ECBDL 15M CART full | 11481 → 11141 (-3%) | 18666 → 18290 (-2%) | 6744 → 5654 (-16%) | 6789 → 5701 (-16%) | 10252 → 8759 (-15%) | 10221 → 8756 (-14%) |
+| ECBDL 15M C4.5 d10 | 5039 → 4639 (-8%) | 9066 → 8672 (-4%) | 2965 → 2423 (-18%) | 2969 → 2427 (-18%) | 4937 → 4241 (-14%) | 5023 → 4287 (-15%) |
+| SOREL 4M CART d10 | 5415 → 4949 (-9%) | 8737 → 8227 (-6%) | 2776 → 2368 (-15%) | 2790 → 2373 (-15%) | 4791 → 4182 (-13%) | 4755 → 4197 (-12%) |
+| SOREL 4M C4.5 d10 | 5485 → 4967 (-9%) | 9675 → 9000 (-7%) | 3255 → 2728 (-16%) | 3248 → 2731 (-16%) | 5193 → 4532 (-13%) | 5252 → 4493 (-14%) |
+| **geomean** | **-6.5%** | **-4.2%** | **-14.5%** | **-15.2%** | **-12.7%** | **-13.0%** |
+
+¹ Two modes on the H100 node, about 980 and 1,160 ms, for both binaries;
+8 more rounds of this case alone: 1,162 → 1,156 ms (-0.5%, 24 runs each).
+
+One thread (epyc2, dell2): +0.2% geomean on both, every case within ±1.3%
+(C1 is off there, the GPU items do not run). Peak VRAM, sampled every 0.2 s:
+the same for main and the merge on every case long enough to sample (the new
+per-node array of G2 is 8 bytes per node of a level). The largest is SOREL 4M,
+78,164 MiB of the H100's 81,559 MiB and 78,126 of the A100's 81,920 MiB;
+MNIST8M C4.5 full 75,582 MiB, ECBDL 15M 75,246 MiB: the GPU samples still
+fit on both nodes' 80 GB GPUs. Host peak RSS of the GPU runs: within 0.01 GiB.
+
+Tried and dropped (same trees in every case):
+
+* **G2 on the CPU** (the best gain of the features swept so far on one
+  thread, minus 1e-8, as a floor in the sweeps' skip tests): 48 threads
+  epyc1 +0.7% geomean (chess C4.5 d10 +14%), dell1 -1.4%; one thread epyc2
+  +0.8% (HIGGS and SUSY +3-4%).
+* **G3, a tile bound for more than two classes** (`maxGainStep / n` per row
+  moved, launched on levels of 1M+ rows): MNIST8M d10 -2 to -4%, nothing
+  else; geomean -0.4% / -0.5% (hybrid A100 / H100), -0.4% / -0.1% (GPU-only).
+* **G4, per-thread left bitmaps for the hybrid's CPU subtrees**: -0.3% (A100)
+  and +0.1% (H100) geomean, no case beyond noise.
+* **G9, no arena zero-fill for depth-limited trees that hand off almost
+  nothing**: -1.1% (A100; depth-10 HIGGS, SUSY and chess -4 to -7%) and +0.1%
+  (H100).
+* **C2, the count table only where it is read** (none for multi-class data
+  or `--multicore` Gini): 48 threads -0.3% (epyc1) and -0.9% (dell1), one
+  thread -1.3% (dell2; chess CART -6.6%).
+* **C3, `cutGain` reading the big `c·log2 c` table**: 48 threads +0.5% and
+  0.0%, one thread -0.9% (C4.5 1-4% faster on dell2).
+* **C4, per-node work by the node's features**: +0.3% (epyc2) and -0.2%
+  (dell1) at 48 threads, +0.2% on one thread, +0.1% / -0.2% hybrid.
+* **C5, C4.5's skipped blocks counted with SSE2**: GCC already vectorized
+  the loop (2-wide); +0.5%, -0.5%, +0.3%.
+
+C2 and C3 were faster on one thread but within noise on 48; they were not
+merged with the four above. B1's CPU gate (`moveRows()` on 4-byte words) is
+in SUGGESTIONS.MD.
+
 ## November 2026: CUDA kernels for small nodes (mordor3 cluster)
 
 The small-node work of `worktree-numa-gpu` (docs/CUDA.md, "Small nodes"):

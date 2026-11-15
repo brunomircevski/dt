@@ -15,22 +15,35 @@ feature again at every node — `O(F · n log n)` per node.
 
 ## Sort once: presorted columns
 
-Each feature is sorted once at the start (`presortColumns`, an LSD radix sort
-on the float bits, stable, 3 passes of 11 bits; a pass in which all keys share
-the digit is skipped). The histograms of all features are computed first, so
-that the features needing the most passes (continuous ones need three, binary
-ones one) are sorted first, which balances the threads. Columns of 1M+ rows
-are counted in chunks on all threads (not one thread per column), and their
-digits then cover only the key bits that vary, in as few passes of up to 12
-bits as possible; an integer column whose range needs fewer passes is keyed by
-`int(v) − min` instead (`radixPlan`). The first pass reads
-the raw values directly and the last one writes the final column. With
-fewer features than threads (airline: 13 features, 48 threads) each big
-column is sorted by several threads: every thread counts the digits of its
-part, a prefix over (digit, part) gives each part its place, and the parts
-scatter in parallel, still stably. C4.5's thresholds then take each feature's
-distinct values from the sorted columns (in parallel, per 1M-entry chunk).
-For feature `f`
+Each feature is sorted once at the start (`presortColumns`), stably by a key
+of the float bits (or `int(v) − min` for an integer column whose range needs
+fewer bits, `radixPlan`), so every way below gives the same columns.
+
+* **Columns of 1M+ rows, with a pool** (`presortBig`): one read of each row
+  chunk's raw values gives the range, "all integers" and the AND and OR of the
+  keys, so the bits in which the keys differ. A column whose keys differ in at
+  most 12 bits is sorted by one counting pass. Otherwise the top 16 of those
+  bits are counted per chunk, consecutive prefixes are grouped into buckets of
+  about 32K entries (float keys are skewed: a few exponents hold most rows, so
+  equal digit widths would leave a few huge buckets), and the rows are
+  scattered once, stably, into their buckets in the column's slot. Each bucket
+  is then sorted where it lies, in cache, by LSD passes over the bits in which
+  its own keys differ (insertion sort up to 32 entries). The chunks and the
+  groups of buckets of all columns are tasks of one `parallelFor` each; with at
+  least as many columns as threads a column is one task. Before, every big
+  column took up to three LSD passes over the whole column, each a scatter to
+  2,048-4,096 places out of the caches: the new presort is 1.3-1.5x as fast on
+  48 threads (HIGGS 0.27 → 0.20 s, chess_100m 0.23 → 0.16 s, ECBDL'14
+  2.8 → 2.2 s on dell).
+* **Smaller columns, and one thread:** an LSD radix sort, 3 passes of 11 bits
+  at most; a pass in which all keys share the digit is skipped. The
+  histograms of all features are computed first, so that the features needing
+  the most passes are sorted first, which balances the threads. One thread
+  keeps it for big columns too: it does not saturate the memory, and the
+  bucket sort was 3-8% slower there.
+
+C4.5's thresholds then take each feature's distinct values from the sorted
+columns (in parallel, per 1M-entry chunk). For feature `f`
 the builder keeps a column of entries
 
 ```
@@ -208,7 +221,9 @@ in. Fewer spare slots save `8 · n` bytes each but make big nodes wait: on
 epyc1 and dell1 (48 threads), 8 spare slots cut HIGGS from 5.7 to 4.1 GiB and
 airline from 29.0 to 25.6 GiB, with HIGGS CART 33-35% slower (C4.5 5-8%,
 airline 0-7%); 2 spare slots halve the speed. The presort sorts into the
-slots too, a free slot as each sort's second buffer. Partitioning in place
+slots too, a free slot as each sort's second buffer (columns of 1M+ rows on a
+pool: each feature in its own slot, and a buffer per thread as big as the
+largest bucket it sorts). Partitioning in place
 (nodes below 2^15 rows, and the CUDA backend's hand-offs) needs a buffer for
 the rows of one child: a per-thread buffer as big as the largest such node.
 Until 2026-10-17 both backends kept a full second copy of
