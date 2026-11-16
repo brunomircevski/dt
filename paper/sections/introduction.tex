@@ -44,8 +44,8 @@ GPU together, with each node sent to one device according to its size.
 
 In this paper, we investigate parallel implementations of CART and C4.5 for
 multicore CPUs, CUDA-enabled GPUs and heterogeneous CPU--GPU systems. They
-search for splits exactly, without binning: every cut between two consecutive
-distinct attribute values is tested. All our implementations grow the same
+search for splits exactly, without binning: every threshold between two consecutive
+distinct attribute values is evaluated. All our implementations grow the same
 tree. We checked this node by node, against each other and against
 scikit-learn (CART) and Quinlan's original C4.5 program. Our speed comparisons
 therefore always compare runs that build the same tree.
