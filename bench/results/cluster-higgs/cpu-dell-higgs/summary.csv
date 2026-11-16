@@ -1,3 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cpu-dell-higgs,higgs,cart_depth10,tree,48,ok,True,0.6053999999999999,0.5565,0.62,0.59532,0.02587927742422496,5,1.0,9.769532141974196,6060044288,6058782720,6061469696,6053765120,2029,1015,10,0.706345,0.705172,0.0012638716206309134,,0.0
-cpu-dell-higgs,higgs,c45_depth10_unpruned,tree,48,ok,True,0.6924,0.6648,0.7072,0.68808,0.015705954284920137,5,1.0,8.943575932993554,6086443008,6084976640,6089080832,6080163840,935,468,10,0.637616,0.637296,0.0013326553221954837,,0.0013
