@@ -18,14 +18,18 @@ sets.
 
 The training sets of ECBDL'14 and SOREL-20M do not fit
 into the 80\,GB memory of our GPUs. To include them in the GPU experiments, we
-train on their first 15 million and 4 million samples, respectively, and
-evaluate the trees on the full test sets.
+train on their first 15 million and 4 million samples, respectively.
 
 Chess is a synthetic $3 \times 3$ checkerboard: two attributes drawn uniformly
 from $[0, 3]$ and two classes alternating between the unit squares, without
 noise. Its exact tree has only nine leaves, so the training time reflects the
 cost per sample rather than tree growth. We use sizes from $10^6$ to
 $2 \cdot 10^9$ samples, for timing only.
+
+All tested implementations (except YaDT) read each dataset from the same binary
+files: the attribute values as a row-major matrix of little-endian 32-bit
+floats, the class labels as 32-bit integers, and the dimensions in a small
+metadata file.
 
 \begin{table}
 \caption{Datasets. Size: the training set as float32.}
@@ -49,26 +53,36 @@ CHESS 3$\times$3                    & 2    & 2  & $10^6$--$2 \cdot 10^9$ & \mult
 \end{table}
 
 \subsection{Hardware}
-\plan{Nodes of Table~\ref{tab:hardware}, exclusive jobs. GPU runs: one GPU and
-every CPU of the node (32 hopper, 48 ampere), libraries the same.
-\ImplParallel{} 48 threads; one-thread runs pinned to one CPU. Add STREAM
-bandwidth. Software: g++ 13.3 \texttt{-O3}, CUDA 12.9; library versions.}
+The experiments run on four servers (Table~\ref{tab:hardware}).
+The CPU implementations run on epyc (AMD) and dell (Intel). \ImplGpu{},
+\ImplHybrid{} and the GPU libraries run on hopper and ampere, each using one
+80\,GB GPU: an NVIDIA H100 attached over PCIe~5.0 x16, or an A100 over
+PCIe~4.0 x16.
+
+Every job has exclusive use of its server. \ImplParallel{} uses all 48 cores of
+both sockets. Single-threaded runs are pinned to one core. A GPU run uses one
+GPU and is allowed to use all CPU cores of the server. Memory is placed by first
+touch, without explicit NUMA binding. The only exception are transfers to and
+from the GPU, which use buffers and threads on the GPU's NUMA node
+(Section~\ref{sec:impl-gpu}). Our code is compiled with g++ 13.3 (\texttt{-O3})
+and CUDA 12.9 on Ubuntu 24.04.
 
 \begin{table}
-\caption{Hardware. Every node has two sockets with SMT disabled; CPU, cores and L3
-are per socket. Clock is base/max turbo in GHz. One GPU is used per run.}
+\caption{Hardware. Every server has two sockets with SMT disabled. CPU, cores
+and clock (base/max turbo, GHz) are per socket, RAM per server. One GPU is
+used per run.}
 \label{tab:hardware}
 \centering
 \small
-\setlength{\tabcolsep}{5pt}
-\begin{tabular}{@{}llrrrll@{}}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}llrrll@{}}
 \toprule
-Node & CPU & Cores & Clock & L3 & RAM & GPU \\
+Node & CPU & Cores & Clock & RAM & GPU \\
 \midrule
-hopper & Xeon Gold 6444Y & 16 & 3.6/4.0 & 45\,MB  & 1\,TB DDR5-4800   & H100 80\,GB \\
-ampere & EPYC 7402       & 24 & 2.8/3.35& 128\,MB & 1\,TB DDR4-3200   & A100 80\,GB \\
-epyc  & EPYC 9255       & 24 & 3.25/4.3& 128\,MB & 512\,GB DDR5-6400 & -- \\
-dell  & Xeon Gold 6542Y & 24 & 2.9/4.1 & 60\,MB  & 1\,TB DDR5-5200   & -- \\
+hopper & Xeon Gold 6444Y & 16 & 3.6/4.0  & 1\,TB DDR5-4800   & H100 PCIe 80\,GB \\
+ampere & EPYC 7402       & 24 & 2.8/3.35 & 1\,TB DDR4-3200   & A100 PCIe 80\,GB \\
+epyc   & EPYC 9255       & 24 & 3.25/4.3 & 512\,GB DDR5-6400 & -- \\
+dell   & Xeon Gold 6542Y & 24 & 2.9/4.1  & 1\,TB DDR5-5200   & -- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -82,12 +96,12 @@ equivalent tree.}
 
 \subsection{Protocol and Measurement}
 \plan{Timing: one unpruned tree, depth $\le$ 10, training only (GPU upload and
-presort included, one-time GPU start-up reported apart); peak RAM and VRAM;
-mean and spread over the runs. Accuracy: pruned trees (CART fixed $\alpha$,
-C4.5 CF 0.25), not timed. Every run is one fresh process, no warm-up fit; data loading not timed.
-Fairness notes: hybrid CPU threads, input layout. Each implementation in its
-best measured setting: the hybrid's hand-off size is the fastest of a sweep
-(256--32768) per GPU node and dataset at the reported depth, stored in
-bench/handoff\_rows.json and reused; report ./tree's untuned default
-(10 $\times$ attributes within [512, 16384]) next to it. Source:
+presort included, one-time GPU start-up reported apart); peak RAM and VRAM; mean
+and spread over the runs. Accuracy: pruned trees (CART fixed $\alpha$, C4.5 CF
+0.25), not timed. Every run is one fresh process, no warm-up fit; data loading
+not timed. Fairness notes: hybrid CPU threads, input layout. Each implementation
+in its best measured setting: the hybrid's hand-off size is the fastest of a
+sweep (256--32768) per GPU node and dataset at the reported depth, stored in
+bench/handoff\_rows.json and reused; report ./tree's untuned default (10
+$\times$ attributes within [512, 16384]) next to it. Source:
 bench/results/handoff-sweep/.}

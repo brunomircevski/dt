@@ -20,55 +20,57 @@ detection~\cite{harang2020sorel}. On such data, a straightforward sequential
 implementation can need minutes to hours per tree, and parameter tuning
 pays that cost repeatedly.
 
-Modern servers combine many cores on several sockets with high-bandwidth
-memory, and many are equipped with data-center GPUs. Using this hardware
-efficiently for tree induction is challenging, for two reasons. First, the work per node shrinks with depth. Nodes
-near the root hold most of the training set and provide enough work for
-thousands of GPU threads. The lower levels consist of many small nodes, for
-which kernel-launch, synchronization and transfer costs often dominate.
-Second, split evaluation does little computation per value read, so it is
-often limited by memory bandwidth.
+Modern servers combine many cores on several sockets with high-bandwidth memory,
+and many are equipped with data-center GPUs. Using this hardware efficiently for
+tree induction is challenging, for two reasons. First, the work per node shrinks
+with depth. Nodes near the root hold most of the training set and provide enough
+work for thousands of GPU threads. The lower levels consist of many small nodes,
+for which kernel-launch, synchronization and transfer costs often dominate.
+Second, split evaluation does little computation per value read, so it is often
+limited by memory bandwidth.
 
 SLIQ~\cite{mehta1996sliq} and SPRINT~\cite{shafer1996sprint} introduced
-presorting to scale to large data. Later work targeted multicore processors~\cite{aldinucci2014fastflow}
-and distributed systems~\cite{abuzaid2016yggdrasil}. Several studies proposed
-GPU implementations~\cite{lo2014cudt,nasridinov2014gpu,strnad2016gpu}, but
-they were evaluated on GPUs of earlier generations. Most current
-high-performance GPU tree
-learners~\cite{chen2016xgboost,ke2017lightgbm} use
-histogram-based split finding: continuous values are assigned to a fixed
-number of bins before induction. This is cheaper, but the chosen thresholds, and therefore the trees, usually
-differ from those an exact CART or C4.5 search would find. To our knowledge, no
-public implementation grows an exact CART or C4.5 tree using the CPU and the
-GPU together, with each node sent to one device according to its size.
+presorting to scale to large data. Later work targeted multicore
+processors~\cite{aldinucci2014fastflow} and distributed
+systems~\cite{abuzaid2016yggdrasil}. Several studies proposed GPU
+implementations~\cite{lo2014cudt,nasridinov2014gpu,strnad2016gpu}, but they were
+evaluated on GPUs of earlier generations. Most current high-performance GPU tree
+learners~\cite{chen2016xgboost,ke2017lightgbm} use histogram-based split
+finding: continuous values are assigned to a fixed number of bins before
+induction. This is cheaper, but the chosen thresholds, and therefore the trees,
+usually differ from those an exact CART or C4.5 search would find. To our
+knowledge, no public implementation grows an exact CART or C4.5 tree using the
+CPU and the GPU together, with each node sent to one device according to its
+size.
 
 In this paper, we investigate parallel implementations of CART and C4.5 for
 multicore CPUs, CUDA-enabled GPUs and heterogeneous CPU--GPU systems. They
-search for splits exactly, without binning: every threshold between two consecutive
-distinct attribute values is evaluated. All our implementations grow the same
-tree. We checked this node by node against each other, and against
+search for splits exactly, without binning: every threshold between two
+consecutive distinct attribute values is evaluated. All our implementations grow
+the same tree. We checked this node by node against each other, and against
 scikit-learn (CART) and Release~8 of Quinlan's C4.5 program, which agree with
 ours except at exact ties and where Release~8's single-precision arithmetic
 rounds a gain. Comparisons among our implementations therefore always compare
 runs that build the same tree. Of the existing implementations we compare
-against, scikit-learn and Weka J48 grow the same or almost the same trees on
-the CPU, while the GPU libraries split on histogram bins, so their trees can
-differ. We therefore report tree size and test accuracy with every training
-time.
+against, scikit-learn and Weka J48 grow the same or almost the same trees on the
+CPU, while the GPU libraries split on histogram bins, so their trees can differ.
+We therefore report tree size and test accuracy with every training time.
 
-We evaluate five implementations, from a straightforward sequential baseline
-to a hybrid one that uses the CPU and the GPU together. The experiments use five public datasets with up to
-32 million samples and 2,381 attributes, recent CPU servers, and two
-generations of data-center GPUs.
+We evaluate five implementations, from a straightforward sequential baseline to
+a hybrid one that uses the CPU and the GPU together. The experiments use five
+public datasets with up to 32 million samples and 2,381 attributes, recent CPU
+servers, and two generations of data-center GPUs.
 % Numbers: Tables tab:time-cart and tab:time-c45 (depth <= 10, no pruning,
 % epyc; ./tree f53347a9, libraries 2026-11-09). Libraries against Serial
 % Optimized only (both run on one thread). Re-derive after the final rerun;
 % the GPU ratio is a placeholder until then.
 On one thread, our optimized sequential implementation trains CART trees
 8.7--27$\times$ faster than scikit-learn~\cite{pedregosa2011sklearn} and C4.5
-trees 112--168$\times$ faster than Weka J48~\cite{hall2009weka}, with the same or almost the same trees. On the 48 cores of a
-two-socket server, our multicore implementation is up to 41$\times$ faster than
-the optimized sequential one. Our GPU implementation on NVIDIA H100 is up to \tbd{}$\times$ faster than the multicore one.
+trees 112--168$\times$ faster than Weka J48~\cite{hall2009weka}, with the same
+or almost the same trees. On the 48 cores of a two-socket server, our multicore
+implementation is up to 41$\times$ faster than the optimized sequential one. Our
+GPU implementation on NVIDIA H100 is up to \tbd{}$\times$ faster than the
+multicore one.
 
 The main contributions of this paper are:
 \begin{itemize}

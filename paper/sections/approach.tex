@@ -23,16 +23,17 @@ these trees node by node with scikit-learn and Quinlan's C4.5. They differ
 only at exact ties and, for C4.5, where Quinlan's program computes in single
 precision.
 
-Pruning runs after growth, in CPU code shared by all implementations. CART with a fixed cost-complexity parameter
-$\alpha$ does not split a node when pruning would provably remove its subtree.
+Pruning runs after growth, in CPU code shared by all implementations. CART with
+a fixed cost-complexity parameter $\alpha$ does not split a node when pruning
+would provably remove its subtree.
 
 \begin{table}
-\caption{Comparison of our five implementations. \emph{Presorted}: each attribute is sorted
-once, before growth, and kept sorted by stable partitioning.
-\emph{Selective}: thresholds that provably cannot win are skipped; all others are
-evaluated exactly. \emph{Data} parallelism works within a node, \emph{task}
-parallelism across subtrees. \emph{Mixed}: breadth-first on the GPU,
-depth-first on the CPU.}
+\caption{Comparison of our five implementations. \emph{Presorted}: each
+attribute is sorted once, before growth, and kept sorted by stable partitioning.
+\emph{Selective}: thresholds that provably cannot win are skipped; all others
+are evaluated exactly. \emph{Data} parallelism works within a node, \emph{task}
+parallelism across subtrees. \emph{Mixed}: breadth-first on the GPU, depth-first
+on the CPU.}
 \label{tab:impl}
 \centering
 \small
@@ -106,16 +107,17 @@ large two-class node has fewer attributes than threads, each attribute's sweep
 is split among the threads. The parts are combined in order, so the chosen
 threshold is the same as in a single sweep. Threads create nodes in a
 nondeterministic order. The nodes are therefore renumbered in preorder at the
-end, which makes the output identical to that of \ImplSerialOpt{}. Threads are not pinned to cores, and memory is not explicitly placed on NUMA nodes.
+end, which makes the output identical to that of \ImplSerialOpt{}. Threads are
+not pinned to cores, and memory is not explicitly placed on NUMA nodes.
 
 \subsection{\ImplGpu}
 \label{sec:impl-gpu}
 
 \ImplGpu{} adapts the \ImplSerialOpt{} algorithm to the GPU. The attributes are
 presorted on the GPU as they are uploaded and stored in the same format.
-Thresholds are evaluated by the same double-precision routine. Unlike the CPU builders, \ImplGpu{} grows the tree
-breadth-first. It processes all nodes of a level together, so deep levels with
-many small nodes still keep the GPU busy.
+Thresholds are evaluated by the same double-precision routine. Unlike the CPU
+builders, \ImplGpu{} grows the tree breadth-first. It processes all nodes of a
+level together, so deep levels with many small nodes still keep the GPU busy.
 
 At each level, the GPU divides every node's attributes into tiles of 2,048
 samples. It finds the best threshold in each tile, then reduces these to the
