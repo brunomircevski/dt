@@ -163,10 +163,13 @@ Replace the `\plan{...}` of "Protocol and Measurement" in
 
 Another agent is adding **binary float32 input** to ./tree (every dataset
 already has `train.f32` / `train.y.i32` / `test.*` in
-`bench/data/<dataset>/`). Wait until that is merged into main, then check:
-- [ ] `bench/benchlib.py tree_input()` passes the binary files, so ./tree
-  reads the same bytes as the libraries.
-- [ ] **Start-up never leaks into `train total`.**
+`bench/data/<dataset>/`). Merged 2026-11-16 (a `.f32` path is read as the binary dump, by extension;
+CSV stays for users). Checks:
+- [x] `bench/benchlib.py tree_input()` passes the binary files (`train.f32`),
+  so ./tree reads the same bytes as the libraries.
+- [x] **Start-up never leaks into `train total`.** `main.cpp` waits for
+  `gpuReady.get()` before `trainTree` starts its timer, so a start-up longer
+  than the load waits outside `train total`.
   - `gpu startup` runs on a background thread while the data loads.
   - With binary input the load becomes much shorter (HIGGS about 1 s, MNIST8M
     a few seconds) and may finish **before** the start-up does.
@@ -174,10 +177,13 @@ already has `train.f32` / `train.y.i32` / `test.*` in
     finished. Otherwise waiting for it becomes part of `train total`.
   - Verify in `src/app/main.cpp` / `trainer.h`, and print the wait if there is
     one.
-- [ ] ./tree prints its load time (e.g. `load NNN ms`), for the end-to-end
+- [x] ./tree prints its load time (`load NNN ms`), for the end-to-end
   benchmark.
 - [ ] Trees are bit-identical to the CSV input: compare `tree_sha256` with the
-  2026-11-15 runs for at least HIGGS and MNIST8M.
+  2026-11-15 runs for at least HIGGS and MNIST8M. (Already checked when it
+  was built: dumped trees identical from CSV and `.f32` on covertype, SUSY,
+  HIGGS, chess, ECBDL'14 and MNIST8M; tests/check.sh runs every case from
+  both.)
 
 ### 3.2 CPU libraries (scikit-learn, rpart, J48, YaDT)
 
@@ -271,11 +277,17 @@ All of them, with the build that includes binary input, at 10 runs per case
 | `cluster-susy`, `cluster-higgs`, `cluster-mnist8m`, `cluster-ecbdl`, `cluster-sorel`, `cluster-chess` | ./tree all five backends | epyc and dell for CPU, hopper and ampere for GPU |
 | `cluster-cpu-scaling` | ./tree 1–48 threads | HIGGS and MNIST8M |
 | `cluster-profiling` | ./tree `--profile` | chess and HIGGS, ECBDL'14 15M; **no airline** |
-| `hybrid-vs-gpu-only` | ./tree `--hybrid` vs `--gpu` | as before |
+| `hybrid-vs-gpu-only` | ./tree `--hybrid` vs `--gpu` | as before; `--handoff-rows` from `bench/handoff_rows.json` (below) |
 | `cluster-cpu-vs-others` | scikit-learn, rpart (CART, 1 thread), YaDT (C4.5, 1 and 48 threads), Weka J48 (C4.5, 1 thread) | HIGGS and MNIST8M only; ./tree's bars from the same rerun |
 | `cluster-gpu-vs-others` | cuML, XGBoost, CART only | HIGGS and MNIST8M only; hopper and ampere |
 | `cluster-end-to-end` (**new**) | everything, end to end with every step | HIGGS only; design in [bench/results/cluster-end-to-end/BENCHMARK.md](bench/results/cluster-end-to-end/BENCHMARK.md) |
 | `bench/power` | ./tree, energy | keeps its `--repeat` method (§1); rerun with the new build |
+
+Every `--hybrid` run takes its `--handoff-rows` from `bench/handoff_rows.json`
+(`run.py`; the fastest of a sweep per GPU node, dataset and depth limit, made
+once by `bench/cluster/handoff_sweep.sh`, results in
+`bench/results/handoff-sweep/`). Do not sweep again in the rerun; a missing
+entry falls back to ./tree's default.
 
 Before the full run, run `final.sh -t` (one run of each kind into
 `cluster-test/`) and check every kind works. Then move the old run folders out
