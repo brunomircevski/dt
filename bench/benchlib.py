@@ -5,15 +5,16 @@ Data layout (bench/data/<dataset>/, made by prepare.py):
   meta.json                  features, classes, row counts, how the split was made
   train.f32, test.f32        features, row-major little-endian float32 (n x F)
   train.y.i32, test.y.i32    class index per row, little-endian int32
-  train.csv                  header f0..f{F-1},class; labels c0..c{K-1}  (./tree), or
+  train.csv                  header f0..f{F-1},class; labels c0..c{K-1}, or
                              a link to a source CSV with names of its own (ECBDL):
-                             meta.json's csv_features / csv_classes
+                             meta.json's csv_features / csv_classes (for users;
+                             the benchmarks give ./tree train.f32, the same values)
   yadt.names, train.yadt.csv, test.yadt.csv   headerless CSV + metadata  (YaDT)
 
 A dataset without a test set (split = "none": the synthetic chess sets) has
 n_test 0 and no test files. A dataset that is another one's first rows
 (prefix_of in datasets.toml: sorel_4m, ecbdl_15m, chess_100m) has only its
-meta.json: every tool reads its parent's files (folder()), ./tree its train.csv
+meta.json: every tool reads its parent's files (folder()), ./tree its train.f32
 with --rows (tree_input()), the others the binary files' first n_train rows.
 
 Every tool sees the same float32 values: the CSVs print them exactly (9
@@ -216,11 +217,13 @@ def folder(dataset):
 
 
 def tree_input(dataset):
-    """./tree's arguments for the training rows: the CSV, after --rows N for a
-    prefix_of set (the first N rows of its parent's train.csv)."""
+    """./tree's arguments for the training rows: the binary dump (train.f32,
+    with train.y.i32 and meta.json beside it; the same values as train.csv,
+    loaded without parsing text), after --rows N for a prefix_of set (the
+    first N rows of its parent's)."""
     m = meta(dataset)
     rows = ["--rows", str(m["n_train"])] if "prefix_of" in m else []
-    return rows + [str(folder(dataset) / "train.csv")]
+    return rows + [str(folder(dataset) / "train.f32")]
 
 
 def load(dataset, part):

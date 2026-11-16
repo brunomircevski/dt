@@ -33,16 +33,16 @@
 # ./tree --repeat K trains every tree in its own forked child (each tree is a
 # fresh process's only tree) and prints its training window as Unix times; the
 # GPU backends add --repeat-warmup WARMUP: the child keeps its CPU threads busy
-# for WARMUP s before its timer, as a single run's CSV load does (without it, a
+# for WARMUP s before its timer, as a single run's data load does (without it, a
 # GPU tree after idle CPUs set up 10-40% slower on hopper and ampere).
 #
 # Placement as in the time benchmark (bench/cluster/job.sh and bench/run.py):
-# Serial-Simple and Serial-Opt on CPU 0 (taskset; the CSV load then has one
+# Serial-Simple and Serial-Opt on CPU 0 (taskset; the load then has one
 # thread too); Multicore on every CPU; GPU and Hybrid on the GPU of the NUMA node
 # with the most free memory, with every CPU of the node (that node's first)
 # and first-touch memory.
 #
-# Environment: DATA (CSV; default ECBDL'14's train.csv with ROWS=15000000, the
+# Environment: DATA (.f32 or CSV; default ECBDL'14's train.f32 with ROWS=15000000, the
 # time benchmark's ecbdl_15m), REPS (3), REPS_BY (per backend, e.g. "simple=1";
 # default "simple=1"), TARGET (120 s of training per measured process), IDLE
 # (300), CAL (60 s per staircase level; 0: no staircase), PRE (20), WARMUP (15),
@@ -54,7 +54,7 @@ cd "${SLURM_SUBMIT_DIR:-.}"
 KIND=$1
 OUT=$2
 if [ -z "${DATA:-}" ]; then  # ecbdl_15m: a prefix of ecbdl (bench/datasets.toml)
-  DATA=bench/data/ecbdl/train.csv ROWS=${ROWS:-15000000}
+  DATA=bench/data/ecbdl/train.f32 ROWS=${ROWS:-15000000}
 fi
 ROWS=${ROWS:-}
 REPS=${REPS:-3}

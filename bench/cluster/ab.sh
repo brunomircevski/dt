@@ -7,7 +7,7 @@
 #       bench/cluster/ab.sh <out-dir> <variants-file> <cases-file> [rounds] [repeat]
 #
 # variants file, one per line:  label|binary|extra args|prefix (e.g. numactl ...)
-# cases file, one per line:     case|args|dataset csv
+# cases file, one per line:     case|args|dataset (.f32 or CSV)
 # Lines starting with # are skipped. Writes <out-dir>/times.csv (label, case,
 # round, run, train ms, tree sha256) and each invocation's output.
 # REPEAT_WARMUP (default 5) is --repeat-warmup; PROFILE=1 adds --profile
