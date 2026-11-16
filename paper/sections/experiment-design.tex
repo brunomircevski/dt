@@ -91,5 +91,9 @@ timed in a warm process, and reported apart; ./tree overlaps it with loading;
 cold end-to-end ./tree wall time in an appendix; caveat: on small sets such as
 SUSY the start-up exceeds the training and a CPU backend wins end to end);
 peak RAM and VRAM; runs per case, means and spread; exclusive nodes; fairness
-(CPU threads of the hybrid, warm library processes, input layout). Source:
-docs/GPU-LIBRARIES.md, bench/README.md.}
+(CPU threads of the hybrid, warm library processes, input layout); no
+per-dataset tuning: the hybrid's hand-off size is ./tree's fixed default,
+10 $\times$ features within [512, 16384], chosen once from a full-depth sweep on
+HIGGS, MNIST8M and SOREL 4M (within 2\% of the fastest value there), as the
+libraries run with their defaults. Source: docs/GPU-LIBRARIES.md,
+bench/README.md, bench/results/hybrid-vs-gpu-only/BENCHMARK.md.}

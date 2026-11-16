@@ -6,9 +6,8 @@ without a depth limit, no pruning. One panel per dataset, one group of bars per
 depth: CART hybrid, CART GPU only, C4.5 hybrid, C4.5 GPU only. A bar is the
 mean training time of its runs, the whisker from the fastest to
 the slowest; above each pair, GPU only / hybrid; under each group, the trees'
-nodes. The --handoff-rows each dataset ran with comes from
-<dir>/sweep/<node>-<dataset>.json ({"min_rows": N, ...}), written by the sweep
-(bench/cluster/hybrid_vs_gpu_only.sh).
+nodes. The title gives the --handoff-rows the hybrid ran with: the value in its
+commands, or ./tree's default (10 x features, between 512 and 16384).
 
   bench/.venv/bin/python bench/hybrid_chart.py bench/results/hybrid-vs-gpu-only --node ampere
 
@@ -79,7 +78,12 @@ def duration(value):
     return f"{value:.3g} s" if value >= 1 else f"{value * 1e3:.3g} ms"
 
 
-def panel(ax, dataset, entry, sweep):
+def default_handoff(features):
+    """./tree's default --handoff-rows (src/core/options.cpp: handoffRows())."""
+    return min(max(10 * features, 512), 16384)
+
+
+def panel(ax, dataset, entry):
     width = 0.2
     labels = []
     top = max(row["train_seconds"] for rows in entry["rows"].values() for row in rows)
@@ -117,31 +121,17 @@ def panel(ax, dataset, entry, sweep):
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
     ax.set_ylabel("training time", color=MUTED, fontsize=9)
-    m = sweep.get(dataset, {})
     rows = entry["rows"]
     any_row = next(iter(next(iter(rows.values()))), {}) if rows else {}
-    shape = (f"{any_row.get('n_train_loaded', 0):,} rows × {any_row.get('n_features_loaded', 0):,} features"
-             if any_row else "")
+    features = any_row.get("n_features_loaded", 0)
+    shape = f"{any_row.get('n_train_loaded', 0):,} rows × {features:,} features" if any_row else ""
     title = f"{NAMES.get(dataset, dataset)}: {shape}"
-    if m:
-        title += f"; hybrid at --handoff-rows {m['min_rows']:,}"
-        low = min_rows([r for (b, p), v in rows.items() if b == "cuda"
-                        for r in v if p in {protocol(a, d) for a in ALGORITHMS for d in DEPTHS[:2]}])
-        if low and low != [m["min_rows"]]:
-            title += f" (depth 5 and 10: {', '.join(f'{v:,}' for v in low)})"
-    ax.text(0, 1.075, title, transform=ax.transAxes, fontsize=10.5, color=INK, va="bottom")
-    times = m.get("times", {})
-    chosen, default = times.get(str(m.get("min_rows"))), times.get("default")
-    if chosen and default:
-        def pair(t):
-            return f"CART {duration(t['cart_full_nodepth'])}, C4.5 {duration(t['c45_unpruned'])}"
-        tried = [int(v) for v in times if v != "default"]
-        rows_in = any_row.get("n_train_loaded", 0)  # ./tree's default: rows/8192 (CART), rows/4096 (C4.5), clamped
-        own = f"CART {min(max(rows_in // 8192, 1024), 2048):,}, C4.5 {min(max(rows_in // 4096, 1024), 4096):,}"
-        ax.text(0, 1.02, f"sweep (no depth limit, {len(tried)} values {min(tried):,}–{max(tried):,}): {m['min_rows']:,}: {pair(chosen)}; "
-                f"./tree's default ({own}): {pair(default)}", transform=ax.transAxes,
-                fontsize=7.5, color=MUTED, va="bottom")
-
+    used = min_rows([r for (b, _), v in rows.items() if b == "cuda" for r in v])
+    if used:
+        title += f"; hybrid at --handoff-rows {', '.join(f'{v:,}' for v in used)}"
+    elif features:
+        title += f"; hybrid at the default --handoff-rows (10 × features: {default_handoff(features):,})"
+    ax.text(0, 1.04, title, transform=ax.transAxes, fontsize=10.5, color=INK, va="bottom")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -150,12 +140,10 @@ def main():
     parser.add_argument("--datasets", help="comma list, in panel order (default: every one found)")
     args = parser.parse_args()
     data = load(args.folder, args.node)
-    sweep = {f.name[len(args.node) + 1:-5]: json.loads(f.read_text())
-             for f in (args.folder / "sweep").glob(f"{args.node}-*.json")}
     datasets = args.datasets.split(",") if args.datasets else sorted(data)
     fig, axes = plt.subplots(len(datasets), 1, figsize=(12, 4.6 * len(datasets) + 1.6), squeeze=False)
     for ax, dataset in zip(axes[:, 0], datasets):
-        panel(ax, dataset, data[dataset], sweep)
+        panel(ax, dataset, data[dataset])
 
     machine = next((d["machine"] for d in data.values() if d["machine"]), None) or {}
     rows = [r for d in data.values() for v in d["rows"].values() for r in v]
@@ -196,7 +184,7 @@ def main():
         "threads while the GPU goes on with the next level. GPU only (--gpu): every node, down to the "
         "leaves, on the GPU.\n"
         "Above each pair: GPU-only time / hybrid time (above 1: hybrid faster). Under each group: the tree's nodes "
-        "(the same in both modes). --handoff-rows: the fastest value of a sweep on this node (BENCHMARK.md).")
+        "(the same in both modes). --handoff-rows: ./tree's default unless the title says otherwise (BENCHMARK.md).")
     fig.text(0.06, 0.012, details, fontsize=7.8, color=MUTED, va="bottom", wrap=True)
     fig.tight_layout(rect=(0.02, 0.09, 1, 0.94), h_pad=3)
     out = args.folder / f"chart-{args.node}.png"

@@ -13,9 +13,12 @@ count), on three of the paper's datasets, chosen by a screen of five
 ([below](#earlier-measurements-95b6d77)): HIGGS (10.5M rows × 28 features),
 where the hybrid's lead was the largest; SOREL-20M's 4M sample (4M × 2,381),
 where it was the smallest; and MNIST8M (8.1M × 784) in between. The trees are
-the same in both modes (node counts under each group). The hybrid runs at the
-fastest `--handoff-rows` of a sweep on the same node and dataset
-([the sweep](#--handoff-rows-the-sweep)).
+the same in both modes (node counts under each group). The runs below (f53347a9)
+took the fastest `--handoff-rows` of a sweep on the same node and dataset
+([the sweep](#--handoff-rows-the-sweep)). That sweep chose ./tree's default since
+then, 10 × features between 512 and 16,384; from the next rerun on, the hybrid
+runs at that default, like every other `--hybrid` benchmark, and the sweep is
+not rerun.
 
 **Where.** The whole node (`--exclusive`), one GPU, every CPU of the node:
 ampere, A100 80 GB PCIe (GPU 0, NUMA node 0), 48 threads (CPUs 0–23, then
@@ -362,21 +365,19 @@ of the paper's datasets.
 `bench/cluster/final.sh -k hybrid` queues `hybrid_vs_gpu_only.sh` on hopper
 and ampere after their test-set runs. By hand, from the repository root after
 `bench/cluster/build.sh` (hopper has no git, so the version comes along;
-`RUNS` and `SWEEP_RUNS` default to 3):
+`RUNS` defaults to 3):
 
 ```bash
 for n in ampere hopper; do
-  TREE_GIT_DESCRIBE="$(git describe --always --abbrev=12)" RUNS=5 SWEEP_RUNS=5 \
+  TREE_GIT_DESCRIBE="$(git describe --always --abbrev=12)" RUNS=5 \
     sbatch -J hvg-$n -p $n -w $n --exclusive -t 4-00:00:00 -o bench/results/hybrid-vs-gpu-only/$n.log \
       bench/cluster/hybrid_vs_gpu_only.sh $n
 done
 ```
 
 Set the variables in the environment, not with `sbatch --export=...` (on
-mordor3 that can hold the job). `DATASETS`, `VALUES`, `PROTOCOLS` and
-`PROFILE_DATASETS` narrow a run; a sweep value whose folder already has a
-`report.md` is kept, so a cut-short sweep is finished by resubmitting with the
-values still missing (`--open-mode=append` keeps the log).
+mordor3 that can hold the job). `DATASETS`, `PROTOCOLS` and
+`PROFILE_DATASETS` narrow a run.
 
 Charts and the profile tables:
 

@@ -182,7 +182,9 @@ libraries ran on 2026-11-09/10. Each run's `machine.json` names its commit.
 After this run (commit after 3e9c767a) `--hybrid`'s default `--handoff-rows`
 changed from rows / 8192 or / 4096 (1,024–4,096) to 10 × features
 (512–16,384); the `--hybrid` results here are on the old default, except
-hybrid-vs-gpu-only, which sets the value from its own sweep.
+hybrid-vs-gpu-only, which took the value from its own sweep. Every `--hybrid`
+benchmark now runs at ./tree's default (no per-dataset sweep);
+hybrid-vs-gpu-only's sweep is how that default was chosen.
 
 ## Settings specific to the cluster
 
