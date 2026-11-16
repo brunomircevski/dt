@@ -84,5 +84,5 @@ equivalent tree.}
 \plan{Timing: one unpruned tree, depth $\le$ 10, training only (GPU upload and
 presort included, one-time GPU start-up reported apart); peak RAM and VRAM;
 mean and spread over the runs. Accuracy: pruned trees (CART fixed $\alpha$,
-C4.5 CF 0.25), not timed. Fairness notes: hybrid CPU threads, input layout,
-warm library processes. No per-dataset tuning (hybrid hand-off default).}
+C4.5 CF 0.25), not timed. Every run is one fresh process, no warm-up fit; data loading not timed.
+Fairness notes: hybrid CPU threads, input layout. No per-dataset tuning (hybrid hand-off default).}

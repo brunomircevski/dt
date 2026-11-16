@@ -49,8 +49,8 @@ seconds. \tbd{}: not yet measured on the final build; --: not possible (data
 larger than the GPU's 80\,GB). CPU runs on epyc (\ImplParallel{} 48 threads,
 the rest one thread); GPU runs on the H100 with all 32 CPUs of its server.
 Runs per cell: 5; \ImplSerialBase{} 10 (full ECBDL'14 3, full SOREL-20M 1);
-libraries on HIGGS and MNIST8M only, Weka J48 10 runs (MNIST8M 3). No GPU
-library grows C4.5 trees.}
+libraries on HIGGS and MNIST8M only, Weka J48 10 runs (MNIST8M 3); YaDT
+one thread and 48 threads. No GPU library grows C4.5 trees.}
 \label{tab:time-c45}
 \centering
 \scriptsize
@@ -69,10 +69,10 @@ SOREL-20M & 12\,906 & 599 & 15.5 & -- & -- \\
 \quad 4M subsample & 3\,127 & 171 & 5.00 & \tbd & \tbd \\
 \specialrule{1.2pt}{1pt}{3pt}
 \multicolumn{6}{@{}l}{\textbf{Existing implementations}} \\
-Dataset & Weka J48 & YaDT &  &  &  \\
+Dataset & Weka J48 & YaDT & YaDT, 48 thr. &  &  \\
 \midrule
-HIGGS & 833 & \tbd &  &  &  \\
-MNIST8M & 18\,998 & \tbd &  &  &  \\
+HIGGS & 833 & \tbd & \tbd &  &  \\
+MNIST8M & 18\,998 & \tbd & \tbd &  &  \\
 \bottomrule
 \end{tabular}
 \end{table}
