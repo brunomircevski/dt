@@ -66,11 +66,9 @@ generations of data-center GPUs.
 % the GPU ratio is a placeholder until then.
 On one thread, our optimized sequential implementation trains CART trees
 8.7--27$\times$ faster than scikit-learn~\cite{pedregosa2011sklearn} and C4.5
-trees 112--168$\times$ faster than Weka J48~\cite{hall2009weka}, on HIGGS and
-MNIST8M, with the same or almost the same trees. On the 48 cores of a
-two-socket server, our multicore implementation is 14--41$\times$ faster than
-the optimized sequential one, and our GPU implementation \tbd{}$\times$ faster
-than the multicore one.
+trees 112--168$\times$ faster than Weka J48~\cite{hall2009weka}, with the same or almost the same trees. On the 48 cores of a
+two-socket server, our multicore implementation is up to 41$\times$ faster than
+the optimized sequential one. Our GPU implementation on NVIDIA H100 is up to \tbd{}$\times$ faster than the multicore one.
 
 The main contributions of this paper are:
 \begin{itemize}
