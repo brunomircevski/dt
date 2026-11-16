@@ -11,8 +11,8 @@
 #
 # Results: bench/results/$DIR/{cuda,gpuonly}-<node>-<dataset>/ (the depth runs),
 # $DIR/sweep/cuda-<node>-<dataset>-mr<N>/ (the sweep, "default" = ./tree's own),
-# $DIR/sweep/<node>-<dataset>.json (the value taken). The value taken has the
-# smallest mean, over CART and C4.5, of its time / that algorithm's fastest.
+# $DIR/sweep/<node>-<dataset>.json (the value taken, by pick_handoff.py: the
+# smallest mean, over CART and C4.5, of its time / that algorithm's fastest).
 # For the datasets in PROFILE_DATASETS (default mnist8m) the depth runs are then
 # made once more with ./tree --profile, into $DIR/profile/{cuda,gpuonly}-<node>-<dataset>/
 # (results.jsonl + profiles/*.json; chart: bench/hybrid_profile_chart.py).
@@ -48,29 +48,8 @@ for dataset in $DATASETS; do
     fi
     run "$DIR/sweep" "cuda-$NODE-$dataset-mr$value" "$dataset" tree_cuda "$SWEEP_RUNS" "$SWEEP_PROTOCOLS" "$extra"
   done
-  best="$("$PY" - "bench/results/$DIR/sweep" "$NODE" "$dataset" $VALUES <<'EOF'
-import json, statistics, sys
-from pathlib import Path
-folder, node, dataset, values = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4:]
-times = {}  # value -> {protocol: mean training seconds}
-for value in values:
-    results = folder / f"cuda-{node}-{dataset}-mr{value}" / "results.jsonl"
-    rows = [json.loads(line) for line in results.read_text().splitlines()] if results.exists() else []
-    by = {}
-    for row in rows:
-        if row.get("kind") == "run" and row.get("status") == "ok":
-            by.setdefault(row["protocol"], []).append(row["train_seconds"])
-    if len(by) == 2:
-        times[value] = {p: statistics.mean(v) for p, v in by.items()}
-fastest = {p: min(t[p] for t in times.values()) for p in next(iter(times.values()))}
-score = {v: statistics.mean(t[p] / fastest[p] for p in t) for v, t in times.items()}
-numeric = [v for v in score if v != "default"]
-best = min(numeric, key=score.get)
-(folder / f"{node}-{dataset}.json").write_text(json.dumps(
-    {"min_rows": int(best), "times": times, "score": score}, indent=1) + "\n")
-print(best)
-EOF
-)" || { echo "  no sweep result for $dataset, skipping its depth runs"; failed+=("$dataset"); continue; }
+  best="$("$PY" bench/cluster/pick_handoff.py "bench/results/$DIR/sweep" "$NODE" "$dataset" $VALUES)" ||
+    { echo "  no sweep result for $dataset, skipping its depth runs"; failed+=("$dataset"); continue; }
   echo "$(date '+%F %T')  $dataset: --handoff-rows $best"
   run "$DIR" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS" "--handoff-rows $best"
   run "$DIR" "gpuonly-$NODE-$dataset" "$dataset" tree_gpu_only "$RUNS" "$PROTOCOLS"
