@@ -188,8 +188,8 @@ def check_same(runs):
     if len(datasets) != 1:
         raise SystemExit(f"the runs used different datasets: {sorted(datasets)}")
     dataset = datasets.pop()
-    for name in DATA_FILES:
-        if len({plan["data_files"][dataset][name] for plan in plans}) != 1:
+    for name in DATA_FILES:  # chess has no test files
+        if len({plan["data_files"][dataset].get(name) for plan in plans}) != 1:
             raise SystemExit(f"{dataset}/{name} differs between the runs: not the same data")
     return dataset, plans[0]["datasets"][dataset]
 

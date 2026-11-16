@@ -4,13 +4,13 @@
    "ecbdl_15m",
    "cart_depth10",
    "tree_gpu_only",
-   16
+   32
   ],
   [
    "ecbdl_15m",
    "c45_depth10_unpruned",
    "tree_gpu_only",
-   16
+   32
   ]
  ],
  "protocols": {
@@ -19,7 +19,6 @@
    "impls": {
     "tree": [
      "--cart",
-     "--no-prune",
      "-d",
      "30"
     ],
@@ -33,19 +32,16 @@
     },
     "tree_cuda": [
      "--cart",
-     "--no-prune",
      "-d",
      "30"
     ],
     "tree_gpu_only": [
      "--cart",
-     "--no-prune",
      "-d",
      "30"
     ],
     "tree_simple": [
      "--cart",
-     "--no-prune",
      "-d",
      "30"
     ]
@@ -56,7 +52,6 @@
    "impls": {
     "tree": [
      "--cart",
-     "--no-prune",
      "-d",
      "12"
     ],
@@ -70,19 +65,16 @@
     },
     "tree_cuda": [
      "--cart",
-     "--no-prune",
      "-d",
      "12"
     ],
     "tree_gpu_only": [
      "--cart",
-     "--no-prune",
      "-d",
      "12"
     ],
     "tree_simple": [
      "--cart",
-     "--no-prune",
      "-d",
      "12"
     ]
@@ -95,7 +87,7 @@
      "--cart",
      "-d",
      "30",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "sklearn": {
@@ -112,21 +104,21 @@
      "--cart",
      "-d",
      "30",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_gpu_only": [
      "--cart",
      "-d",
      "30",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_simple": [
      "--cart",
      "-d",
      "30",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ]
    }
@@ -136,7 +128,7 @@
    "impls": {
     "tree": [
      "--cart",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "sklearn": {
@@ -145,17 +137,17 @@
     },
     "tree_cuda": [
      "--cart",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_gpu_only": [
      "--cart",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_simple": [
      "--cart",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ]
    }
@@ -164,20 +156,16 @@
    "title": "CART, grown to pure leaves, no pruning, no depth limit",
    "impls": {
     "tree": [
-     "--cart",
-     "--no-prune"
+     "--cart"
     ],
     "tree_cuda": [
-     "--cart",
-     "--no-prune"
+     "--cart"
     ],
     "tree_gpu_only": [
-     "--cart",
-     "--no-prune"
+     "--cart"
     ],
     "tree_simple": [
-     "--cart",
-     "--no-prune"
+     "--cart"
     ]
    }
   },
@@ -186,7 +174,6 @@
    "impls": {
     "tree": [
      "--cart",
-     "--no-prune",
      "-d",
      "10"
     ],
@@ -196,19 +183,16 @@
     },
     "tree_cuda": [
      "--cart",
-     "--no-prune",
      "-d",
      "10"
     ],
     "tree_gpu_only": [
      "--cart",
-     "--no-prune",
      "-d",
      "10"
     ],
     "tree_simple": [
      "--cart",
-     "--no-prune",
      "-d",
      "10"
     ]
@@ -219,7 +203,6 @@
    "impls": {
     "tree": [
      "--c45",
-     "--no-prune",
      "-d",
      "10"
     ],
@@ -235,19 +218,16 @@
     },
     "tree_cuda": [
      "--c45",
-     "--no-prune",
      "-d",
      "10"
     ],
     "tree_gpu_only": [
      "--c45",
-     "--no-prune",
      "-d",
      "10"
     ],
     "tree_simple": [
      "--c45",
-     "--no-prune",
      "-d",
      "10"
     ]
@@ -260,28 +240,28 @@
      "--cart",
      "-d",
      "10",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_cuda": [
      "--cart",
      "-d",
      "10",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_gpu_only": [
      "--cart",
      "-d",
      "10",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_simple": [
      "--cart",
      "-d",
      "10",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ]
    }
@@ -292,22 +272,30 @@
     "tree": [
      "--c45",
      "-d",
-     "10"
+     "10",
+     "--prune",
+     "0.25"
     ],
     "tree_cuda": [
      "--c45",
      "-d",
-     "10"
+     "10",
+     "--prune",
+     "0.25"
     ],
     "tree_gpu_only": [
      "--c45",
      "-d",
-     "10"
+     "10",
+     "--prune",
+     "0.25"
     ],
     "tree_simple": [
      "--c45",
      "-d",
-     "10"
+     "10",
+     "--prune",
+     "0.25"
     ]
    }
   },
@@ -315,7 +303,9 @@
    "title": "C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows",
    "impls": {
     "tree": [
-     "--c45"
+     "--c45",
+     "--prune",
+     "0.25"
     ],
     "j48": {
      "options": "-C 0.25 -M 2"
@@ -333,13 +323,19 @@
      "ccp_alpha": "{alpha}"
     },
     "tree_cuda": [
-     "--c45"
+     "--c45",
+     "--prune",
+     "0.25"
     ],
     "tree_gpu_only": [
-     "--c45"
+     "--c45",
+     "--prune",
+     "0.25"
     ],
     "tree_simple": [
-     "--c45"
+     "--c45",
+     "--prune",
+     "0.25"
     ]
    }
   },
@@ -347,8 +343,7 @@
    "title": "C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows",
    "impls": {
     "tree": [
-     "--c45",
-     "--no-prune"
+     "--c45"
     ],
     "j48": {
      "options": "-U -M 2"
@@ -359,16 +354,263 @@
      "2"
     ],
     "tree_cuda": [
+     "--c45"
+    ],
+    "tree_gpu_only": [
+     "--c45"
+    ],
+    "tree_simple": [
+     "--c45"
+    ]
+   }
+  },
+  "cart_depth5": {
+   "title": "CART, grown to depth 5, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "5"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "5"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "5"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "5"
+    ]
+   }
+  },
+  "c45_depth5_unpruned": {
+   "title": "C4.5, grown to depth 5, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
      "--c45",
-     "--no-prune"
+     "-d",
+     "5"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "5"
     ],
     "tree_gpu_only": [
      "--c45",
-     "--no-prune"
+     "-d",
+     "5"
     ],
     "tree_simple": [
      "--c45",
-     "--no-prune"
+     "-d",
+     "5"
+    ]
+   }
+  },
+  "cart_depth15": {
+   "title": "CART, grown to depth 15, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "15"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "15"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "15"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "15"
+    ]
+   }
+  },
+  "c45_depth15_unpruned": {
+   "title": "C4.5, grown to depth 15, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "15"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "15"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "15"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "15"
+    ]
+   }
+  },
+  "cart_depth20": {
+   "title": "CART, grown to depth 20, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "20"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "20"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "20"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "20"
+    ]
+   }
+  },
+  "c45_depth20_unpruned": {
+   "title": "C4.5, grown to depth 20, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "20"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "20"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "20"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "20"
+    ]
+   }
+  },
+  "cart_depth25": {
+   "title": "CART, grown to depth 25, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "25"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "25"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "25"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "25"
+    ]
+   }
+  },
+  "c45_depth25_unpruned": {
+   "title": "C4.5, grown to depth 25, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "25"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "25"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "25"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "25"
+    ]
+   }
+  },
+  "cart_depth30": {
+   "title": "CART, grown to depth 30, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "30"
+    ],
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "30"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "30"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "30"
+    ]
+   }
+  },
+  "c45_depth30_unpruned": {
+   "title": "C4.5, grown to depth 30, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "30"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "30"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "30"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "30"
     ]
    }
   }
@@ -380,12 +622,12 @@
    "warmup": false
   },
   "tree_cuda": {
-   "label": "./tree CUDA",
+   "label": "./tree Hybrid",
    "threads": "all",
    "warmup": false
   },
   "tree_gpu_only": {
-   "label": "./tree CUDA, GPU only",
+   "label": "./tree GPU",
    "threads": "all",
    "warmup": false
   },
@@ -1721,12 +1963,648 @@
    ],
    "n_train": 15000000,
    "n_test": 2897917,
+   "csv_features": [
+    "separation",
+    "propensity",
+    "length",
+    "PredSS_r1_-4",
+    "PredSS_r1_-3",
+    "PredSS_r1_-2",
+    "PredSS_r1_-1",
+    "PredSS_r1",
+    "PredSS_r1_1",
+    "PredSS_r1_2",
+    "PredSS_r1_3",
+    "PredSS_r1_4",
+    "PredSS_r2_-4",
+    "PredSS_r2_-3",
+    "PredSS_r2_-2",
+    "PredSS_r2_-1",
+    "PredSS_r2",
+    "PredSS_r2_1",
+    "PredSS_r2_2",
+    "PredSS_r2_3",
+    "PredSS_r2_4",
+    "PredSS_freq_central_H",
+    "PredSS_freq_central_E",
+    "PredSS_freq_central_C",
+    "PredCN_freq_central_0",
+    "PredCN_freq_central_1",
+    "PredCN_freq_central_2",
+    "PredCN_freq_central_3",
+    "PredCN_freq_central_4",
+    "PredRCH_freq_central_0",
+    "PredRCH_freq_central_1",
+    "PredRCH_freq_central_2",
+    "PredRCH_freq_central_3",
+    "PredRCH_freq_central_4",
+    "PredSA_freq_central_0",
+    "PredSA_freq_central_1",
+    "PredSA_freq_central_2",
+    "PredSA_freq_central_3",
+    "PredSA_freq_central_4",
+    "PredRCH_r1_-4",
+    "PredRCH_r1_-3",
+    "PredRCH_r1_-2",
+    "PredRCH_r1_-1",
+    "PredRCH_r1",
+    "PredRCH_r1_1",
+    "PredRCH_r1_2",
+    "PredRCH_r1_3",
+    "PredRCH_r1_4",
+    "PredRCH_r2_-4",
+    "PredRCH_r2_-3",
+    "PredRCH_r2_-2",
+    "PredRCH_r2_-1",
+    "PredRCH_r2",
+    "PredRCH_r2_1",
+    "PredRCH_r2_2",
+    "PredRCH_r2_3",
+    "PredRCH_r2_4",
+    "PredCN_r1_-4",
+    "PredCN_r1_-3",
+    "PredCN_r1_-2",
+    "PredCN_r1_-1",
+    "PredCN_r1",
+    "PredCN_r1_1",
+    "PredCN_r1_2",
+    "PredCN_r1_3",
+    "PredCN_r1_4",
+    "PredCN_r2_-4",
+    "PredCN_r2_-3",
+    "PredCN_r2_-2",
+    "PredCN_r2_-1",
+    "PredCN_r2",
+    "PredCN_r2_1",
+    "PredCN_r2_2",
+    "PredCN_r2_3",
+    "PredCN_r2_4",
+    "PredSA_r1_-4",
+    "PredSA_r1_-3",
+    "PredSA_r1_-2",
+    "PredSA_r1_-1",
+    "PredSA_r1",
+    "PredSA_r1_1",
+    "PredSA_r1_2",
+    "PredSA_r1_3",
+    "PredSA_r1_4",
+    "PredSA_r2_-4",
+    "PredSA_r2_-3",
+    "PredSA_r2_-2",
+    "PredSA_r2_-1",
+    "PredSA_r2",
+    "PredSA_r2_1",
+    "PredSA_r2_2",
+    "PredSA_r2_3",
+    "PredSA_r2_4",
+    "PredSS_freq_global_H",
+    "PredSS_freq_global_E",
+    "PredSS_freq_global_C",
+    "PredCN_freq_global_0",
+    "PredCN_freq_global_1",
+    "PredCN_freq_global_2",
+    "PredCN_freq_global_3",
+    "PredCN_freq_global_4",
+    "PredRCH_freq_global_0",
+    "PredRCH_freq_global_1",
+    "PredRCH_freq_global_2",
+    "PredRCH_freq_global_3",
+    "PredRCH_freq_global_4",
+    "PredSA_freq_global_0",
+    "PredSA_freq_global_1",
+    "PredSA_freq_global_2",
+    "PredSA_freq_global_3",
+    "PredSA_freq_global_4",
+    "AA_freq_central_A",
+    "AA_freq_central_R",
+    "AA_freq_central_N",
+    "AA_freq_central_D",
+    "AA_freq_central_C",
+    "AA_freq_central_Q",
+    "AA_freq_central_E",
+    "AA_freq_central_G",
+    "AA_freq_central_H",
+    "AA_freq_central_I",
+    "AA_freq_central_L",
+    "AA_freq_central_K",
+    "AA_freq_central_M",
+    "AA_freq_central_F",
+    "AA_freq_central_P",
+    "AA_freq_central_S",
+    "AA_freq_central_T",
+    "AA_freq_central_W",
+    "AA_freq_central_Y",
+    "AA_freq_central_V",
+    "PredSS_central_-2",
+    "PredSS_central_-1",
+    "PredSS_central",
+    "PredSS_central_1",
+    "PredSS_central_2",
+    "PredCN_central_-2",
+    "PredCN_central_-1",
+    "PredCN_central",
+    "PredCN_central_1",
+    "PredCN_central_2",
+    "PredRCH_central_-2",
+    "PredRCH_central_-1",
+    "PredRCH_central",
+    "PredRCH_central_1",
+    "PredRCH_central_2",
+    "PredSA_central_-2",
+    "PredSA_central_-1",
+    "PredSA_central",
+    "PredSA_central_1",
+    "PredSA_central_2",
+    "AA_freq_global_A",
+    "AA_freq_global_R",
+    "AA_freq_global_N",
+    "AA_freq_global_D",
+    "AA_freq_global_C",
+    "AA_freq_global_Q",
+    "AA_freq_global_E",
+    "AA_freq_global_G",
+    "AA_freq_global_H",
+    "AA_freq_global_I",
+    "AA_freq_global_L",
+    "AA_freq_global_K",
+    "AA_freq_global_M",
+    "AA_freq_global_F",
+    "AA_freq_global_P",
+    "AA_freq_global_S",
+    "AA_freq_global_T",
+    "AA_freq_global_W",
+    "AA_freq_global_Y",
+    "AA_freq_global_V",
+    "PSSM_r1_-4_A",
+    "PSSM_r1_-4_R",
+    "PSSM_r1_-4_N",
+    "PSSM_r1_-4_D",
+    "PSSM_r1_-4_C",
+    "PSSM_r1_-4_Q",
+    "PSSM_r1_-4_E",
+    "PSSM_r1_-4_G",
+    "PSSM_r1_-4_H",
+    "PSSM_r1_-4_I",
+    "PSSM_r1_-4_L",
+    "PSSM_r1_-4_K",
+    "PSSM_r1_-4_M",
+    "PSSM_r1_-4_F",
+    "PSSM_r1_-4_P",
+    "PSSM_r1_-4_S",
+    "PSSM_r1_-4_T",
+    "PSSM_r1_-4_W",
+    "PSSM_r1_-4_Y",
+    "PSSM_r1_-4_V",
+    "PSSM_r1_-3_A",
+    "PSSM_r1_-3_R",
+    "PSSM_r1_-3_N",
+    "PSSM_r1_-3_D",
+    "PSSM_r1_-3_C",
+    "PSSM_r1_-3_Q",
+    "PSSM_r1_-3_E",
+    "PSSM_r1_-3_G",
+    "PSSM_r1_-3_H",
+    "PSSM_r1_-3_I",
+    "PSSM_r1_-3_L",
+    "PSSM_r1_-3_K",
+    "PSSM_r1_-3_M",
+    "PSSM_r1_-3_F",
+    "PSSM_r1_-3_P",
+    "PSSM_r1_-3_S",
+    "PSSM_r1_-3_T",
+    "PSSM_r1_-3_W",
+    "PSSM_r1_-3_Y",
+    "PSSM_r1_-3_V",
+    "PSSM_r1_-2_A",
+    "PSSM_r1_-2_R",
+    "PSSM_r1_-2_N",
+    "PSSM_r1_-2_D",
+    "PSSM_r1_-2_C",
+    "PSSM_r1_-2_Q",
+    "PSSM_r1_-2_E",
+    "PSSM_r1_-2_G",
+    "PSSM_r1_-2_H",
+    "PSSM_r1_-2_I",
+    "PSSM_r1_-2_L",
+    "PSSM_r1_-2_K",
+    "PSSM_r1_-2_M",
+    "PSSM_r1_-2_F",
+    "PSSM_r1_-2_P",
+    "PSSM_r1_-2_S",
+    "PSSM_r1_-2_T",
+    "PSSM_r1_-2_W",
+    "PSSM_r1_-2_Y",
+    "PSSM_r1_-2_V",
+    "PSSM_r1_-1_A",
+    "PSSM_r1_-1_R",
+    "PSSM_r1_-1_N",
+    "PSSM_r1_-1_D",
+    "PSSM_r1_-1_C",
+    "PSSM_r1_-1_Q",
+    "PSSM_r1_-1_E",
+    "PSSM_r1_-1_G",
+    "PSSM_r1_-1_H",
+    "PSSM_r1_-1_I",
+    "PSSM_r1_-1_L",
+    "PSSM_r1_-1_K",
+    "PSSM_r1_-1_M",
+    "PSSM_r1_-1_F",
+    "PSSM_r1_-1_P",
+    "PSSM_r1_-1_S",
+    "PSSM_r1_-1_T",
+    "PSSM_r1_-1_W",
+    "PSSM_r1_-1_Y",
+    "PSSM_r1_-1_V",
+    "PSSM_r1_0_A",
+    "PSSM_r1_0_R",
+    "PSSM_r1_0_N",
+    "PSSM_r1_0_D",
+    "PSSM_r1_0_C",
+    "PSSM_r1_0_Q",
+    "PSSM_r1_0_E",
+    "PSSM_r1_0_G",
+    "PSSM_r1_0_H",
+    "PSSM_r1_0_I",
+    "PSSM_r1_0_L",
+    "PSSM_r1_0_K",
+    "PSSM_r1_0_M",
+    "PSSM_r1_0_F",
+    "PSSM_r1_0_P",
+    "PSSM_r1_0_S",
+    "PSSM_r1_0_T",
+    "PSSM_r1_0_W",
+    "PSSM_r1_0_Y",
+    "PSSM_r1_0_V",
+    "PSSM_r1_1_A",
+    "PSSM_r1_1_R",
+    "PSSM_r1_1_N",
+    "PSSM_r1_1_D",
+    "PSSM_r1_1_C",
+    "PSSM_r1_1_Q",
+    "PSSM_r1_1_E",
+    "PSSM_r1_1_G",
+    "PSSM_r1_1_H",
+    "PSSM_r1_1_I",
+    "PSSM_r1_1_L",
+    "PSSM_r1_1_K",
+    "PSSM_r1_1_M",
+    "PSSM_r1_1_F",
+    "PSSM_r1_1_P",
+    "PSSM_r1_1_S",
+    "PSSM_r1_1_T",
+    "PSSM_r1_1_W",
+    "PSSM_r1_1_Y",
+    "PSSM_r1_1_V",
+    "PSSM_r1_2_A",
+    "PSSM_r1_2_R",
+    "PSSM_r1_2_N",
+    "PSSM_r1_2_D",
+    "PSSM_r1_2_C",
+    "PSSM_r1_2_Q",
+    "PSSM_r1_2_E",
+    "PSSM_r1_2_G",
+    "PSSM_r1_2_H",
+    "PSSM_r1_2_I",
+    "PSSM_r1_2_L",
+    "PSSM_r1_2_K",
+    "PSSM_r1_2_M",
+    "PSSM_r1_2_F",
+    "PSSM_r1_2_P",
+    "PSSM_r1_2_S",
+    "PSSM_r1_2_T",
+    "PSSM_r1_2_W",
+    "PSSM_r1_2_Y",
+    "PSSM_r1_2_V",
+    "PSSM_r1_3_A",
+    "PSSM_r1_3_R",
+    "PSSM_r1_3_N",
+    "PSSM_r1_3_D",
+    "PSSM_r1_3_C",
+    "PSSM_r1_3_Q",
+    "PSSM_r1_3_E",
+    "PSSM_r1_3_G",
+    "PSSM_r1_3_H",
+    "PSSM_r1_3_I",
+    "PSSM_r1_3_L",
+    "PSSM_r1_3_K",
+    "PSSM_r1_3_M",
+    "PSSM_r1_3_F",
+    "PSSM_r1_3_P",
+    "PSSM_r1_3_S",
+    "PSSM_r1_3_T",
+    "PSSM_r1_3_W",
+    "PSSM_r1_3_Y",
+    "PSSM_r1_3_V",
+    "PSSM_r1_4_A",
+    "PSSM_r1_4_R",
+    "PSSM_r1_4_N",
+    "PSSM_r1_4_D",
+    "PSSM_r1_4_C",
+    "PSSM_r1_4_Q",
+    "PSSM_r1_4_E",
+    "PSSM_r1_4_G",
+    "PSSM_r1_4_H",
+    "PSSM_r1_4_I",
+    "PSSM_r1_4_L",
+    "PSSM_r1_4_K",
+    "PSSM_r1_4_M",
+    "PSSM_r1_4_F",
+    "PSSM_r1_4_P",
+    "PSSM_r1_4_S",
+    "PSSM_r1_4_T",
+    "PSSM_r1_4_W",
+    "PSSM_r1_4_Y",
+    "PSSM_r1_4_V",
+    "PSSM_r2_-4_A",
+    "PSSM_r2_-4_R",
+    "PSSM_r2_-4_N",
+    "PSSM_r2_-4_D",
+    "PSSM_r2_-4_C",
+    "PSSM_r2_-4_Q",
+    "PSSM_r2_-4_E",
+    "PSSM_r2_-4_G",
+    "PSSM_r2_-4_H",
+    "PSSM_r2_-4_I",
+    "PSSM_r2_-4_L",
+    "PSSM_r2_-4_K",
+    "PSSM_r2_-4_M",
+    "PSSM_r2_-4_F",
+    "PSSM_r2_-4_P",
+    "PSSM_r2_-4_S",
+    "PSSM_r2_-4_T",
+    "PSSM_r2_-4_W",
+    "PSSM_r2_-4_Y",
+    "PSSM_r2_-4_V",
+    "PSSM_r2_-3_A",
+    "PSSM_r2_-3_R",
+    "PSSM_r2_-3_N",
+    "PSSM_r2_-3_D",
+    "PSSM_r2_-3_C",
+    "PSSM_r2_-3_Q",
+    "PSSM_r2_-3_E",
+    "PSSM_r2_-3_G",
+    "PSSM_r2_-3_H",
+    "PSSM_r2_-3_I",
+    "PSSM_r2_-3_L",
+    "PSSM_r2_-3_K",
+    "PSSM_r2_-3_M",
+    "PSSM_r2_-3_F",
+    "PSSM_r2_-3_P",
+    "PSSM_r2_-3_S",
+    "PSSM_r2_-3_T",
+    "PSSM_r2_-3_W",
+    "PSSM_r2_-3_Y",
+    "PSSM_r2_-3_V",
+    "PSSM_r2_-2_A",
+    "PSSM_r2_-2_R",
+    "PSSM_r2_-2_N",
+    "PSSM_r2_-2_D",
+    "PSSM_r2_-2_C",
+    "PSSM_r2_-2_Q",
+    "PSSM_r2_-2_E",
+    "PSSM_r2_-2_G",
+    "PSSM_r2_-2_H",
+    "PSSM_r2_-2_I",
+    "PSSM_r2_-2_L",
+    "PSSM_r2_-2_K",
+    "PSSM_r2_-2_M",
+    "PSSM_r2_-2_F",
+    "PSSM_r2_-2_P",
+    "PSSM_r2_-2_S",
+    "PSSM_r2_-2_T",
+    "PSSM_r2_-2_W",
+    "PSSM_r2_-2_Y",
+    "PSSM_r2_-2_V",
+    "PSSM_r2_-1_A",
+    "PSSM_r2_-1_R",
+    "PSSM_r2_-1_N",
+    "PSSM_r2_-1_D",
+    "PSSM_r2_-1_C",
+    "PSSM_r2_-1_Q",
+    "PSSM_r2_-1_E",
+    "PSSM_r2_-1_G",
+    "PSSM_r2_-1_H",
+    "PSSM_r2_-1_I",
+    "PSSM_r2_-1_L",
+    "PSSM_r2_-1_K",
+    "PSSM_r2_-1_M",
+    "PSSM_r2_-1_F",
+    "PSSM_r2_-1_P",
+    "PSSM_r2_-1_S",
+    "PSSM_r2_-1_T",
+    "PSSM_r2_-1_W",
+    "PSSM_r2_-1_Y",
+    "PSSM_r2_-1_V",
+    "PSSM_r2_0_A",
+    "PSSM_r2_0_R",
+    "PSSM_r2_0_N",
+    "PSSM_r2_0_D",
+    "PSSM_r2_0_C",
+    "PSSM_r2_0_Q",
+    "PSSM_r2_0_E",
+    "PSSM_r2_0_G",
+    "PSSM_r2_0_H",
+    "PSSM_r2_0_I",
+    "PSSM_r2_0_L",
+    "PSSM_r2_0_K",
+    "PSSM_r2_0_M",
+    "PSSM_r2_0_F",
+    "PSSM_r2_0_P",
+    "PSSM_r2_0_S",
+    "PSSM_r2_0_T",
+    "PSSM_r2_0_W",
+    "PSSM_r2_0_Y",
+    "PSSM_r2_0_V",
+    "PSSM_r2_1_A",
+    "PSSM_r2_1_R",
+    "PSSM_r2_1_N",
+    "PSSM_r2_1_D",
+    "PSSM_r2_1_C",
+    "PSSM_r2_1_Q",
+    "PSSM_r2_1_E",
+    "PSSM_r2_1_G",
+    "PSSM_r2_1_H",
+    "PSSM_r2_1_I",
+    "PSSM_r2_1_L",
+    "PSSM_r2_1_K",
+    "PSSM_r2_1_M",
+    "PSSM_r2_1_F",
+    "PSSM_r2_1_P",
+    "PSSM_r2_1_S",
+    "PSSM_r2_1_T",
+    "PSSM_r2_1_W",
+    "PSSM_r2_1_Y",
+    "PSSM_r2_1_V",
+    "PSSM_r2_2_A",
+    "PSSM_r2_2_R",
+    "PSSM_r2_2_N",
+    "PSSM_r2_2_D",
+    "PSSM_r2_2_C",
+    "PSSM_r2_2_Q",
+    "PSSM_r2_2_E",
+    "PSSM_r2_2_G",
+    "PSSM_r2_2_H",
+    "PSSM_r2_2_I",
+    "PSSM_r2_2_L",
+    "PSSM_r2_2_K",
+    "PSSM_r2_2_M",
+    "PSSM_r2_2_F",
+    "PSSM_r2_2_P",
+    "PSSM_r2_2_S",
+    "PSSM_r2_2_T",
+    "PSSM_r2_2_W",
+    "PSSM_r2_2_Y",
+    "PSSM_r2_2_V",
+    "PSSM_r2_3_A",
+    "PSSM_r2_3_R",
+    "PSSM_r2_3_N",
+    "PSSM_r2_3_D",
+    "PSSM_r2_3_C",
+    "PSSM_r2_3_Q",
+    "PSSM_r2_3_E",
+    "PSSM_r2_3_G",
+    "PSSM_r2_3_H",
+    "PSSM_r2_3_I",
+    "PSSM_r2_3_L",
+    "PSSM_r2_3_K",
+    "PSSM_r2_3_M",
+    "PSSM_r2_3_F",
+    "PSSM_r2_3_P",
+    "PSSM_r2_3_S",
+    "PSSM_r2_3_T",
+    "PSSM_r2_3_W",
+    "PSSM_r2_3_Y",
+    "PSSM_r2_3_V",
+    "PSSM_r2_4_A",
+    "PSSM_r2_4_R",
+    "PSSM_r2_4_N",
+    "PSSM_r2_4_D",
+    "PSSM_r2_4_C",
+    "PSSM_r2_4_Q",
+    "PSSM_r2_4_E",
+    "PSSM_r2_4_G",
+    "PSSM_r2_4_H",
+    "PSSM_r2_4_I",
+    "PSSM_r2_4_L",
+    "PSSM_r2_4_K",
+    "PSSM_r2_4_M",
+    "PSSM_r2_4_F",
+    "PSSM_r2_4_P",
+    "PSSM_r2_4_S",
+    "PSSM_r2_4_T",
+    "PSSM_r2_4_W",
+    "PSSM_r2_4_Y",
+    "PSSM_r2_4_V",
+    "PSSM_central_-2_A",
+    "PSSM_central_-2_R",
+    "PSSM_central_-2_N",
+    "PSSM_central_-2_D",
+    "PSSM_central_-2_C",
+    "PSSM_central_-2_Q",
+    "PSSM_central_-2_E",
+    "PSSM_central_-2_G",
+    "PSSM_central_-2_H",
+    "PSSM_central_-2_I",
+    "PSSM_central_-2_L",
+    "PSSM_central_-2_K",
+    "PSSM_central_-2_M",
+    "PSSM_central_-2_F",
+    "PSSM_central_-2_P",
+    "PSSM_central_-2_S",
+    "PSSM_central_-2_T",
+    "PSSM_central_-2_W",
+    "PSSM_central_-2_Y",
+    "PSSM_central_-2_V",
+    "PSSM_central_-1_A",
+    "PSSM_central_-1_R",
+    "PSSM_central_-1_N",
+    "PSSM_central_-1_D",
+    "PSSM_central_-1_C",
+    "PSSM_central_-1_Q",
+    "PSSM_central_-1_E",
+    "PSSM_central_-1_G",
+    "PSSM_central_-1_H",
+    "PSSM_central_-1_I",
+    "PSSM_central_-1_L",
+    "PSSM_central_-1_K",
+    "PSSM_central_-1_M",
+    "PSSM_central_-1_F",
+    "PSSM_central_-1_P",
+    "PSSM_central_-1_S",
+    "PSSM_central_-1_T",
+    "PSSM_central_-1_W",
+    "PSSM_central_-1_Y",
+    "PSSM_central_-1_V",
+    "PSSM_central_0_A",
+    "PSSM_central_0_R",
+    "PSSM_central_0_N",
+    "PSSM_central_0_D",
+    "PSSM_central_0_C",
+    "PSSM_central_0_Q",
+    "PSSM_central_0_E",
+    "PSSM_central_0_G",
+    "PSSM_central_0_H",
+    "PSSM_central_0_I",
+    "PSSM_central_0_L",
+    "PSSM_central_0_K",
+    "PSSM_central_0_M",
+    "PSSM_central_0_F",
+    "PSSM_central_0_P",
+    "PSSM_central_0_S",
+    "PSSM_central_0_T",
+    "PSSM_central_0_W",
+    "PSSM_central_0_Y",
+    "PSSM_central_0_V",
+    "PSSM_central_1_A",
+    "PSSM_central_1_R",
+    "PSSM_central_1_N",
+    "PSSM_central_1_D",
+    "PSSM_central_1_C",
+    "PSSM_central_1_Q",
+    "PSSM_central_1_E",
+    "PSSM_central_1_G",
+    "PSSM_central_1_H",
+    "PSSM_central_1_I",
+    "PSSM_central_1_L",
+    "PSSM_central_1_K",
+    "PSSM_central_1_M",
+    "PSSM_central_1_F",
+    "PSSM_central_1_P",
+    "PSSM_central_1_S",
+    "PSSM_central_1_T",
+    "PSSM_central_1_W",
+    "PSSM_central_1_Y",
+    "PSSM_central_1_V",
+    "PSSM_central_2_A",
+    "PSSM_central_2_R",
+    "PSSM_central_2_N",
+    "PSSM_central_2_D",
+    "PSSM_central_2_C",
+    "PSSM_central_2_Q",
+    "PSSM_central_2_E",
+    "PSSM_central_2_G",
+    "PSSM_central_2_H",
+    "PSSM_central_2_I",
+    "PSSM_central_2_L",
+    "PSSM_central_2_K",
+    "PSSM_central_2_M",
+    "PSSM_central_2_F",
+    "PSSM_central_2_P",
+    "PSSM_central_2_S",
+    "PSSM_central_2_T",
+    "PSSM_central_2_W",
+    "PSSM_central_2_Y",
+    "PSSM_central_2_V"
+   ],
+   "csv_classes": [
+    "0",
+    "1"
+   ],
    "spec": {
-    "source": "datasets/ecbdl/ecbdl.csv",
-    "test_source": "datasets/ecbdl/ecbdl_test.csv",
-    "train_rows": 15000000,
-    "yadt": false
-   }
+    "prefix_of": "ecbdl",
+    "train_rows": 15000000
+   },
+   "prefix_of": "ecbdl"
   }
  },
  "data_files": {
@@ -1742,10 +2620,10 @@
    "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168"
   },
   "ecbdl_15m": {
-   "meta.json": "9eea324900c26cb01f9ac6bddc1e66cbb650518b56f067604325679be2523912",
+   "meta.json": "8ff93a2be2649169a8f6188a5f3ee07224564a658793f343d5158ed2876cdd6f",
    "test.f32": "89289779fa0dd238798d6aace852ba207cb3132d04dd50f51693805750dec70f",
    "test.y.i32": "e9defcc0b77562d3684e79c59dcdd6ef9c7d25a7b6609d67103a6cf105337cfe",
-   "train.csv": "83e7f1960aeeba65990d73671962e596693bd1746be8bff66fb350f59af634ff",
+   "train.csv": "a75edf17fe6aaff071321f1be93e1636c4d5c5a5d24fb03e9eeeb6f1a1227bd0",
    "train.f32": "7d3880fae4ae25f1554b08080e9d81b5415ff624f84422408a5aea5f8a2e46fd",
    "train.y.i32": "a4709242ab8251e056e4e77fa218899284327888cf8c5fe2d646f0566def20aa"
   }

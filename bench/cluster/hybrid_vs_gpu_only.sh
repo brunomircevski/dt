@@ -41,6 +41,11 @@ run() {  # <dir> <name> <dataset> <impls> <runs> <protocols> [RUN_EXTRA]
 for dataset in $DATASETS; do
   for value in $VALUES; do
     extra=; [ "$value" = default ] || extra="--handoff-rows $value"
+    # A value already measured (report.md is written last) is kept: rerunning
+    # with other VALUES finishes a sweep that was cut short.
+    if [ -f "bench/results/$DIR/sweep/cuda-$NODE-$dataset-mr$value/report.md" ]; then
+      echo "$(date '+%F %T')  $DIR/sweep/cuda-$NODE-$dataset-mr$value kept"; continue
+    fi
     run "$DIR/sweep" "cuda-$NODE-$dataset-mr$value" "$dataset" tree_cuda "$SWEEP_RUNS" "$SWEEP_PROTOCOLS" "$extra"
   done
   best="$("$PY" - "bench/results/$DIR/sweep" "$NODE" "$dataset" $VALUES <<'EOF'

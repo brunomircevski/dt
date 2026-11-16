@@ -2,6 +2,14 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: open: C4.5 on big chess runs at two speeds (mordor3 cluster)
+
+Found in the 5-run rerun of 2026-11-15/16 at f53347a9 (`src/` = d2957ff2), `--multicore` with 48 threads ([cluster-profiling](../bench/results/cluster-profiling/BENCHMARK.md#c45-on-big-chess-two-speeds)). C4.5 on chess 500M–2000M takes one of two times from run to run, on epyc1 and dell1 alike: epyc's build on chess 1000M 1.13–1.15 s or 1.40–1.47 s, on chess 2000M 2.42 s or 3.0 s (20–40% min to max). CART on the same data spreads at most 6%; the runs at ec77727 spread 5–8% on this case.
+
+- **The same work:** every run grows the same tree, with the same sweep and partition time in `--profile`. The presort is steady.
+- **Where the time goes:** the slow runs have more "other" and idle thread time (chess 2000M: 31.6 against 7.7 thread-seconds of other, 15.6 against 7.9 idle); on dell they also spend more system time (121 against 83 s), on epyc system time does not follow the slow runs.
+- **Not yet known:** a C4.5-only step outside the sweeps and partitions (its distinct-value bookkeeping, or an allocation that page-faults in some runs), or scheduling. Even the slow runs are 2.5–3× faster than at ec77727.
+
 ## November 2026: four suggestions merged (mordor3 cluster)
 
 The items of SUGGESTIONS.MD (written from main at a7990141), each on its own

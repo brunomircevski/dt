@@ -34,40 +34,71 @@ sbatch bench/cluster/prepare.sh  # on a dell node: the datasets (checked by SHA-
 
 ### The final rerun
 
-`final.sh` queues every run of the benchmarks in bench/results (except
-cluster-profiling, hybrid-vs-gpu-only and the power benchmark) on one build:
-one chain of `batch.sh` jobs per node, each running a plan file
-(`bench/cluster/plans/final-<node>-<n>.txt`, its log next to it) line by line,
-the most important first. Started on 2026-11-09 from `~/dt-final`, a clone
-with its own build whose `bench/data`, `bench/.venv` and `datasets` link to
-`~/dt`'s (and a copy of `bench/.tools`), so rebuilding `~/dt` cannot change it.
+`final.sh` queues the runs of the benchmarks in bench/results (all but the
+power benchmark) on one build: one chain of jobs per node, each a `batch.sh`
+plan file (`bench/cluster/plans/final-<node>-<n>.txt`, its log next to it) run
+line by line, or `hybrid_vs_gpu_only.sh`, the most important first. `-m` sets
+the runs per case, `-k` the kinds of runs (`gpu`, `cpu`, `scaling`, `serial`,
+`simple`, `vs`, `gpulibs`, `profiling`, `hybrid`; default all). It runs from
+`~/dt-final`, a clone with its own build whose `bench/data`, `bench/.venv` and
+`datasets` link to `~/dt`'s (and a copy of `bench/.tools`), so rebuilding
+`~/dt` cannot change it.
 
 ```bash
-git clone https://github.com/brunomircevski/dt ~/dt-final && cd ~/dt-final
-ln -s ~/dt/bench/data bench/data; ln -s ~/dt/bench/.venv bench/.venv; ln -s ~/datasets datasets
+git clone ~/dt ~/dt-final && cd ~/dt-final
+ln -s ~/datasets/bench bench/data; ln -s ~/dt/bench/.venv bench/.venv; ln -s ~/datasets datasets
 cp -a ~/dt/bench/.tools bench/.tools
-sbatch --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)" bench/cluster/build.sh
+TREE_GIT_DESCRIBE="$(git describe --always --abbrev=12)" sbatch bench/cluster/build.sh
 bench/cluster/final.sh -t   # the check: one run of each kind of job, into bench/results/cluster-test/
 bench/cluster/final.sh -n   # the plans only; then move the old run folders they name out of bench/results
 bench/cluster/final.sh      # submit
 ```
 
-| Node | Jobs, in order | Runs | Expected |
-|---|---|---|---|
-| hopper, ampere | `--hybrid` and `--gpu` on SUSY, HIGGS, MNIST8M, ECBDL'14 15M, SOREL 4M, chess 1M–1000M; then cuML and XGBoost (one tree, then the default forest of 10) on HIGGS and MNIST8M from `~/gpu-dt-bench` into `results-final/` | 10 | half a day each |
-| epyc1 | `--multicore` 48 threads on every dataset, thread scaling (HIGGS, MNIST8M), `--serial` on every dataset, `--simple` on all but ECBDL'14, SOREL and SOREL 4M | 10 | about 2.7 days |
-| epyc2 | scikit-learn and Weka J48 on HIGGS and MNIST8M (cluster-cpu-vs-others), then `--simple` on ECBDL'14, SOREL and SOREL 4M | 10; J48 on MNIST8M and `--simple` on full ECBDL'14 and SOREL 3 | about 3 days |
-| dell1 (dell-long) | `--multicore` 48 threads, thread scaling, `--serial`, then `--simple` on full SOREL | as epyc | about 2.5 days |
-| dell2, dell3 (dell-long) | `--simple` on ECBDL'14 and SOREL 4M (dell2), on the other datasets (dell3), moved there from dell1 on 2026-11-10 | as epyc | about 1.5 days |
+**2026-11-15 rerun** (f53347a9: d2957ff2's `src`): every ./tree backend but
+`--simple`, which did not change, 5 runs a case:
+`final.sh -m 5 -k gpu,cpu,scaling,serial,profiling,hybrid`. scikit-learn, J48,
+cuML and XGBoost did not change either and keep their 2026-11-09 runs; so do
+`--simple`'s.
+
+Every kind's jobs per node (this rerun left out `simple`, `vs` and `gpulibs`):
+
+| Node | Jobs, in order |
+|---|---|
+| hopper | `--hybrid` and `--gpu` on SUSY, HIGGS, MNIST8M, ECBDL'14 15M, SOREL 4M, chess 1M–1000M; hybrid-vs-gpu-only; cluster-profiling (`--hybrid`, `--gpu`); cuML and XGBoost (`gpulibs`) |
+| ampere | the same `--hybrid` and `--gpu` runs; hybrid-vs-gpu-only; cuML and XGBoost |
+| epyc1 | `--multicore` 48 threads on every dataset, thread scaling (HIGGS, MNIST8M), cluster-profiling, `--serial` on MNIST8M and SOREL 4M, `--simple` on all but ECBDL'14, SOREL and SOREL 4M |
+| epyc2 | scikit-learn and Weka J48 (`vs`), `--serial` on the other datasets, `--simple` on ECBDL'14, SOREL and SOREL 4M |
+| dell1 (dell-long) | `--multicore`, thread scaling, cluster-profiling, `--serial` on full ECBDL'14 and SOREL (226 and 354 GiB), `--simple` on full SOREL |
+| dell2 (dell-long) | `--serial` on ECBDL'14 15M and SOREL 4M, `--simple` on ECBDL'14, ECBDL'14 15M and SOREL 4M |
+| dell3 (dell-long) | `--serial` and `--simple` on MNIST8M, chess, HIGGS and SUSY |
 
 dell2 and dell3 have half of dell1's memory channels, but one thread does not
 use the bandwidth: on 2026-11-09/10 `--serial` and `--simple` on SUSY and HIGGS
 (10 and 3 runs each, CART and C4.5) took 0.9–1.2% longer on dell2 than on dell1
-(one 5% case: a single slow run). Full SOREL stays on dell1: `--simple` peaks at
-123 GiB, about what dell2's NUMA node 0 has free (dell1's has twice that).
-The moved jobs record `TREE_GIT_DESCRIBE` ce907ddfe59f, the same `src` as f1fe270.
+(one 5% case: a single slow run), so they take one-thread runs only. Full
+ECBDL'14 and SOREL stay on dell1: their peaks are more than dell2's NUMA node 0
+has free (dell1's has twice that).
 
-Runs per case: 10, and 3 where one process takes over an hour. Parallel runs
+How it went: submitted on 2026-11-15 at 09:3x (jobs 20–31), done on 2026-11-16
+at 05:22; the GPU nodes and dell1 took longest (hybrid-vs-gpu-only about 20 h
+per GPU node, mostly reading the data once per run: 30–120 s against a few
+seconds of training). Three things were redone:
+- **dell3 out of idle:** `serial-dell-susy`'s first 1–3 runs were 10–30% slower
+  with as much more CPU time (the powersave governor coming out of idle); rerun
+  on dell3 (job 117, with `serial-dell-chess_100m`). `batch.sh` now keeps every
+  CPU busy for 30 s before its first run.
+- **dell1, slow minutes:** the HIGGS thread scaling (job 161) and `--multicore`
+  on chess 1M and 10M (2026-11-16) were rerun after dell1 had a few slow
+  minutes, presort included; the rejected folders are not kept.
+- **SOREL 4M's `--handoff-rows` sweep** was cut short (jobs 162–165): ampere
+  skipped 1024 and 2048, hopper 2048, and the resubmitted job kept the values
+  already measured. Resubmitting by hand needs `TREE_GIT_DESCRIBE` set (hopper
+  has no git); without it `job.sh` stops at once.
+
+To add runs later (e.g. 5 more, to 10), run the same command into a fresh
+clone's empty bench/results and append its folders with `bench/merge_runs.py`.
+
+Runs per case: `-m`, by default 10, and 3 where one process takes over an hour. Parallel runs
 use every CPU (both sockets), one-thread runs the first CPU, memory
 first-touch; CUDA runs one GPU and every CPU, the GPU's socket first. Every
 run records its test accuracy and the SHA-256 of its tree. The datasets the
@@ -144,11 +175,10 @@ the mean of the other runs (none now).
 
 ### Which build ran
 
-Every run of the final rerun (2026-11-09 on) is one build of main in
-`~/dt-final` (final.sh); each run's `machine.json` names its commit. Until it
-replaces them, the folders hold the runs of 2026-10-29/30 on ec77727 (`--simple`
-from 2026-10-27/29, SOREL's `--simple` on 32cf657, `sorel_4m` on 4ece22f), with
-the CUDA runs on the GPU's socket only.
+Every ./tree run in bench/results is one build of main in `~/dt-final`
+(final.sh), f53347a9 (2026-11-15/16), but `--simple`: f1fe270e on epyc and
+ce907ddf on dell (2026-11-10/12), full SOREL's on 32cf657 (2026-11-02). The
+libraries ran on 2026-11-09/10. Each run's `machine.json` names its commit.
 
 ## Settings specific to the cluster
 

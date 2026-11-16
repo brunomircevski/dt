@@ -1,3 +1,3 @@
 run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cpu-epyc-chess_50m,chess_50m,cart_depth10,tree,48,ok,True,0.2552,0.21830000000000002,0.2859,0.25167333333333336,0.017700963023350533,30,1.0,2.0646527791395783,2519851008.0,2519412736,2520215552,2513635328.0,17,9,4,1.0,,,,0.0
-cpu-epyc-chess_50m,chess_50m,c45_depth10_unpruned,tree,48,ok,True,0.2927,0.2697,0.3315,0.3012666666666667,0.0182928351026284,30,1.0,2.1296571667771786,2520553472.0,2520100864,2520928256,2514337792.0,17,9,4,1.0,,,,0.0001
+cpu-epyc-chess_50m,chess_50m,cart_depth10,tree,48,ok,True,0.1427,0.104,0.2049,0.14596,0.03922815315561007,5,1.0,4.914841176010668,2197610496,2183921664,2201526272,2191331328,17,9,4,1.0,,,,0.0
+cpu-epyc-chess_50m,chess_50m,c45_depth10_unpruned,tree,48,ok,True,0.1311,0.1164,0.1468,0.13026,0.01174682935944845,5,1.0,5.310500250081532,2198564864,2196762624,2201772032,2192285696,17,9,4,1.0,,,,0.0001

@@ -2,7 +2,7 @@
 
 One tree per run, grown to depth ≤ 10 without pruning on every training row and feature, scored on the dataset's test set, on the H100 PCIe of hopper and the A100 80 GB PCIe of ampere: one GPU and every CPU of the node, as ./tree's CUDA runs. cuML and XGBoost also grow a forest of 10 trees with their own random-forest defaults; its time divided by 10 is the bar "forest of 10 / 10".
 
-**Final data (2026-11-09/10):** ./tree f1fe270 (`bench/cluster/final.sh`, 10 runs per case), cuML and XGBoost 10 timed fits per case. XGBoost on MNIST8M first ran out of memory and stalled in `gpubench.py`'s tree walk; it was rerun on 2026-11-10 with the fixes (538fc78; `logs/*-first.log` are the first pass, with every other library run). Until 2026-11-09 this benchmark also had SUSY, airline, ECBDL'14 15M and chess 1000M; those runs are in git at 3354a8a.
+**Final data:** ./tree rerun on 2026-11-15/16 (f53347a9, `src/` = d2957ff2; `bench/cluster/final.sh -m 5`, 5 runs per case); cuML and XGBoost from 2026-11-09/10, 10 timed fits per case, not rerun (their code has not changed). The chart gives every bar's runs. XGBoost on MNIST8M first ran out of memory and stalled in `gpubench.py`'s tree walk; it was rerun on 2026-11-10 with the fixes (538fc78; `logs/*-first.log` are the first pass, with every other library run). Until 2026-11-09 this benchmark also had SUSY, airline, ECBDL'14 15M and chess 1000M; those runs are in git at 3354a8a.
 
 ![./tree against cuML and XGBoost, HIGGS and MNIST8M, CART and C4.5, H100 and A100](chart.png)
 
@@ -14,20 +14,21 @@ bench/.venv/bin/python bench/vs_chart.py gpu     # chart.png, summary.csv
 
 ## Results
 
-Mean of 10 runs, H100 (A100 in brackets); the chart has every bar with its spread, memory, test accuracy and nodes.
+Mean of the runs (./tree 5, the libraries 10), H100 (A100 in brackets); the chart has every bar with its spread, runs, memory, test accuracy and nodes.
 
 | | ./tree hybrid | cuML, 1 tree | XGBoost, 1 tree | ./tree faster than cuML / XGBoost |
 |---|--:|--:|--:|--:|
-| HIGGS CART | 0.159 s (0.208) | 0.450 s (0.507) | 2.62 s (2.72) | 2.8× / 16× (2.4× / 13×) |
-| HIGGS C4.5 (cuML: entropy) | 0.168 s (0.222) | 0.453 s (0.506) | — | 2.7× (2.3×) |
-| MNIST8M CART | 3.74 s (5.18) | 7.96 s (10.4) | 26.7 s (29.0) | 2.1× / 7.1× (2.0× / 5.6×) |
-| MNIST8M C4.5 (cuML: entropy) | 3.90 s (5.31) | 7.99 s (10.4) | — | 2.0× (2.0×) |
+| HIGGS CART | 0.131 s (0.175) | 0.450 s (0.507) | 2.62 s (2.72) | 3.4× / 20× (2.9× / 16×) |
+| HIGGS C4.5 (cuML: entropy) | 0.154 s (0.194) | 0.453 s (0.506) | — | 2.9× (2.6×) |
+| MNIST8M CART | 2.03 s (3.10) | 7.96 s (10.4) | 26.7 s (29.0) | 3.9× / 13× (3.3× / 9.4×) |
+| MNIST8M C4.5 (cuML: entropy) | 2.12 s (3.10) | 7.99 s (10.4) | — | 3.8× (3.4×) |
 
-- **./tree --gpu-only** takes the same time as the hybrid (within 3%) with less than half its RAM (MNIST8M 26 against 77 GB).
+- **./tree --gpu** takes the same time as the hybrid (within 2–6%) with a third of its RAM (MNIST8M 24 against 72 GB).
+- **Against the runs before (./tree f1fe270):** ./tree is 8–20% faster on HIGGS and 40–48% on MNIST8M, so its lead over cuML grew from 2.0–2.8× to 2.6–3.9×.
 - **XGBoost's time is mostly `QuantileDMatrix`:** the binning takes about 2.4 s of 2.6 s on HIGGS and 20–21 s of 27 s on MNIST8M; the tree itself takes 0.2–0.4 s and 6 s. Its one tree is ./tree's CART tree on MNIST8M (2,047 nodes, training 80.77%, test 84.51%) and nearly on HIGGS (2,033 against 2,029 nodes, test 70.51% against 70.52%).
 - **XGBoost needs 79 GB of VRAM on MNIST8M:** the multi-output tree's histograms (10 classes × 784 features × 256 bins per node). Its default cache of up to 65,536 nodes' histograms does not fit in 80 GB, nor does 256; `gpubench.py` keeps 128 (`max_cached_hist_node`, the same tree). ./tree uses 53 GB, cuML 27 GB.
 - **A forest's tree is cheaper than one full tree:** cuML's default forest takes 0.10 s (HIGGS) and 0.45 s (MNIST8M) per tree on the H100, faster than ./tree's one tree, because each tree sees a bootstrap sample and √features per split; its trees are not the full-data tree (it is a forest, test 90.4% against one tree's 84.5% on MNIST8M).
-- **H100 against A100:** ./tree 1.3–1.4× faster on the H100, cuML 1.1–1.3×, XGBoost 1.04–1.09× (its binning runs mostly on the CPUs).
+- **H100 against A100:** ./tree 1.3–1.5× faster on the H100, cuML 1.1–1.3×, XGBoost 1.04–1.09× (its binning runs mostly on the CPUs).
 
 ## What is compared
 
@@ -35,7 +36,7 @@ No public CUDA implementation of C4.5 was found (the GPU C4.5 papers publish no 
 
 | Implementation | Version | Settings |
 |---|---|---|
-| **./tree --cuda** (hybrid) and **--cuda --gpu-only** | the build of the test-set benchmarks | `--cart --no-prune -d 10` (exact Gini), `--c45 --no-prune -d 10` (C4.5 gain ratio); its bars are `cluster-<data>/cuda-<node>-<data>` and `gpuonly-<node>-<data>` |
+| **./tree --hybrid** and **--gpu** | the build of the test-set benchmarks | `--cart -d 10` (exact Gini), `--c45 -d 10` (C4.5 gain ratio), no pruning; its bars are `cluster-<data>/cuda-<node>-<data>` and `gpuonly-<node>-<data>` |
 | **cuML** `RandomForestClassifier` | 26.10 | 1 tree: `n_estimators=1, bootstrap=False, max_features=1.0, n_bins=128, max_depth=10`. CART: Gini. C4.5 stand-in: entropy (information gain), `min_samples_leaf=2` |
 | **XGBoost** | 3.4.1, `device="cuda", tree_method="hist"` | `reg:squarederror` with `eta=1, lambda=0`, 256 bins, `max_depth=10`, one round: on 0/1 labels the gain is n/2 × the drop in Gini impurity, so the CART split on bins. MNIST8M (10 classes): one multi-output tree (`multi_strategy="multi_output_tree"`) on the one-hot labels, whose summed squared error is again n/2 × the Gini drop. No entropy criterion, so CART only |
 

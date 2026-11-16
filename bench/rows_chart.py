@@ -239,9 +239,12 @@ def main():
         fig.text(0.1, 0.985 - (0.36 + 0.2 * index) / inches,
                  B.hardware_line(info, used_gpu) + f"   (run {info['started'][:10]})",
                  fontsize=8.8, color=INK, va="top")
+    def runs_of(key):  # '5 runs', or '3–10 runs' when the cases differ
+        n = sorted({len(e["times"]) for (b, m, _), es in lines.items() if (b, m) == key for e in es})
+        return f"{n[0]}{'–' + str(n[-1]) if n[-1] != n[0] else ''} run{'s' if n[-1] > 1 else ''}"
     handles = [Line2D([], [], color=M.COLORS[b], marker=marker[k], markersize=8,
                       markeredgecolor="white", linewidth=2,
-                      label=f"{M.BACKENDS[b]} · {m}") for k in keys for b, m in [k]]
+                      label=f"{M.BACKENDS[b]} · {m} ({runs_of(k)})") for k in keys for b, m in [k]]
     handles.append(Line2D([], [], color=MUTED, linestyle=":", linewidth=1,
                           label="time ∝ rows"))
     header = 0.36 + 0.2 * len(machines) + 0.1
@@ -250,7 +253,7 @@ def main():
                handletextpad=0.4, columnspacing=1.4)
     counts = {len(e["times"]) for e in entries}
     fig.text(0.04, 0.12 / inches,
-             (f"Points: mean over the runs of each case ({min(counts)}–{max(counts)} runs), "
+             (f"Points: mean over the runs of each case ({min(counts)}{"–" + str(max(counts)) if max(counts) != min(counts) else ""} runs), "
               "whiskers from the fastest to the slowest run. " if counts != {1} else
               "Points: one run per case. ")
              + "Time: ./tree's 'train total' (presort, build, prune; CUDA also upload and "

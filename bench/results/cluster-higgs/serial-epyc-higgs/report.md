@@ -1,6 +1,6 @@
 ## serial-epyc-higgs
 
-**serial-epyc-higgs**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor performance, turbo on, ./tree f1fe270e76bb, CPUs in order of use 0-47, 10 run(s) per case, warm-up 50000 rows
+**serial-epyc-higgs**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor performance, turbo on, ./tree f53347a9d336, CPUs in order of use 0-47, 5 run(s) per case, warm-up 50000 rows
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
@@ -10,12 +10,12 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 10.4 s | 10.4 s–10.4 s | 1.00× | 3.57 GiB | 3.56 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
+| ./tree | 7.9 s | 7.89 s–7.91 s | 1.00× | 3.49 GiB | 3.48 GiB | 2,029 | 1,015 | 10 | 70.63% | 70.52% |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 1 thread
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 12.1 s | 12.1 s–12.2 s | 1.00× | 3.60 GiB | 3.59 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
+| ./tree | 7.4 s | 7.39 s–7.43 s | 1.00× | 3.52 GiB | 3.51 GiB | 935 | 468 | 10 | 63.76% | 63.73% |
 
 Test accuracy is measured on 500,000 rows: its 95% interval is ±0.13 percentage points at most.

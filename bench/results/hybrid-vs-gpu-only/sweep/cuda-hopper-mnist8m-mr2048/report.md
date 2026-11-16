@@ -1,8 +1,8 @@
 ## cuda-hopper-mnist8m-mr2048
 
-**cuda-hopper-mnist8m-mr2048**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor schedutil, turbo on, ./tree 95b6d774, CPUs in order of use 16-31,0-15, 3 run(s) per case, warm-up 50000 rows
+**cuda-hopper-mnist8m-mr2048**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor schedutil, turbo on, ./tree f53347a9d336, CPUs in order of use 16-31,0-15, 5 run(s) per case, warm-up 50000 rows
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 647 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 643 MiB
 
 ### mnist8m (8,100,000 train / 10,000 test rows, 784 features, 10 classes)
 
@@ -10,10 +10,10 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 647 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 16.1 s | 16.1 s–16.1 s |  | 71.73 GiB (+ GPU 48.94 GiB) | 71.10 GiB | 301,939 | 150,970 | 115 | 100.00% |  |
+| ./tree Hybrid | 8.76 s | 8.51 s–8.78 s |  | 71.76 GiB (+ GPU 48.94 GiB) | 71.13 GiB | 301,939 | 150,970 | 115 | 100.00% |  |
 
 **C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows** (`c45_unpruned`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 20.1 s | 19.9 s–20.2 s |  | 71.73 GiB (+ GPU 48.94 GiB) | 71.10 GiB | 218,325 | 109,163 | 147 | 99.61% |  |
+| ./tree Hybrid | 10.2 s | 10.2 s–10.3 s |  | 71.75 GiB (+ GPU 48.91 GiB) | 71.13 GiB | 218,325 | 109,163 | 147 | 99.61% |  |

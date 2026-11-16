@@ -12,6 +12,11 @@
 #            <timeout> [VAR=value,VAR=value]  (the limit is the submitter's)
 set -uo pipefail
 cd "$SLURM_SUBMIT_DIR"
+# A node that was idle runs its first seconds of work slow (dell3, powersave
+# governor, 2026-11-15: the first 1-3 processes of a job 10-30% slower, with
+# as much more CPU time): keep every CPU busy for 30 s before the first run.
+for _ in $(seq "$(nproc)"); do timeout 30 sh -c 'while :; do :; done' & done
+wait
 failed=()
 while read -r _ dir name dataset impls runs protocols threads timeout environment <&3; do
   [ -n "$dir" ] || continue

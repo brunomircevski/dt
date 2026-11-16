@@ -1,8 +1,8 @@
 ## cuda-hopper-sorel_4m-mr256
 
-**cuda-hopper-sorel_4m-mr256**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-34-generic #34~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 15:38:29 UTC 2 x86_64, governor schedutil, turbo on, ./tree 95b6d774, CPUs in order of use 16-31,0-15, 3 run(s) per case, warm-up 50000 rows
+**cuda-hopper-sorel_4m-mr256**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor schedutil, turbo on, ./tree f53347a9d336, CPUs in order of use 16-31,0-15, 5 run(s) per case, warm-up 50000 rows
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 647 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 643 MiB
 
 ### sorel_4m (4,000,000 train / 4,195,042 test rows, 2381 features, 2 classes)
 
@@ -10,10 +10,10 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree CUDA 647 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 28.5 s | 28.5 s–29 s |  | 107.27 GiB (+ GPU 76.28 GiB) | 106.64 GiB | 87,729 | 43,865 | 231 | 100.00% |  |
+| ./tree Hybrid | 22.4 s | 22.1 s–22.6 s |  | 107.23 GiB (+ GPU 76.25 GiB) | 106.61 GiB | 87,729 | 43,865 | 231 | 100.00% |  |
 
 **C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows** (`c45_unpruned`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree CUDA | 70.8 s | 70.8 s–71 s |  | 110.99 GiB (+ GPU 75.87 GiB) | 110.36 GiB | 69,637 | 34,819 | 572 | 99.81% |  |
+| ./tree Hybrid | 54.7 s | 54.7 s–54.8 s |  | 110.98 GiB (+ GPU 75.87 GiB) | 110.35 GiB | 69,637 | 34,819 | 572 | 99.81% |  |

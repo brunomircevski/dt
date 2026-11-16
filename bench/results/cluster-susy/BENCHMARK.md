@@ -1,47 +1,42 @@
 # SUSY (18 features): training set and test set
 
-**Status (2026-11-09): being rerun** on one build of main with every other benchmark (`bench/cluster/final.sh`, 10 runs per case, 3 where one process takes over an hour; CUDA on every CPU of the node). The numbers and charts below are still the 2026-10 runs (ec77727, CUDA on the GPU's socket only) and will be replaced. The one-socket runs (`socket-*`) were removed; they are in git at 3354a8a.
-
 ./tree only, trained on the training rows and scored on the test rows
 ([bench/cluster/README.md](../../cluster/README.md#test-set-benchmarks)).
 
 - **Training rows:** the first 4,500,000 rows.
 - **Test rows:** the last 500,000, UCI's test set.
-- **Protocols:** depth ≤ 10, CART (gini) and C4.5 (gain ratio), both without pruning. The pruned runs of 2026-10-23 (CART α = 1e-5, C4.5 CF 0.25) are in git at 96705a7.
-- **Runs:** CUDA hybrid and GPU only on hopper (H100) and ampere (A100 80 GB); on epyc (2× EPYC 9255) and dell1 (2× Xeon Gold 6542Y): parallel on both sockets, parallel on one socket, --serial and --simple (one thread). Runs per case: 10 when a run takes about 2 minutes or less, 3 under about 10 minutes, longer ones once (the chart and the table give the count).
-- **Builds:** every run on one build of main, ./tree at ec77727 (with the CPU presort of 4fb419c and `-falign-functions=64 -falign-loops=32`), 2026-10-29/30, except --simple where it was not rerun: those runs are from 2026-10-27/28 on 67495f9 or 8187eb9 (`machine.json` says which; --simple's code has not changed since). Why, and the batches that ran them: [bench/cluster/README.md](../../cluster/README.md#reruns-of-2026-102930). Older runs are in git.
-- **Measured:** ./tree's training time, peak RAM while training, peak VRAM; the tree's test and training accuracy, nodes and depth.
+- **Protocols:** depth ≤ 10, CART (gini) and C4.5 (gain ratio), both without pruning.
+- **Runs:** CUDA `--hybrid` and `--gpu` (GPU only) on hopper (H100) and ampere (A100 80 GB), with every CPU of the node; on epyc (2× EPYC 9255) and dell (2× Xeon Gold 6542Y): `--multicore` on both sockets (48 threads), `--serial` and `--simple` (one thread). Runs per case: 5, `--simple` 10.
+- **Builds:** ./tree at f53347a9 (`src/` = d2957ff2: presort of big columns in cache, GPU tiles without a cut skipped, CART bound per node), one build for every node, run on 2026-11-15/16 by `bench/cluster/final.sh -m 5` ([bench/cluster/README.md](../../cluster/README.md#the-final-rerun)): `--multicore` and CUDA on epyc1, dell1, hopper and ampere, `--serial` spread over epyc1/epyc2 and dell1/dell2/dell3 (the same hardware). `--simple` was not rerun, its code has not changed: its runs are from 2026-11-10/12, f1fe270e on epyc and ce907ddf on dell (`machine.json` says which). The runs before (f1fe270e, 10 runs per case, 2026-11-09/12) are in git at 1e655067.
+- **Measured:** ./tree's training time (presort, build; not reading the CSV), peak RAM while training, peak VRAM; the tree's test and training accuracy, nodes, depth and SHA-256.
 - **Chart:** `chart.png`, `bench/testset_chart.py` (log scale).
 
 ## Results
 
-Run on 2026-10-29/30 (--simple on the dates above). The tables give the mean ± standard deviation of ./tree's training time (`bench/testset_chart.py --table`). Accuracies, nodes and depth are the same in every run.
+Every run of a case grew the same tree (the same `tree_sha256`). The tables give the mean ± standard deviation of ./tree's training time (`bench/testset_chart.py --table`); "runs" is the number of runs of the case, also on the chart.
 
 ![chart](chart.png)
 
-- **Same tree everywhere:** every backend grew the same tree in every run.
-- **Speed:** both GPUs take 82–119 ms, a near-fixed cost at 4.5M rows (the A100 matches the H100). That is 2.2–2.9× faster than epyc (0.24–0.25 s); dell takes 0.34–0.37 s.
-- **One socket:** 1.11–1.18× the two-socket time on epyc, 1.19–1.25× on dell: 4.5M rows hardly fill two sockets. dell's one-socket time moves between batches on the same build: a rerun the next day took 0.36 s and 0.39 s against this table's 0.43 and 0.44 s ([cluster-cpu-scaling](../cluster-cpu-scaling/BENCHMARK.md#dell1-two-oddities-checked-on-2026-10-30)).
-- **Serial and simple:** --serial takes 2.8 s and 3.1 s on epyc, 12× the parallel run, and 4.0 s and 4.4 s on dell. --simple takes 71–81 s on both: 25× --serial on epyc, 18–19× on dell.
-- **Accuracy:** CART reaches 79.0% on the test set, C4.5 78.6%.
-- **Memory:** VRAM 1.6–1.7 GiB; RAM at most 1.6 GiB everywhere (GPU only 1.0 GiB, --serial 1.1 GiB, --simple 0.5 GiB).
+- **Speed:** both GPUs take 62–85 ms, a near-fixed cost at 4.5M rows (the A100 within 6–18% of the H100). That is 2.0–2.6× faster than epyc's `--multicore` (162 and 172 ms); dell takes 275 and 293 ms, 1.7× epyc.
+- **Serial and simple:** `--serial` takes 2.60 s (CART) and 2.48 s (C4.5) on epyc, 14–16× `--multicore`, and 3.91 s and 3.95 s on dell. `--simple`, the reference, takes 70–80 s: 27–31× `--serial` on epyc, 19–20× on dell.
+- **Against the runs before (f1fe270e):** `--multicore` 31–33% faster on epyc and 22% on dell, the GPUs 17–29%, `--serial` 8–22% on epyc and 3–12% on dell. The 100–300 ms runs spread up to ±15% (`--multicore` on epyc ±25 ms).
+- **Accuracy:** CART reaches 79.0% on the test set, C4.5 78.7%.
+- **Memory:** VRAM 1.6–1.7 GB; RAM at most 1.6 GB everywhere (GPU only and `--serial` 1.0 GB, `--simple` 0.5 GB).
 
 | Protocol | test acc | train acc | nodes | depth |
 |---|---|---|---|---|
 | CART, no pruning | 79.01% | 79.16% | 1,959 | 10 |
 | C4.5, no pruning | 78.65% | 78.74% | 743 | 10 |
 
-| Run | runs | CART | C4.5 | RAM GiB (peak) | VRAM GiB (peak) |
+| Run | runs | CART | C4.5 | RAM GB (peak) | VRAM GB (peak) |
 |---|---|---|---|---|---|
-| epyc, --simple, one thread | 3 | 70.8 s ± 23.6 ms | 77.2 s ± 58.3 ms | 0.5 | – |
-| dell, --simple, one thread | 10 | 76.3 s ± 118 ms | 80.7 s ± 27.9 ms | 0.5 | – |
-| epyc, --serial, one thread | 10 | 2.84 s ± 18.6 ms | 3.1 s ± 21 ms | 1.1 | – |
-| dell, --serial, one thread | 10 | 4.03 s ± 21.2 ms | 4.42 s ± 26.9 ms | 1.1 | – |
-| epyc, parallel, one socket | 10 | 281 ms ± 3.09 ms | 277 ms ± 5.07 ms | 1.6 | – |
-| dell, parallel, one socket | 10 | 425 ms ± 11.5 ms | 437 ms ± 7.5 ms | 1.6 | – |
-| epyc, parallel, both sockets | 10 | 239 ms ± 14 ms | 249 ms ± 24.4 ms | 1.6 | – |
-| dell, parallel, both sockets | 10 | 339 ms ± 10.1 ms | 368 ms ± 8.23 ms | 1.6 | – |
-| hopper, CUDA hybrid | 10 | 83.7 ms ± 4.25 ms | 112 ms ± 2.61 ms | 1.6 | 1.7 |
-| ampere, CUDA hybrid | 10 | 90.8 ms ± 3.35 ms | 119 ms ± 2.97 ms | 1.6 | 1.6 |
-| hopper, CUDA, GPU only | 10 | 81.6 ms ± 3.82 ms | 109 ms ± 5.64 ms | 1.0 | 1.7 |
-| ampere, CUDA, GPU only | 10 | 89.1 ms ± 1.64 ms | 107 ms ± 1.74 ms | 1.0 | 1.6 |
+| epyc, --simple, one thread | 10 | 70.3 s ± 224 ms | 76.7 s ± 386 ms | 0.5 | – |
+| dell, --simple, one thread | 10 | 75.1 s ± 86.9 ms | 79.6 s ± 15 ms | 0.5 | – |
+| epyc, --serial, one thread | 5 | 2.6 s ± 12.5 ms | 2.48 s ± 12.1 ms | 1.0 | – |
+| dell, --serial, one thread | 5 | 3.91 s ± 1.13 ms | 3.95 s ± 2.92 ms | 1.0 | – |
+| epyc, parallel, both sockets | 5 | 162 ms ± 24.9 ms | 172 ms ± 26.8 ms | 1.6 | – |
+| dell, parallel, both sockets | 5 | 275 ms ± 21.3 ms | 293 ms ± 12.2 ms | 1.6 | – |
+| hopper, CUDA hybrid | 5 | 62.4 ms ± 6.49 ms | 75.2 ms ± 5.91 ms | 1.6 | 1.7 |
+| ampere, CUDA hybrid | 5 | 73.4 ms ± 1.98 ms | 84.8 ms ± 2.4 ms | 1.6 | 1.6 |
+| hopper, CUDA, GPU only | 5 | 64 ms ± 6.33 ms | 78.1 ms ± 5.32 ms | 1.0 | 1.7 |
+| ampere, CUDA, GPU only | 5 | 66.9 ms ± 1.2 ms | 80.7 ms ± 0.471 ms | 1.0 | 1.6 |
