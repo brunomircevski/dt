@@ -206,6 +206,7 @@ hybrid_runs() {
   for gpu in hopper ampere; do for d in $HYBRID_DATA; do
     echo "$HYBRID_DIR/cuda-$gpu-$d $HYBRID_DIR/gpuonly-$gpu-$d $HYBRID_DIR/profile/cuda-$gpu-$d"
     echo "$HYBRID_DIR/profile/gpuonly-$gpu-$d"
+    ls -d "bench/results/$HYBRID_DIR/sweep/cuda-$gpu-$d-mr"* 2>/dev/null | sed 's|^bench/results/||' || true
   done; done
 }
 
@@ -228,8 +229,8 @@ chain() {
     if [ "$step" = hybrid ]; then
       want hybrid || continue
       mkdir -p "bench/results/$HYBRID_DIR"
-      local hybrid_env=(DIR="$HYBRID_DIR" DATASETS="$HYBRID_DATA" RUNS="$(runs hybrid x)")
-      [ -z "$TEST" ] || hybrid_env+=(PROTOCOLS=cart_depth10,c45_unpruned PROFILE_DATASETS=susy)
+      local hybrid_env=(DIR="$HYBRID_DIR" DATASETS="$HYBRID_DATA" RUNS="$(runs hybrid x)" SWEEP_RUNS="$(runs hybrid x)")
+      [ -z "$TEST" ] || hybrid_env+=(VALUES="default 1024" PROTOCOLS=cart_depth10,c45_unpruned PROFILE_DATASETS=susy)
       id=$(env "${hybrid_env[@]}" sbatch --parsable -J "dt-final-hybrid-$node" -p "$partition" -w "$node" \
         --exclusive -t "$limit" ${after:+--dependency=afterany:$after} -o "bench/results/$HYBRID_DIR/$node.log" \
         bench/cluster/hybrid_vs_gpu_only.sh "$node")
