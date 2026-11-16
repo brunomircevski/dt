@@ -16,7 +16,7 @@ It measures training time and peak memory, and records tree size and training an
 |---|---|
 | `setup.sh` | Builds `tree_cpu`, creates `.venv`, and downloads Weka and YaDT into `.tools/`. It also compiles the J48 adapter and the `rusage` launcher. |
 | `datasets.toml` | Dataset registry: source CSV, split, subsampling. Add new datasets here. |
-| `prepare.py` | Writes `data/<name>/`: the split as float32 binary (for the adapters), a CSV for `./tree`, and CSV plus `.names` for YaDT. Every CSV row is checked to read back as the binary values. Also writes the tiny `_baseline` dataset. A `prefix_of` set (another set's first rows, e.g. `sorel_4m`) gets only `meta.json`: `./tree` reads the parent's CSV with `--rows N`, the adapters the first N rows of the parent's binary files. A `split = "none"` set (the synthetic chess sets) has no test set. |
+| `prepare.py` | Writes `data/<name>/`: the split as float32 binary (`train.f32`, `train.y.i32`, `meta.json`: read by the adapters and by `./tree`), a CSV with the same values (for users of `./tree`), and CSV plus `.names` for YaDT. Every CSV row is checked to read back as the binary values. Also writes the tiny `_baseline` dataset. A `prefix_of` set (another set's first rows, e.g. `sorel_4m`) gets only `meta.json`: `./tree` reads the parent's `train.f32` with `--rows N`, the adapters the first N rows of the parent's binary files. A `split = "none"` set (the synthetic chess sets) has no test set. |
 | `benchlib.py` | The protocols (the exact settings for every tool), the implementations, the data layout and the data check. |
 | `adapters/` | One program per library (`sklearn_fit.py`, `rpart_fit.R`, `J48Fit.java`). Each loads the binary data, times only the fit, then measures accuracy and prints one JSON line. `./tree` and YaDT are run directly. `rusage.c` is the launcher every measured process runs under. |
 | `run.py` | Checks the data, then runs every case in fresh processes. It measures time inside each tool and memory from outside, and writes `results/<run-id>/`. |
@@ -53,7 +53,7 @@ Finished benchmarks, one directory per backend, machine and dataset: see [result
 - `--no-baseline` leaves out the runtime-footprint runs.
 - Output: `--run-id` names the directory in `bench/results/` (default host-date); `--dry-run` prints the plan and exits; `--seed` seeds the shuffled order of the cases.
 - NUMA and cache: `--membind NODES` runs every process under `numactl --membind`; `--drop-cache` drops the datasets from the page cache before each process.
-- `./tree` only: `--train-accuracy-only`, `--test-accuracy` (skip or limit predicting the dumped tree), `--hash-trees` (SHA-256 of every dumped tree), `--profile` (write `--profile` JSON per run), `--handoff-rows`.
+- `./tree` only: `--train-accuracy-only`, `--test-accuracy` (skip or limit predicting the dumped tree), `--hash-trees` (SHA-256 of every dumped tree), `--profile` (write `--profile` JSON per run), `--handoff-rows` (a number, or `default` for ./tree's own; without it the value measured best for the node, dataset and depth limit in [`handoff_rows.json`](handoff_rows.json), see below).
 
 ## Protocols (what is compared)
 
@@ -78,6 +78,10 @@ Each protocol is one well-defined piece of work, done with equivalent settings i
   - scikit-learn's `ccp_alpha` measures Gini impurity, while `./tree` and rpart count misclassified rows. So the same α prunes scikit-learn's tree to a somewhat different size. Report the size each tool builds; don't adjust for it.
 - **C4.5 needs no α.** Error-based pruning is a single pass over the tree, so every C4.5 protocol grows exactly one tree.
 
+## The hybrid's hand-off size
+
+`./tree --hybrid` hands nodes below `--handoff-rows` rows to the CPU threads. Each implementation runs in its best measured setting, so every `--hybrid` benchmark run takes the value measured fastest for its GPU node, dataset and depth limit, stored in [`handoff_rows.json`](handoff_rows.json) (`{node: {dataset: {"depth10" | "nodepth": rows}}}`; `run.py` takes `depth<N>` for `-d N`, else `nodepth`, else ./tree's default). The values come from [`cluster/handoff_sweep.sh`](cluster/handoff_sweep.sh) (a sweep of 256–32,768 and ./tree's default, CART and C4.5, the fastest mean over both; results in [`results/handoff-sweep/`](results/handoff-sweep/)) and are reused, not swept again for each benchmark: rerun the sweep only when a dataset, a GPU node or the hybrid's code changes. Chess has no entry: its depth-10 tree has no node small enough to hand off. ./tree's own default (10 × features, between 512 and 16,384) is reported next to the tuned value.
+
 ## How time is measured
 
 The reported time is **training time**: from the data being in memory to the finished, pruned model. Each tool measures it itself, with a monotonic clock:
@@ -95,7 +99,7 @@ The reported time is **training time**: from the data being in memory to the fin
 - **Why:** these measure the CSV parser and the language runtime, not the algorithm.
 - **Where to find them:** the whole-process wall time is recorded too (`wall_seconds`) for an appendix.
 
-**The GPU's one-time start-up is excluded, and reported apart.** Creating the CUDA context, the device memory pool and the page-locked staging buffers costs 0.1–0.7 s once per process (0.6–0.7 s on the RTX 2080 Ti node), whatever the data. ./tree does it on a background thread while the CSV loads (`gpuPrepare`) and prints it as `gpu startup` (`gpu_startup_seconds`), not in `train total`. Everything that depends on the data stays in: allocating and uploading it, the GPU presort, the build. This matches how the GPU libraries are timed (cuML, XGBoost: an untimed warm-up fit in the same process first, see [results/cluster-gpu-vs-others/BENCHMARK.md](results/cluster-gpu-vs-others/BENCHMARK.md)), i.e. a process that already uses the GPU. Do not add the start-up to the training time: it overlaps the load. For a single cold run, use `wall_seconds`: on small sets (SUSY) the start-up is larger than the whole training, and a CPU backend wins end to end.
+**The GPU's one-time start-up is excluded, and reported apart.** Creating the CUDA context, the device memory pool and the page-locked staging buffers costs 0.1–0.7 s once per process (0.6–0.7 s on the RTX 2080 Ti node), whatever the data. ./tree does it on a background thread while the data loads (`gpuPrepare`) and prints it as `gpu startup` (`gpu_startup_seconds`), not in `train total`. Everything that depends on the data stays in: allocating and uploading it, the GPU presort, the build. This matches how the GPU libraries are timed (cuML, XGBoost: an untimed warm-up fit in the same process first, see [results/cluster-gpu-vs-others/BENCHMARK.md](results/cluster-gpu-vs-others/BENCHMARK.md)), i.e. a process that already uses the GPU. Do not add the start-up to the training time: it overlaps the load. For a single cold run, use `wall_seconds`: on small sets (SUSY) the start-up is larger than the whole training, and a CPU backend wins end to end.
 
 **Preparation counts as training.** Each tool's own data preparation is included: `./tree`'s presort, YaDT's indexing, and the sorting the other libraries do inside their fit call. It is part of the algorithm, and leaving it out would favour some tools over others.
 
@@ -134,8 +138,8 @@ The reported time is **training time**: from the data being in memory to the fin
 
 **How the measurement is kept clean:**
 - **Measured in the timed process, before evaluation.** Time and peak memory come from the same run; the peak is read right after training, so loading the test set and predicting never count.
-- **Binary input for the adapters.** scikit-learn, rpart and J48 read float32 binary files directly into their own data structures, so no CSV parser's temporary objects inflate the peak.
-- **CSV for ./tree and YaDT.** They only read CSV, so their peak includes the parser. ./tree reads the file through a 64 KiB buffer per thread (no memory mapping), so it never holds more than a few MiB of text; on SUSY its peak comes from training (presort and build), not from loading.
+- **Binary input for the adapters and ./tree.** scikit-learn, rpart and J48 read the float32 binary files directly into their own data structures, so no CSV parser's temporary objects inflate the peak. ./tree is given the same files (`train.f32`; it picks the format by the extension): it reads them through a 4 MiB buffer per thread (no memory mapping of the file), so it never holds more than a few MiB of the file, and its load is 3–5× faster than parsing the CSV of the same values (the trees are identical). Runs before this change (2026-11-16) loaded `train.csv`; loading is not timed, so their training times stand.
+- **CSV for YaDT.** It only reads CSV, so its peak includes the parser.
 - **Single process per run.** Every tool runs as one process, so `ru_maxrss` covers all of its work. A tool that spawned worker processes would need cgroup v2 `memory.peak` instead. That counts the whole process tree, but also charges it with page cache from file reads.
 
 **Caveats to state in the paper:**
@@ -145,8 +149,8 @@ The reported time is **training time**: from the data being in memory to the fin
 **Cross-checking by hand:**
 
 ```bash
-bench/.tools/rusage /dev/stdout ./tree_cpu --serial --c45 bench/data/susy_50k/train.csv   # first number: peak RSS in KiB
-/usr/bin/time -v ./tree_cpu --serial --c45 bench/data/susy_50k/train.csv                  # "Maximum resident set size"
+bench/.tools/rusage /dev/stdout ./tree_cpu --serial --c45 bench/data/susy_50k/train.f32   # first number: peak RSS in KiB
+/usr/bin/time -v ./tree_cpu --serial --c45 bench/data/susy_50k/train.f32                  # "Maximum resident set size"
 ```
 
 GNU time is the `time` package (forked from a small process, so it is exact too). Its "Maximum resident set size" must match `peak_rss_bytes`.

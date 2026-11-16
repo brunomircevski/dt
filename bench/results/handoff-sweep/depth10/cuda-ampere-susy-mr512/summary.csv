@@ -1,0 +1,3 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+cuda-ampere-susy-mr512,susy,cart_depth10,tree_cuda,48,ok,True,0.060899999999999996,0.0581,0.06620000000000001,0.06164000000000001,0.003150079364079583,5,,1.3577716276049614,1653198848,1652264960,1653825536,992813056,1959,980,10,0.791554,,,1750073344,0.0
+cuda-ampere-susy-mr512,susy,c45_depth10_unpruned,tree_cuda,48,ok,True,0.071,0.0691,0.0732,0.07114000000000001,0.001512613632095126,5,,1.221872738096863,1746300928,1744789504,1747689472,1085915136,743,372,10,0.787429,,,1750073344,0.0007

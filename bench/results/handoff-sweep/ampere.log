@@ -1,0 +1,24 @@
+2026-11-16 15:26:32  handoff-sweep/depth10/cuda-ampere-susy-mrdefault
+2026-11-16 15:27:10  handoff-sweep/depth10/cuda-ampere-susy-mr256
+2026-11-16 15:27:48  handoff-sweep/depth10/cuda-ampere-susy-mr512
+2026-11-16 15:28:25  handoff-sweep/depth10/cuda-ampere-susy-mr1024
+2026-11-16 15:29:01  handoff-sweep/depth10/cuda-ampere-susy-mr2048
+2026-11-16 15:29:39  handoff-sweep/depth10/cuda-ampere-susy-mr4096
+2026-11-16 15:30:18  handoff-sweep/depth10/cuda-ampere-susy-mr8192
+2026-11-16 15:30:57  handoff-sweep/depth10/cuda-ampere-susy-mr16384
+2026-11-16 15:31:33  handoff-sweep/depth10/cuda-ampere-susy-mr32768
+2026-11-16 15:32:12  susy (depth10): --handoff-rows 1024
+2026-11-16 15:32:12  handoff-sweep/depth10/cuda-ampere-higgs-mrdefault
+2026-11-16 15:33:43  handoff-sweep/depth10/cuda-ampere-higgs-mr256
+2026-11-16 15:35:01  handoff-sweep/depth10/cuda-ampere-higgs-mr512
+2026-11-16 15:36:26  handoff-sweep/depth10/cuda-ampere-higgs-mr1024
+2026-11-16 15:37:48  handoff-sweep/depth10/cuda-ampere-higgs-mr2048
+2026-11-16 15:39:19  handoff-sweep/depth10/cuda-ampere-higgs-mr4096
+2026-11-16 15:40:49  handoff-sweep/depth10/cuda-ampere-higgs-mr8192
+2026-11-16 15:42:15  handoff-sweep/depth10/cuda-ampere-higgs-mr16384
+2026-11-16 15:43:39  handoff-sweep/depth10/cuda-ampere-higgs-mr32768
+2026-11-16 15:44:55  higgs (depth10): --handoff-rows 1024
+2026-11-16 15:44:55  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mrdefault
+2026-11-16 16:01:21  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr256
+2026-11-16 16:17:30  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr512
+[2026-11-16T16:30:57.705] error: *** JOB 215 ON ampere CANCELLED AT 2026-11-16T16:30:57 DUE to SIGNAL Terminated ***

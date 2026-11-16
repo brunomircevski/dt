@@ -1,0 +1,33 @@
+2026-11-16 15:26:32  handoff-sweep/depth10/cuda-hopper-susy-mrdefault
+2026-11-16 15:27:09  handoff-sweep/depth10/cuda-hopper-susy-mr256
+2026-11-16 15:27:47  handoff-sweep/depth10/cuda-hopper-susy-mr512
+2026-11-16 15:28:24  handoff-sweep/depth10/cuda-hopper-susy-mr1024
+2026-11-16 15:29:00  handoff-sweep/depth10/cuda-hopper-susy-mr2048
+2026-11-16 15:29:39  handoff-sweep/depth10/cuda-hopper-susy-mr4096
+2026-11-16 15:30:17  handoff-sweep/depth10/cuda-hopper-susy-mr8192
+2026-11-16 15:30:56  handoff-sweep/depth10/cuda-hopper-susy-mr16384
+2026-11-16 15:31:32  handoff-sweep/depth10/cuda-hopper-susy-mr32768
+2026-11-16 15:32:10  susy (depth10): --handoff-rows 512
+2026-11-16 15:32:10  handoff-sweep/depth10/cuda-hopper-higgs-mrdefault
+2026-11-16 15:33:23  handoff-sweep/depth10/cuda-hopper-higgs-mr256
+2026-11-16 15:34:34  handoff-sweep/depth10/cuda-hopper-higgs-mr512
+2026-11-16 15:35:45  handoff-sweep/depth10/cuda-hopper-higgs-mr1024
+2026-11-16 15:36:58  handoff-sweep/depth10/cuda-hopper-higgs-mr2048
+2026-11-16 15:38:12  handoff-sweep/depth10/cuda-hopper-higgs-mr4096
+2026-11-16 15:39:32  handoff-sweep/depth10/cuda-hopper-higgs-mr8192
+2026-11-16 15:40:49  handoff-sweep/depth10/cuda-hopper-higgs-mr16384
+2026-11-16 15:42:07  handoff-sweep/depth10/cuda-hopper-higgs-mr32768
+2026-11-16 15:43:16  higgs (depth10): --handoff-rows 256
+2026-11-16 15:43:16  handoff-sweep/depth10/cuda-hopper-airline-mrdefault
+2026-11-16 15:46:39  handoff-sweep/depth10/cuda-hopper-airline-mr256
+2026-11-16 15:49:42  handoff-sweep/depth10/cuda-hopper-airline-mr512
+2026-11-16 15:52:31  handoff-sweep/depth10/cuda-hopper-airline-mr1024
+2026-11-16 15:55:52  handoff-sweep/depth10/cuda-hopper-airline-mr2048
+2026-11-16 15:59:30  handoff-sweep/depth10/cuda-hopper-airline-mr4096
+2026-11-16 16:02:59  handoff-sweep/depth10/cuda-hopper-airline-mr8192
+2026-11-16 16:06:03  handoff-sweep/depth10/cuda-hopper-airline-mr16384
+2026-11-16 16:08:52  handoff-sweep/depth10/cuda-hopper-airline-mr32768
+2026-11-16 16:12:08  airline (depth10): --handoff-rows 512
+2026-11-16 16:12:08  handoff-sweep/depth10/cuda-hopper-ecbdl_15m-mrdefault
+2026-11-16 16:26:14  handoff-sweep/depth10/cuda-hopper-ecbdl_15m-mr256
+[2026-11-16T16:30:57.706] error: *** JOB 214 ON hopper CANCELLED AT 2026-11-16T16:30:57 DUE to SIGNAL Terminated ***

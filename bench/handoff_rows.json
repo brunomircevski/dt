@@ -1,6 +1,7 @@
 {
  "ampere": {
   "higgs": {
+   "depth10": 1024,
    "nodepth": 512
   },
   "mnist8m": {
@@ -8,10 +9,17 @@
   },
   "sorel_4m": {
    "nodepth": 16384
+  },
+  "susy": {
+   "depth10": 1024
   }
  },
  "hopper": {
+  "airline": {
+   "depth10": 512
+  },
   "higgs": {
+   "depth10": 256,
    "nodepth": 256
   },
   "mnist8m": {
@@ -19,6 +27,9 @@
   },
   "sorel_4m": {
    "nodepth": 16384
+  },
+  "susy": {
+   "depth10": 512
   }
  }
 }

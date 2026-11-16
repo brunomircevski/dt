@@ -182,7 +182,10 @@ libraries ran on 2026-11-09/10. Each run's `machine.json` names its commit.
 After this run (commit after 3e9c767a) `--hybrid`'s default `--handoff-rows`
 changed from rows / 8192 or / 4096 (1,024–4,096) to 10 × features
 (512–16,384); the `--hybrid` results here are on the old default, except
-hybrid-vs-gpu-only, which sets the value from its own sweep.
+hybrid-vs-gpu-only, which set the value from its own sweep. From the next
+rerun on, every `--hybrid` run takes the value measured best for its node,
+dataset and depth limit from `bench/handoff_rows.json` (`handoff_sweep.sh`;
+[bench/README.md](../README.md#the-hybrids-hand-off-size)).
 
 ## Settings specific to the cluster
 
@@ -270,9 +273,11 @@ A prepared folder holds the split in each tool's format; its `train.csv` is a
 link to the source CSV when the set takes all of the CSV's rows in the CSV's own
 format (ecbdl, sorel, mnist8m, the chess sets). A set that is another set's
 first rows (`prefix_of` in `datasets.toml`: `ecbdl_15m`, `sorel_4m`, and
-`chess_1m` to `chess_500m` of `chess_2b`) holds only `meta.json`: ./tree reads
-the parent's `train.csv` with `--rows N`, the other tools the first N rows of
-the parent's binary files, and `run.py` hashes and checks just those bytes. So
+`chess_1m` to `chess_500m` of `chess_2b`) holds only `meta.json`: every tool reads
+the first N rows of the parent's binary files (./tree: the parent's `train.f32`
+with `--rows N`), and `run.py` hashes and checks just those bytes. Since
+2026-11-16 the benchmarks give ./tree `train.f32` rather than `train.csv` (the
+same values; the load is 3–5× faster, the trees identical). So
 no rows are stored twice; until 2026-11-13 these sets were copies (165 GB).
 
 HIGGS and SUSY are in UCI's row order, so their last 500,000 rows are the
