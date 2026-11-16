@@ -49,3 +49,4 @@ __pycache__
 
 # Reference PDFs (kept locally, listed in refs/REFERENCES.md)
 /refs/*.pdf
+bench/handoff_rows.lock

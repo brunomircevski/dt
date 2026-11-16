@@ -192,6 +192,31 @@ def profile_name(case, rep):
 ACCURACY = {}
 
 
+HANDOFF_FILE = B.BENCH / "handoff_rows.json"
+
+
+def handoff_rows(requested, dataset, flags):
+    """--hybrid's --handoff-rows for a run, None for ./tree's own default.
+    `requested` (run.py --handoff-rows): a number, "default" (./tree's own), or
+    None: the value measured best for this node, dataset and depth limit in
+    bench/handoff_rows.json (written by bench/cluster/handoff_sweep.sh), the
+    entry "depth<N>" for -d N, else "nodepth", else ./tree's default."""
+    if requested == "default":
+        return None
+    if requested:
+        return int(requested)
+    try:
+        stored = json.loads(HANDOFF_FILE.read_text())
+    except FileNotFoundError:
+        return None
+    entries = stored.get(socket.gethostname(), {}).get(dataset, {})
+    depth = flags[flags.index("-d") + 1] if "-d" in flags else None
+    for key in ([f"depth{depth}"] if depth else []) + ["nodepth"]:
+        if key in entries:
+            return int(entries[key])
+    return None
+
+
 def build_command(case, kind, args, scratch, rep=0):
     """-> (argv, extra env, parser of stdout -> result dict)."""
     dataset, protocol, impl, threads = case
@@ -207,8 +232,9 @@ def build_command(case, kind, args, scratch, rep=0):
         flags = [fill(flag, args.alpha) for flag in spec]
         if impl == "tree_cuda":
             binary, backend = B.TREE_CUDA, ["--hybrid", "--threads", str(threads)]
-            if args.handoff_rows:
-                backend += ["--handoff-rows", str(args.handoff_rows)]
+            rows = handoff_rows(args.handoff_rows, dataset, flags)
+            if rows:
+                backend += ["--handoff-rows", str(rows)]
         elif impl == "tree_gpu_only":
             binary, backend = B.TREE_CUDA, ["--gpu", "--threads", str(threads)]
         elif impl == "tree_simple":
@@ -562,9 +588,11 @@ def main():
     parser.add_argument("--profile", action="store_true",
                         help="./tree: also write where its training time goes (--profile) to "
                              "<run dir>/profiles/<protocol>-<impl>-t<threads>-r<rep>.json")
-    parser.add_argument("--handoff-rows", type=int,
-                        help="./tree --hybrid (tree_cuda): its --handoff-rows (default: "
-                             "./tree's own); --gpu has none")
+    parser.add_argument("--handoff-rows",
+                        help="./tree --hybrid (tree_cuda): its --handoff-rows, a number or "
+                             "'default' (./tree's own); without it, the value measured best for "
+                             "the node, dataset and depth limit in bench/handoff_rows.json, else "
+                             "./tree's own; --gpu has none")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()
     args.cpu_list = parse_cpus(args.cpus) if args.cpus else None

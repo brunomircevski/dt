@@ -1,0 +1,24 @@
+{
+ "ampere": {
+  "higgs": {
+   "nodepth": 512
+  },
+  "mnist8m": {
+   "nodepth": 8192
+  },
+  "sorel_4m": {
+   "nodepth": 16384
+  }
+ },
+ "hopper": {
+  "higgs": {
+   "nodepth": 256
+  },
+  "mnist8m": {
+   "nodepth": 8192
+  },
+  "sorel_4m": {
+   "nodepth": 16384
+  }
+ }
+}

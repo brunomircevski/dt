@@ -1,19 +1,22 @@
-"""The fastest --handoff-rows of a sweep (hybrid_vs_gpu_only.sh, handoff_sweep.sh).
+"""The fastest --handoff-rows of a sweep (handoff_sweep.sh).
 
-    pick_handoff.py <sweep folder> <node> <dataset> <value>...
+    pick_handoff.py <sweep folder> <node> <dataset> <key> <value>...
 
 reads <folder>/cuda-<node>-<dataset>-mr<value>/results.jsonl for each value
 ("default" = ./tree's own), writes <folder>/<node>-<dataset>.json and prints
 the value taken: the smallest mean, over the protocols, of its training time
-over that protocol's fastest. "default" is measured for reference only.
+over that protocol's fastest. "default" is measured for reference only. The
+value is also stored in bench/handoff_rows.json under node, dataset and <key>
+("depth10", "nodepth"), where bench/run.py takes it for every --hybrid run.
 """
 
+import fcntl
 import json
 import statistics
 import sys
 from pathlib import Path
 
-folder, node, dataset, values = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4:]
+folder, node, dataset, key, values = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5:]
 times = {}  # value -> {protocol: mean training seconds}
 for value in values:
     results = folder / f"cuda-{node}-{dataset}-mr{value}" / "results.jsonl"
@@ -34,4 +37,11 @@ score = {v: statistics.mean(t[p] / fastest[p] for p in t) for v, t in times.item
 best = min(numeric, key=score.get)
 (folder / f"{node}-{dataset}.json").write_text(json.dumps(
     {"min_rows": int(best), "times": times, "score": score}, indent=1) + "\n")
+
+store = Path(__file__).resolve().parents[1] / "handoff_rows.json"
+with open(store.with_suffix(".lock"), "w") as lock:  # both GPU nodes may write at once
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    data = json.loads(store.read_text()) if store.exists() else {}
+    data.setdefault(node, {}).setdefault(dataset, {})[key] = int(best)
+    store.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
 print(best)
