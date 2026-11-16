@@ -45,7 +45,7 @@ unsigned threadCount(const Options &options) {
   return std::max(1u, std::thread::hardware_concurrency());
 }
 
-std::size_t handoffRows(const Options &options, std::size_t trainingRows) {
+std::size_t handoffRows(const Options &options, std::size_t features) {
   const GpuOptions &gpu = options.gpu;
   if (options.backend == Backend::Gpu) {
     return 1;
@@ -53,11 +53,8 @@ std::size_t handoffRows(const Options &options, std::size_t trainingRows) {
   if (gpu.handoffRows > 0) {
     return gpu.handoffRows;
   }
-  return options.algorithm == Algorithm::Cart
-             ? std::clamp(trainingRows / GpuOptions::kAutoMinRowsShareCart,
-                          GpuOptions::kAutoMinRows, GpuOptions::kAutoMaxMinRowsCart)
-             : std::clamp(trainingRows / GpuOptions::kAutoMinRowsShare, GpuOptions::kAutoMinRows,
-                          GpuOptions::kAutoMaxMinRows);
+  return std::clamp(features * GpuOptions::kHandoffRowsPerFeature, GpuOptions::kMinHandoffRows,
+                    GpuOptions::kMaxHandoffRows);
 }
 
 void printUsage(const char *program) {
@@ -100,11 +97,9 @@ void printUsage(const char *program) {
       << "  --threads N              CPU threads for loading, evaluation and (multicore,\n"
       << "                           gpu, hybrid) training (0 = every CPU it may run on)\n"
       << "  --handoff-rows N         --hybrid: smaller nodes go to the CPU threads\n"
-      << "                           (default: training rows / " << GpuOptions::kAutoMinRowsShare
-      << ", between " << GpuOptions::kAutoMinRows << "\n"
-      << "                           and " << GpuOptions::kAutoMaxMinRows << "; CART: rows / "
-      << GpuOptions::kAutoMinRowsShareCart << ", between " << GpuOptions::kAutoMinRows
-      << " and " << GpuOptions::kAutoMaxMinRowsCart << ")\n"
+      << "                           (default: " << GpuOptions::kHandoffRowsPerFeature
+      << " x features, between " << GpuOptions::kMinHandoffRows << " and "
+      << GpuOptions::kMaxHandoffRows << ")\n"
       << "\n"
       << "Output:\n"
       << "  --dump FILE              write the tree as text\n"

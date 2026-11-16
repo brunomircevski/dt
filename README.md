@@ -129,7 +129,7 @@ c4.5 program's unpruned tree does).
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--handoff-rows N` | CART: rows / 8192, between 1024 and 2048; C4.5: rows / 4096, between 1024 and 4096 | `--hybrid` only: nodes with fewer rows are handed off to the CPU pool, which finishes their subtrees while the GPU grows the big ones. (`--gpu` hands nothing off: the CPU threads only count the classes, stage the copies to and from the GPU and run C4.5's pruning.) |
+| `--handoff-rows N` | 10 × features, between 512 and 16384 | `--hybrid` only: nodes with fewer rows are handed off to the CPU pool, which finishes their subtrees while the GPU grows the big ones. (`--gpu` hands nothing off: the CPU threads only count the classes, stage the copies to and from the GPU and run C4.5's pruning.) |
 
 The best values depend on the hardware and the data (`docs/CPU.md`,
 `docs/CUDA.md` explain what each threshold does). The defaults were tuned on

@@ -245,18 +245,19 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
 
 ## Tuning
 
-* `--handoff-rows N` (default: CART training rows / 8192, between 1024 and
-  2048; C4.5 rows / 4096, between 1024 and 4096): nodes smaller than this are
-  finished on the CPU. Lower values keep more of the tree on the GPU (more,
-  smaller levels); higher values hand over earlier and keep the CPU pool
-  busier. A level costs the GPU about as much for thousands of mid-size nodes
-  as for a few big ones, so the best value grows with the dataset, but
-  slowly: on the H100 (32 CPU cores) and the A100 (48), HIGGS (10.5M rows) was
-  fastest at 1-2.5K and airline (115M rows) at 2K for CART and 2-4K for C4.5,
-  10-15% faster than at 28K. (Airline's best was 16-64K while the CPU threads
-  still waited on the node store; see docs/PERFORMANCE.md.) On the test laptop
-  (power-limited GPU) full CART trees on SUSY were fastest around 512,
-  covertype (54 features, 7 classes) around 4096.
+* `--handoff-rows N` (default: 10 × features, between 512 and 16384, CART
+  and C4.5 alike): nodes smaller than this are finished on the CPU. Lower
+  values keep more of the tree on the GPU (more, smaller levels); higher
+  values hand over earlier and keep the CPU pool busier. A node's CPU subtree
+  costs about rows × features, while a GPU level costs little more for a few
+  wide nodes than for one, so the best value grows with the features. On
+  f53347a9 (A100 + 48 threads, H100 + 32, no depth limit;
+  bench/results/hybrid-vs-gpu-only/BENCHMARK.md) the fastest was 256-512 on
+  HIGGS (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M (2381); the
+  default is within 2% of that on all three, where the earlier rows-based
+  default (rows / 8192 or / 4096, 1024-4096) was 6-12% slower. Datasets with
+  few features (SUSY, chess, HIGGS) get 512; the rule was not measured on
+  ECBDL (631 features, 6310).
 * `--gpu`: no node goes to the CPU; the GPU grows every level down to
   the leaves, and the host arena for the hand-offs (8 bytes per value) is not
   allocated. Everything else stays as without it: the CPU threads

@@ -59,20 +59,19 @@ struct ParallelOptions {
 struct GpuOptions {
   // --hybrid: nodes with fewer rows are handed off (copied back and finished by
   // the CPU pool) while the GPU keeps working on the large nodes of the next
-  // level. 0 = auto (handoffRows()): the training rows / kAutoMinRowsShare, between
-  // kAutoMinRows and kAutoMaxMinRows (CART: rows / kAutoMinRowsShareCart,
-  // between kAutoMinRows and kAutoMaxMinRowsCart).
-  // A GPU level costs about the same for a thousand mid-size nodes as for a
-  // few big ones, so on bigger datasets the CPU takes over somewhat earlier,
-  // but not much: measured on an H100 (32 CPU cores) and an A100 (48), C4.5
-  // was best at about 2.5K rows on 10.5M rows and at 4K on 115M; CART, whose
-  // CPU subtrees are few, at 1-2.5K and 2K.
+  // level. 0 = auto (handoffRows()): kHandoffRowsPerFeature × the features,
+  // between kMinHandoffRows and kMaxHandoffRows, for CART and C4.5 alike.
+  // A node's CPU subtree costs about rows × features, a GPU level little more
+  // for a few wide nodes than for one, so wide data hands off later. Measured
+  // on f53347a9 (no depth limit, A100 + 48 threads and H100 + 32 threads,
+  // bench/results/hybrid-vs-gpu-only/): the fastest value was 256-512 on HIGGS
+  // (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M (2381); this
+  // rule is within 2% of the fastest on all three, where the earlier
+  // rows-based default was 6-12% slower.
   std::size_t handoffRows = 0;
-  static constexpr std::size_t kAutoMinRows = 1024;
-  static constexpr std::size_t kAutoMaxMinRows = 4096;
-  static constexpr std::size_t kAutoMinRowsShare = 4096;
-  static constexpr std::size_t kAutoMaxMinRowsCart = 2048;
-  static constexpr std::size_t kAutoMinRowsShareCart = 8192;
+  static constexpr std::size_t kHandoffRowsPerFeature = 10;
+  static constexpr std::size_t kMinHandoffRows = 512;
+  static constexpr std::size_t kMaxHandoffRows = 16384;
   // --gpu grows every node on the GPU: no hand-offs to the CPU, and no host
   // arena for them (C4.5's pruning allocates it when it needs it). With
   // --threads 1 the CPU side is one thread (the staged copies too).
@@ -136,7 +135,7 @@ unsigned threadCount(const Options &options);
 // GPU backends: nodes with fewer rows go to the CPU (--hybrid:
 // options.gpu.handoffRows, or the automatic value for this many training
 // rows; --gpu: 1, none).
-std::size_t handoffRows(const Options &options, std::size_t trainingRows);
+std::size_t handoffRows(const Options &options, std::size_t features);
 
 // Parse argv on top of `options`. Throws std::runtime_error on bad input.
 // Returns false if --help was requested.

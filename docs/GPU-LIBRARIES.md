@@ -100,9 +100,8 @@ tree has half the nodes or fewer). No public GPU C4.5 exists. Lead with CART.
   (the H100 and A100 run FP64 at half the FP32 rate). The lead over cuML comes
   from the data layout, the partition, the two-class tile bound and the
   CPU/GPU split. Consumer GPUs (FP64 about 64× slower) are not a target.
-* **./tree is a CPU + GPU hybrid:** nodes below `--handoff-rows` (CART
-  rows / 8192 within [1024, 2048], C4.5 rows / 4096 within [1024, 4096]) go to
-  the CPU. Report the GPU / CPU share and a thread sweep.
+* **./tree is a CPU + GPU hybrid:** nodes below `--handoff-rows` (10 ×
+  features within [512, 16384]) go to the CPU. Report the GPU / CPU share and a thread sweep.
 * **Memory cost of exactness:** ./tree uses more VRAM than the libraries on
   HIGGS, SUSY and ECBDL (73.3 GiB against 36–48 GiB on ECBDL) and less on
   chess (25.4 against 42–44 GiB).

@@ -276,9 +276,12 @@ hopper (32 threads):
   9–10%, C4.5 4% against the default, 1,024), as most of its work never
   reaches `--handoff-rows`; C4.5 alone would take 32,768 on ampere (under 1%
   faster), where CART is 34–63% slower.
-- **The default is 6–12% slower than the best** on every dataset: it could be
-  raised for wide data (MNIST8M, SOREL 4M), but no single value is best for all
-  three.
+- **The default here is 6–12% slower than the best** on every dataset. So
+  after this run ./tree's default became 10 × features, between 512 and
+  16,384 (HIGGS 512, MNIST8M 7,840, SOREL 4M 16,384): within 2% of the best on
+  all three datasets and both nodes, judging by the sweep above (not rerun).
+  The "default" columns and the depth runs here are the old rows-based default
+  or the sweep's pick, so none of these numbers change.
 
 ## Earlier measurements (95b6d77)
 

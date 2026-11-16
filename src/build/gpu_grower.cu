@@ -185,7 +185,7 @@ public:
     std::iota(allFeatures.begin(), allFeatures.end(), 0u);
     LevelNode root{store.add(counts.data()), 0, static_cast<std::uint32_t>(stride_), 0,
                    std::move(allFeatures)};
-    minRows_ = handoffRows(options_, stride_);
+    minRows_ = handoffRows(options_, features_);
     setupPhase.reset();
     if (stride_ < minRows_) {
       growOnCpu(std::move(root));
