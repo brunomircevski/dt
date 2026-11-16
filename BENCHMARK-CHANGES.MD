@@ -250,8 +250,11 @@ Change it to:
   their own CUDA runtime statically, so `cudaFree(0)` through cuda-python
   creates the shared context but does not load *their* kernels; with EAGER
   each library loads all of its kernels at its first CUDA call, inside `fit`.
-  `CUDA_MODULE_LOADING` can be overridden (`job.sh`, `run.py`) to measure
-  EAGER against LAZY; see `cluster-gpu-vs-others/BENCHMARK.md`.
+  Probe (ampere, HIGGS, 6 fresh processes each, job 245): cuML fit 2.19 s
+  EAGER vs 1.71 s LAZY, XGBoost 3.11 vs 2.88 s, same trees. So the libraries
+  run with LAZY, CUDA's default (job.sh; run.py, `GPULIB_MODULE_LOADING`
+  overrides): the kernels a fit uses still load inside it (timed), which
+  favours neither side by more than that. ./tree keeps EAGER (main.cpp).
 - [x] **Timed:** exactly what it is today, from host float32 NumPy arrays to
   the fitted model.
   - cuML: `fit` (copy, binning, build).

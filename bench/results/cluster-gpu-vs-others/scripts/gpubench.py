@@ -22,8 +22,10 @@ The phases, in order:
               (read_seconds; not timed);
   2. start-up import the library (cuML imports RMM; import_seconds), then
               create the CUDA context on the chosen GPU with cudaFree(0)
-              (gpu_startup_seconds). CUDA_MODULE_LOADING=EAGER (job.sh) loads
-              the kernels with the context. RMM keeps cuML's default memory
+              (gpu_startup_seconds). CUDA_MODULE_LOADING=LAZY (CUDA's default,
+              job.sh): the libraries link their own CUDA runtime, so EAGER
+              would load all their kernels inside fit; the kernels a fit uses
+              load inside it (timed). RMM keeps cuML's default memory
               resource: nothing is reconfigured or pre-grown, so every
               allocation fit makes stays timed (as ./tree's pool growth does).
               startup_seconds = import_seconds + gpu_startup_seconds; not timed;

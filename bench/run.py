@@ -410,9 +410,13 @@ def build_command(case, kind, args, scratch, rep=0):
                 str(scratch), "1", str(spec["depth"])]
         # OMP_NUM_THREADS: the run's CPUs (base_env's 1 would leave XGBoost's
         # QuantileDMatrix binning, mostly on the CPU, on one thread).
-        # CUDA_MODULE_LOADING: EAGER unless the caller's environment sets it.
+        # CUDA_MODULE_LOADING: LAZY (CUDA's default) unless GPULIB_MODULE_LOADING
+        # says otherwise. cuML and XGBoost link their own CUDA runtime, so EAGER
+        # loads *all* their kernels at their first call, inside fit (HIGGS on the
+        # A100, 2026-11-17: cuML fit 2.19 s EAGER vs 1.71 s LAZY, XGBoost 3.11 vs
+        # 2.88 s); ./tree sets EAGER for itself (main.cpp).
         environment = {"EVAL": str(int(evaluate)), "GPU_MEMORY": "0", "DATA_ROOT": str(B.DATA),
-                       "CUDA_MODULE_LOADING": os.environ.get("CUDA_MODULE_LOADING", "EAGER"),
+                       "CUDA_MODULE_LOADING": os.environ.get("GPULIB_MODULE_LOADING", "LAZY"),
                        "OMP_NUM_THREADS": str(threads)}
         return argv, environment, lambda stdout: json.loads(stdout.strip().splitlines()[-1])
 

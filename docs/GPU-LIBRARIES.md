@@ -57,7 +57,11 @@ startup`; `train total` starts only after it has finished.
 **cuML / XGBoost** (`gpubench.py`, since 2026-11-16): one fresh Python process
 per run, no warm-up fit. It loads row-major float32 NumPy arrays, then does the
 start-up (import the library, which for cuML imports RMM; then the CUDA context
-alone, `cudaFree(0)`, with `CUDA_MODULE_LOADING=EAGER`; RMM stays at cuML's
+alone, `cudaFree(0)`, with `CUDA_MODULE_LOADING=LAZY`, CUDA's default: both
+libraries link their own CUDA runtime, so EAGER would load *all* their kernels
+at their first call, inside `fit` (HIGGS, A100, 2026-11-17, 6 runs each: cuML
+2.19 s EAGER vs 1.71 s LAZY, XGBoost 3.11 vs 2.88 s); the kernels a fit uses
+load inside it, timed, while ./tree loads its own with the context; RMM stays at cuML's
 default memory resource, nothing reconfigured or pre-grown), then exactly one
 timed fit (`time.perf_counter`). Ten runs are ten processes, in rounds of one
 process per case in a shuffled order (`job.sh`); reported as means:

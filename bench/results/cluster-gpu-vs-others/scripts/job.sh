@@ -48,7 +48,7 @@ trap 'rm -rf "$SCRATCH"; drop_cache' EXIT
 trap 'exit 143' TERM INT
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1 DATA_ROOT
 # Start-up: the kernels load with the CUDA context, before the timer.
-export CUDA_MODULE_LOADING="${CUDA_MODULE_LOADING:-EAGER}"  # LAZY: the probe in BENCHMARK.md
+export CUDA_MODULE_LOADING="${CUDA_MODULE_LOADING:-LAZY}"  # CUDA's default; EAGER: see BENCHMARK.md "Time"
 if [ -z "${NUMA_NODE:-}" ]; then  # the GPU on the node with the most free memory
   NUMA_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
     while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
