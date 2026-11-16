@@ -1,7 +1,13 @@
-job 84 on ampere, 2026-11-04T12:20:08+01:00, kind gpu
-commit 50d29cd + uncommitted --repeat patch
-data bench/data/ecbdl_15m/train.csv, reps 3, target 120 s, idle 60 s, pre 20 s, algos cart c45, impls cuda gpuonly
-protocol --no-prune -d 10
+job 173 on ampere, 2026-11-16T03:32:18+01:00, kind all
+commit f53347a9d336
+data bench/data/ecbdl/train.csv (first 15000000 rows), reps 3 simple=1, target 240 s, idle 600 s, cal 240 s, pre 20 s, warm-up 2 s, algos cart c45, impls simple serial parallel gpuonly cuda
+used_gpu 0 (NUMA node 0, cpus 0-23,24-47, 48 threads, first-touch memory)
+protocol -d 10
+command simple taskset -c 0 ./tree_cpu --simple 
+command serial taskset -c 0 ./tree_cpu --serial 
+command parallel taskset -c 0-47 ./tree_cpu --multicore --threads 48 
+command gpuonly env CUDA_VISIBLE_DEVICES=0 taskset -c 0-23,24-47 ./tree --gpu --threads 48 --repeat-warmup 2
+command cuda env CUDA_VISIBLE_DEVICES=0 taskset -c 0-23,24-47 ./tree --hybrid --threads 48 --repeat-warmup 2
 kernel 7.0.0-38-generic
 dmi Supermicro AS -4124GS-TNR
 Model name:                              AMD EPYC 7402 24-Core Processor
@@ -9,15 +15,24 @@ Core(s) per socket:                      24
 Socket(s):                               2
 NUMA node(s):                            2
 governor acpi-cpufreq ondemand
-perf_event_paranoid 0
+cpus available 48
+rapl_max intel-rapl:0 package-0 65532610987
+rapl_max intel-rapl:0:0 core 65532610987
+rapl_max intel-rapl:1 package-1 65532610987
+rapl_max intel-rapl:1:0 core 65532610987
+psu_file 1794796337.431344306 402
                total        used        free      shared  buff/cache   available
-Mem:            1007          11         934           0          67         996
-index, name, power.limit [W], driver_version
-0, NVIDIA A100 80GB PCIe, 300.00 W, 615.71.09
-1, NVIDIA A100 80GB PCIe, 300.00 W, 615.71.09
-2, NVIDIA A100-PCIE-40GB, 250.00 W, 615.71.09
-3, NVIDIA A100-PCIE-40GB, 250.00 W, 615.71.09
-repeat cuda cart 18 (warm-up train 6964.5 ms)
-repeat gpuonly cart 17 (warm-up train 7095.7 ms)
-repeat cuda c45 18 (warm-up train 6930.0 ms)
-repeat gpuonly c45 17 (warm-up train 7162.0 ms)
+Mem:            1007          14         813           2         187         992
+node 0 free: 426289 MB
+node 1 free: 406574 MB
+index, name, power.limit [W], driver_version, memory.used [MiB]
+0, NVIDIA A100 80GB PCIe, 300.00 W, 615.71.09, 0 MiB
+1, NVIDIA A100 80GB PCIe, 300.00 W, 615.71.09, 0 MiB
+2, NVIDIA A100-PCIE-40GB, 250.00 W, 615.71.09, 0 MiB
+3, NVIDIA A100-PCIE-40GB, 250.00 W, 615.71.09, 0 MiB
+repeat parallel cart 21 (warm-up train 12471.4 ms)
+repeat gpuonly cart 58 (warm-up train 4254.4 ms)
+repeat cuda cart 57 (warm-up train 4308.5 ms)
+repeat parallel c45 20 (warm-up train 13208.7 ms)
+repeat gpuonly c45 57 (warm-up train 4292.8 ms)
+repeat cuda c45 57 (warm-up train 4362.7 ms)

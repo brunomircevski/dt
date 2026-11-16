@@ -1,0 +1,43 @@
+job 171 on hopper, 2026-11-16T05:21:51+01:00, kind all
+commit f53347a9d336
+data bench/data/ecbdl/train.csv (first 15000000 rows), reps 3 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 15 s, algos cart c45, impls simple serial parallel gpuonly cuda
+used_gpu 2 (NUMA node 1, cpus 16-31,0-15, 32 threads, first-touch memory)
+protocol -d 10
+command simple taskset -c 0 ./tree_cpu --simple 
+command serial taskset -c 0 ./tree_cpu --serial 
+command parallel taskset -c 0-31 ./tree_cpu --multicore --threads 32 
+command gpuonly env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --gpu --threads 32 --repeat-warmup 15
+command cuda env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --hybrid --threads 32 --repeat-warmup 15
+kernel 7.0.0-42-generic
+dmi Supermicro SYS-741GE-TNRT
+Model name:                              Intel(R) Xeon(R) Gold 6444Y
+Core(s) per socket:                      16
+Socket(s):                               2
+NUMA node(s):                            2
+governor intel_cpufreq schedutil
+cpus available 32
+power1_accuracy 97.500%
+power1_average 504000000
+power1_average_interval 1000
+power1_average_interval_max 3600000
+power1_average_interval_min 1000
+power1_average_max unknown
+power1_average_min unknown
+power1_is_battery 0
+power1_model_number Intel(R) Node Manager
+power1_oem_info Meter measures total domain
+power1_serial_number 
+rapl_max intel-rapl:0 package-0 262143328850
+rapl_max intel-rapl:0:0 dram 262143328850
+rapl_max intel-rapl:1 package-1 262143328850
+rapl_max intel-rapl:1:0 dram 262143328850
+psu_file 1794802911.446640869 481
+               total        used        free      shared  buff/cache   available
+Mem:            1007          16         877           2         120         991
+node 0 free: 449236 MB
+node 1 free: 449806 MB
+index, name, power.limit [W], driver_version, memory.used [MiB]
+0, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+1, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+2, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+3, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB

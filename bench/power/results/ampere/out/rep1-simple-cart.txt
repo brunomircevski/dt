@@ -1,0 +1,16 @@
+CART on bench/data/ecbdl/train.csv (first 15000000 rows) (backend simple)
+  rows 15000000 train, 631 features, 2 classes
+  pruning off
+  repeat 1/1: train 4470181.4 ms, unix 1794799858.533280 1794804328.715255
+Tree:
+  nodes 1863, leaves 932, depth 10
+  train accuracy 97.9198%
+Timings:
+  load                243909.4 ms
+  presort                  0.0 ms
+  build              4470181.4 ms
+  prune                    0.0 ms
+  train total        4470181.4 ms
+  evaluate              6885.9 ms
+Memory:
+  peak after training 37266632 KiB

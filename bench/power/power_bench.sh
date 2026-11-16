@@ -1,60 +1,54 @@
 #!/usr/bin/env bash
-# Power benchmark job: ./tree's five backends train one tree (depth <= 10, no
-# pruning) while bench/power/pwrlog.py samples every power source a user can
-# read (bench/power/README.md). Submit from the repository root, one job per
-# node, with the whole node:
+# Power benchmark job: ./tree's five backends train one tree (ECBDL'14 15M,
+# depth <= 10, no pruning) while bench/power/pwrlog.py samples every power
+# source a user can read, every 0.1 s (bench/power/README.md). One job per
+# node, with the whole node, from the repository root (submit.sh-style:
+# held, then released, since sbatch --export can leave a job held):
 #
-#   sbatch -p ampere -w ampere --exclusive -t 1:30:00 -J pwr-ampere \
-#     -o bench/results/power/ampere/job.log bench/power/power_bench.sh gpu bench/results/power/ampere
-#   sbatch -p dell -w dell4 --exclusive -t 8:00:00 -J pwr-dell \
-#     -o bench/results/power/dell/job.log bench/power/power_bench.sh cpu bench/results/power/dell
+#   bench/power/submit.sh epyc1 dell4 ampere hopper
 #
-# gpu: Hybrid (--hybrid) and GPU (--gpu) on GPU 0 with the 24 CPUs and
-#      the memory of its NUMA node, as in the cluster benchmarks; RAPL is read with
-#      perf (ampere allows it to users).
-# cpu: Serial-Simple (--simple), Serial-Opt (--serial) and Parallel on all cores.
-# all: all five on one node with readable CPU (RAPL) and GPU power (ampere), so
-#      that every implementation gets the same CPU/GPU split:
-#   sbatch -p ampere -w ampere --exclusive -c 48 -t 9:00:00 -J pwr-all \
-#     --export=ALL,TARGET=30,REPS=5,REPS_BY="simple=1 serial=3" \
-#     -o bench/results/power-ampere/ampere/job.log bench/power/power_bench.sh all bench/results/power-ampere/ampere
+# KIND (first argument): cpu = Serial-Simple (--simple), Serial-Opt (--serial)
+# and Multicore (--multicore); all = those three plus GPU (--gpu) and Hybrid
+# (--hybrid). OUT (second argument): the job's folder.
 #
-# PSU readings (2026-11-06): ampere and hopper publish the BMC's reading in
-# /run/power/psu_W, and their RAPL counters are readable. ampere's BMC refreshes
-# its value only about once a minute, so give it long windows: TARGET=720 (>= 10
-# refreshes per measured window), IDLE=900 and STEP=600 (an all-core busy step
-# that shows the meter's delay and refresh period):
-#   sbatch -p ampere -w ampere --exclusive -c 48 -t 12:00:00 -J pwr-psu-ampere \
-#     --export=ALL,TARGET=720,IDLE=900,STEP=600,REPS=2,REPS_BY="simple=1 serial=1",REPEAT_BY="serial=2" \
-#     -o bench/results/power-psu/ampere/job.log bench/power/power_bench.sh all bench/results/power-psu/ampere
-#   sbatch -p hopper -w hopper --exclusive -c 32 -t 10:00:00 -J pwr-psu-hopper \
-#     --export=ALL,GPU=2,GPU_CPUS=16-31,GPU_MEM=1,GPU_THREADS=16,TARGET=120,IDLE=300,STEP=300,REPS=3,REPS_BY="simple=1 serial=1" \
-#     -o bench/results/power-psu/hopper/job.log bench/power/power_bench.sh all bench/results/power-psu/hopper
+# The problem it solves: the whole-server (PSU) meters refresh every 1 s
+# (hopper), 2 s (dell), 4-10 s (epyc) or once a minute (ampere, a point
+# reading), while a tree takes 2.4 s on a GPU. So the job records, next to the
+# meter, the fast sensors (RAPL package and DRAM per socket, every GPU's NVML
+# energy counter; all read every 0.1 s), and gives the meter a wide range of
+# loads to calibrate against: analyze.py fits the meter as a delayed moving
+# average of  a + b * (CPU packages + DRAM) + c * (all GPUs)  over every
+# reading of the job, and integrates that model over each tree's window.
 #
-# The run: a warm-up run of each fast backend (Parallel, Hybrid, GPU) per
-# algorithm (two trees), which also picks its repeat count K = ceil(TARGET /
-# the second tree's training time) + 1, so that the measured trees (all K)
-# last >= TARGET seconds; then IDLE seconds of idle; then,
-# with STEP > 0, STEP seconds of every core busy and IDLE seconds of idle again;
-# then REPS rounds of every case (round-robin), each process preceded by PRE
-# seconds of idle; then IDLE seconds of idle again. ./tree --repeat K trains
-# every tree as a fresh process's only tree (each one in a forked child, since
-# 2026-11-07) and prints its training window as Unix times;
-# bench/power/analyze.py integrates the samples over those windows. The GPU
-# implementations add --repeat-warmup WARMUP: each tree's child keeps its CPUs
-# busy for WARMUP seconds before its timer, as a single run's CSV load does
-# (without it, a GPU tree after an idle CPU set up 10-40% slower).
+# The job:
+#   1. warm-up: each fast backend (Multicore, GPU, Hybrid) trains two trees
+#      per algorithm; the second one's time sets K = ceil(TARGET / t) + 1
+#      trees per measured process;
+#   2. (GPU nodes) the warm-up check: GPU and Hybrid, CART, 10 trees at
+#      --repeat-warmup 2 and at WARMUP (CHECK=0 skips it);
+#   3. IDLE s idle; the calibration staircase: 1, 2, 4, ... and all CPUs
+#      busy (spin loops), CAL s each; IDLE s idle;
+#   4. REPS rounds of every case (round-robin), PRE s idle before each process;
+#   5. IDLE s idle.
+# ./tree --repeat K trains every tree in its own forked child (each tree is a
+# fresh process's only tree) and prints its training window as Unix times; the
+# GPU backends add --repeat-warmup WARMUP: the child keeps its CPU threads busy
+# for WARMUP s before its timer, as a single run's CSV load does (without it, a
+# GPU tree after idle CPUs set up 10-40% slower on hopper and ampere).
 #
-# Environment: DATA (CSV) and ROWS (its first ROWS rows, ./tree --rows; by
-# default ECBDL'14 15M: ecbdl's train.csv, ROWS 15000000), REPS (3), REPS_BY (per-implementation rounds,
-# e.g. "simple=1 serial=3"; the rest run REPS rounds), REPEAT_BY (trees per
-# process for the slow backends, e.g. "serial=2"; default 1), TARGET (120),
-# IDLE (60), STEP (0), PRE (20), ALGOS ("cart c45"), IMPLS (gpu: "cuda gpuonly",
-# cpu: "simple serial parallel", all: all five); GPU (0), GPU_CPUS (0-23),
-# GPU_MEM (0) and GPU_THREADS (24): the GPU the GPU backends use, and the CPUs
-# and memory node of its NUMA node; WARMUP (15): seconds of --repeat-warmup
-# for the GPU implementations (2 s was enough on ampere, but on hopper it left
-# every tree after the first few 8% slower; 15 s keeps them at single-run speed).
+# Placement as in the time benchmark (bench/cluster/job.sh and bench/run.py):
+# Serial-Simple and Serial-Opt on CPU 0 (taskset; the CSV load then has one
+# thread too); Multicore on every CPU; GPU and Hybrid on the GPU of the NUMA node
+# with the most free memory, with every CPU of the node (that node's first)
+# and first-touch memory.
+#
+# Environment: DATA (CSV; default ECBDL'14's train.csv with ROWS=15000000, the
+# time benchmark's ecbdl_15m), REPS (3), REPS_BY (per backend, e.g. "simple=1";
+# default "simple=1"), TARGET (120 s of training per measured process), IDLE
+# (300), CAL (60 s per staircase level; 0: no staircase), PRE (20), WARMUP (15),
+# CHECK (1), CHECK_ONLY (1: the warm-up check alone, at every warm-up in
+# CHECK_WARMUPS, default "2 WARMUP"), ALGOS ("cart c45"), IMPLS (cpu: "simple serial parallel", all: all
+# five), BIN (the folder of ./tree and ./tree_cpu; default the repository root).
 set -uo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 KIND=$1
@@ -64,58 +58,80 @@ if [ -z "${DATA:-}" ]; then  # ecbdl_15m: a prefix of ecbdl (bench/datasets.toml
 fi
 ROWS=${ROWS:-}
 REPS=${REPS:-3}
+REPS_BY=${REPS_BY:-simple=1}
 TARGET=${TARGET:-120}
-IDLE=${IDLE:-60}
+IDLE=${IDLE:-300}
+CAL=${CAL:-60}
 PRE=${PRE:-20}
-STEP=${STEP:-0}
-GPU=${GPU:-0}
-GPU_CPUS=${GPU_CPUS:-0-23}
-GPU_MEM=${GPU_MEM:-0}
-GPU_THREADS=${GPU_THREADS:-24}
 WARMUP=${WARMUP:-15}
+CHECK=${CHECK:-1}
+CHECK_ONLY=${CHECK_ONLY:-}
+CHECK_WARMUPS=${CHECK_WARMUPS:-2 $WARMUP}
 ALGOS=${ALGOS:-cart c45}
+BIN=${BIN:-.}
 PROTOCOL=(-d 10)
 mkdir -p "$OUT/out"
 now() { date +%s.%N | cut -c1-17; }
 mark() { echo "$(now) $*" >> "$OUT/markers.txt"; }
 
 case $KIND in
-  gpu) IMPLS=${IMPLS:-cuda gpuonly}; FAST="cuda gpuonly" ;;
   cpu) IMPLS=${IMPLS:-simple serial parallel}; FAST="parallel" ;;
-  all) IMPLS=${IMPLS:-simple serial parallel cuda gpuonly}; FAST="parallel cuda gpuonly" ;;
-  *) echo "usage: $0 gpu|cpu|all OUTDIR" >&2; exit 2 ;;
+  all) IMPLS=${IMPLS:-simple serial parallel gpuonly cuda}; FAST="parallel gpuonly cuda" ;;
+  *) echo "usage: $0 cpu|all OUTDIR" >&2; exit 2 ;;
 esac
 declare -A NREPS
 MAXREP=$REPS
 for impl in $IMPLS; do NREPS[$impl]=$REPS; done
-for kv in ${REPS_BY:-}; do
+for kv in $REPS_BY; do
   NREPS[${kv%%=*}]=${kv#*=}
   [ "${kv#*=}" -gt "$MAXREP" ] && MAXREP=${kv#*=}
 done
 
+NCPU=$(nproc)
+ALL_CPUS="0-$((NCPU - 1))"
+# The GPU: as bench/cluster/job.sh, the first GPU on the NUMA node (among the
+# GPUs' nodes) with the most free memory; its node's CPUs first, then the rest.
+GPU= GPU_NODE= GPU_CPUS=
+if [ "$KIND" = all ]; then
+  GPU_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
+    while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
+    while read -r node; do
+      numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4, n }'
+    done | sort -rn | head -1 | cut -d' ' -f2)"
+  GPU="$(nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader | tr A-Z a-z |
+    while IFS=', ' read -r index bus; do
+      [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$GPU_NODE" ] && { echo "$index"; break; }
+    done)"
+  [ -n "$GPU" ] || { echo "no GPU found" >&2; exit 1; }
+  GPU_CPUS="$(cat "/sys/devices/system/node/node$GPU_NODE/cpulist")$(
+    for n in /sys/devices/system/node/node[0-9]*; do
+      [ "${n##*node}" = "$GPU_NODE" ] || printf ,%s "$(cat "$n/cpulist")"
+    done)"
+fi
+
 command_of() { # impl -> the command line before the algorithm flags
   case $1 in
-    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --hybrid --threads $GPU_THREADS --repeat-warmup $WARMUP" ;;
-    gpuonly) echo "env CUDA_VISIBLE_DEVICES=$GPU numactl --membind=$GPU_MEM taskset -c $GPU_CPUS ./tree --gpu --threads $GPU_THREADS --repeat-warmup $WARMUP" ;;
-    # --threads 0: loading and evaluation use every core; training is one thread
-    simple) echo "./tree_cpu --simple --threads 0" ;;
-    serial) echo "./tree_cpu --serial --threads 0" ;;
-    parallel) echo "./tree_cpu --multicore --threads 0" ;;
+    simple) echo "taskset -c 0 $BIN/tree_cpu --simple" ;;
+    serial) echo "taskset -c 0 $BIN/tree_cpu --serial" ;;
+    parallel) echo "taskset -c $ALL_CPUS $BIN/tree_cpu --multicore --threads $NCPU" ;;
+    gpuonly) echo "env CUDA_VISIBLE_DEVICES=$GPU taskset -c $GPU_CPUS $BIN/tree --gpu --threads $NCPU" ;;
+    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU taskset -c $GPU_CPUS $BIN/tree --hybrid --threads $NCPU" ;;
   esac
 }
+warmup_of() { case $1 in gpuonly|cuda) echo "--repeat-warmup ${2:-$WARMUP}" ;; esac; }
 
 {
   echo "job ${SLURM_JOB_ID:-none} on $(hostname), $(date -Is), kind $KIND"
   echo "commit ${TREE_GIT_DESCRIBE:-$(git describe --always --dirty 2>/dev/null)}"
-  echo "data $DATA${ROWS:+ (first $ROWS rows)}, reps $REPS ${REPS_BY:-}, repeat ${REPEAT_BY:-}, target $TARGET s, idle $IDLE s, step $STEP s, pre $PRE s, algos $ALGOS, impls $IMPLS"
-  echo "used_gpu $GPU (cpus $GPU_CPUS, memory node $GPU_MEM, $GPU_THREADS threads, warm-up $WARMUP s)"
+  echo "data $DATA${ROWS:+ (first $ROWS rows)}, reps $REPS $REPS_BY, target $TARGET s, idle $IDLE s, cal $CAL s, pre $PRE s, warm-up $WARMUP s, algos $ALGOS, impls $IMPLS"
+  [ -z "$GPU" ] || echo "used_gpu $GPU (NUMA node $GPU_NODE, cpus $GPU_CPUS, $NCPU threads, first-touch memory)"
   echo "protocol ${PROTOCOL[*]}"
+  for impl in $IMPLS; do echo "command $impl $(command_of "$impl") $(warmup_of "$impl")"; done
   echo "kernel $(uname -r)"
   echo "dmi $(cat /sys/class/dmi/id/sys_vendor) $(cat /sys/class/dmi/id/product_name)"
   lscpu | grep -E 'Model name|Socket|Core\(s\)|NUMA node\(s\)'
   echo "governor $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_driver) $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)"
-  echo "cpus available $(nproc)"
-  echo "perf_event_paranoid $(cat /proc/sys/kernel/perf_event_paranoid)"
+  echo "cpus available $NCPU"
   for h in /sys/class/hwmon/hwmon*; do
     [ "$(cat "$h/name")" = power_meter ] && for f in "$h"/power1_*; do echo "$(basename "$f") $(cat "$f")"; done
   done
@@ -124,40 +140,50 @@ command_of() { # impl -> the command line before the algorithm flags
   done
   [ -r /run/power/psu_W ] && echo "psu_file $(cat /run/power/psu_W)"
   free -g | head -2
-  command -v nvidia-smi > /dev/null && nvidia-smi --query-gpu=index,name,power.limit,driver_version --format=csv
+  numactl -H | grep free
+  if command -v nvidia-smi > /dev/null; then
+    nvidia-smi --query-gpu=index,name,power.limit,driver_version,memory.used --format=csv
+    nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | sed 's/^/GPU process: /'
+  fi
 } > "$OUT/machine.txt" 2>&1
 
 python3 bench/power/pwrlog.py 0.1 "$OUT/samples.csv" &
 SAMPLER=$!
-PERF=
-if [ "$KIND" != cpu ] && [ "$(cat /proc/sys/kernel/perf_event_paranoid)" -le 0 ]; then
-  mark perf_start
-  perf stat -a --per-socket -x, -I 100 -e power/energy-pkg/ -o "$OUT/perf_rapl.csv" &
-  PERF=$!
-fi
+BUSY=()
 cleanup() {
+  [ ${#BUSY[@]} -eq 0 ] || kill "${BUSY[@]}" 2> /dev/null
   kill "$SAMPLER" 2> /dev/null
-  [ -n "$PERF" ] && kill -INT "$PERF" 2> /dev/null
   wait 2> /dev/null
+  gzip -f "$OUT/samples.csv"
 }
 trap cleanup EXIT
 trap 'exit 143' TERM INT
 
-run() { # id impl algo repeat
+run() { # id impl algo repeat [warm-up]
   local id=$1 impl=$2 algo=$3 k=$4
   mark "start $id impl=$impl algo=$algo repeat=$k"
   # shellcheck disable=SC2046
-  timeout --foreground 3h $(command_of "$impl") "--$algo" "${PROTOCOL[@]}" --repeat "$k" ${ROWS:+--rows "$ROWS"} "$DATA" \
-    > "$OUT/out/$id.txt" 2>&1
+  timeout --foreground 4h $(command_of "$impl") "--$algo" "${PROTOCOL[@]}" --repeat "$k" $(warmup_of "$impl" "${5:-}") \
+    ${ROWS:+--rows "$ROWS"} "$DATA" > "$OUT/out/$id.txt" 2>&1
   mark "end $id rc=$?"
 }
 
-declare -A REPEAT SLOW_REPEAT
-for kv in ${REPEAT_BY:-}; do SLOW_REPEAT[${kv%%=*}]=${kv#*=}; done
+# busy N SECONDS: spin loops on CPUs 0 .. N-1 (the calibration staircase)
+busy() {
+  BUSY=()
+  for ((c = 0; c < $1; c++)); do
+    taskset -c "$c" timeout "$2" sh -c 'while :; do :; done' & BUSY+=($!)
+  done
+  wait "${BUSY[@]}"  # not a bare wait: the sampler runs in the background too
+  BUSY=()
+}
+
+declare -A REPEAT
 mark job_start
+[ -z "$CHECK_ONLY" ] || ALGOS=""
 for algo in $ALGOS; do
   for impl in $IMPLS; do
-    REPEAT[$impl-$algo]=${SLOW_REPEAT[$impl]:-1}
+    REPEAT[$impl-$algo]=1
     case " $FAST " in *" $impl "*) ;; *) continue ;; esac
     # two trees: the second one's time picks K (the data is in the page cache by then)
     run "warmup-$impl-$algo" "$impl" "$algo" 2
@@ -168,16 +194,31 @@ for algo in $ALGOS; do
     echo "repeat $impl $algo ${REPEAT[$impl-$algo]} (warm-up train $ms ms)" >> "$OUT/machine.txt"
   done
 done
+# The warm-up check: is WARMUP still needed, and enough? (CART, 10 trees.)
+if [ "$CHECK" = 1 ] && [ "$KIND" = all ]; then
+  # one process first, so that the first check does not pay for the page cache
+  [ -z "$CHECK_ONLY" ] || run "warmup-gpuonly-cart" gpuonly cart 2
+  for w in $CHECK_WARMUPS; do
+    for impl in gpuonly cuda; do
+      sleep "$PRE"
+      run "check-$impl-w$w" "$impl" cart "${CHECK_TREES:-10}" "$w"
+    done
+  done
+fi
+[ -z "$CHECK_ONLY" ] || { mark job_end; exit 0; }
 
 sleep "$PRE"
 mark idle_start
 sleep "$IDLE"
 mark idle_end
-if [ "$STEP" -gt 0 ]; then
-  mark step_start
-  BUSY=()
-  for _ in $(seq "$(nproc)"); do timeout "$STEP" sh -c 'while :; do :; done' & BUSY+=($!); done
-  wait "${BUSY[@]}"  # not a bare wait: the sampler runs in the background too
+if [ "$CAL" -gt 0 ]; then
+  levels=""
+  for ((n = 1; n < NCPU; n *= 2)); do levels="$levels $n"; done
+  for n in $levels $NCPU; do
+    mark "cal_start n=$n"
+    busy "$n" "$CAL"
+    mark "cal_end n=$n"
+  done
   mark step_end
   sleep "$IDLE"
   mark step_idle_end

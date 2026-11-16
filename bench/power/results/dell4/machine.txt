@@ -1,0 +1,37 @@
+job 170 on dell4, 2026-11-15T21:52:33+01:00, kind cpu
+commit f53347a9d336
+data bench/data/ecbdl/train.csv (first 15000000 rows), reps 3 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 15 s, algos cart c45, impls simple serial parallel
+protocol -d 10
+command simple taskset -c 0 ./tree_cpu --simple 
+command serial taskset -c 0 ./tree_cpu --serial 
+command parallel taskset -c 0-47 ./tree_cpu --multicore --threads 48 
+kernel 7.0.0-42-generic
+dmi Dell Inc. PowerEdge R660
+Model name:                              INTEL(R) XEON(R) GOLD 6542Y
+Core(s) per socket:                      24
+Socket(s):                               2
+NUMA node(s):                            4
+governor intel_pstate powersave
+cpus available 48
+power1_accuracy 90.0%
+power1_average 154000000
+power1_average_interval 2000
+power1_average_interval_max 604800000
+power1_average_interval_min 2000
+power1_is_battery 0
+power1_model_number PowerEdge
+power1_oem_info ___DELL
+power1_serial_number 
+rapl_max intel-rapl:0 package-0 262143328850
+rapl_max intel-rapl:0:0 dram 262143328850
+rapl_max intel-rapl:1 psys 4294967295000000
+rapl_max intel-rapl:2 package-1 262143328850
+rapl_max intel-rapl:2:0 dram 262143328850
+               total        used        free      shared  buff/cache   available
+Mem:             503           3         497           0           4         499
+node 0 free: 126104 MB
+node 1 free: 127195 MB
+node 2 free: 128304 MB
+node 3 free: 128190 MB
+repeat parallel cart 12 (warm-up train 11459.0 ms)
+repeat parallel c45 9 (warm-up train 16207.2 ms)

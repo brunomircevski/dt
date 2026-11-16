@@ -19,7 +19,7 @@ Styles:
   profile   100 % stacked bars: where the training time goes, per backend
   bars      grouped bars, log scale: the five implementations on every dataset
   energy    time, mean power and total energy of one C4.5 tree on ECBDL'14 15M,
-            epyc and hopper, from bench/power/results-*/
+            epyc and hopper, from bench/power/results/summary.csv
 """
 
 import csv
@@ -570,8 +570,9 @@ def bars():
 
 
 # ---------------------------------------------------------------- power (energy per tree)
-# bench/power/results-<node>/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
-# energy at the PSU; components: CPU packages (RAPL), the GPU in use (NVML), the rest.
+# bench/power/results/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
+# energy at the PSU (each node's meter modelled from the fast sensors, bench/power/README.md);
+# components: CPU packages (RAPL), DRAM (RAPL, Intel nodes), the GPU in use (NVML), the rest.
 POWER = ROOT / "bench" / "power"
 P_NODES = [("epyc1", "epyc"), ("dell4", "dell"), ("ampere", "ampere"), ("hopper", "hopper")]
 P_IMPLS = [("simple", "simple"), ("serial", "serial"), ("parallel", "cpu"), ("gpuonly", "gpuonly"),
@@ -583,11 +584,12 @@ P_GPU = {"ampere": "A100", "hopper": "H100"}
 def power_rows():
     """{(STYLE key, node short name, algo): row with floats} from every power result."""
     out = {}
-    for full, short in P_NODES:
-        f = POWER / f"results-{short}" / "summary.csv"
-        if not f.exists():
-            continue
+    f = POWER / "results" / "summary.csv"
+    shorts = {short for _, short in P_NODES}
+    if f.exists():
         for r in csv.DictReader(open(f)):
+            if r["node"] not in shorts:
+                continue
             v = {}
             for k, x in r.items():
                 try:
@@ -595,7 +597,7 @@ def power_rows():
                 except (TypeError, ValueError):
                     v[k] = x
             key = dict(P_IMPLS)[r["impl"]]
-            out[(key, short, r["algo"])] = v
+            out[(key, r["node"], r["algo"])] = v
     return out
 
 

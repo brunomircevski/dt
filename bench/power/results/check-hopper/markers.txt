@@ -1,0 +1,20 @@
+1794802911.836069 job_start
+1794802911.842412 start warmup-gpuonly-cart impl=gpuonly algo=cart repeat=2
+1794802979.615500 end warmup-gpuonly-cart rc=0
+1794802999.621125 start check-gpuonly-w0 impl=gpuonly algo=cart repeat=12
+1794803078.575777 end check-gpuonly-w0 rc=0
+1794803098.583164 start check-cuda-w0 impl=cuda algo=cart repeat=12
+1794803180.479747 end check-cuda-w0 rc=0
+1794803200.484069 start check-gpuonly-w2 impl=gpuonly algo=cart repeat=12
+1794803303.302761 end check-gpuonly-w2 rc=0
+1794803323.308254 start check-cuda-w2 impl=cuda algo=cart repeat=12
+1794803426.292780 end check-cuda-w2 rc=0
+1794803446.300935 start check-gpuonly-w5 impl=gpuonly algo=cart repeat=12
+1794803583.320398 end check-gpuonly-w5 rc=0
+1794803603.328236 start check-cuda-w5 impl=cuda algo=cart repeat=12
+1794803737.781174 end check-cuda-w5 rc=0
+1794803757.787592 start check-gpuonly-w15 impl=gpuonly algo=cart repeat=12
+1794804009.649935 end check-gpuonly-w15 rc=0
+1794804029.656715 start check-cuda-w15 impl=cuda algo=cart repeat=12
+1794804283.830781 end check-cuda-w15 rc=0
+1794804283.835759 job_end
