@@ -17,7 +17,7 @@
 #   scaling    the same at 1 (--serial), 2, 4, 8, ..., 48 threads, HIGGS and MNIST8M (cluster-cpu-scaling)
 #   serial     --serial, one thread
 #   simple     --simple, one thread
-#   vs         scikit-learn and Weka J48 on epyc2 (cluster-cpu-vs-others)
+#   vs         scikit-learn, rpart, YaDT (1 and 48 threads), Weka J48 on epyc2 (cluster-cpu-vs-others)
 #   gpulibs    cuML and XGBoost on hopper and ampere (cluster-gpu-vs-others, ~/gpu-dt-bench)
 #   profiling  ./tree --profile, then the same without (plain/), epyc1, dell1, hopper (cluster-profiling)
 #   hybrid     hybrid_vs_gpu_only.sh on hopper and ampere (hybrid-vs-gpu-only)
@@ -128,10 +128,12 @@ scaling() {
   line "$1" "${OUT:-cluster-cpu-scaling}" "cpu-$2-$3" "$3" tree "$(runs scaling "$3")" "$P" scaling 14400 \
     RUN_EXTRA=--hash-trees
 }
-# vs <plan> <dataset> <tool> <algorithm>: scikit-learn (CART) or Weka J48 (C4.5), one thread
+# vs <plan> <dataset> <tool> <algorithm> [all]: scikit-learn or rpart (CART), Weka J48
+# or YaDT (C4.5), one thread; "all": every CPU of the node (YaDT), run name -multi
 vs() {
-  local protocol=cart_depth10; [ "$4" = cart ] || protocol=c45_depth10_unpruned
-  line "$1" "${OUT:-cluster-cpu-vs-others}" "vs-epyc-$2-$3-$4" "$2" "$3" "$(runs "$3" "$2")" "$protocol" 1 86400 "$EXTRA"
+  local protocol=cart_depth10 threads="${5:-1}"; [ "$4" = cart ] || protocol=c45_depth10_unpruned
+  line "$1" "${OUT:-cluster-cpu-vs-others}" "vs-epyc-$2-$3-$4${5:+-multi}" "$2" "$3" "$(runs "$3" "$2")" \
+    "$protocol" "$threads" 86400 "$EXTRA"
 }
 # profile <plan> <backend> <node>: every PROFILE_DATA dataset with --profile, then
 # all of them again without it (into plain/), to see what profiling costs
@@ -190,7 +192,10 @@ fi
 if want vs; then
   for d in $VS_DATA; do
     if [ -n "$TEST" ]; then vs epyc2-1 "$d" sklearn cart
-    else vs epyc2-1 "$d" sklearn cart; vs epyc2-1 "$d" j48 c45; fi
+    else
+      vs epyc2-1 "$d" sklearn cart; vs epyc2-1 "$d" rpart cart
+      vs epyc2-1 "$d" yadt c45; vs epyc2-1 "$d" yadt c45 all; vs epyc2-1 "$d" j48 c45
+    fi
   done
 fi
 

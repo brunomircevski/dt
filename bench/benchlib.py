@@ -99,12 +99,14 @@ PROTOCOLS = {
         },
     },
     # Growing only, to depth 10 (the profiling benchmark, cluster-profiling; the
-    # test-set benchmarks; cluster-cpu-vs-others with scikit-learn and J48).
+    # test-set benchmarks; cluster-cpu-vs-others with scikit-learn, rpart, J48
+    # and YaDT).
     "cart_depth10": {
         "title": "CART, grown to depth 10, no pruning",
         "impls": {
             "tree": ["--cart", "-d", "10"],
             "sklearn": {"mode": "fit", "max_depth": 10},
+            "rpart": {"mode": "fit", "maxdepth": 10},
         },
     },
     "c45_depth10_unpruned": {
@@ -113,10 +115,9 @@ PROTOCOLS = {
             "tree": ["--c45", "-d", "10"],
             # J48 has no depth limit: the adapter's own (J48Fit max_depth).
             "j48": {"options": "-U -M 2", "max_depth": 10},
-            # Not C4.5: scikit-learn's nearest tree, entropy, with C4.5's
-            # smallest split (2 rows on each side).
-            "sklearn": {"mode": "fit", "criterion": "entropy", "max_depth": 10,
-                        "min_samples_leaf": 2},
+            # YaDT's own depth limit (root at depth 0, as ./tree's -d); -np: only
+            # C4.5's pre-pruning, no error-based pruning.
+            "yadt": ["-np", "-m", "2", "-depth", "10"],
         },
     },
     # Pruned at the same fixed values, to depth 10 (the test-set benchmarks:
@@ -139,9 +140,6 @@ PROTOCOLS = {
             "tree": ["--c45", "--prune", "0.25"],
             "j48": {"options": "-C 0.25 -M 2"},
             "yadt": ["-ebpg", "-c", "0.25", "-m", "2"],
-            # Not C4.5: scikit-learn's nearest tree, entropy, pruned the only
-            # way it can, by cost-complexity at CART's alpha.
-            "sklearn": {"mode": "fit", "criterion": "entropy", "ccp_alpha": "{alpha}"},
         },
     },
     "c45_unpruned": {
@@ -194,8 +192,9 @@ IMPLS = {
 }
 
 # Rows of the untimed warm-up fit (run.py --warmup-rows overrides it; "all" =
-# the whole training set). The same number for every managed runtime.
-WARMUP_ROWS = 50_000
+# the whole training set). 0, no warm-up: every run is one cold process that
+# fits one tree, as if the tool were run once (./tree's runs are the same).
+WARMUP_ROWS = 0
 
 
 

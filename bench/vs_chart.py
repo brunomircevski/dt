@@ -3,8 +3,8 @@
 (rows) by CART and C4.5 (columns), one tree at depth <= 10 without pruning:
 
   cpu  cluster-cpu-vs-others/chart.png: ./tree --simple, --serial and
-       --multicore (48 threads) on epyc against scikit-learn (CART) and Weka J48
-       (C4.5), one thread each
+       --multicore (48 threads) on epyc against scikit-learn and rpart (CART) and
+       Weka J48 and YaDT (C4.5), one thread each, and YaDT on 48 threads
   gpu  cluster-gpu-vs-others/chart.png: ./tree --hybrid and --gpu
        against cuML (1 tree, and a default forest of 10 / 10) and XGBoost (the
        same, CART only), on the H100 (hopper) and the A100 (ampere); also
@@ -36,7 +36,7 @@ TITLES = {"higgs": "HIGGS: 10,500,000 training rows, 28 features, 2 classes; tes
           "mnist8m": "MNIST8M: 8,100,000 training rows, 784 features, 10 classes; test 10,000 rows"}
 ALGOS = {"cart": ("CART (Gini)", "cart_depth10"), "c45": ("C4.5 (gain ratio)", "c45_depth10_unpruned")}
 CPU_COLORS = {"simple": "#d6455a", "serial": "#7f4fc9", "cpu": "#2a78d6", "sklearn": "#1baf7a",
-              "j48": "#eda100"}
+              "rpart": "#0f6e4c", "j48": "#eda100", "yadt": "#e87ba4", "yadt_multi": "#a3326b"}
 GPU_COLORS = {"hopper": "#2a78d6", "ampere": "#eb6834"}
 GPU_NAMES = {"hopper": "H100 (hopper)", "ampere": "A100 80 GB (ampere)"}
 
@@ -130,13 +130,16 @@ def panel(ax, bars, title):
 
 def cpu_bars(res, dataset, algo):
     protocol = ALGOS[algo][1]
-    d = res / f"cluster-{dataset}"
-    other = (("scikit-learn, one thread", "sklearn", f"vs-epyc-{dataset}-sklearn-cart") if algo == "cart"
-             else ("Weka J48, one thread", "j48", f"vs-epyc-{dataset}-j48-c45"))
+    d, v = res / f"cluster-{dataset}", res / "cluster-cpu-vs-others"
+    others = ([("scikit-learn, one thread", "sklearn", f"vs-epyc-{dataset}-sklearn-cart"),
+               ("rpart, one thread", "rpart", f"vs-epyc-{dataset}-rpart-cart")] if algo == "cart"
+              else [("Weka J48, one thread", "j48", f"vs-epyc-{dataset}-j48-c45"),
+                    ("YaDT, one thread", "yadt", f"vs-epyc-{dataset}-yadt-c45"),
+                    ("YaDT, 48 threads", "yadt_multi", f"vs-epyc-{dataset}-yadt-c45-multi")])
     return [("./tree --simple, one thread", CPU_COLORS["simple"], summary(d / f"simple-epyc-{dataset}", protocol)),
             ("./tree --serial, one thread", CPU_COLORS["serial"], summary(d / f"serial-epyc-{dataset}", protocol)),
-            ("./tree --multicore, 48 threads", CPU_COLORS["cpu"], summary(d / f"cpu-epyc-{dataset}", protocol)),
-            (other[0], CPU_COLORS[other[1]], summary(res / "cluster-cpu-vs-others" / other[2], protocol))]
+            ("./tree --multicore, 48 threads", CPU_COLORS["cpu"], summary(d / f"cpu-epyc-{dataset}", protocol))] + \
+        [(label, CPU_COLORS[key], summary(v / run, protocol)) for label, key, run in others]
 
 
 def gpu_bars(res, dataset, algo):
@@ -175,10 +178,11 @@ def draw(kind, res, out):
         axes[i][0].annotate(TITLES[d], (0, 1), xycoords="axes fraction", xytext=(0, 22),
                             textcoords="offset points", fontsize=10.5, fontweight="bold", color=INK)
     if kind == "cpu":
-        head = ("./tree against scikit-learn and Weka J48 on the CPU: one tree, depth ≤ 10, no pruning, "
+        head = ("./tree against scikit-learn, rpart, Weka J48 and YaDT on the CPU: one tree, depth ≤ 10, no pruning, "
                 "all rows and features; epyc (2× AMD EPYC 9255, 48 cores, DDR5-6400)")
-        note = ("scikit-learn DecisionTreeClassifier (gini, max_depth 10); Weka J48 (-U -M 2, its adapter's "
-                "depth limit 10); every tool one tree on the same float32 data. ./tree --multicore uses both sockets.")
+        note = ("scikit-learn DecisionTreeClassifier (gini, max_depth 10); rpart (gini, maxdepth 10, cp 0, no "
+                "competitor or surrogate splits); Weka J48 (-U -M 2, its adapter's depth limit 10); YaDT (-np -m 2 "
+                "-depth 10). Every run a fresh process, no warm-up. ./tree --multicore and YaDT 48 threads use both sockets.")
     else:
         head = ("./tree against cuML and XGBoost on the GPU: one tree, depth ≤ 10, no pruning, all rows and features; "
                 "one GPU and every CPU of the node")
