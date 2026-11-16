@@ -179,6 +179,11 @@ CSV stays for users). Checks:
     one.
 - [x] ./tree prints its load time (`load NNN ms`), for the end-to-end
   benchmark.
+- [ ] ./tree gets an option that skips its built-in accuracy computation
+  (e.g. `--no-accuracy`; today it always computes training and test accuracy
+  after training, [src/app/main.cpp:225](src/app/main.cpp)), for the
+  end-to-end benchmark. This is the same switch the adapters already have
+  (`eval=0`).
 - [ ] Trees are bit-identical to the CSV input: compare `tree_sha256` with the
   2026-11-15 runs for at least HIGGS and MNIST8M. (Already checked when it
   was built: dumped trees identical from CSV and `.f32` on covertype, SUSY,
@@ -245,6 +250,9 @@ Change it to:
   - cuML: `fit` (copy, binning, build).
   - XGBoost: `QuantileDMatrix` and `train`.
   - Keep recording XGBoost's `QuantileDMatrix` part separately, as now.
+- [ ] An evaluation switch like the adapters' `eval=0|1`: today the last fit
+  always computes accuracy, predictions and the tree walk. The timing runs
+  keep evaluation on, after the timer; the end-to-end benchmark turns it off.
 - [ ] VRAM: peak above idle per process, sampled as now.
 - [ ] The "forest of 10 / 10" bars (library default forests) follow the same
   rule: one fit per process, no warm-up.
