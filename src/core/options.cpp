@@ -59,7 +59,7 @@ std::size_t handoffRows(const Options &options, std::size_t features) {
 
 void printUsage(const char *program) {
   std::cout
-      << "Usage: " << program << " [options] dataset.csv\n"
+      << "Usage: " << program << " [options] dataset.csv|dataset.f32\n"
       << "\n"
       << "Backend (default --multicore), the paper's five implementations:\n"
       << "  --simple                 Serial Simple: one thread, the textbook algorithm\n"
@@ -87,11 +87,14 @@ void printUsage(const char *program) {
       << "                           reduce the training errors.\n"
       << "\n"
       << "Data:\n"
-      << "  --rows N                 use only the first N rows of dataset.csv\n"
-      << "  --test FILE              test set: a CSV with the same header\n"
+      << "  --rows N                 use only the first N rows of the dataset\n"
+      << "  --test FILE              test set: a CSV or .f32 file with the same features\n"
       << "  --test-last N            test set: the last N rows of the training file\n"
       << "  --holdout F              test set: a random fraction F of the rows\n"
       << "  --seed N                 random seed for the holdout split (default 1)\n"
+      << "  A path ending in .f32 is a binary dataset (X.f32: row-major float32,\n"
+      << "  X.y.i32: int32 class index per row, meta.json: the names, as\n"
+      << "  bench/prepare.py writes them); any other path is a CSV.\n"
       << "\n"
       << "Run:\n"
       << "  --threads N              CPU threads for loading, evaluation and (multicore,\n"
@@ -272,7 +275,7 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
   }
   if (options.datasetPath.empty()) {
     throw std::runtime_error("No dataset given (" + std::string(argv[0]) +
-                             " [options] dataset.csv; --help lists the options)");
+                             " [options] dataset.csv|dataset.f32; --help lists the options)");
   }
   checkFlagCombination(options, given);
   return true;

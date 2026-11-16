@@ -48,6 +48,7 @@ make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,cod
 ./tree --c45 --prune 0.25 datasets/covertype.csv     # C4.5 as in Quinlan's c4.5: -m 2, CF 0.25
 ./tree --c45 --test-last 500000 datasets/higgs.csv   # official split: the last 500k rows are the test set
 ./tree --c45 --test test.csv train.csv               # test set in its own CSV (same header)
+./tree --c45 --test bench/data/higgs/test.f32 bench/data/higgs/train.f32  # binary input
 ./tree --c45 --hybrid --holdout 0.2 datasets/higgs.csv  # GPU + CPU; a random 20% of the rows as the test set
 ./tree --help
 ```
@@ -57,6 +58,18 @@ there); `tests/data/` has three small ones.
 
 The CSV needs a header; the last column is the class, a first column called
 `Id` is ignored, every other column must be numeric.
+
+A path ending in `.f32` is read as a binary dataset instead, the format
+`bench/prepare.py` writes (and the Python baselines read): `X.f32` holds the
+features as row-major little-endian float32, `X.y.i32` the class index of
+each row as little-endian int32, and `meta.json` in the same folder the
+names (`csv_features` and `csv_classes` when the dataset's CSV uses names
+of its own, else `features` and `classes`, the features quoted as in the
+header Arrow writes: `"f0"`). It gives exactly the tree its CSV gives (the
+same float32 values, feature names and class names) and, with nothing to
+parse, loads 3-5 times faster from the page cache (from a network file system
+the bytes decide: a dataset of small integers, such as MNIST8M, has a smaller
+CSV).
 
 The dataset is required. Without other flags `./tree` grows an unpruned CART
 tree with `--multicore`. The algorithms follow the published ones: CART as
@@ -94,7 +107,7 @@ A flag that the chosen backend would ignore (`--handoff-rows` without
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--test FILE` | off | The test set is another CSV with the same header (same features in the same order, label last). A class the training file lacks is reported, and its rows count as misclassified. |
+| `--test FILE` | off | The test set is another CSV or `.f32` file with the same features in the same order (a CSV: the same header, label last); the two files may differ in format. A class the training file lacks is reported, and its rows count as misclassified. |
 | `--test-last N` | 0 | The last N rows of the file are the test set, the others the training set (both in file order): the published split of HIGGS and SUSY is `--test-last 500000` on `datasets/higgs.csv` and `datasets/supersymmetry.csv`. |
 | `--holdout F` | 0 | Put a random fraction F of the rows aside, train on the rest and report the accuracy on the put-aside rows. Tested once, on one split. |
 | `--seed N` | 1 | Random seed for `--holdout`. The same seed gives the same split on every machine and backend; change it to see how much the result depends on the split. |
@@ -166,7 +179,7 @@ Every run prints:
 
 | Line | What it measures |
 |------|------------------|
-| `load` | Reading the CSV (not part of training). |
+| `load` | Reading the CSV or `.f32` file (not part of training). |
 | `gpu setup` | `--gpu`, `--hybrid`: allocating and uploading to the GPU. |
 | `presort` | Sorting every feature column once (needed by all backends). |
 | `build` | Growing the tree. |
@@ -215,7 +228,8 @@ detected" and an incomplete `.tree` file).
 | `src/app/trainer.*` | Puts it together: backend, growing, post-processing. |
 | `src/app/repeat.*` | `--repeat`: one tree per forked child, for energy measurements. |
 | `src/core/options.*` | All settings, grouped by algorithm and backend. |
-| `src/core/dataset.*` | Column-major dataset, parallel CSV loader. |
+| `src/core/dataset.*` | Column-major dataset, parallel CSV and `.f32` loaders. |
+| `src/core/json.*` | The little JSON reader for a `.f32` dataset's `meta.json`. |
 | `src/core/tree.*` | The tree (flat arrays in preorder), prediction, printing. |
 | `src/core/memory.cpp` | Large blocks on 2 MiB transparent huge pages (replaces global `operator new`). |
 | `src/core/trace.*`, `nvtx.h` | `--profile`: where the training time goes; NVTX ranges (`make NVTX=1`). |

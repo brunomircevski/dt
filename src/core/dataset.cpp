@@ -1,18 +1,24 @@
 #include "core/dataset.h"
 
+#include "core/json.h"
 #include "core/thread_pool.h"
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstring>
 #include <fcntl.h>
+#include <fstream>
+#include <iterator>
+#include <new>
 #include <numeric>
 #include <random>
 #include <stdexcept>
 #include <string_view>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <unordered_map>
@@ -21,10 +27,10 @@ namespace dt {
 
 namespace {
 
-// The CSV is read with pread() through a small buffer per thread, never mapped
-// or read whole: the loader holds at most a few MiB of text at a time, so the
-// process's peak memory is the dataset and the training structures, not a
-// copy of the file as well (as for a tool that reads a binary file).
+// The CSV (or a .f32 file) is read with pread() through a small buffer per
+// thread, never mapped or read whole: the loader holds at most a few MiB of
+// the file at a time, so the process's peak memory is the dataset and the
+// training structures, not a copy of the file as well.
 class InputFile {
 public:
   explicit InputFile(const std::string &path) {
@@ -298,9 +304,7 @@ void parseLines(const char *begin, const char *end, Chunk &chunk, std::size_t &r
   }
 }
 
-} // namespace
-
-Dataset loadDataset(const std::string &filePath, ThreadPool *pool, std::size_t maxRows) {
+Dataset loadCsv(const std::string &filePath, ThreadPool *pool, std::size_t maxRows) {
   const InputFile file(filePath);
 
   // Header: feature names. The last column is the label; "Id" is skipped.
@@ -413,6 +417,263 @@ Dataset loadDataset(const std::string &filePath, ThreadPool *pool, std::size_t m
   });
 
   return dataset;
+}
+
+// A binary dataset's names from its meta.json, exactly as loadCsv reads them
+// from the dataset's train.csv, so that both inputs give the same tree:
+// csv_features / csv_classes when train.csv is a link to a source with names
+// of its own, else features / classes. A train.csv without its own names is
+// written by Arrow, which quotes every name in the header (not the labels),
+// and loadCsv keeps the quotes: the features are then "f0", "f1", ...
+struct BinaryNames {
+  std::vector<std::string> features;
+  std::vector<std::string> classes; // class index in the .y.i32 file -> label text
+};
+
+BinaryNames readBinaryNames(const std::string &metaPath) {
+  std::ifstream input(metaPath, std::ios::binary);
+  if (!input) {
+    throw std::runtime_error("Could not open " + metaPath +
+                             " (a .f32 dataset needs the meta.json next to it)");
+  }
+  const std::string text{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+  Json meta;
+  try {
+    meta = parseJson(text);
+  } catch (const std::runtime_error &error) {
+    throw std::runtime_error(metaPath + ": " + error.what());
+  }
+  auto names = [&](const char *csvKey, const char *key) {
+    if (meta.find(csvKey)) {
+      key = csvKey;
+    }
+    const Json *list = meta.find(key);
+    const std::string error = metaPath + ": \"" + key + "\" must be a list of names";
+    if (!list || list->type != Json::Type::Array || list->items.empty()) {
+      throw std::runtime_error(error);
+    }
+    std::vector<std::string> out;
+    for (const Json &item : list->items) {
+      if (item.type != Json::Type::String) {
+        throw std::runtime_error(error);
+      }
+      out.push_back(item.text);
+    }
+    return out;
+  };
+  BinaryNames binary{names("csv_features", "features"), names("csv_classes", "classes")};
+  if (!meta.find("csv_features")) {
+    for (std::string &name : binary.features) {
+      name = '"' + name + '"';
+    }
+  }
+  return binary;
+}
+
+// A buffer straight from mmap, not from the heap: freeing a heap block of a
+// few MiB would raise glibc's mmap threshold, and the training's later
+// allocations would then stay on the heap (see forEachLines).
+class MappedBuffer {
+public:
+  explicit MappedBuffer(std::size_t bytes) : bytes_(bytes) {
+    data_ = ::mmap(nullptr, bytes_, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (data_ == MAP_FAILED) {
+      throw std::bad_alloc();
+    }
+  }
+  ~MappedBuffer() { ::munmap(data_, bytes_); }
+  MappedBuffer(const MappedBuffer &) = delete;
+  MappedBuffer &operator=(const MappedBuffer &) = delete;
+
+  char *data() const { return static_cast<char *>(data_); }
+
+private:
+  void *data_ = nullptr;
+  std::size_t bytes_ = 0;
+};
+
+// Exactly `length` bytes from `offset`, or an error naming the file.
+void readExactly(const InputFile &file, const std::string &path, std::size_t offset, char *out,
+                 std::size_t length) {
+  if (file.read(offset, out, length) != length) {
+    throw std::runtime_error("Dataset file changed while it was read: " + path);
+  }
+}
+
+// Copy `count` rows of row-major `rows` (`featureCount` floats each) into the
+// column-major `values` from row `firstRow` on. In tiles of 64 rows: a tile's
+// source rows stay in L1/L2 while each column receives 64 values, whole cache
+// lines, in a run.
+void scatterRows(const float *rows, std::size_t count, std::size_t featureCount,
+                 std::size_t firstRow, std::size_t rowCount, float *values) {
+  constexpr std::size_t kTile = 64;
+  for (std::size_t tile = 0; tile < count; tile += kTile) {
+    const std::size_t tileRows = std::min(kTile, count - tile);
+    const float *source = rows + tile * featureCount;
+    for (std::size_t feature = 0; feature < featureCount; ++feature) {
+      float *target = values + feature * rowCount + firstRow + tile;
+      for (std::size_t row = 0; row < tileRows; ++row) {
+        target[row] = source[row * featureCount + feature];
+      }
+    }
+  }
+}
+
+// A dataset as bench/prepare.py writes it: `path` (X.f32) holds the features,
+// row-major little-endian float32; X.y.i32 the class index of each row,
+// little-endian int32; meta.json in the same folder the names. Gives exactly
+// what loadCsv gives on the CSV of the same float32 values and labels.
+Dataset loadBinary(const std::string &path, ThreadPool *pool, std::size_t maxRows) {
+  static_assert(std::endian::native == std::endian::little,
+                "the .f32 / .y.i32 files are little-endian");
+  const std::string stem = path.substr(0, path.size() - 4); // without ".f32"
+  const std::string labelPath = stem + ".y.i32";
+  const std::size_t slash = path.rfind('/');
+  const std::string metaPath =
+      (slash == std::string::npos ? std::string() : path.substr(0, slash + 1)) + "meta.json";
+
+  BinaryNames names = readBinaryNames(metaPath);
+  const std::size_t featureCount = names.features.size();
+  const std::size_t rowBytes = featureCount * sizeof(float);
+  if (names.classes.size() > 65535) {
+    throw std::runtime_error("Too many distinct class labels");
+  }
+
+  std::size_t fileRows = 0;
+  {
+    const InputFile valueFile(path);
+    const InputFile labelFile(labelPath);
+    if (valueFile.size() % rowBytes != 0) {
+      throw std::runtime_error(path + ": " + std::to_string(valueFile.size()) +
+                               " bytes is not a whole number of rows of " +
+                               std::to_string(featureCount) + " float32 features (" + metaPath +
+                               ")");
+    }
+    fileRows = valueFile.size() / rowBytes;
+    if (labelFile.size() != fileRows * sizeof(std::int32_t)) {
+      throw std::runtime_error(labelPath + " has " +
+                               std::to_string(labelFile.size() / sizeof(std::int32_t)) +
+                               " labels, " + path + " " + std::to_string(fileRows) + " rows");
+    }
+  }
+  if (maxRows > fileRows) {
+    throw std::runtime_error("--rows " + std::to_string(maxRows) + ": " + path + " has only " +
+                             std::to_string(fileRows) + " rows");
+  }
+  const std::size_t rowCount = maxRows > 0 ? maxRows : fileRows;
+  if (rowCount > 0xFFFFFFFFull) {
+    throw std::runtime_error("Datasets are limited to 2^32 - 1 rows");
+  }
+
+  Dataset dataset;
+  dataset.featureNames = std::move(names.features);
+  dataset.rowCount = rowCount;
+  dataset.values.resize(featureCount * rowCount);
+  dataset.labels.resize(rowCount);
+
+  // One contiguous range of rows per thread, read through its own
+  // descriptors (one sequential stream per thread for the kernel's
+  // read-ahead) in blocks of about 4 MiB, scattered into the columns and
+  // dropped from the page cache: as for the CSV, the process never holds a
+  // copy of the file, and the cache does not grow next to the values.
+  constexpr std::size_t kBlockBytes = std::size_t{4} << 20;
+  constexpr std::size_t kForgetBytes = std::size_t{64} << 20;
+  const std::size_t blockRows = std::max<std::size_t>(1, kBlockBytes / rowBytes);
+  const std::size_t classCount = names.classes.size();
+  const unsigned threadCount = pool ? pool->workerCount() + 1 : 1;
+  const std::size_t chunkCount = std::min<std::size_t>(threadCount, rowCount);
+  std::vector<std::vector<std::uint8_t>> present(chunkCount); // class indices seen, per chunk
+  parallelFor(pool, chunkCount, [&](std::size_t chunk) {
+    const std::size_t first = rowCount * chunk / chunkCount;
+    const std::size_t last = rowCount * (chunk + 1) / chunkCount;
+    const InputFile valueFile(path);
+    const InputFile labelFile(labelPath);
+    const MappedBuffer buffer(blockRows * (rowBytes + sizeof(std::int32_t)));
+    float *rows = reinterpret_cast<float *>(buffer.data());
+    std::int32_t *labels = reinterpret_cast<std::int32_t *>(buffer.data() + blockRows * rowBytes);
+    std::vector<std::uint8_t> &seen = present[chunk];
+    seen.assign(classCount, 0);
+    std::size_t forgotten = first; // the page cache holds none of the rows before this
+    for (std::size_t row = first; row < last;) {
+      const std::size_t count = std::min(blockRows, last - row);
+      readExactly(valueFile, path, row * rowBytes, buffer.data(), count * rowBytes);
+      readExactly(labelFile, labelPath, row * sizeof(std::int32_t),
+                  reinterpret_cast<char *>(labels), count * sizeof(std::int32_t));
+      // The CSV loader rejects NaN (no split could place it); so does this one.
+      bool anyNan = false;
+      for (std::size_t index = 0; index < count * featureCount; ++index) {
+        anyNan |= std::isnan(rows[index]);
+      }
+      if (anyNan) {
+        const float *nan = std::find_if(rows, rows + count * featureCount,
+                                        [](float value) { return std::isnan(value); });
+        const std::size_t index = static_cast<std::size_t>(nan - rows);
+        throw std::runtime_error(path + ": NaN in row " +
+                                 std::to_string(row + index / featureCount) + ", feature " +
+                                 std::to_string(index % featureCount));
+      }
+      scatterRows(rows, count, featureCount, row, rowCount, dataset.values.data());
+      for (std::size_t index = 0; index < count; ++index) {
+        const std::int32_t label = labels[index];
+        if (label < 0 || static_cast<std::size_t>(label) >= classCount) {
+          throw std::runtime_error(labelPath + ": class index " + std::to_string(label) +
+                                   " in row " + std::to_string(row + index) + ", but " +
+                                   metaPath + " lists " + std::to_string(classCount) +
+                                   " classes");
+        }
+        seen[static_cast<std::size_t>(label)] = 1;
+        dataset.labels[row + index] = static_cast<std::uint16_t>(label);
+      }
+      row += count;
+      if ((row - forgotten) * rowBytes >= kForgetBytes || row == last) {
+        valueFile.forget(forgotten * rowBytes, (row - forgotten) * rowBytes);
+        labelFile.forget(forgotten * sizeof(std::int32_t),
+                         (row - forgotten) * sizeof(std::int32_t));
+        forgotten = row;
+      }
+    }
+  });
+
+  // Class ids as loadCsv numbers them: the label texts of the loaded rows in
+  // text order ("c10" before "c2"), so a class absent from the rows (--rows)
+  // has no id, and two indices with the same text share one.
+  std::vector<std::string> classNames;
+  for (std::size_t index = 0; index < classCount; ++index) {
+    for (const std::vector<std::uint8_t> &seen : present) {
+      if (seen[index]) {
+        classNames.push_back(names.classes[index]);
+        break;
+      }
+    }
+  }
+  std::sort(classNames.begin(), classNames.end());
+  classNames.erase(std::unique(classNames.begin(), classNames.end()), classNames.end());
+  std::vector<std::uint16_t> idOf(classCount, 0);
+  for (std::size_t index = 0; index < classCount; ++index) {
+    idOf[index] = static_cast<std::uint16_t>(
+        std::lower_bound(classNames.begin(), classNames.end(), names.classes[index]) -
+        classNames.begin());
+  }
+  dataset.classNames = std::move(classNames);
+  parallelFor(pool, chunkCount, [&](std::size_t chunk) {
+    const std::size_t first = rowCount * chunk / chunkCount;
+    const std::size_t last = rowCount * (chunk + 1) / chunkCount;
+    for (std::size_t row = first; row < last; ++row) {
+      dataset.labels[row] = idOf[dataset.labels[row]];
+    }
+  });
+  return dataset;
+}
+
+} // namespace
+
+Dataset loadDataset(const std::string &filePath, ThreadPool *pool, std::size_t maxRows) {
+  constexpr std::string_view kBinary = ".f32";
+  if (filePath.size() > kBinary.size() &&
+      std::string_view(filePath).substr(filePath.size() - kBinary.size()) == kBinary) {
+    return loadBinary(filePath, pool, maxRows);
+  }
+  return loadCsv(filePath, pool, maxRows);
 }
 
 namespace {

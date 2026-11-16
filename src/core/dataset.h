@@ -68,7 +68,11 @@ DistinctValues distinctValues(const Dataset &dataset);
 
 // Load a CSV with a header line. The last column is the class label; a first
 // column named "Id" (any case) is ignored; every other column must be numeric.
-// Parsing runs on the pool (or on the calling thread if `pool` is null).
+// A path ending in ".f32" is instead a binary dataset as bench/prepare.py
+// writes it: X.f32 (row-major float32), X.y.i32 (int32 class index per row)
+// and meta.json in the same folder (feature and class names); it loads
+// exactly as the CSV of the same values would, many times faster.
+// Loading runs on the pool (or on the calling thread if `pool` is null).
 // maxRows > 0: only the file's first maxRows rows (the file must have them),
 // so a dataset's first N rows need no file of their own.
 Dataset loadDataset(const std::string &filePath, ThreadPool *pool, std::size_t maxRows = 0);

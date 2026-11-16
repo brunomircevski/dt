@@ -80,14 +80,14 @@ struct GpuOptions {
 struct Options {
   std::string datasetPath; // required
   // --rows N: only the training file's first N rows (0 = all), e.g. sorel_4m
-  // from SOREL's CSV without a copy of its first 4M rows. --test-last and
+  // from SOREL's files without a copy of their first 4M rows. --test-last and
   // --holdout then split these rows.
   std::size_t rows = 0;
   Backend backend = Backend::Multicore;
   Algorithm algorithm = Algorithm::Cart;
 
   // The test set, at most one of these three (none: no test accuracy):
-  // a separate CSV with the same header as the training file,
+  // a separate file (CSV or .f32) with the same features as the training file,
   std::string testPath;
   // the last N rows of the training file (e.g. HIGGS's and SUSY's published
   // split: their last 500,000 rows), or
