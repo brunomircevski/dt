@@ -10,6 +10,8 @@
 #                                  # 5 runs a case, only those kinds (the 2026-11-15 rerun)
 #   bench/cluster/final.sh -N epyc1,epyc2,dell1,dell2,dell3
 #                                  # only those nodes' chains (the GPU nodes later)
+#   bench/cluster/final.sh -D higgs,susy -k gpu,cpu,scaling,serial,simple,vs,gpulibs,e2e
+#                                  # only those datasets' runs (a first part of the rerun)
 #
 # Every run is one fresh process that trains one tree, no warm-up
 # (BENCHMARK-CHANGES.MD, section 1).
@@ -19,6 +21,8 @@
 #   maybe rpart on MNIST8M).
 # -N NODES: comma-separated, only these nodes' chains are checked and submitted
 #   (default all: hopper ampere epyc1 epyc2 dell1 dell2 dell3).
+# -D DATASETS: comma-separated, only these datasets' runs (plan lines, gpulibs,
+#   hybrid); a kind left without a dataset is skipped.
 # -k KINDS: comma-separated, default all of
 #   gpu        --hybrid and --gpu on hopper and ampere, every dataset that fits in 80 GB
 #   cpu        --multicore, 48 threads on both sockets, epyc1 and dell1
@@ -56,15 +60,16 @@
 set -euo pipefail
 ALL_KINDS=gpu,cpu,scaling,serial,simple,vs,gpulibs,profiling,hybrid,e2e
 ALL_NODES=hopper,ampere,epyc1,epyc2,dell1,dell2,dell3
-TEST= SUBMIT=1 RUNS= KINDS=$ALL_KINDS NODES=$ALL_NODES
-while getopts "tnm:k:N:h" option; do
+TEST= SUBMIT=1 RUNS= KINDS=$ALL_KINDS NODES=$ALL_NODES ONLY_DATA=
+while getopts "tnm:k:N:D:h" option; do
   case "$option" in
     t) TEST=1 ;;
     n) SUBMIT= ;;
     m) RUNS="$OPTARG" ;;
     k) KINDS="$OPTARG" ;;
     N) NODES="$OPTARG" ;;
-    *) sed -n '2,56p' "$0"; exit 2 ;;
+    D) ONLY_DATA="$OPTARG" ;;
+    *) sed -n '2,59p' "$0"; exit 2 ;;
   esac
 done
 for n in ${NODES//,/ }; do
@@ -251,6 +256,17 @@ declare -A CHAIN=(
   [dell2]="dell2-1 dell2-2"
   [dell3]="dell3-1 dell3-2"
 )
+# -D: only those datasets' plan lines, gpulibs and hybrid runs
+if [ -n "$ONLY_DATA" ]; then
+  only() { local d out=; for d in $1; do [[ ",$ONLY_DATA," == *",$d,"* ]] && out+="$d "; done; echo "${out% }"; }
+  for f in "$PLANS"/final-*.txt; do
+    [ -e "$f" ] || continue
+    awk -v only=",$ONLY_DATA," 'index(only, "," $4 ",")' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  done
+  GPULIBS_DATA=$(only "$GPULIBS_DATA") HYBRID_DATA=$(only "$HYBRID_DATA")
+  [ -n "$GPULIBS_DATA" ] || KINDS=$(echo ",$KINDS," | sed 's/,gpulibs,/,/; s/^,//; s/,$//')
+  [ -n "$HYBRID_DATA" ] || KINDS=$(echo ",$KINDS," | sed 's/,hybrid,/,/; s/^,//; s/,$//')
+fi
 # The plan files of the chosen nodes' chains (-N); the others are removed.
 chosen=()
 for node in ${NODES//,/ }; do for step in ${CHAIN[$node]}; do
