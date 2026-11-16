@@ -1,13 +1,18 @@
 {
  "ampere": {
+  "ecbdl_15m": {
+   "depth10": 4096
+  },
   "higgs": {
    "depth10": 1024,
    "nodepth": 512
   },
   "mnist8m": {
+   "depth10": 1024,
    "nodepth": 8192
   },
   "sorel_4m": {
+   "depth10": 1024,
    "nodepth": 16384
   },
   "susy": {
@@ -15,21 +20,23 @@
   }
  },
  "hopper": {
-  "airline": {
-   "depth10": 512
+  "ecbdl_15m": {
+   "depth10": 4096
   },
   "higgs": {
-   "depth10": 256,
+   "depth10": 512,
    "nodepth": 256
   },
   "mnist8m": {
+   "depth10": 2048,
    "nodepth": 8192
   },
   "sorel_4m": {
+   "depth10": 1024,
    "nodepth": 16384
   },
   "susy": {
-   "depth10": 512
+   "depth10": 1024
   }
  }
 }

@@ -297,6 +297,32 @@ once by `bench/cluster/handoff_sweep.sh`, results in
 `bench/results/handoff-sweep/`). Do not sweep again in the rerun; a missing
 entry falls back to ./tree's default.
 
+The stored values (swept 2026-11-16 at 291a736f, binary input, 5 runs per
+value of 256–32,768 and ./tree's default, CART and C4.5 at depth 10). The pick
+is the smallest mean, over CART and C4.5, of the time over that protocol's
+fastest, timed without the GPU setup (`train_seconds - gpu_setup_seconds`).
+The allocation and upload do not depend on the value, and on the H100 they
+take one of two speeds from run to run, which would otherwise decide a close
+sweep (ECBDL'14 15M). `nodepth` is the earlier no-limit sweep
+(`bench/results/hybrid-vs-gpu-only/sweep/`, f53347a9), re-picked the same way
+with unchanged values. `run.py` uses `depth10` for `-d 5` and `-d 10`, and
+`nodepth` for `-d 15` to `-d 30` and for no limit. Chess has no entry: its
+depth-10 tree has no node small enough to hand off, so the value cannot
+matter, and it runs at ./tree's default.
+
+| Dataset | Node | `depth10` | ./tree default | CART best / default (s, presort + build) | C4.5 best / default (s, presort + build) | `nodepth` (f53347a9) |
+|---|---|--:|--:|--:|--:|--:|
+| susy | hopper | 1,024 | 512 | 0.024 / 0.024 | 0.029 / 0.030 | – |
+| susy | ampere | 1,024 | 512 | 0.034 / 0.035 | 0.039 / 0.040 | – |
+| higgs | hopper | 512 | 512 | 0.066 / 0.066 | 0.083 / 0.082 | 256 |
+| higgs | ampere | 1,024 | 512 | 0.095 / 0.096 | 0.115 / 0.116 | 512 |
+| ecbdl_15m | hopper | 4,096 | 6,310 | 1.691 / 1.700 | 1.714 / 1.711 | – |
+| ecbdl_15m | ampere | 4,096 | 6,310 | 2.409 / 2.433 | 2.438 / 2.447 | – |
+| mnist8m | hopper | 2,048 | 7,840 | 1.418 / 1.474 | 1.395 / 1.386 | 8,192 |
+| mnist8m | ampere | 1,024 | 7,840 | 1.885 / 2.047 | 1.887 / 1.875 | 8,192 |
+| sorel_4m | hopper | 1,024 | 16,384 | 1.650 / 1.790 | 1.676 / 1.659 | 16,384 |
+| sorel_4m | ampere | 1,024 | 16,384 | 2.367 / 2.636 | 2.377 / 2.352 | 16,384 |
+
 Before the full run, run `final.sh -t` (one run of each kind into
 `cluster-test/`) and check every kind works. Then move the old run folders out
 of the way (`git rm`; they stay in git history) so `final.sh`'s clash check

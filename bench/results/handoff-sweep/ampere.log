@@ -22,3 +22,54 @@
 2026-11-16 16:01:21  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr256
 2026-11-16 16:17:30  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr512
 [2026-11-16T16:30:57.705] error: *** JOB 215 ON ampere CANCELLED AT 2026-11-16T16:30:57 DUE to SIGNAL Terminated ***
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mrdefault kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mr256 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mr512 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mr1024 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mr2048 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mr4096 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mr8192 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mr16384 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-susy-mr32768 kept
+2026-11-16 17:12:29  susy (depth10): --handoff-rows 1024
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mrdefault kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mr256 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mr512 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mr1024 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mr2048 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mr4096 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mr8192 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mr16384 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-higgs-mr32768 kept
+2026-11-16 17:12:29  higgs (depth10): --handoff-rows 1024
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mrdefault kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr256 kept
+2026-11-16 17:12:29  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr512
+2026-11-16 17:30:32  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr1024
+2026-11-16 17:47:57  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr2048
+2026-11-16 18:05:02  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr4096
+2026-11-16 18:21:21  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr8192
+2026-11-16 18:37:14  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr16384
+2026-11-16 18:53:46  handoff-sweep/depth10/cuda-ampere-ecbdl_15m-mr32768
+2026-11-16 19:11:44  ecbdl_15m (depth10): --handoff-rows 4096
+2026-11-16 19:11:44  handoff-sweep/depth10/cuda-ampere-mnist8m-mrdefault
+2026-11-16 19:23:16  handoff-sweep/depth10/cuda-ampere-mnist8m-mr256
+2026-11-16 19:35:38  handoff-sweep/depth10/cuda-ampere-mnist8m-mr512
+2026-11-16 19:48:07  handoff-sweep/depth10/cuda-ampere-mnist8m-mr1024
+2026-11-16 19:59:58  handoff-sweep/depth10/cuda-ampere-mnist8m-mr2048
+2026-11-16 20:11:02  handoff-sweep/depth10/cuda-ampere-mnist8m-mr4096
+2026-11-16 20:21:42  handoff-sweep/depth10/cuda-ampere-mnist8m-mr8192
+2026-11-16 20:31:49  handoff-sweep/depth10/cuda-ampere-mnist8m-mr16384
+2026-11-16 20:42:05  handoff-sweep/depth10/cuda-ampere-mnist8m-mr32768
+2026-11-16 20:52:51  mnist8m (depth10): --handoff-rows 1024
+2026-11-16 20:52:51  handoff-sweep/depth10/cuda-ampere-sorel_4m-mrdefault
+2026-11-16 21:11:48  handoff-sweep/depth10/cuda-ampere-sorel_4m-mr256
+2026-11-16 21:32:29  handoff-sweep/depth10/cuda-ampere-sorel_4m-mr512
+2026-11-16 21:56:06  handoff-sweep/depth10/cuda-ampere-sorel_4m-mr1024
+2026-11-16 22:18:10  handoff-sweep/depth10/cuda-ampere-sorel_4m-mr2048
+2026-11-16 22:38:47  handoff-sweep/depth10/cuda-ampere-sorel_4m-mr4096
+2026-11-16 22:58:25  handoff-sweep/depth10/cuda-ampere-sorel_4m-mr8192
+2026-11-16 23:17:15  handoff-sweep/depth10/cuda-ampere-sorel_4m-mr16384
+2026-11-16 23:36:38  handoff-sweep/depth10/cuda-ampere-sorel_4m-mr32768
+2026-11-16 23:55:23  sorel_4m (depth10): --handoff-rows 1024
+2026-11-16 23:55:23  done

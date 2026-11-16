@@ -5,7 +5,10 @@
 reads <folder>/cuda-<node>-<dataset>-mr<value>/results.jsonl for each value
 ("default" = ./tree's own), writes <folder>/<node>-<dataset>.json and prints
 the value taken: the smallest mean, over the protocols, of its training time
-over that protocol's fastest. "default" is measured for reference only. The
+without the GPU setup (train_seconds - gpu_setup_seconds: presort and build,
+what the hand-off acts on) over that protocol's fastest. The setup (allocation
+and upload) does not depend on the value, and on the H100 it takes one of two
+speeds from run to run (docs/PERFORMANCE.md), enough to decide a close sweep. "default" is measured for reference only. The
 value is also stored in bench/handoff_rows.json under node, dataset and <key>
 ("depth10", "nodepth"), where bench/run.py takes it for every --hybrid run.
 """
@@ -17,14 +20,15 @@ import sys
 from pathlib import Path
 
 folder, node, dataset, key, values = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5:]
-times = {}  # value -> {protocol: mean training seconds}
+times = {}  # value -> {protocol: mean training seconds without the GPU setup}
 for value in values:
     results = folder / f"cuda-{node}-{dataset}-mr{value}" / "results.jsonl"
     rows = [json.loads(line) for line in results.read_text().splitlines()] if results.exists() else []
     by = {}
     for row in rows:
         if row.get("kind") == "run" and row.get("status") == "ok":
-            by.setdefault(row["protocol"], []).append(row["train_seconds"])
+            by.setdefault(row["protocol"], []).append(
+                row["train_seconds"] - row.get("gpu_setup_seconds", 0.0))
     if by:
         times[value] = {p: statistics.mean(v) for p, v in by.items()}
 protocols = set().union(*times.values()) if times else set()
