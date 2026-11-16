@@ -12,8 +12,9 @@
 #   REPLACE=1 sbatch ...   first moves the IMPLS' earlier rows out of each
 #   dataset's results.jsonl (to results.jsonl.before-<job id>)
 #   TREES="1 10" DEPTH=19 sbatch ...   the libraries' fits with 1 and with 10
-#   trees each, depth <= 19 (default: TREES=1, DEPTH=10; ./tree always grows
-#   one tree, at depth 19). REPS: timed fits per process (default 10). A forest that fails with cuML's default 4 streams
+#   trees each, depth <= 19 (default: TREES=1, DEPTH=10; IMPLS tree and
+#   tree_gpu, not used now, grow one tree at depth 19). REPS: timed fits per
+#   process (default 10). A forest that fails with cuML's default 4 streams
 #   (out of GPU memory) is run again with N_STREAMS=1.
 #   RESULTS=$HOME/gpu-dt-bench/results-forest sbatch ...   where results go
 #   CUML_WARMUP_ROWS=0 sbatch ...   cuML's untimed warm-up fit on all rows
@@ -94,8 +95,10 @@ for line in open(sys.argv[1]):
         sys.stdout.write(line)' "$OUT/results.jsonl.before-${SLURM_JOB_ID:-$$}" > "$OUT/results.jsonl"
   fi
   for impl in $IMPLS; do
-    for case in cart c45; do
-      [ "$impl" = xgboost ] && [ "$case" = c45 ] && continue  # no entropy criterion
+    # The libraries: CART only. No GPU library grows C4.5 trees, and an
+    # entropy tree is not C4.5, so C4.5 has no GPU competitor.
+    cases=cart; { [ "$impl" = tree ] || [ "$impl" = tree_gpu ]; } && cases="cart c45"
+    for case in $cases; do
       if [ "$impl" = tree ] || [ "$impl" = tree_gpu ]; then
         mode=split; [ "$impl" = tree_gpu ] && mode=gpu
         run ${BIND[@]+"${BIND[@]}"} $PY $B/treebench.py "$TREE" $dataset $case "$REPS" "$OUT/results.jsonl" "$OUT/pred" "$SCRATCH" $mode

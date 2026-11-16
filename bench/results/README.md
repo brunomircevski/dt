@@ -42,7 +42,7 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 | Directory | What | Main result |
 |---|---|---|
 | [`cluster-cpu-vs-others`](cluster-cpu-vs-others/BENCHMARK.md) | ./tree `--simple`, `--serial`, `--multicore` on epyc against scikit-learn (CART) and Weka J48 (C4.5), one thread | HIGGS: `--multicore` 660× scikit-learn and 2,400× J48, `--serial` 27× and 112×; the same trees (J48's C4.5 on HIGGS 923 against 935 nodes). |
-| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--hybrid` and `--gpu` against cuML (Gini; entropy for C4.5) and XGBoost (Gini-equivalent, CART only), one tree and a default forest of 10, H100 and A100 | One tree: ./tree 2.6–3.9× faster than cuML and 9–20× than XGBoost; cuML's default forest is faster per tree. |
+| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--hybrid` and `--gpu` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree and a default forest of 10, H100 and A100 | One CART tree: ./tree 2.9–3.9× faster than cuML and 9–20× than XGBoost; cuML's default forest is faster per tree. |
 
 ## A new node or machine
 

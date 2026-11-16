@@ -143,11 +143,11 @@ def gpu_bars(res, dataset, algo):
     protocol = ALGOS[algo][1]
     d, g = res / f"cluster-{dataset}", res / "cluster-gpu-vs-others"
     impls = [("./tree hybrid", lambda n: summary(d / f"cuda-{n}-{dataset}", protocol)),
-             ("./tree GPU only", lambda n: summary(d / f"gpuonly-{n}-{dataset}", protocol)),
-             ("cuML, 1 tree", lambda n: library(g, dataset, n, "cuml", algo, 1)),
-             ("cuML, forest of 10 / 10", lambda n: library(g, dataset, n, "cuml", algo, 10))]
-    if algo == "cart":
-        impls += [("XGBoost, 1 tree", lambda n: library(g, dataset, n, "xgboost", algo, 1)),
+             ("./tree GPU only", lambda n: summary(d / f"gpuonly-{n}-{dataset}", protocol))]
+    if algo == "cart":  # no GPU library grows C4.5 trees (an entropy tree is not C4.5)
+        impls += [("cuML, 1 tree", lambda n: library(g, dataset, n, "cuml", algo, 1)),
+                  ("cuML, forest of 10 / 10", lambda n: library(g, dataset, n, "cuml", algo, 10)),
+                  ("XGBoost, 1 tree", lambda n: library(g, dataset, n, "xgboost", algo, 1)),
                   ("XGBoost, forest of 10 / 10", lambda n: library(g, dataset, n, "xgboost", algo, 10))]
     return [(f"{name} — {GPU_NAMES[n].split(' (')[0]}", GPU_COLORS[n], fn(n)) for name, fn in impls
             for n in GPU_COLORS]
@@ -182,7 +182,7 @@ def draw(kind, res, out):
     else:
         head = ("./tree against cuML and XGBoost on the GPU: one tree, depth ≤ 10, no pruning, all rows and features; "
                 "one GPU and every CPU of the node")
-        note = ("cuML RandomForestClassifier, 1 tree on every row and feature (128 bins; C4.5: entropy); XGBoost hist, "
+        note = ("cuML RandomForestClassifier, 1 tree on every row and feature (128 bins, Gini); XGBoost hist, "
                 "squared error, λ 0 (256 bins; = Gini; MNIST8M: one multi-output tree on the one-hot labels).\n"
                 "Forest of 10 / 10: the library's random-forest defaults (cuML bootstrap and √features; XGBoost RF 0.8 "
                 "of rows and features), its time divided by 10. ./tree hybrid: --hybrid, GPU only: --gpu.")

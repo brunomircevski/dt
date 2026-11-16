@@ -239,10 +239,10 @@ def dots():
                  ("cpu", lambda d: ours(d, "cpu", "epyc", algo)),
                  ("cuda", lambda d: ours(d, "cuda", "hopper", algo)),
                  ("sklearn" if algo == "cart" else "j48",
-                  lambda d: cpu_other(d, "sklearn" if algo == "cart" else "j48", algo)),
-                 ("cuml", lambda d: gpu_other(d, "cuml", algo))]
-        if algo == "cart":
-            impls.append(("xgboost", lambda d: gpu_other(d, "xgboost", algo)))
+                  lambda d: cpu_other(d, "sklearn" if algo == "cart" else "j48", algo))]
+        if algo == "cart":  # no GPU library grows C4.5 trees (an entropy tree is not C4.5)
+            impls += [("cuml", lambda d: gpu_other(d, "cuml", algo)),
+                      ("xgboost", lambda d: gpu_other(d, "xgboost", algo))]
         mine = {"serial", "cpu", "cuda"}
         for y, ds in enumerate(datasets):
             ax.axhline(y, color=GRID, lw=0.4, zorder=0)
@@ -416,7 +416,7 @@ def depth():
 
 # ---------------------------------------------------------------- 5. pareto
 def pareto(ds="higgs"):
-    # broken y axis: the CART trees (top) and the C4.5/entropy trees (bottom) are
+    # broken y axis: the CART trees (top) and the C4.5 trees (bottom) are
     # 7 points apart; each band is zoomed so the small accuracy gaps show
     fig, (top, bot) = plt.subplots(2, 1, figsize=(HALF, 2.05), sharex=True,
                                    gridspec_kw={"height_ratios": [1, 1], "hspace": 0.08})
@@ -426,13 +426,13 @@ def pareto(ds="higgs"):
             r = ours(ds, k, node, algo)
             mem = r["gpu_peak"] if k == "cuda" else r["peak_rss"]
             pts.append((k, algo, r["time_mean"], r["test_accuracy"], mem, True))
-        r = cpu_other(ds, "sklearn", algo)  # sklearn's C4.5 stand-in: entropy tree
+        r = cpu_other(ds, "sklearn", algo) if algo == "cart" else None  # no C4.5 stand-ins
         if r:
             pts.append(("sklearn", algo, r["time_mean"], r["test_accuracy"], r["peak_rss"], False))
         if algo == "c45":
             r = cpu_other(ds, "j48", algo)
             pts.append(("j48", algo, r["time_mean"], r["test_accuracy"], r["peak_rss"], False))
-        for k in (["cuml", "xgboost"] if algo == "cart" else ["cuml"]):
+        for k in (["cuml", "xgboost"] if algo == "cart" else []):  # no GPU C4.5
             r = gpu_other(ds, k, algo)
             if r:
                 pts.append((k, algo, r["time_mean"], r["test_accuracy"], r["gpu_peak"], False))
@@ -459,12 +459,12 @@ def pareto(ds="higgs"):
     bot.set_xlim(0.08, 2000)
     bot.set_xlabel("training time (s)")
     fig.supylabel("test accuracy (\\%)", fontsize=8, x=-0.1)
-    top.text(0.02, 0.06, "CART + sklearn/cuML entropy", transform=top.transAxes, fontsize=5.5, color=MUTED)
+    top.text(0.02, 0.06, "CART (Gini)", transform=top.transAxes, fontsize=5.5, color=MUTED)
     bot.text(0.02, 0.06, "C4.5 (gain ratio, exact)", transform=bot.transAxes, fontsize=5.5, color=MUTED)
     h = [Line2D([], [], ls="", marker="o", color=STYLE[k][1], ms=3.5, label=STYLE[k][0])
          for k in ["serial", "cpu", "cuda", "sklearn", "j48", "cuml", "xgboost"]]
     h += [Line2D([], [], ls="", marker="o", color=MUTED, ms=3.5, label="CART"),
-          Line2D([], [], ls="", marker="s", mfc="white", color=MUTED, ms=3.5, label="C4.5/entr.")]
+          Line2D([], [], ls="", marker="s", mfc="white", color=MUTED, ms=3.5, label="C4.5")]
     top.legend(handles=h, loc="upper left", bbox_to_anchor=(1.0, 1.05), fontsize=5.8,
                labelspacing=0.25, handletextpad=0.1)
     bot.text(1.04, 0.0, DATA[ds][0] + "\nmarker area\n" + r"$\propto$ peak RAM" + "\nor VRAM",

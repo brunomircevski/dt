@@ -1,10 +1,12 @@
-# GPU vs others: ./tree against cuML and XGBoost on HIGGS and MNIST8M
+# GPU vs others: ./tree against cuML and XGBoost on HIGGS and MNIST8M (CART)
 
 One tree per run, grown to depth ≤ 10 without pruning on every training row and feature, scored on the dataset's test set, on the H100 PCIe of hopper and the A100 80 GB PCIe of ampere: one GPU and every CPU of the node, as ./tree's CUDA runs. cuML and XGBoost also grow a forest of 10 trees with their own random-forest defaults; its time divided by 10 is the bar "forest of 10 / 10".
 
 **Final data:** ./tree rerun on 2026-11-15/16 (f53347a9, `src/` = d2957ff2; `bench/cluster/final.sh -m 5`, 5 runs per case); cuML and XGBoost from 2026-11-09/10, 10 timed fits per case, not rerun (their code has not changed). The chart gives every bar's runs. XGBoost on MNIST8M first ran out of memory and stalled in `gpubench.py`'s tree walk; it was rerun on 2026-11-10 with the fixes (538fc78; `logs/*-first.log` are the first pass, with every other library run). Until 2026-11-09 this benchmark also had SUSY, airline, ECBDL'14 15M and chess 1000M; those runs are in git at 3354a8a.
 
 ![./tree against cuML and XGBoost, HIGGS and MNIST8M, CART and C4.5, H100 and A100](chart.png)
+
+*The chart predates the removal of the cuML entropy runs and still shows them in its C4.5 panels; `vs_chart.py gpu` draws the C4.5 panels with ./tree's bars only. It is redrawn with the rerun.*
 
 ```bash
 bench/cluster/final.sh            # queues the libraries on hopper and ampere after ./tree's runs
@@ -19,9 +21,7 @@ Mean of the runs (./tree 5, the libraries 10), H100 (A100 in brackets); the char
 | | ./tree hybrid | cuML, 1 tree | XGBoost, 1 tree | ./tree faster than cuML / XGBoost |
 |---|--:|--:|--:|--:|
 | HIGGS CART | 0.131 s (0.175) | 0.450 s (0.507) | 2.62 s (2.72) | 3.4× / 20× (2.9× / 16×) |
-| HIGGS C4.5 (cuML: entropy) | 0.154 s (0.194) | 0.453 s (0.506) | — | 2.9× (2.6×) |
 | MNIST8M CART | 2.03 s (3.10) | 7.96 s (10.4) | 26.7 s (29.0) | 3.9× / 13× (3.3× / 9.4×) |
-| MNIST8M C4.5 (cuML: entropy) | 2.12 s (3.10) | 7.99 s (10.4) | — | 3.8× (3.4×) |
 
 - **./tree --gpu** takes the same time as the hybrid (within 2–6%) with a third of its RAM (MNIST8M 24 against 72 GB).
 - **Against the runs before (./tree f1fe270):** ./tree is 8–20% faster on HIGGS and 40–48% on MNIST8M, so its lead over cuML grew from 2.0–2.8× to 2.6–3.9×.
@@ -32,16 +32,16 @@ Mean of the runs (./tree 5, the libraries 10), H100 (A100 in brackets); the char
 
 ## What is compared
 
-No public CUDA implementation of C4.5 was found (the GPU C4.5 papers publish no code). Every GPU tree library still in use builds binary Gini, entropy or second-order-gain trees on histogram bins: it splits only at the edges of a fixed number of quantile bins per feature (cuML 128, XGBoost 256). ./tree tests every distinct value.
+**CART only.** No public CUDA implementation of C4.5 was found (the GPU C4.5 papers publish no code), and an entropy (information-gain) tree is not C4.5, so ./tree's C4.5 has no GPU competitor and no library runs C4.5 here. The cuML entropy runs that stood in for C4.5 until 2026-11-16 were removed from the data and the harness. Every GPU tree library still in use builds binary Gini, entropy or second-order-gain trees on histogram bins: it splits only at the edges of a fixed number of quantile bins per feature (cuML 128, XGBoost 256). ./tree tests every distinct value.
 
 | Implementation | Version | Settings |
 |---|---|---|
 | **./tree --hybrid** and **--gpu** | the build of the test-set benchmarks | `--cart -d 10` (exact Gini), `--c45 -d 10` (C4.5 gain ratio), no pruning; its bars are `cluster-<data>/cuda-<node>-<data>` and `gpuonly-<node>-<data>` |
-| **cuML** `RandomForestClassifier` | 26.10 | 1 tree: `n_estimators=1, bootstrap=False, max_features=1.0, n_bins=128, max_depth=10`. CART: Gini. C4.5 stand-in: entropy (information gain), `min_samples_leaf=2` |
-| **XGBoost** | 3.4.1, `device="cuda", tree_method="hist"` | `reg:squarederror` with `eta=1, lambda=0`, 256 bins, `max_depth=10`, one round: on 0/1 labels the gain is n/2 × the drop in Gini impurity, so the CART split on bins. MNIST8M (10 classes): one multi-output tree (`multi_strategy="multi_output_tree"`) on the one-hot labels, whose summed squared error is again n/2 × the Gini drop. No entropy criterion, so CART only |
+| **cuML** `RandomForestClassifier` | 26.10 | 1 tree: `n_estimators=1, bootstrap=False, max_features=1.0, n_bins=128, max_depth=10`, Gini |
+| **XGBoost** | 3.4.1, `device="cuda", tree_method="hist"` | `reg:squarederror` with `eta=1, lambda=0`, 256 bins, `max_depth=10`, one round: on 0/1 labels the gain is n/2 × the drop in Gini impurity, so the CART split on bins. MNIST8M (10 classes): one multi-output tree (`multi_strategy="multi_output_tree"`) on the one-hot labels, whose summed squared error is again n/2 × the Gini drop. |
 
 - **Forest of 10 / 10** (`gpubench.py FOREST=default`): each library's own random-forest defaults, only the criterion and `max_depth=10` set. cuML: bootstrap samples, `max_features="sqrt"`, 128 bins, `n_streams=4`. XGBoost (as `XGBRFClassifier`): `binary:logistic` (MNIST8M: `multi:softprob` with multi-output trees), `subsample=0.8`, `colsample_bynode=0.8`, `lambda=1e-5`, `eta=1`, one round of 10 parallel trees. A forest is not one tree: the comparison is per unit of work, not of result.
-- **Time:** from host memory to the finished tree. ./tree: its `train total` (GPU setup and upload, presort, build), a fresh process per run; the one-time CUDA context, memory pool and staging buffers are made while the CSV loads and are not in it (reported as `gpu startup`, see [bench/README.md](../../README.md#how-time-is-measured)). Libraries: one Python process per case: an untimed full-size warm-up fit, then 10 timed fits on the float32 NumPy arrays; a fit includes the copy to the GPU and the binning (`QuantileDMatrix` for XGBoost).
+- **Time:** from host memory to the finished tree. ./tree: its `train total` (GPU setup and upload, presort, build), a fresh process per run; the one-time CUDA context, memory pool and staging buffers are made while the CSV loads and are not in it (reported as `gpu startup`, see [bench/README.md](../../README.md#how-time-is-measured)). Libraries: one Python process per case: an untimed warm-up fit (cuML on every training row, `CUML_WARMUP_ROWS=0` in `final.sh`, so its memory pool has grown; XGBoost on the first 50,000 rows), then 10 timed fits on the float32 NumPy arrays; a fit includes the copy to the GPU and the binning (`QuantileDMatrix` for XGBoost).
 - **VRAM:** peak GPU memory in use above its idle value, sampled with nvidia-smi every 20 ms, for the whole process.
 - **Nodes:** each job owns its node (`--exclusive`); the GPU is the first on the NUMA node with the most free memory (hopper GPU 2, ampere GPU 0), nothing is bound (every CPU, memory first-touch), as in ./tree's `bench/cluster/job.sh`.
 - **Test sets:** HIGGS the last 500,000 rows (UCI's split), MNIST8M the original MNIST test set (10,000).

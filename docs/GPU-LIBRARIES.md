@@ -73,9 +73,10 @@ and preprocessing (presort against binning).
 
 **In ./tree's favour:**
 
-1. **CPU threads** (the biggest): ./tree finishes small subtrees on every CPU
-   of the GPU's NUMA node (16 on hopper, 24 on ampere; `--cpus` in the runs'
-   `machine.json`) while the GPU goes on; cuML uses about one host thread. XGBoost gets all cores but uses them mainly in the sketch.
+1. **CPU threads** (the biggest): ./tree's `--hybrid` finishes small subtrees
+   on every CPU of the node (32 on hopper, 48 on ampere; `--cpus` in the runs'
+   `machine.json`) while the GPU goes on; `--gpu` uses the CPU only to drive
+   the GPU; cuML uses about one host thread. XGBoost gets all cores but uses them mainly in the sketch.
 2. **Input layout:** ./tree's host data is column-major after loading; the
    libraries get row-major NumPy and any transpose is inside their timed fit.
    Not measured.
@@ -89,9 +90,10 @@ and preprocessing (presort against binning).
 process, with a memory pool already grown; ./tree is a cold process every run
 and pays its allocations in `gpu setup`.
 
-**Not a timing issue:** C4.5 against cuML's entropy tree compares different
-algorithms (gain ratio, MDL threshold cost, MinSplit; ./tree's depth-10 C4.5
-tree has half the nodes or fewer). No public GPU C4.5 exists. Lead with CART.
+**C4.5 has no GPU competitor.** No public GPU C4.5 exists, and an entropy
+(information-gain) tree is a different algorithm (no gain ratio, MDL threshold
+cost or MinSplit), so the libraries run CART only. cuML's entropy tree is not
+used anywhere as a C4.5 stand-in (removed 2026-11-16).
 
 ## Caveats to state
 

@@ -8,8 +8,9 @@ timed fit to OUT and saves the last model's test predictions.
     DATASET  higgs | mnist8m | susy | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
     CASE     cart   Gini (cuML) or the Gini-equivalent squared error (XGBoost;
                     with more than 2 classes one multi-output tree on the
-                    one-hot labels, whose summed squared error is Gini too)
-             c45    entropy (cuML only; XGBoost has no entropy criterion)
+                    one-hot labels, whose summed squared error is Gini too).
+                    The only case: no GPU library has C4.5's gain ratio, and
+                    an entropy tree is not C4.5, so C4.5 has no GPU competitor.
     TREES    trees per fit (default 1): cuML n_estimators, XGBoost
              num_parallel_tree in one round
     DEPTH    depth limit (default 19)
@@ -106,21 +107,18 @@ def n_streams():
 
 
 def cuml_fit(X, y, case, trees):
-    # c45: entropy (information gain; cuML has no gain ratio), and C4.5's
-    # smallest split: at least 2 rows on each side, so 4 rows to split.
     from cuml.ensemble import RandomForestClassifier
     if FOREST == "default":
         model = RandomForestClassifier(
-            n_estimators=trees, split_criterion="gini" if case == "cart" else "entropy",
+            n_estimators=trees, split_criterion="gini",
             max_depth=DEPTH, n_streams=n_streams(), random_state=0, output_type="numpy")
         model.fit(X, y)
         return model, {}
     model = RandomForestClassifier(
         n_estimators=trees, bootstrap=False, max_samples=1.0, max_features=1.0,
-        split_criterion="gini" if case == "cart" else "entropy",
+        split_criterion="gini",
         max_depth=DEPTH, max_leaves=-1, n_bins=BINS["cuml"],
-        min_samples_leaf=1 if case == "cart" else 2,
-        min_samples_split=2 if case == "cart" else 4, min_impurity_decrease=0.0,
+        min_samples_leaf=1, min_samples_split=2, min_impurity_decrease=0.0,
         n_streams=n_streams(), random_state=0, output_type="numpy")
     model.fit(X, y)
     return model, {}
@@ -162,7 +160,6 @@ def xgb_fit(X, y, case, trees):
     # reg:squarederror with lambda = 0 on 0/1 labels: every row has hessian 1,
     # so the split gain is the drop in the children's squared error, which is
     # n/2 times the drop in Gini impurity: the CART split, on histogram bins.
-    assert case == "cart", "XGBoost has no entropy criterion"
     # More than 2 classes: one multi-output tree (multi_strategy
     # multi_output_tree) instead of XGBoost's default of one tree per class.
     # Its histograms hold every class's gradients (MNIST8M: 10 x 784 features x
@@ -238,6 +235,7 @@ def version(impl):
 def main():
     global DEPTH, TREES, CLASSES
     impl, dataset, case, reps, out, pred_dir = sys.argv[1:7]
+    assert case == "cart", "CART only: no GPU library grows C4.5 trees"
     TREES = int(sys.argv[7]) if len(sys.argv) > 7 else 1
     DEPTH = int(sys.argv[8]) if len(sys.argv) > 8 else 19
     fit, info, predict = IMPLS[impl]
