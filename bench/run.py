@@ -199,8 +199,11 @@ def handoff_rows(requested, dataset, flags):
     """--hybrid's --handoff-rows for a run, None for ./tree's own default.
     `requested` (run.py --handoff-rows): a number, "default" (./tree's own), or
     None: the value measured best for this node, dataset and depth limit in
-    bench/handoff_rows.json (written by bench/cluster/handoff_sweep.sh), the
-    entry "depth<N>" for -d N, else "nodepth", else ./tree's default."""
+    bench/handoff_rows.json (written by bench/cluster/handoff_sweep.sh): the
+    entry of the shallowest measured depth limit at least as deep as this
+    run's ("depth<N>" for -d N, "nodepth" for no limit; -d 5 takes depth10,
+    -d 20 nodepth: the hand-off acts on the small nodes of the deep levels,
+    so a deeper limit is the closer measurement), else ./tree's default."""
     if requested == "default":
         return None
     if requested:
@@ -210,11 +213,11 @@ def handoff_rows(requested, dataset, flags):
     except FileNotFoundError:
         return None
     entries = stored.get(socket.gethostname(), {}).get(dataset, {})
-    depth = flags[flags.index("-d") + 1] if "-d" in flags else None
-    for key in ([f"depth{depth}"] if depth else []) + ["nodepth"]:
-        if key in entries:
-            return int(entries[key])
-    return None
+    def limit(key):  # "depth10" -> 10, "nodepth" -> infinity
+        return float("inf") if key == "nodepth" else int(key.removeprefix("depth"))
+    depth = float(flags[flags.index("-d") + 1]) if "-d" in flags else float("inf")
+    deeper = [key for key in entries if limit(key) >= depth]
+    return int(entries[min(deeper, key=limit)]) if deeper else None
 
 
 def build_command(case, kind, args, scratch, rep=0):
