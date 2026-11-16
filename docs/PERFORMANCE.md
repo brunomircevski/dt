@@ -2,6 +2,34 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
 
+## November 2026: the GPU setup's fixed cost (mordor3 cluster)
+
+Measured against 2c688938 on 2026-11-16: hopper (H100 PCIe, GPU 2, NUMA node 1, 32 threads) and ampere (A100 80 GB, GPU 0, node 0, 48 threads), whole nodes, baseline and patched binaries interleaved, `--gpu`, depth 10, CART unless noted, `--profile` on every run; every tree equal to the baseline's.
+
+**The stall.** Every GPU run idled 14–40 ms between the end of the presort and the first level, in the timed setup. Nsight Systems: the process's first `cudaMallocAsync` (the log table's 512 KB, in `prepareHost()`) blocks the host while the device's memory pool is set up: 27 ms on the H100 node, 9 ms on the RTX 2080 Ti node. `gpuPrepare()`, which already creates the context while the CSV loads, now also makes and frees one 2 MiB block from the pool (with the pool's release threshold set, so it keeps it). The gap is now 0.2–0.6 ms. Medians (runs):
+
+| | before | after | |
+|---|--:|--:|--:|
+| hopper, chess 10M (10) | 60.7 ms | 25.0 ms | −59% |
+| hopper, SUSY (8) | 62.9 ms | 47.3 ms | −25% |
+| hopper, HIGGS CART / C4.5 (8) | 126 / 152 ms | 112 / 135 ms | −11% |
+| ampere, chess 10M (10) | 35.3 ms | 18.6 ms | −47% |
+| ampere, HIGGS (8) | 172 ms | 161 ms | −7% |
+| turing (RTX 2080 Ti), chess 10M (5) | 38.2 ms | 30.7 ms | −20% |
+
+The build is unchanged (the same kernels, 1.56 ms busy on chess 10M). On MNIST8M, SOREL 4M and ECBDL 15M the 20 ms is within the upload's spread (below).
+
+**Not changed: putting the training values on the GPU's NUMA node.** The loader's threads on both sockets first-touch the columns, so about half of them sat on the other socket. Binding them to the GPU's node (`mbind`, or `numactl --membind`) gave 100% of the pages there and the same upload rates on hopper (MNIST8M 34–36 GB/s, one run in eight at 52) and 2–3% slower ones on ampere (MNIST8M setup 1.22 → 1.30 s), so it was dropped.
+
+**Open: the H100 upload runs at ~52 or ~35 GB/s.** Per process: in the 2026-11-15/16 rerun about half of the MNIST8M and SOREL 4M runs were slow, on 2026-11-16 almost every MNIST8M run (14 of 14 in one job), while ECBDL 15M was fast in 5 of 6. In a slow run the GPU's copy engine is busy 90% of the upload and each 32 MB copy from a staging buffer takes 0.83–0.88 ms (fast: 0.61 ms); the copier threads keep up (gaps 0.06–0.08 ms). Ruled out:
+
+* **The PCIe link:** Gen5 x16 on all four H100s.
+* **Page placement and NUMA balancing** (`numa_balancing` is 1 on both GPU nodes): as above; during an upload only a few hundred pages take hinting faults or move.
+* **The copy engine or stream:** a probe that copies 8 GiB in 32 MB pieces from four `cudaMallocHost` buffers (as `uploadStaged()` does, but with nothing else running) gives 55.5 GB/s in each of 50 processes, on one stream, another, alternating between two, and from either socket's CPUs.
+* **The presort overlapping the copies:** fast and slow runs overlap alike (ECBDL: fast at 89%, slow at 59%).
+
+So the copies are slow only while the copier threads fill the other staging buffers. Next to test: the copiers' stores (non-temporal, or fewer threads), and the staging buffers' size against the 45 MB L3.
+
 ## November 2026: open: C4.5 on big chess runs at two speeds (mordor3 cluster)
 
 Found in the 5-run rerun of 2026-11-15/16 at f53347a9 (`src/` = d2957ff2), `--multicore` with 48 threads ([cluster-profiling](../bench/results/cluster-profiling/BENCHMARK.md#c45-on-big-chess-two-speeds)). C4.5 on chess 500M–2000M takes one of two times from run to run, on epyc1 and dell1 alike: epyc's build on chess 1000M 1.13–1.15 s or 1.40–1.47 s, on chess 2000M 2.42 s or 3.0 s (20–40% min to max). CART on the same data spreads at most 6%; the runs at ec77727 spread 5–8% on this case.

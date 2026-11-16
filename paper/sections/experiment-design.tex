@@ -84,7 +84,12 @@ XGBoost squared error = Gini on bins). rpart and YaDT: add or say why not.}
 
 \subsection{Protocol and Measurement}
 \plan{One tree, depth $\le$ 10, no pruning, all samples and attributes; what is
-timed (training only, from data in memory; GPU setup and upload included);
+timed (training only, from data in memory; GPU allocation, upload and
+presort included; the one-time GPU start-up -- CUDA context, memory pool,
+pinned buffers, 0.1--0.7 s -- excluded for every tool, as the libraries are
+timed in a warm process, and reported apart; ./tree overlaps it with loading;
+cold end-to-end ./tree wall time in an appendix; caveat: on small sets such as
+SUSY the start-up exceeds the training and a CPU backend wins end to end);
 peak RAM and VRAM; runs per case, means and spread; exclusive nodes; fairness
 (CPU threads of the hybrid, warm library processes, input layout). Source:
 docs/GPU-LIBRARIES.md, bench/README.md.}

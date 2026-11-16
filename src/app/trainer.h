@@ -12,6 +12,10 @@ struct TrainTimings {
   double presortSeconds = 0.0;  // sorting every feature once
   double buildSeconds = 0.0;    // growing the tree
   double pruneSeconds = 0.0;    // pruning
+  // Cuda: the one-time start-up before training (CUDA context, memory pool,
+  // page-locked staging buffers), made while the dataset loads. Not training
+  // work, so not in total(); reported apart.
+  double gpuStartupSeconds = 0.0;
   // Unix time when training ended: after the pruning, before the grower frees
   // its memory (the end of --repeat's energy window).
   double endUnix = 0.0;

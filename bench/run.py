@@ -232,9 +232,11 @@ def build_command(case, kind, args, scratch, rep=0):
             peak = int(re.search(r"peak after training (\d+) KiB", stdout).group(1))
             result = {"train_seconds": float(re.search(r"train total\s+([\d.]+) ms",
                                                        stdout).group(1)) / 1000,
-                      # The phases of the training time (gpu setup: CUDA only).
+                      # The phases of the training time (gpu setup: CUDA only),
+                      # and gpu startup: the CUDA context, memory pool and
+                      # staging buffers, made during the load, not in train total.
                       **{f"{name.replace(' ', '_')}_seconds": float(ms) / 1000
-                         for name, ms in re.findall(r"^  (gpu setup|presort|build|prune)"
+                         for name, ms in re.findall(r"^  (gpu startup|gpu setup|presort|build|prune)"
                                                     r"\s+([\d.]+) ms$",
                                                     stdout, re.M)},
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),

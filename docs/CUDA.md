@@ -66,7 +66,14 @@ copies ping-ponged instead (and a third mirrored the host arena, see Memory).
    0.54 to 0.09 s on the H100 node.
 
 The CUDA context itself is created on a background thread while the CSV is
-being parsed (`gpuPrepare`).
+being parsed (`gpuPrepare`). So is the device's stream-ordered memory pool:
+the first `cudaMallocAsync` of a process blocks the host while the pool is set
+up (27 ms on the H100 node, about 15 ms on the A100 node, 9 ms on the RTX 2080
+Ti node), and it used to fall in the timed setup, at the first level array,
+with the GPU idle ([PERFORMANCE.md](PERFORMANCE.md#november-2026-the-gpu-setups-fixed-cost-mordor3-cluster)).
+This start-up (context, pool, staging buffers) is printed as `gpu startup` and
+is not part of `train total`; `gpu setup` (allocation, upload, GPU presort) is
+([bench/README.md](../bench/README.md#how-time-is-measured)).
 
 ## One level
 

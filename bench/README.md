@@ -84,7 +84,7 @@ The reported time is **training time**: from the data being in memory to the fin
 
 | Tool | What is timed |
 |---|---|
-| ./tree | `train total`: presort, build, pruning |
+| ./tree | `train total`: GPU setup and upload (`--gpu`, `--hybrid`), presort, build, pruning |
 | YaDT | the indexing part of its read time, plus build and prune (from its log) |
 | scikit-learn | `fit` |
 | rpart | `rpart()` + `prune()` |
@@ -94,6 +94,8 @@ The reported time is **training time**: from the data being in memory to the fin
 - **Excluded:** reading files, process start-up, and prediction.
 - **Why:** these measure the CSV parser and the language runtime, not the algorithm.
 - **Where to find them:** the whole-process wall time is recorded too (`wall_seconds`) for an appendix.
+
+**The GPU's one-time start-up is excluded, and reported apart.** Creating the CUDA context, the device memory pool and the page-locked staging buffers costs 0.1–0.7 s once per process (0.6–0.7 s on the RTX 2080 Ti node), whatever the data. ./tree does it on a background thread while the CSV loads (`gpuPrepare`) and prints it as `gpu startup` (`gpu_startup_seconds`), not in `train total`. Everything that depends on the data stays in: allocating and uploading it, the GPU presort, the build. This matches how the GPU libraries are timed (cuML, XGBoost: an untimed warm-up fit in the same process first, see [results/cluster-gpu-vs-others/BENCHMARK.md](results/cluster-gpu-vs-others/BENCHMARK.md)), i.e. a process that already uses the GPU. Do not add the start-up to the training time: it overlaps the load. For a single cold run, use `wall_seconds`: on small sets (SUSY) the start-up is larger than the whole training, and a CPU backend wins end to end.
 
 **Preparation counts as training.** Each tool's own data preparation is included: `./tree`'s presort, YaDT's indexing, and the sorting the other libraries do inside their fit call. It is part of the algorithm, and leaving it out would favour some tools over others.
 

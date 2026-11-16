@@ -118,6 +118,9 @@ void printResults(const Tree &tree, const LoadedData &data, const TrainTimings &
   }
   std::cout << "Timings:\n";
   printMs("load", data.seconds);
+  if (timings.gpuStartupSeconds > 0) { // during the load, not in train total
+    printMs("gpu startup", timings.gpuStartupSeconds);
+  }
   if (timings.gpuSetupSeconds > 0) {
     printMs("gpu setup", timings.gpuSetupSeconds);
   }
@@ -158,7 +161,8 @@ void writeProfile(const Options &options, const Tree &tree, const LoadedData &da
                 {"depth", number(tree.depth())},
                 {"load_seconds", number(data.seconds)},
                 {"train_seconds", number(timings.total())},
-                {"timings", "{\"gpu_setup\": " + number(timings.gpuSetupSeconds) +
+                {"timings", "{\"gpu_startup\": " + number(timings.gpuStartupSeconds) +
+                                ", \"gpu_setup\": " + number(timings.gpuSetupSeconds) +
                                 ", \"presort\": " + number(timings.presortSeconds) +
                                 ", \"build\": " + number(timings.buildSeconds) +
                                 ", \"prune\": " + number(timings.pruneSeconds) + "}"},
@@ -172,10 +176,12 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   }
   std::cout << " (backend " << backendName(options.backend) << ")\n";
 
-  // CUDA context creation is slow; do it while the CSV is being parsed. Not
-  // with --repeat N > 1: a process may only fork before it uses CUDA.
+  // The GPU's one-time start-up (CUDA context, memory pool, staging buffers)
+  // is slow; do it while the CSV is being parsed. Its time is reported as
+  // "gpu startup", apart from the training time. Not with --repeat N > 1: a
+  // process may only fork before it uses CUDA.
   const bool forks = options.repeat > 1;
-  std::future<void> gpuReady;
+  std::future<double> gpuReady;
   // Load the GPU code with the context, not at the first launch (CUDA's
   // default, lazy): 24 ms of an A100's or an RTX 2080 Ti's training setup
   // otherwise (`CUDA_MODULE_LOADING=LAZY` keeps the default). Set while this
@@ -192,9 +198,7 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   auto pool = std::make_unique<ThreadPool>(threadCount(options) - 1);
   const LoadedData data = loadData(options, *pool);
   printDataSummary(options, data);
-  if (gpuReady.valid()) {
-    gpuReady.get();
-  }
+  const double gpuStartupSeconds = gpuReady.valid() ? gpuReady.get() : 0.0;
 
   if (forks) {
     if (const std::optional<int> status = forkRepeatedTrees(data.train, options, pool)) {
@@ -204,6 +208,7 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   }
 
   TrainTimings timings;
+  timings.gpuStartupSeconds = gpuStartupSeconds;
   const bool profile = !options.profilePath.empty();
   if (profile) {
     trace::start();
