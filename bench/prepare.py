@@ -6,6 +6,12 @@ input format (see benchlib.py for the layout), plus the tiny synthetic
   bench/.venv/bin/python bench/prepare.py              # every dataset whose source exists
   bench/.venv/bin/python bench/prepare.py covertype_10k susy_50k
   bench/.venv/bin/python bench/prepare.py --force susy # rebuild
+  bench/.venv/bin/python bench/prepare.py --yadt higgs # add YaDT's files to a prepared set
+
+Each dataset's folder (bench/data/<name>/) holds its prepared files next to
+its originals (the CSVs prepare.py reads, the downloads): rebuilding replaces
+the prepared files only. A prefix_of set is one file in its parent's folder,
+<name>.meta.json.
 """
 
 import argparse
@@ -21,7 +27,37 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
-from benchlib import BASELINE, BENCH, DATA, ROOT, check_csv
+from benchlib import (BASELINE, BENCH, DATA, PREPARED_FILES, ROOT, check_csv, folder, load, meta,
+                      meta_path)
+
+
+def install(tmp, out, name=None):
+    """Move the prepared files from tmp into out, replacing out's prepared
+    files (the old ones that tmp lacks go too); the originals and the prefix
+    sets' <name>.meta.json stay. name: a set in a shared folder, whose files
+    are named after it (meta.json -> <name>.meta.json, train.f32 -> <name>.f32,
+    train.y.i32 -> <name>.y.i32, train.csv -> <name>.csv), replaced one by one."""
+    out.mkdir(exist_ok=True)
+    if name:
+        for old, new in (("meta.json", f"{name}.meta.json"), ("train.f32", f"{name}.f32"),
+                         ("train.y.i32", f"{name}.y.i32"), ("train.csv", f"{name}.csv")):
+            if (tmp / old).exists() or (tmp / old).is_symlink():
+                os.replace(tmp / old, out / new)
+        leftover = sorted(path.name for path in tmp.iterdir())
+        if leftover:
+            raise ValueError(f"{tmp}: a set in a shared folder has only training rows: {leftover}")
+        tmp.rmdir()
+        return
+    for name in PREPARED_FILES:
+        target = out / name
+        if (tmp / name).exists() or (tmp / name).is_symlink():
+            os.replace(tmp / name, target)
+        elif target.exists() or target.is_symlink():
+            target.unlink()
+    leftover = sorted(path.name for path in tmp.iterdir())
+    if leftover:
+        raise ValueError(f"{tmp}: files prepare.py does not know: {leftover}")
+    tmp.rmdir()
 
 
 def split_rows(n, spec, n_source, column=None):
@@ -119,10 +155,15 @@ def linkable(source, X, y, features, classes):
     return None
 
 
-def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, source=None):
+def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, source=None,
+                  shared=None):
     """source: the CSV the training rows are, in order; train.csv links to it
-    when it is already in train.csv's format (linkable)."""
-    out = DATA / name
+    when it is already in train.csv's format (linkable). shared: the folder it
+    shares with other sets (datasets.toml folder), its files named after it;
+    its CSV is then <name>.csv itself when that is the source."""
+    out = DATA / (shared or name)
+    if shared and (len(test) or yadt):
+        raise ValueError(f"{name}: a set in a shared folder has no test set and no YaDT files")
     tmp = DATA / f".{name}.tmp"
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
@@ -144,7 +185,8 @@ def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, s
             else None
         if link is not None:
             own_names = link
-            (tmp / "train.csv").symlink_to(os.path.relpath(source.resolve(), out.resolve()))
+            if not (shared and source.resolve() == (out / f"{name}.csv").resolve()):
+                (tmp / "train.csv").symlink_to(os.path.relpath(source.resolve(), out.resolve()))
         elif part == "train":
             pacsv.write_csv(table, tmp / "train.csv", pacsv.WriteOptions(quoting_style="none"))
             check_csv(tmp / "train.csv", Xp, y[rows], header=True)
@@ -162,28 +204,56 @@ def write_dataset(name, features, classes, X, y, train, test, info, yadt=True, s
             "classes": [f"c{k}" for k in range(len(classes))], "class_names": classes,
             "n_train": int(len(train)), "n_test": int(len(test)), **own_names, **info}
     json.dump(meta, open(tmp / "meta.json", "w"), indent=1)
-    shutil.rmtree(out, ignore_errors=True)
-    tmp.rename(out)
+    install(tmp, out, name if shared else None)
 
 
 def write_prefix(name, spec, specs):
     """A prefix_of set: its parent's first train_rows training rows and its test
-    set, with nothing of its own but meta.json (benchlib.folder, tree_input)."""
+    set, with nothing of its own but <parent>/<name>.meta.json (benchlib.meta_path,
+    folder, tree_input)."""
     parent = spec["prefix_of"]
-    if "prefix_of" in specs.get(parent, {}) or not (DATA / parent / "meta.json").exists():
+    if "prefix_of" in specs.get(parent, {}) or meta_path(parent) is None:
         raise ValueError(f"{name}: prefix_of {parent!r} must be a prepared set of its own")
     if set(spec) != {"prefix_of", "train_rows"}:
         raise ValueError(f"{name}: a prefix_of set has only prefix_of and train_rows")
-    m = json.load(open(DATA / parent / "meta.json"))
+    m = meta(parent)
     if not 0 < spec["train_rows"] <= m["n_train"]:
         raise ValueError(f"{name}: {parent} has {m['n_train']:,} training rows")
     for kept in ("yadt.names", "train.yadt.csv"):  # YaDT reads whole files
-        if (DATA / parent / kept).exists():
+        if meta_path(parent).name == "meta.json" and (folder(parent) / kept).exists():
             raise ValueError(f"{name}: {parent} has YaDT files, which a prefix cannot share")
     m.update(name=name, n_train=spec["train_rows"], prefix_of=parent, spec=spec)
-    shutil.rmtree(DATA / name, ignore_errors=True)
-    (DATA / name).mkdir(parents=True)
-    json.dump(m, open(DATA / name / "meta.json", "w"), indent=1)
+    partial = folder(parent) / f".{name}.meta.json.partial"
+    json.dump(m, open(partial, "w"), indent=1)
+    os.replace(partial, folder(parent) / f"{name}.meta.json")
+
+
+def write_yadt(name):
+    """YaDT's files of a prepared set, from its binary files (which stay as they
+    are): yadt.names and the headerless train/test CSVs, every row checked."""
+    m = meta(name)
+    if "prefix_of" in m or meta_path(name).name != "meta.json":
+        raise ValueError(f"{name}: only a set in a folder of its own can have YaDT files "
+                         "(YaDT reads whole files)")
+    out = folder(name)
+    F = len(m["features"])
+    labels = pa.array(m["classes"], pa.large_string())
+    for part in ("train", "test"):
+        X, y = load(name, part)
+        if not len(y):
+            continue
+        columns = [pa.array(X[:, j]) for j in range(F)] + [pc.take(labels, pa.array(y))]
+        table = pa.table(columns, names=m["features"] + ["class"])
+        partial = out / f".{part}.yadt.csv.partial"
+        pacsv.write_csv(table, partial, pacsv.WriteOptions(include_header=False, quoting_style="none"))
+        check_csv(partial, X, y, header=False)
+        os.replace(partial, out / f"{part}.yadt.csv")
+        del X, y, columns, table
+    with open(out / ".yadt.names.partial", "w") as names:
+        for feature in m["features"]:
+            names.write(f"{feature},float,continuous\n")
+        names.write("class,string,class\n")
+    os.replace(out / ".yadt.names.partial", out / "yadt.names")
 
 
 def make_baseline():
@@ -201,10 +271,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("datasets", nargs="*", help=f"default: all in datasets.toml ({len(specs)})")
     parser.add_argument("--force", action="store_true", help="rebuild existing datasets")
+    parser.add_argument("--yadt", action="store_true",
+                        help="only write YaDT's files of these prepared datasets, from their "
+                             "binary files (which are not touched)")
     args = parser.parse_args()
     unknown = set(args.datasets) - set(specs)
     if unknown:
         sys.exit(f"not in datasets.toml: {', '.join(sorted(unknown))}")
+    if args.yadt:
+        for name in args.datasets:
+            start = time.perf_counter()
+            write_yadt(name)
+            print(f"{name}: YaDT's files written ({time.perf_counter() - start:.1f} s)")
+        return
     DATA.mkdir(exist_ok=True)
     if args.force or not (DATA / BASELINE / "meta.json").exists():
         make_baseline()
@@ -212,7 +291,7 @@ def main():
     # prefix_of sets after the others: their parents first
     for name in sorted(args.datasets or list(specs), key=lambda name: "prefix_of" in specs[name]):
         spec = specs[name]
-        if (DATA / name / "meta.json").exists() and not args.force:
+        if meta_path(name) is not None and not args.force:
             print(f"{name}: already prepared")
             continue
         if "prefix_of" in spec:
@@ -234,7 +313,8 @@ def main():
         # all its rows, in order
         whole = ("test_source" in spec or spec.get("split") == "none") and len(train) == n_source
         write_dataset(name, features, classes, X, y, train, test, {"spec": spec},
-                      yadt=spec.get("yadt", True), source=ROOT / spec["source"] if whole else None)
+                      yadt=spec.get("yadt", True), source=ROOT / spec["source"] if whole else None,
+                      shared=spec.get("folder"))
         print(f"{name}: {len(train):,} train / {len(test):,} test rows, {len(features)} features, "
               f"{len(classes)} classes ({time.perf_counter() - start:.1f} s)")
 

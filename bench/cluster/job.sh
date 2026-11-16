@@ -9,7 +9,8 @@
 # threads: run.py's --threads (default all); "scaling" = 1, 2, 4, then every
 # 4 up to the node's CPU count (scaling.sh). timeout: seconds per ./tree process
 # (default 3600). RUN_EXTRA (environment): more run.py arguments, e.g.
-# --profile (profile.sh). ACCURACY (environment, submit.sh -e): run.py's
+# --profile (profile.sh). E2E=1 (environment): the end-to-end runs (see
+# below). ACCURACY (environment, submit.sh -e): run.py's
 # --test-accuracy instead of the default --train-accuracy-only. NUMA_NODE (environment, submit.sh -n): the GPU
 # is the first one attached to that NUMA node instead of GPU 0. CUDA runs
 # always get one (below) and use every CPU of the node, that node's first,
@@ -80,6 +81,9 @@ if [ -n "${NUMA_NODE:-}" ]; then
 fi
 export NVCC=/usr/local/cuda/bin/nvcc LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export PYTHONUNBUFFERED=1
+# R (rpart) and the JDK (Weka J48) of the micromamba env dtbench (mordor3)
+DTBENCH="${DTBENCH:-$HOME/micromamba/envs/dtbench}"
+[ ! -d "$DTBENCH/bin" ] || export PATH="$DTBENCH/bin:$PATH"
 CPUS="0-$(($(nproc) - 1))"  # every CPU of the node
 [ -z "${NUMA_NODE:-}" ] || CPUS="$(cat "/sys/devices/system/node/node$NUMA_NODE/cpulist")"
 if [ -n "$CUDA" ]; then  # the GPU's node first, then every other node's CPUs
@@ -111,11 +115,19 @@ fi
 echo "code: $TREE_GIT_DESCRIBE (from submit.sh: hopper has no git)"
 echo "runs per case: $RUNS"
 
+# The page cache: the datasets leave it before every process (--drop-cache),
+# except end to end (E2E=1, cluster-end-to-end): the input is read into it
+# right before every process and dropped after it (--prefetch), no
+# evaluation, no footprint runs.
+CACHE=(--drop-cache)
+[ -z "${E2E:-}" ] || CACHE=(--prefetch --no-eval --no-baseline)
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
-  --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} --drop-cache --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \
+  --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} "${CACHE[@]}" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \
   ${RUN_EXTRA:-}
 
-step "3/3 tables and CSV files"
-"$PY" bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"
+if [ -z "${E2E:-}" ]; then
+  step "3/3 tables and CSV files"
+  "$PY" bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"
+fi
 echo "done $(date '+%F %T')"

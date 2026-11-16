@@ -104,22 +104,28 @@ struct Results {
   double testAccuracy = 0.0;
   double evalSeconds = 0.0;
   long trainPeakKiB = -1;
+  bool accuracy = true; // false: --no-accuracy, none computed
 };
 
 void printResults(const Tree &tree, const LoadedData &data, const TrainTimings &timings,
-                  const Results &results) {
+                  double gpuStartupWaitSeconds, const Results &results) {
   std::cout << "Tree:\n"
             << "  nodes " << tree.nodeCount() << ", leaves " << tree.leafCount() << ", depth "
-            << tree.depth() << "\n"
-            << std::fixed << std::setprecision(4) << "  train accuracy "
-            << results.trainAccuracy * 100.0 << "%\n";
-  if (data.test.rowCount > 0) {
+            << tree.depth() << "\n";
+  if (results.accuracy) {
+    std::cout << std::fixed << std::setprecision(4) << "  train accuracy "
+              << results.trainAccuracy * 100.0 << "%\n";
+  }
+  if (results.accuracy && data.test.rowCount > 0) {
     std::cout << "  test accuracy  " << results.testAccuracy * 100.0 << "%\n";
   }
   std::cout << "Timings:\n";
   printMs("load", data.seconds);
   if (timings.gpuStartupSeconds > 0) { // during the load, not in train total
     printMs("gpu startup", timings.gpuStartupSeconds);
+    // The part of it still running when the load ended: what the process
+    // waited for, before (never inside) train total.
+    printMs("gpu startup wait", gpuStartupWaitSeconds);
   }
   if (timings.gpuSetupSeconds > 0) {
     printMs("gpu setup", timings.gpuSetupSeconds);
@@ -198,7 +204,14 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   auto pool = std::make_unique<ThreadPool>(threadCount(options) - 1);
   const LoadedData data = loadData(options, *pool);
   printDataSummary(options, data);
-  const double gpuStartupSeconds = gpuReady.valid() ? gpuReady.get() : 0.0;
+  // train total starts only once the start-up has finished: with a fast
+  // (binary) load, waiting for it is start-up, not training.
+  double gpuStartupWaitSeconds = 0.0;
+  double gpuStartupSeconds = 0.0;
+  if (gpuReady.valid()) {
+    ScopedTimer timer(gpuStartupWaitSeconds);
+    gpuStartupSeconds = gpuReady.get();
+  }
 
   if (forks) {
     if (const std::optional<int> status = forkRepeatedTrees(data.train, options, pool)) {
@@ -224,7 +237,8 @@ int run(const Options &options, bool &exitWithoutCleanup) {
 
   Results results;
   results.trainPeakKiB = peakResidentKiB();
-  {
+  results.accuracy = options.accuracy;
+  if (options.accuracy) {
     ScopedTimer timer(results.evalSeconds);
     NvtxRange range("accuracy");
     results.trainAccuracy = tree.accuracy(data.train, pool.get());
@@ -232,7 +246,7 @@ int run(const Options &options, bool &exitWithoutCleanup) {
       results.testAccuracy = tree.accuracy(data.test, pool.get());
     }
   }
-  printResults(tree, data, timings, results);
+  printResults(tree, data, timings, gpuStartupWaitSeconds, results);
   if (profile) {
     writeProfile(options, tree, data, timings, results);
   }

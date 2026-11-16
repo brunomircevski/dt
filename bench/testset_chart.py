@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The test-set benchmark's chart (cluster-airline, -higgs, -susy, -ecbdl, -mnist8m, -sorel): one
+"""The test-set benchmark's chart (cluster-higgs, -susy, -ecbdl, -mnist8m, -sorel): one
 dataset, ./tree on every node, trained on the training set and scored on the
 test set. One panel per algorithm (CART, C4.5; depth <= 10, no pruning), one
 bar per run (node and backend), on a log scale, the bars grouped by backend (--simple,

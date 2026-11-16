@@ -1,19 +1,21 @@
 // Weka J48 adapter: fit one protocol on a prepared dataset, print one JSON line.
 //
-//   java -cp weka.jar:bounce.jar:classes J48Fit data=DIR n_train=N n_test=M \
-//       n_features=F n_classes=K warmup=ROWS eval=0|1 options="-C 0.25 -M 2" \
+//   java -cp weka.jar:bounce.jar:classes J48Fit train=STEM test=STEM n_train=N n_test=M \
+//       n_features=F n_classes=K eval=0|1 options="-C 0.25 -M 2" \
 //       [max_depth=D]
 //
 // The data are read from the binary files straight into Weka Instances (no
 // ARFF/CSV parser, whose temporary objects would dominate peak memory), in
-// 16 MB blocks (files over 2 GB: airline, ECBDL, chess 1000M).
+// 16 MB blocks (files over 2 GB: ECBDL, SOREL, the chess sets).
 // max_depth=D: J48 has no depth limit, so the adapter grows the tree with a
 // subclass of J48's own tree that makes every node at depth D (the root is at
 // depth 0) a leaf, as ./tree -d D and scikit-learn's max_depth do; everything
 // else is J48's code. It then always takes the phased path below, with or
 // without -U (unpruned: growing, then only the collapse).
-// warmup=ROWS: one untimed build on the first ROWS training rows first, so the
-// JIT has compiled the hot code (0 = none). Timed: J48.buildClassifier's work,
+// One fresh process builds exactly one tree: no warm-up build before it, so
+// HotSpot's JIT compilation during the build is timed, as a user who trains
+// one tree pays it. read_seconds: the binary files into Instances (not
+// timed). Timed: J48.buildClassifier's work,
 // in two parts: growing (build_seconds) and C4.5's collapse, pruning and
 // cleanup (prune_seconds); train_seconds is their sum. The two parts are the
 // steps of C45PruneableClassifierTree.buildClassifier, called one by one
@@ -56,7 +58,7 @@ public class J48Fit {
         final ByteBuffer block = ByteBuffer.allocate(1 << 24).order(ByteOrder.LITTLE_ENDIAN);
 
         Reader(String file) throws IOException {
-            channel = FileChannel.open(Path.of(args.get("data"), file));
+            channel = FileChannel.open(Path.of(file));
             block.flip();
         }
 
@@ -82,7 +84,7 @@ public class J48Fit {
         attributes.add(new Attribute("class", labels));
         Instances data = new Instances(part, attributes, rows);
         data.setClassIndex(features);
-        try (Reader x = new Reader(part + ".f32"); Reader y = new Reader(part + ".y.i32")) {
+        try (Reader x = new Reader(args.get(part) + ".f32"); Reader y = new Reader(args.get(part) + ".y.i32")) {
             for (int i = 0; i < rows; i++) {
                 double[] values = new double[features + 1];
                 for (int j = 0; j < features; j++) values[j] = x.getFloat();
@@ -216,10 +218,10 @@ public class J48Fit {
         }
         int features = Integer.parseInt(args.get("n_features"));
         int classes = Integer.parseInt(args.get("n_classes"));
+        long readStart = System.nanoTime();
         Instances train = load("train", Integer.parseInt(args.get("n_train")), features, classes);
+        double readSeconds = (System.nanoTime() - readStart) / 1e9;
 
-        int warmup = Math.min(Integer.parseInt(args.get("warmup")), train.numInstances());
-        if (warmup > 0) build(new Instances(train, 0, warmup));
         Built built = build(train);
         Predictor model = built.model;
         J48 plain = built.root != null ? null : built.j48;
@@ -240,9 +242,9 @@ public class J48Fit {
             }
         }
         StringBuilder out = new StringBuilder(String.format(Locale.ROOT,
-                "{\"train_seconds\": %.9f, %s\"nodes\": %d, \"leaves\": %d, \"depth\": %d, "
+                "{\"train_seconds\": %.9f, \"read_seconds\": %.9f, %s\"nodes\": %d, \"leaves\": %d, \"depth\": %d, "
                         + "\"n_train_loaded\": %d, \"n_features_loaded\": %d, \"peak_rss_train_bytes\": %d",
-                built.build + built.prune, built.root == null ? "" : String.format(Locale.ROOT,
+                built.build + built.prune, readSeconds, built.root == null ? "" : String.format(Locale.ROOT,
                         "\"build_seconds\": %.9f, \"prune_seconds\": %.9f, ", built.build, built.prune),
                 nodes, leaves, depth,
                 train.numInstances(), train.numAttributes() - 1, peakKiB * 1024));

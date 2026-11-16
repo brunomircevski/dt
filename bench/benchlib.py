@@ -1,6 +1,9 @@
 """Shared paths, dataset files and protocol definitions for the CPU benchmark.
 
-Data layout (bench/data/<dataset>/, made by prepare.py):
+Data layout (bench/data/<dataset>/, made by prepare.py; on mordor3 bench/data
+and the repository's datasets/ are both links to ~/datasets): one folder per
+dataset, with its prepared files below and its originals (the CSVs
+datasets.toml reads, the downloads they are made from) side by side:
 
   meta.json                  features, classes, row counts, how the split was made
   train.f32, test.f32        features, row-major little-endian float32 (n x F)
@@ -10,12 +13,21 @@ Data layout (bench/data/<dataset>/, made by prepare.py):
                              meta.json's csv_features / csv_classes (for users;
                              the benchmarks give ./tree train.f32, the same values)
   yadt.names, train.yadt.csv, test.yadt.csv   headerless CSV + metadata  (YaDT)
+  <name>.meta.json           the meta.json of a prefix_of set <name> of this
+                             dataset (ecbdl_15m in ecbdl/, sorel_4m in sorel/):
+                             no folder of its own
+
+Several datasets may share one folder (datasets.toml folder = "chess": chess_2b,
+chess_1b and chess_2b's prefixes): each is then named by its own stem,
+<name>.meta.json, <name>.f32, <name>.y.i32, <name>.csv (training rows only:
+no test set, no YaDT files). stem() gives a dataset's files for either layout.
 
 A dataset without a test set (split = "none": the synthetic chess sets) has
 n_test 0 and no test files. A dataset that is another one's first rows
 (prefix_of in datasets.toml: sorel_4m, ecbdl_15m, chess_100m) has only its
-meta.json: every tool reads its parent's files (folder()), ./tree its train.f32
-with --rows (tree_input()), the others the binary files' first n_train rows.
+<name>.meta.json, in its parent's folder (meta_path()): every tool reads its
+parent's files (folder()), ./tree its train.f32 with --rows (tree_input()), the
+others the binary files' first n_train rows.
 
 Every tool sees the same float32 values: the CSVs print them exactly (9
 significant digits), the binary files hold them as they are.
@@ -38,6 +50,9 @@ YADT = TOOLS / "yadt" / "dTcmd"
 RUSAGE = TOOLS / "rusage"  # adapters/rusage.c: runs every measured process
 JAVA_CLASSPATH = f"{TOOLS / 'weka.jar'}:{TOOLS / 'bounce.jar'}:{TOOLS / 'classes'}"
 BASELINE = "_baseline"  # tiny synthetic dataset: each tool's runtime footprint
+# The files prepare.py writes in a dataset's folder (the rest are originals).
+PREPARED_FILES = ("meta.json", "train.f32", "train.y.i32", "test.f32", "test.y.i32", "train.csv",
+                  "yadt.names", "train.yadt.csv", "test.yadt.csv")
 
 # CART trees are capped at depth 30 for every tool: rpart cannot grow deeper,
 # and a tree that only one tool may grow deeper is not the same work.
@@ -108,6 +123,10 @@ PROTOCOLS = {
             "tree": ["--cart", "-d", "10"],
             "sklearn": {"mode": "fit", "max_depth": 10},
             "rpart": {"mode": "fit", "maxdepth": 10},
+            # the GPU libraries' one tree (cluster-gpu-vs-others' gpubench.py;
+            # run.py runs them only for the end-to-end benchmark)
+            "cuml": {"depth": 10},
+            "xgboost": {"depth": 10},
         },
     },
     "c45_depth10_unpruned": {
@@ -122,7 +141,7 @@ PROTOCOLS = {
         },
     },
     # Pruned at the same fixed values, to depth 10 (the test-set benchmarks:
-    # cluster-airline, -higgs, -susy, -ecbdl).
+    # cluster-higgs, -susy, -ecbdl).
     "cart_depth10_alpha": {
         "title": "CART, grown to depth 10, pruned at a fixed alpha (cost-complexity)",
         "impls": {
@@ -177,32 +196,46 @@ for _protocol in PROTOCOLS.values():
 #   "all" = only the largest thread count asked for (./tree --hybrid: the CPU pool
 #   that grows the small subtrees gets every CPU). ./tree --gpu grows
 #   every node on the GPU, and its CPU threads feed the GPU and prune: "all" too.
-# warmup: True for the managed runtimes (Python, R, JVM): before the timed fit,
-#   the adapter fits one untimed tree on the first WARMUP_ROWS training rows in
-#   the same process (imports, first-call costs, JIT compilation). The native
-#   executables need none: loading is not timed, so the file cache does not matter.
+# Every tool runs as one fresh process that fits exactly one tree, with no
+#   warm-up fit before it (bench/README.md, "How time is measured").
 IMPLS = {
-    "tree": {"label": "./tree", "threads": "multi", "warmup": False},
-    "tree_cuda": {"label": "./tree Hybrid", "threads": "all", "warmup": False},
-    "tree_gpu_only": {"label": "./tree GPU", "threads": "all", "warmup": False},
-    "tree_simple": {"label": "./tree simple", "threads": "single", "warmup": False},
-    "sklearn": {"label": "scikit-learn", "threads": "single", "warmup": True},
-    "rpart": {"label": "rpart", "threads": "single", "warmup": True},
-    "j48": {"label": "Weka J48", "threads": "single", "warmup": True},
-    "yadt": {"label": "YaDT", "threads": "multi", "warmup": False},
+    "tree": {"label": "./tree", "threads": "multi"},
+    "tree_cuda": {"label": "./tree Hybrid", "threads": "all"},
+    "tree_gpu_only": {"label": "./tree GPU", "threads": "all"},
+    "tree_simple": {"label": "./tree simple", "threads": "single"},
+    "sklearn": {"label": "scikit-learn", "threads": "single"},
+    "rpart": {"label": "rpart", "threads": "single"},
+    "j48": {"label": "Weka J48", "threads": "single"},
+    "yadt": {"label": "YaDT", "threads": "multi"},
+    "cuml": {"label": "cuML", "threads": "all"},
+    "xgboost": {"label": "XGBoost", "threads": "all"},
 }
-
-# Rows of the untimed warm-up fit (run.py --warmup-rows overrides it; "all" =
-# the whole training set). 0, no warm-up: every run is one cold process that
-# fits one tree, as if the tool were run once (./tree's runs are the same).
-WARMUP_ROWS = 0
 
 
 
 # ------------------------------------------------------------------ datasets
 
+def meta_path(dataset):
+    """A dataset's meta.json: its own folder's, else <folder>/<dataset>.meta.json
+    (a prefix_of set, or a set in a shared folder); None if it is not prepared."""
+    own = DATA / dataset / "meta.json"
+    if own.exists():
+        return own
+    return next(iter(sorted(DATA.glob(f"*/{dataset}.meta.json"))), None)
+
+
+def prepared():
+    """The names of every prepared dataset (prefix_of sets included)."""
+    names = {d.name for d in DATA.iterdir() if (d / "meta.json").exists()}
+    names |= {f.name.removesuffix(".meta.json") for f in DATA.glob("*/*.meta.json")}
+    return sorted(names)
+
+
 def meta(dataset):
-    return json.load(open(DATA / dataset / "meta.json"))
+    path = meta_path(dataset)
+    if path is None:
+        raise FileNotFoundError(f"{dataset}: not prepared (bench/prepare.py {dataset})")
+    return json.load(open(path))
 
 
 def csv_names(m):
@@ -211,19 +244,42 @@ def csv_names(m):
     return (m.get("csv_features", m["features"]), m.get("csv_classes", m["classes"]))
 
 
+def stem(dataset, part):
+    """The path of a dataset's `part` rows without the extension (.f32, .y.i32,
+    .csv, .yadt.csv): <folder>/train or test in its own folder, <folder>/<name>
+    (training rows only) in a shared one; a prefix_of set's parent's."""
+    m = meta(dataset)
+    if "prefix_of" in m:
+        return stem(m["prefix_of"], part)
+    path = meta_path(dataset)
+    if path.name == "meta.json":
+        return path.parent / part
+    if part != "train":
+        raise ValueError(f"{dataset}: a set in a shared folder has training rows only")
+    return path.parent / dataset
+
+
 def folder(dataset):
     """The folder of the dataset's files: its parent's for a prefix_of set."""
-    return DATA / meta(dataset).get("prefix_of", dataset)
+    return stem(dataset, "train").parent
+
+
+def binary_meta(path):
+    """The meta.json ./tree reads for <stem>.f32: <stem>.meta.json if there is
+    one, else the folder's meta.json (src/core/dataset.cpp, loadBinary)."""
+    path = Path(path)
+    own = path.with_suffix(".meta.json")
+    return own if own.exists() else path.parent / "meta.json"
 
 
 def tree_input(dataset):
-    """./tree's arguments for the training rows: the binary dump (train.f32,
-    with train.y.i32 and meta.json beside it; the same values as train.csv,
+    """./tree's arguments for the training rows: the binary dump (<stem>.f32,
+    with <stem>.y.i32 and the meta.json beside it; the same values as the CSV,
     loaded without parsing text), after --rows N for a prefix_of set (the
     first N rows of its parent's)."""
     m = meta(dataset)
     rows = ["--rows", str(m["n_train"])] if "prefix_of" in m else []
-    return rows + [str(folder(dataset) / "train.f32")]
+    return rows + [f"{stem(dataset, 'train')}.f32"]
 
 
 def load(dataset, part):
@@ -232,8 +288,8 @@ def load(dataset, part):
     if rows == 0:  # no test set
         return np.empty((0, F), "<f4"), np.empty(0, "<i4")
     # count: a prefix_of set is the first rows of its parent's files
-    X = np.fromfile(folder(dataset) / f"{part}.f32", dtype="<f4", count=rows * F)
-    y = np.fromfile(folder(dataset) / f"{part}.y.i32", dtype="<i4", count=rows)
+    X = np.fromfile(f"{stem(dataset, part)}.f32", dtype="<f4", count=rows * F)
+    y = np.fromfile(f"{stem(dataset, part)}.y.i32", dtype="<i4", count=rows)
     if len(y) != rows or X.size != rows * F:
         raise AssertionError(f"{dataset} {part}: the files have fewer than {rows} rows")
     return X.reshape(rows, F), y
@@ -299,16 +355,20 @@ def verify_dataset(dataset):
     import hashlib
     m = meta(dataset)
     F = len(m["features"])
+    train = stem(dataset, "train")
     limits = {}  # file -> bytes read; the whole file if absent
     if "prefix_of" in m:
-        limits = {"train.csv": csv_prefix_bytes(folder(dataset) / "train.csv", m["n_train"]),
-                  "train.f32": 4 * F * m["n_train"], "train.y.i32": 4 * m["n_train"]}
+        limits = {Path(f"{train}.csv"): csv_prefix_bytes(f"{train}.csv", m["n_train"]),
+                  Path(f"{train}.f32"): 4 * F * m["n_train"], Path(f"{train}.y.i32"): 4 * m["n_train"]}
+    files = [meta_path(dataset), folder(dataset) / "yadt.names"]
+    for part in ("train", "test") if m["n_test"] else ("train",):
+        files += [Path(f"{stem(dataset, part)}{ext}") for ext in (".f32", ".y.i32", ".csv", ".yadt.csv")]
     hashes = {}
-    for path in sorted(folder(dataset).iterdir()):
-        if "prefix_of" in m and path.name == "meta.json":
-            path = DATA / dataset / "meta.json"
+    for path in files:
+        if not path.exists():
+            continue
         digest = hashlib.sha256()
-        left = limits.get(path.name, float("inf"))
+        left = limits.get(path, float("inf"))
         with open(path, "rb") as handle:
             while left > 0 and (chunk := handle.read(int(min(1 << 24, left)))):
                 digest.update(chunk)
@@ -319,11 +379,11 @@ def verify_dataset(dataset):
         if not len(y):
             continue
         prefix = part == "train" and "prefix_of" in m
-        if (folder(dataset) / f"{part}.yadt.csv").exists():  # not written for huge datasets
-            check_csv(folder(dataset) / f"{part}.yadt.csv", X, y, header=False, prefix=prefix)
+        yadt = Path(f"{stem(dataset, part)}.yadt.csv")
+        if yadt.exists():  # not written for huge datasets
+            check_csv(yadt, X, y, header=False, prefix=prefix)
         if part == "train":
-            check_csv(folder(dataset) / "train.csv", X, y, header=True, classes=csv_names(m)[1],
-                      prefix=prefix)
+            check_csv(f"{train}.csv", X, y, header=True, classes=csv_names(m)[1], prefix=prefix)
     return hashes
 
 

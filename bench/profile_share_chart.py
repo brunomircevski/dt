@@ -33,11 +33,11 @@ import benchlib as B  # noqa: E402
 from chart import GRID, INK, MUTED, NAMES  # noqa: E402
 
 DATASETS = ["chess_10m", "chess_50m", "chess_100m", "chess_500m", "chess_1b", "chess_2b",
-            "higgs", "airline", "ecbdl_15m"]
+            "higgs", "ecbdl_15m"]
 CHESS = 6  # the first CHESS datasets are chess; a divider separates them from the others
 LABELS = {"chess_10m": "chess 10M", "chess_50m": "chess 50M", "chess_100m": "chess 100M",
           "chess_500m": "chess 500M", "chess_1b": "chess 1000M", "chess_2b": "chess 2000M",
-          "higgs": "HIGGS", "airline": "Airline", "ecbdl_15m": "ECBDL'14 15M"}
+          "higgs": "HIGGS", "ecbdl_15m": "ECBDL'14 15M"}
 PROTOCOLS = [("cart_depth10", "CART"), ("c45_depth10_unpruned", "C4.5")]
 MODES = [("cpu-epyc", "Multicore (CPU only), epyc"),
          ("cpu-dell", "Multicore (CPU only), dell"),

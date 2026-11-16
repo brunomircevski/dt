@@ -1,5 +1,8 @@
 # Datasets for the CPU benchmark. prepare.py turns each entry into
-# bench/data/<name>/ (train/test split in every tool's input format).
+# bench/data/<name>/ (train/test split in every tool's input format). Since
+# 2026-11-16 each dataset's originals sit next to its prepared files in
+# datasets/<name>/ (on mordor3 datasets/ and bench/data are both ~/datasets);
+# the variants (susy_500k, covertype_10k) read their full set's originals.
 #
 # Keys:
 #   source         CSV file, relative to the repository root (header row required)
@@ -19,11 +22,15 @@
 #   seed           shuffle seed for split = "random" (default 1)
 #   yadt           write YaDT's files (default true; false for huge datasets
 #                  that YaDT never runs on)
+#   folder         the folder of its files when it shares one with other sets
+#                  (default: its name): then every file is named by the set,
+#                  <name>.meta.json, <name>.f32, <name>.y.i32, <name>.csv, and it
+#                  has training rows only (split "none", no YaDT files)
 #   prefix_of      another entry's name: this set is that set's first
 #                  train_rows training rows, with its test set. It has only
-#                  meta.json, no copy of the rows: ./tree reads the parent's
-#                  train.csv with --rows, the other tools the first rows of the
-#                  parent's binary files (benchlib.folder, tree_input). Only
+#                  <parent>/<name>.meta.json, no folder and no copy of the rows: ./tree reads the parent's
+#                  train.f32 with --rows, the other tools the first rows of the
+#                  parent's binary files (benchlib.stem, tree_input). Only
 #                  prefix_of and train_rows; the parent has no YaDT files.
 #
 # Only numeric features are supported for now. A small variant of a dataset is
@@ -35,19 +42,19 @@ source = "tests/data/diabetes.csv"
 split = "random"
 
 [covertype_10k]
-source = "datasets/covertype.csv"
+source = "datasets/covertype/covertype.csv"
 drop = ["Id"]
 split = "random"
 train_rows = 10_000
 max_test_rows = 2_500
 
 [covertype]
-source = "datasets/covertype.csv"
+source = "datasets/covertype/covertype.csv"
 drop = ["Id"]
 split = "random"
 
 [susy_50k]
-source = "datasets/supersymmetry.csv"
+source = "datasets/susy/supersymmetry.csv"
 drop = ["Id"]
 split = "tail"
 test_rows = 500_000
@@ -55,36 +62,24 @@ train_rows = 50_000
 max_test_rows = 12_500
 
 [susy]
-source = "datasets/supersymmetry.csv"
+source = "datasets/susy/supersymmetry.csv"
 drop = ["Id"]
 split = "tail"
 test_rows = 500_000
 
 [higgs]
-source = "datasets/higgs.csv"
+source = "datasets/higgs/higgs.csv"
 drop = ["Id"]
 split = "tail"
 test_rows = 500_000
 
 [susy_500k]
-source = "datasets/supersymmetry.csv"
+source = "datasets/susy/supersymmetry.csv"
 drop = ["Id"]
 split = "tail"
 test_rows = 500_000
 train_rows = 500_000
 max_test_rows = 100_000
-
-# US flights 1987-2008 (gbm-bench's airline, 115M rows, 13 integer features,
-# carrier and airports as codes; label: arrival delayed). Made from the public
-# download by bench/cluster/make_datasets.py. It has no published test set;
-# the rows are in date order, so since 2026-10-23 the test set is the last
-# year, 2008 (every row from the first with Year >= 2008 on), and training
-# takes 1987-2007: the model predicts flights after the ones it learned from.
-# Until then 500,000 random rows were the test set (cluster-airline-old).
-[airline]
-source = "datasets/airline.csv"
-split = "tail"
-test_from = ["Year", 2008]
 
 # ECBDL'14 (protein contact maps, GECCO 2014 big data competition): 32M rows,
 # 631 features (92 nominal ones as integer codes), label 0/1 (~2% contacts).
@@ -119,11 +114,13 @@ train_rows = 15_000_000
 # 1b is 100m ten times over (100M distinct rows, each 10 times).
 [chess_2b]
 source = "datasets/chess/chess_2b.csv"
+folder = "chess"
 split = "none"
 yadt = false
 
 [chess_1b]
 source = "datasets/chess/chess_1b.csv"
+folder = "chess"
 split = "none"
 yadt = false
 

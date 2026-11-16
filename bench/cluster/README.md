@@ -26,7 +26,7 @@ node: every step is a SLURM job. SLURM's commands are in `/opt/slurm-25.05.8/bin
 ```bash
 # once: the Python venv (python3-venv is missing there; virtualenv is installed)
 virtualenv -p python3 bench/.venv && bench/.venv/bin/pip install -r bench/requirements.txt
-# once: the downloads, see "Data" below, into bench/data/downloads
+# once: the downloads, see "Data" below, into each dataset's ~/datasets/<name>/
 sbatch --export=ALL,TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)" \
     bench/cluster/build.sh       # on hopper: ./tree for sm_75 + sm_80 + sm_90, ./tree_cpu, rusage
 sbatch bench/cluster/prepare.sh  # on a dell node: the datasets (checked by SHA-256), HIGGS prepared
@@ -39,20 +39,28 @@ power benchmark) on one build: one chain of jobs per node, each a `batch.sh`
 plan file (`bench/cluster/plans/final-<node>-<n>.txt`, its log next to it) run
 line by line, or `hybrid_vs_gpu_only.sh`, the most important first. `-m` sets
 the runs per case, `-k` the kinds of runs (`gpu`, `cpu`, `scaling`, `serial`,
-`simple`, `vs`, `gpulibs`, `profiling`, `hybrid`; default all). It runs from
-`~/dt-final`, a clone with its own build whose `bench/data`, `bench/.venv` and
-`datasets` link to `~/dt`'s (and a copy of `bench/.tools`), so rebuilding
-`~/dt` cannot change it.
+`simple`, `vs`, `gpulibs`, `profiling`, `hybrid`, `e2e`; default all), `-N`
+the nodes whose chains are submitted (default all seven). Every run is one
+fresh process that trains one tree, no warm-up (`bench/README.md`, "How time
+is measured"); 10 runs a case, 3 where one run takes over an hour. The
+libraries of `vs` share one `run.py` per dataset and the GPU libraries
+(`gpulibs`, `~/gpu-dt-bench`) run in rounds of one process per case, so their
+runs interleave. It runs from `~/dt-final`, a fresh clone with its own build
+and tools, so `~/dt` cannot change it.
 
 ```bash
-git clone ~/dt ~/dt-final && cd ~/dt-final
-ln -s ~/datasets/bench bench/data; ln -s ~/dt/bench/.venv bench/.venv; ln -s ~/datasets datasets
-cp -a ~/dt/bench/.tools bench/.tools
+git clone git@github.com:brunomircevski/dt.git ~/dt-final && cd ~/dt-final
+ln -s ~/datasets bench/data; ln -s ~/datasets datasets
+sbatch -p dell ... bench/setup.sh   # R and the JDK: ~/micromamba/envs/dtbench/bin on PATH (job.sh adds it)
 TREE_GIT_DESCRIBE="$(git describe --always --abbrev=12)" sbatch bench/cluster/build.sh
 bench/cluster/final.sh -t   # the check: one run of each kind of job, into bench/results/cluster-test/
 bench/cluster/final.sh -n   # the plans only; then move the old run folders they name out of bench/results
-bench/cluster/final.sh      # submit
+bench/cluster/final.sh      # submit (-N epyc1,epyc2,dell1,dell2,dell3: the CPU nodes only)
 ```
+
+The compute nodes lack `python3-venv`: create the venv there with
+`python3 -m venv --without-pip` and install with another venv's pip
+(`pip --python bench/.venv/bin/python install -r ...`).
 
 **2026-11-15 rerun** (f53347a9: d2957ff2's `src`): every ./tree backend but
 `--simple`, which did not change, 5 runs a case:
@@ -253,27 +261,43 @@ The data and measurements are those of the other benchmarks
 ## Data
 
 On mordor3 every dataset lives once, in `~/datasets`, outside the clones
-(since 2026-11-13). A checkout links to it twice: `datasets -> ~/datasets` and
-`bench/data -> ~/datasets/bench`.
+(since 2026-11-13), one folder per dataset with everything it needs, its
+prepared files and its originals side by side (since 2026-11-16). A checkout
+links to it twice: `datasets -> ~/datasets` and `bench/data -> ~/datasets`.
 
 ```
-~/datasets/
-  higgs.csv  supersymmetry.csv  airline.csv  covertype.csv
-  ecbdl/   ecbdl.csv (training set), ecbdl_test.csv (the competition's test set)
-  sorel/   sorel_full.csv (training set), sorel_test.csv
-  mnist8m/ mnist8m.csv, mnist8m_test.csv
-  chess/   chess_1b.csv, chess_2b.csv (no test sets: synthetic)
-  bench/
-    <name>/                 bench/prepare.py's output, one folder per datasets.toml entry
-    downloads/              the downloads make_datasets.py reads (ecbdl: a link to /home/Datasets/ECBDL)
-    supersymmetry_20k.csv   the golden tests' sample (tests/check.sh)
+~/datasets/<name>/      meta.json, train.f32, train.y.i32, test.f32, test.y.i32, train.csv,
+                        yadt.names, train.yadt.csv, test.yadt.csv (bench/prepare.py's output),
+                        and the originals:
+  higgs/                higgs.csv, higgs_openml_45570.pq
+  susy/                 supersymmetry.csv, susy.zip, susy_order.u64, susy_delta.i8,
+                        supersymmetry_20k.csv (the golden tests' sample, tests/check.sh)
+  susy_500k/            (its originals are susy's)
+  covertype/            covertype.csv, covertype.zip
+  mnist8m/              mnist8m.csv, mnist8m_test.csv
+  ecbdl/                ecbdl.csv (training set), ecbdl_test.csv (the competition's test set),
+                        training_set.arff (a link to /home/Datasets/ECBDL),
+                        ecbdl_15m.meta.json (its first 15M rows)
+  sorel/                sorel_full.csv (training set), sorel_test.csv,
+                        sorel_4m.meta.json (its first 4M rows)
+  chess/                every chess set, each file named after its set (datasets.toml
+                        folder = "chess"): chess_2b.{meta.json,f32,y.i32,csv},
+                        chess_1b.{meta.json,f32,y.i32,csv}, and chess_1m, 10m, 50m,
+                        100m, 500m.meta.json (chess_2b's first rows); no test sets
+  _baseline/            the tiny synthetic set (each tool's runtime footprint)
 ```
+
+`prepare.py` replaces only the prepared files; `prepare.py --yadt <names>` adds
+YaDT's files to a prepared set from its binary files. ./tree reads `X.f32`
+with `X.y.i32` and `X.meta.json` beside it, or the folder's `meta.json`.
+Airline was dropped for good on 2026-11-16 (data and code).
 
 A prepared folder holds the split in each tool's format; its `train.csv` is a
 link to the source CSV when the set takes all of the CSV's rows in the CSV's own
-format (ecbdl, sorel, mnist8m, the chess sets). A set that is another set's
-first rows (`prefix_of` in `datasets.toml`: `ecbdl_15m`, `sorel_4m`, and
-`chess_1m` to `chess_500m` of `chess_2b`) holds only `meta.json`: every tool reads
+format (ecbdl, sorel, mnist8m; a chess set's `chess_*.csv` is its source). A set
+that is another set's first rows (`prefix_of` in `datasets.toml`: `ecbdl_15m`,
+`sorel_4m`, and `chess_1m` to `chess_500m` of `chess_2b`) is only
+`<name>.meta.json` in its parent's folder: every tool reads
 the first N rows of the parent's binary files (./tree: the parent's `train.f32`
 with `--rows N`), and `run.py` hashes and checks just those bytes. Since
 2026-11-16 the benchmarks give ./tree `train.f32` rather than `train.csv` (the
@@ -289,27 +313,19 @@ upload is slow). `make_datasets.py` (run by `prepare.sh`) rebuilds
 `covertype.csv` and `higgs.csv` byte for byte as the desktop copies, makes the
 others, and stops on any SHA-256 difference:
 
-| File | Source | SHA-256 (= desktop; airline: first build) |
+| File | Source | SHA-256 (= desktop; ecbdl, chess: first build) |
 |---|---|---|
 | `covertype.csv` | UCI 31 `covertype.zip` (same rows and order; `Id`, header and class names added) | `fd7a387d…` |
 | `higgs.csv` | OpenML 45570 parquet: UCI HIGGS, same rows and order. UCI's own zip downloads at 0.5 MB/s, OpenML's at 19 MB/s. The parquet's doubles are slightly off the float32 values, so they are rounded back to float32 and printed as UCI does (`%.18e`, CRLF line ends, `Id`, label last as signal/background) | `71f566a2…` |
 | `supersymmetry.csv` | UCI 279 `susy.zip`: UCI's rows, order and text (since 2026-10-23; `Id` first, the label last as signal/background), so the last 500,000 rows are the published test set. Until then it was the desktop copy: the same float32 values and labels, but its rows shuffled (no common seed reproduces the order) and its doubles UCI's text read by an unknown parser, 0–6 ulps off (whole file `85ecf105…`). The benchmarks on SUSY before 2026-10-23 used that order | `d152c759…` |
-| `supersymmetry_20k.csv` (in `bench/data/`) | The desktop copy's first 20,000 rows, the sample of the golden trees in `tests/golden/` (`tests/check.sh`). Two files made from the desktop copy carry what is not public: `susy_order.u64` (40 MB, a hash of every row in the desktop's order) and `susy_delta.i8` (90 MB, every value's offset in float64 ulps; 21 MB zstd) | `4563a738…` |
-| `airline.csv` | gbm-bench's airline dataset (also in the XGBoost GPU paper): US flights from October 1987 to April 2008, `airline_14col.data.bz2` from kt.ijs.si (1.09 GB, SHA-256 `1f13460f…`). 115,069,017 rows, 13 integer features; the carrier and the airports become codes in sorted order, as in gbm-bench, and the label is `ArrDelay > 0` (`delayed` 47.5%, `on_time` 52.5%). Rows in file (date) order, so `datasets.toml` takes a random 500,000-row test set. There is no desktop copy: the hash is that of its first build. It takes about 3 minutes, and `prepare.py` 5 more | `25542603…` |
-
-Airline has 10.5× HIGGS's rows and 4.9× its values (1.49 G against 0.31 G;
-6.0 GB as float32 against 1.2 GB). Its CSV is smaller than HIGGS's only
-because its values are short integers. It is cluster-only: the CUDA backend
-needs 13.3 GiB of GPU memory for it, more than the laptop's 8 GB or a 2080 Ti's 11 GB.
-`ActualElapsedTime` partly gives the delay away, so its accuracy says little;
-it is there to compare speed, as in gbm-bench.
+| `supersymmetry_20k.csv` (in `susy/`) | The desktop copy's first 20,000 rows, the sample of the golden trees in `tests/golden/` (`tests/check.sh`). Two files made from the desktop copy carry what is not public: `susy_order.u64` (40 MB, a hash of every row in the desktop's order) and `susy_delta.i8` (90 MB, every value's offset in float64 ulps; 21 MB zstd) | `4563a738…` |
 
 `ecbdl.csv` is ECBDL'14 (protein contact-map prediction, the GECCO 2014 big
 data competition) from the ARFF in mordor3's `/home/Datasets/ECBDL` (60.8 GB):
 31,992,921 rows, 631 features, label 0/1 (about 2% contacts). The 539 real
 attributes become float32; the 92 nominal ones (predicted secondary structure
 H/E/C, solvent accessibility 0–4, X where the window runs past the chain) become
-integer codes in sorted order, as airline's airports. Its 20.2 G values are 65×
+integer codes in sorted order. Its 20.2 G values are 65×
 HIGGS's (81 GB as float32). Since 2026-10-23 `datasets.toml`'s `ecbdl` is the
 competition's split: every training row (`train.csv` is a link to `ecbdl.csv`,
 which keeps its own feature names and labels 0/1; `prepare.py` records them in

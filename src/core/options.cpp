@@ -106,6 +106,7 @@ void printUsage(const char *program) {
       << "\n"
       << "Output:\n"
       << "  --dump FILE              write the tree as text\n"
+      << "  --no-accuracy            skip the training and test accuracy after training\n"
       << "  --profile FILE           write where the training time goes as JSON: phases,\n"
       << "                           thread time per kind of work, GPU kernels and copies\n"
       << "\n"
@@ -261,6 +262,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.parallel.threads = static_cast<int>(parseCount(arg, args.value(arg)));
     } else if (arg == "--dump") {
       options.dumpPath = args.value(arg);
+    } else if (arg == "--no-accuracy") {
+      options.accuracy = false;
     } else if (arg == "--profile") {
       options.profilePath = args.value(arg);
     } else if (arg == "--handoff-rows") {

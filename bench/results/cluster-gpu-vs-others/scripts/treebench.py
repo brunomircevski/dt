@@ -4,7 +4,7 @@ to OUT. The last run dumps the tree; its test predictions are saved for the
 agreement table.
 
   treebench.py TREE DATASET CASE REPS OUT PRED_DIR SCRATCH [MODE]
-    DATASET  higgs | airline | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
+    DATASET  higgs | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
     CASE     cart | c45        depth <= 19, no pruning
     MODE     split (default, impl "tree"): the GPU with the CPU threads, which
              finish the small nodes; gpu (impl "tree_gpu"): --gpu-only, every

@@ -475,8 +475,8 @@ def pareto(ds="higgs"):
 # ---------------------------------------------------------------- 6. profile
 def profile():
     import profile_share_chart as P
-    datasets = ["higgs", "airline", "ecbdl_15m", "chess_1b"]
-    labels = {"higgs": "HIGGS", "airline": "Airline", "ecbdl_15m": "ECBDL", "chess_1b": "Chess"}
+    datasets = ["higgs", "ecbdl_15m", "chess_1b"]
+    labels = {"higgs": "HIGGS", "ecbdl_15m": "ECBDL", "chess_1b": "Chess"}
     modes = [("cpu-epyc", "EPYC"), ("cpu-dell", "Xeon"), ("gpuonly-hopper", "GPU-Based"),
              ("cuda-hopper", "Hybrid")]
     cases = P.load(RES / "cluster-profiling", datasets)

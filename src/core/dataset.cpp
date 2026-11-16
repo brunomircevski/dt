@@ -521,16 +521,21 @@ void scatterRows(const float *rows, std::size_t count, std::size_t featureCount,
 
 // A dataset as bench/prepare.py writes it: `path` (X.f32) holds the features,
 // row-major little-endian float32; X.y.i32 the class index of each row,
-// little-endian int32; meta.json in the same folder the names. Gives exactly
-// what loadCsv gives on the CSV of the same float32 values and labels.
+// little-endian int32; X.meta.json, or else meta.json in the same folder, the
+// names (several datasets may share a folder, each with its own X.meta.json).
+// Gives exactly what loadCsv gives on the CSV of the same float32 values and
+// labels.
 Dataset loadBinary(const std::string &path, ThreadPool *pool, std::size_t maxRows) {
   static_assert(std::endian::native == std::endian::little,
                 "the .f32 / .y.i32 files are little-endian");
   const std::string stem = path.substr(0, path.size() - 4); // without ".f32"
   const std::string labelPath = stem + ".y.i32";
   const std::size_t slash = path.rfind('/');
+  const std::string ownMeta = stem + ".meta.json";
   const std::string metaPath =
-      (slash == std::string::npos ? std::string() : path.substr(0, slash + 1)) + "meta.json";
+      std::ifstream(ownMeta).good()
+          ? ownMeta
+          : (slash == std::string::npos ? std::string() : path.substr(0, slash + 1)) + "meta.json";
 
   BinaryNames names = readBinaryNames(metaPath);
   const std::size_t featureCount = names.features.size();

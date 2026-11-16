@@ -1,9 +1,10 @@
 # rpart adapter: fit one protocol on a prepared dataset, print one JSON line.
 #
-#   Rscript rpart_fit.R data=DIR n_train=N n_test=M n_features=F warmup=ROWS \
+#   Rscript rpart_fit.R train=STEM test=STEM n_train=N n_test=M n_features=F \
 #       eval=0|1 mode=fit|alpha maxdepth=D [alpha=A]
 #
-# warmup=ROWS: one untimed fit on the first ROWS training rows first (0 = none).
+# One fresh process fits exactly one tree: no warm-up fit before it.
+# read_seconds: reading the training rows into a data.frame (not timed).
 # Timed: the rpart() call, plus for mode=alpha pruning to `alpha` (in ./tree's
 # units: a leaf's cost as a misclassification rate). No cross-validation
 # (xval = 0). Loading and prediction are not timed; with eval=1 the training
@@ -24,10 +25,10 @@ n_features <- as.integer(args$n_features)
 mode <- args$mode
 
 read_part <- function(part, rows) {
-  con <- file(file.path(args$data, paste0(part, ".f32")), "rb")
+  con <- file(paste0(args[[part]], ".f32"), "rb")  # STEM.f32: train= / test=
   values <- readBin(con, "numeric", n = rows * n_features, size = 4, endian = "little")
   close(con)
-  con <- file(file.path(args$data, paste0(part, ".y.i32")), "rb")
+  con <- file(paste0(args[[part]], ".y.i32"), "rb")
   labels <- readBin(con, "integer", n = rows, size = 4, endian = "little")
   close(con)
   frame <- as.data.frame(matrix(values, nrow = rows, byrow = TRUE))
@@ -52,9 +53,9 @@ fit <- function(frame) {
   model
 }
 
+start <- Sys.time()
 train <- read_part("train", as.integer(args$n_train))
-warmup <- as.integer(args$warmup)
-if (warmup > 0) invisible(fit(train[seq_len(min(warmup, nrow(train))), ]))
+read_seconds <- as.numeric(difftime(Sys.time(), start, units = "secs"))
 start <- Sys.time()
 model <- fit(train)
 seconds <- as.numeric(difftime(Sys.time(), start, units = "secs"))
@@ -63,10 +64,10 @@ peak_kib <- as.numeric(strsplit(trimws(sub("VmHWM:", "", grep("^VmHWM:", status,
                                 " ")[[1]][1])
 
 leaf <- model$frame$var == "<leaf>"
-result <- sprintf(paste0('"train_seconds": %.9f, "nodes": %d, "leaves": %d, "depth": %d, ',
+result <- sprintf(paste0('"train_seconds": %.9f, "read_seconds": %.9f, "nodes": %d, "leaves": %d, "depth": %d, ',
                          '"n_train_loaded": %d, "n_features_loaded": %d, ',
                          '"peak_rss_train_bytes": %.0f'),
-                  seconds, nrow(model$frame), sum(leaf),
+                  seconds, read_seconds, nrow(model$frame), sum(leaf),
                   max(floor(log2(as.numeric(rownames(model$frame))))),
                   nrow(train), ncol(train) - 1L, peak_kib * 1024)
 accuracy <- function(frame) {

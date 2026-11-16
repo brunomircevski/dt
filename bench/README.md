@@ -47,7 +47,9 @@ Finished benchmarks, one directory per backend, machine and dataset: see [result
 - Threads: `--threads 1,2,4,all` sets the thread counts tried for the multi-threaded tools.
 - Pinning: `--cpus` sets the order of logical CPUs to pin to.
 - Repetitions and limits: `--reps` (runs per case, default 1), `--timeout`.
-- Warm-up: `--warmup-rows` sets the rows of the managed runtimes' untimed warm-up fit (default `WARMUP_ROWS` = 50,000; `all` = the whole training set).
+- Long cases: a case whose first run takes over `--long-seconds` (3600) runs `--long-runs` (3) times in all.
+- End to end: `--no-eval` (no evaluation, ./tree `--no-accuracy`), `--prefetch` (the input into the page cache right before each process, dropped after it).
+- GPU libraries: `--impls cuml,xgboost` runs `results/cluster-gpu-vs-others/scripts/gpubench.py` in `GPU_PYTHON` (default `~/gpu-dt-bench/venv/bin/python`); never by default.
 - Thermal rest: `--cooldown` sets seconds of rest between processes.
 - JVM: `--java-heap` sets its maximum heap.
 - `--no-baseline` leaves out the runtime-footprint runs.
@@ -84,30 +86,80 @@ Each protocol is one well-defined piece of work, done with equivalent settings i
 
 ## How time is measured
 
-The reported time is **training time**: from the data being in memory to the finished, pruned model. Each tool measures it itself, with a monotonic clock:
+**One run = one fresh process** that starts, loads the data, does the tool's
+start-up (if it has any), trains **exactly one** tree, reports its numbers and
+exits. No tool fits anything before the timed fit, and no process trains
+several timed trees: ten runs are ten executions of the same command. This is
+the rule of every timing benchmark since 2026-11-16
+([BENCHMARK-CHANGES.MD](../BENCHMARK-CHANGES.MD), section 1).
 
-| Tool | What is timed |
-|---|---|
-| ./tree | `train total`: GPU setup and upload (`--gpu`, `--hybrid`), presort, build, pruning |
-| YaDT | the indexing part of its read time, plus build and prune (from its log) |
-| scikit-learn | `fit` |
-| rpart | `rpart()` + `prune()` |
-| J48 | `buildClassifier` |
+**Start-up versus warm-up.**
 
-**What is excluded, and why:**
-- **Excluded:** reading files, process start-up, and prediction.
-- **Why:** these measure the CSV parser and the language runtime, not the algorithm.
-- **Where to find them:** the whole-process wall time is recorded too (`wall_seconds`) for an appendix.
+| | Start-up: allowed, before the timer, reported apart | Warm-up: not allowed |
+|---|---|---|
+| What | preparation that does not depend on the data | running real training code before the timed fit |
+| Examples | process launch, interpreter / JVM / R start, imports, CUDA context, eager loading of the GPU kernels (`CUDA_MODULE_LOADING=EAGER`), **empty** memory pools and staging buffers | a fit on a few rows, an untimed full-size fit, growing a memory pool to the data's size, running the split kernels once |
+| Why | every real program pays it once, before its first tree, whatever the data | it leaves the JIT compiled, the pools grown and the caches filled: the timed fit would be a process's second fit, not running the tool once |
 
-**The GPU's one-time start-up is excluded, and reported apart.** Creating the CUDA context, the device memory pool and the page-locked staging buffers costs 0.1–0.7 s once per process (0.6–0.7 s on the RTX 2080 Ti node), whatever the data. ./tree does it on a background thread while the data loads (`gpuPrepare`) and prints it as `gpu startup` (`gpu_startup_seconds`), not in `train total`. Everything that depends on the data stays in: allocating and uploading it, the GPU presort, the build. This matches how the GPU libraries are timed (cuML, XGBoost: an untimed warm-up fit in the same process first, see [results/cluster-gpu-vs-others/BENCHMARK.md](results/cluster-gpu-vs-others/BENCHMARK.md)), i.e. a process that already uses the GPU. Do not add the start-up to the training time: it overlaps the load. For a single cold run, use `wall_seconds`: on small sets (SUSY) the start-up is larger than the whole training, and a CPU backend wins end to end.
+**What is timed: the training time**, all the work that depends on the data,
+from the data in host memory as the tool's input arrays to the finished tree.
+Each tool measures it with its own monotonic clock:
 
-**Preparation counts as training.** Each tool's own data preparation is included: `./tree`'s presort, YaDT's indexing, and the sorting the other libraries do inside their fit call. It is part of the algorithm, and leaving it out would favour some tools over others.
+| Tool | Start-up (not timed) | Timed |
+|---|---|---|
+| ./tree `--serial`, `--multicore`, `--simple` | none | `train total`: presort and build |
+| ./tree `--gpu`, `--hybrid` | CUDA context, a 2 MiB memory pool, pinned staging buffers (`gpuPrepare`), printed as `gpu startup`; it runs while the data loads, and `train total` starts only after it has finished (`gpu startup wait`: the part still running when the load ended) | `train total`: GPU setup and upload (allocation and pool growth included), presort, build |
+| scikit-learn | interpreter, imports | `DecisionTreeClassifier.fit` |
+| rpart | R, `library(rpart)` | `rpart()` |
+| Weka J48 | JVM, class loading | `buildClassifier` (HotSpot's JIT compilation during it stays in: a user who trains one tree pays it too) |
+| YaDT (1 and 48 threads) | process start | its `total time` minus its `load time` (parsing the CSV), i.e. its indexing, plus the sum of its per-tree `time` fields (build) |
+| cuML | interpreter, imports (RMM), CUDA context with eager kernels; RMM left at cuML's default, not configured or pre-grown | `fit` from host float32 arrays: copy, binning, build, and every allocation it makes |
+| XGBoost | interpreter, imports, CUDA context with eager kernels | `QuantileDMatrix` from host arrays plus `train` (both recorded) |
 
-**Repetitions and run order:**
-- **One kind of run.** `--reps` fresh processes per case; each one gives training time, peak memory, tree size and accuracy. Report the mean and the spread.
-- **Tree size and accuracy come from every run.** After its timer stops, each process reports nodes, leaves, depth, and training and test accuracy (each tool predicts with its own code; ./tree's dumped tree is evaluated by `benchlib.predict_tree`, checked against ./tree's own training accuracy; with `run.py --train-accuracy-only`, used on the mordor3 cluster, ./tree reports only its own training accuracy). They must be the same in every repetition; `report.py` marks a case where they are not.
-- **One warm-up rule for the managed runtimes** (scikit-learn, rpart, J48): one untimed fit on the first `--warmup-rows` training rows, in the same process, before the timed fit. It loads code paths, and the JVM's JIT compiles the same methods on 50,000 rows as on millions. The native tools (./tree, YaDT) need none: loading is not timed, so the page cache does not matter.
-- **Order:** shuffled anew on each repetition, so slow drift (heat, background load) is spread over all cases.
+**Not timed:** reading the file into memory; start-up (the GPU's is recorded as
+`gpu_startup_seconds`, the rest is only in the whole process's
+`wall_seconds`, broken down by the end-to-end benchmark,
+[results/cluster-end-to-end](results/cluster-end-to-end/BENCHMARK.md));
+prediction and evaluation; process exit.
+
+**Trees:** unpruned, depth ≤ 10 (protocols `cart_depth10` and
+`c45_depth10_unpruned`) for every timing number. Accuracy on pruned trees
+(CART at a fixed alpha, C4.5 at CF 0.25) will be compared separately, untimed;
+it is not part of these benchmarks yet.
+
+**Runs, order, placement:**
+- **10 runs per case**, 3 where one run takes over an hour (`--simple` on full
+  ECBDL'14 and SOREL-20M; `run.py` stops any case at `--long-runs` 3 whose
+  first run took over `--long-seconds` 3600, e.g. J48 on MNIST8M). Every
+  3-run case is named on its chart.
+- **Means only** in text and tables; charts may show the spread (min–max).
+- **Shuffled order:** `run.py` runs every case once per repetition, in a new
+  order each time, so slow drift spreads over all cases. The libraries of
+  `cluster-cpu-vs-others` share one `run.py`; the GPU libraries run in rounds
+  of one process per case, shuffled (their `job.sh`).
+- **Fixed placement:** every run of a case uses the same CPUs (`taskset`), the
+  same memory policy and the same GPU (`--exclusive` nodes; the GPU on the NUMA
+  node `bench/cluster/job.sh` picks).
+- **The page cache:** `--drop-cache` drops the datasets before every process
+  (reading is not timed; this keeps cached files from filling one NUMA node).
+- **Every row records** the commit, the node, the CPU list, the GPU,
+  `wall_seconds` and, for GPU tools, `gpu_startup_seconds`.
+
+**Preparation counts as training.** Each tool's own data preparation is
+included: ./tree's presort, YaDT's indexing, XGBoost's `QuantileDMatrix`, and
+the sorting or binning the other libraries do inside their fit call. It is part
+of the algorithm, and leaving it out would favour some tools over others.
+
+**Tree size and accuracy come from every run.** After its timer stops, each
+process reports nodes, leaves, depth, and training and test accuracy (each tool
+predicts with its own code; ./tree's dumped tree is evaluated by
+`benchlib.predict_tree`, checked against ./tree's own training accuracy). They
+must be the same in every repetition; `report.py` marks a case where they are
+not. `run.py --no-eval` skips all of it (the end-to-end runs).
+
+**`./tree --repeat` is not used for timing.** It serves only the power
+benchmark (`bench/power`, whose `--repeat-warmup` is part of its energy method)
+and A/B tests of code changes (`bench/cluster/ab.sh`).
 
 **Machine hygiene (record it; `run.py` writes `machine.json`):**
 - **Idle machine.** Set the `performance` governor, and either fix turbo or record whether it is on. Laptops throttle, so use `--cooldown` and look at the min–max spread.
@@ -125,7 +177,7 @@ The reported time is **training time**: from the data being in memory to the fin
 
 | Metric | Source | Includes | Excludes |
 |---|---|---|---|
-| **`peak_rss_train_bytes` (main metric)** | the kernel's high-water mark of resident memory (`VmHWM`), read by the tool right after training. YaDT, a closed binary, can't: its measured process only trains and saves the tree (a second, unmeasured process classifies the test rows), so its number is `ru_maxrss`. Exact, no sampling. | everything up to the end of training: runtime, libraries, input data, the loader's temporary memory, the 50k-row warm-up, training structures | evaluation (test set, predictions) |
+| **`peak_rss_train_bytes` (main metric)** | the kernel's high-water mark of resident memory (`VmHWM`), read by the tool right after training. YaDT, a closed binary, can't: its measured process only trains and saves the tree (a second, unmeasured process classifies the test rows), so its number is `ru_maxrss`. Exact, no sampling. | everything up to the end of training: runtime, libraries, input data, the loader's temporary memory, training structures | evaluation (test set, predictions) |
 | **`peak_rss_bytes`** | `ru_maxrss` from `wait4()` in the `rusage` launcher (GNU time's `%M`): the whole process | everything, evaluation included | |
 | **runtime footprint** | `peak_rss_bytes` of the same tool on the tiny `_baseline` dataset (200 rows) | interpreter, JVM or R, libraries | |
 
@@ -165,4 +217,4 @@ GNU time is the `time` package (forked from a small process, so it is exact too)
 
 Edit `datasets.toml`; [cluster/README.md](cluster/README.md#data) describes each set.
 
-Only numeric features are supported so far. To add one, put the CSV under `datasets/`, add an entry, and run `prepare.py <name>`. Use small variants (`train_rows`) to check correctness and the full datasets for timing and scaling. Keep cases that time out in the report as timeouts rather than dropping them.
+Only numeric features are supported so far. To add one, put the CSV in `datasets/<name>/` (each dataset's folder holds its originals next to its prepared files; on mordor3 `datasets/` and `bench/data` both link to `~/datasets`), add an entry, and run `prepare.py <name>`. Use small variants (`train_rows`) to check correctness and the full datasets for timing and scaling. Keep cases that time out in the report as timeouts rather than dropping them.

@@ -179,7 +179,7 @@ CSV stays for users). Checks:
     one.
 - [x] ./tree prints its load time (`load NNN ms`), for the end-to-end
   benchmark.
-- [ ] ./tree gets an option that skips its built-in accuracy computation
+- [x] ./tree gets an option that skips its built-in accuracy computation
   (e.g. `--no-accuracy`; today it always computes training and test accuracy
   after training, [src/app/main.cpp:225](src/app/main.cpp)), for the
   end-to-end benchmark. This is the same switch the adapters already have
@@ -192,7 +192,7 @@ CSV stays for users). Checks:
 
 ### 3.2 CPU libraries (scikit-learn, rpart, J48, YaDT)
 
-- [ ] **Remove the warm-up code entirely**, not just set it to 0, so nobody
+- [x] **Remove the warm-up code entirely**, not just set it to 0, so nobody
   can turn it on again:
   - `WARMUP_ROWS` and the `warmup` field of the tools table in
     `bench/benchlib.py`;
@@ -202,7 +202,7 @@ CSV stays for users). Checks:
   - their comments.
 
   Keep the results' `warmup_rows` column only if old rows need it to parse.
-- [ ] The rpart and YaDT harness from e3362b96 stays:
+- [x] The rpart and YaDT harness from e3362b96 stays:
   - rpart: CART, one thread, `maxdepth=10`;
   - YaDT: C4.5, `-np -m 2 -depth 10`, one thread and all 48 CPUs (run name
     `vs-epyc-<data>-yadt-c45-multi`).
@@ -214,7 +214,7 @@ CSV stays for users). Checks:
   - on mordor3, HIGGS had only `yadt.names` on 2026-11-16;
   - record the sha256 of the `.f32`/`.i32` files first and check they are
     unchanged afterwards.
-- [ ] `bench/setup.sh` downloads Weka and YaDT. R 4.6.1 with rpart 4.1.27 and
+- [x] `bench/setup.sh` downloads Weka and YaDT. R 4.6.1 with rpart 4.1.27 and
   OpenJDK 17 are in the micromamba env `~/micromamba/envs/dtbench` on mordor3.
 
 ### 3.3 GPU libraries: `bench/results/cluster-gpu-vs-others/scripts/gpubench.py` and `job.sh`
@@ -224,15 +224,15 @@ Today one process does a warm-up fit (cuML on all rows with
 timed fits. That breaks the rule twice.
 
 Change it to:
-- [ ] **One timed fit per process.**
+- [x] **One timed fit per process.**
   - `job.sh` launches a new `gpubench.py` process for every run (REPS = 1),
     10 per case, interleaved over the cases (shuffled order, §2).
   - `results.jsonl` gets one row per process.
-- [ ] **No warm-up fit.**
+- [x] **No warm-up fit.**
   - Delete `WARMUP_ROWS`, `CUML_WARMUP_ROWS` and the warm-up block.
   - Also delete the 50,000-row forest agreement check, or move it into a
     separate, untimed checking process.
-- [ ] **An explicit start-up phase before the timer, recorded as
+- [x] **An explicit start-up phase before the timer, recorded as
   `startup_seconds`:**
   1. export `CUDA_MODULE_LOADING=EAGER` in `job.sh` before the process
      starts;
@@ -245,23 +245,30 @@ Change it to:
      resource as it is. Any allocation `fit` makes stays timed, as ./tree's
      pool growth does;
   5. for XGBoost, nothing beyond the context.
-- [ ] **Timed:** exactly what it is today, from host float32 NumPy arrays to
+
+  Done 2026-11-16. Caveat (review, 2026-11-17): libcuml and libxgboost link
+  their own CUDA runtime statically, so `cudaFree(0)` through cuda-python
+  creates the shared context but does not load *their* kernels; with EAGER
+  each library loads all of its kernels at its first CUDA call, inside `fit`.
+  `CUDA_MODULE_LOADING` can be overridden (`job.sh`, `run.py`) to measure
+  EAGER against LAZY; see `cluster-gpu-vs-others/BENCHMARK.md`.
+- [x] **Timed:** exactly what it is today, from host float32 NumPy arrays to
   the fitted model.
   - cuML: `fit` (copy, binning, build).
   - XGBoost: `QuantileDMatrix` and `train`.
   - Keep recording XGBoost's `QuantileDMatrix` part separately, as now.
-- [ ] An evaluation switch like the adapters' `eval=0|1`: today the last fit
+- [x] An evaluation switch like the adapters' `eval=0|1`: today the last fit
   always computes accuracy, predictions and the tree walk. The timing runs
   keep evaluation on, after the timer; the end-to-end benchmark turns it off.
-- [ ] VRAM: peak above idle per process, sampled as now.
-- [ ] The "forest of 10 / 10" bars (library default forests) follow the same
+- [x] VRAM: peak above idle per process, sampled as now.
+- [x] The "forest of 10 / 10" bars (library default forests) follow the same
   rule: one fit per process, no warm-up.
-- [ ] Document the new procedure in the docstring and in
+- [x] Document the new procedure in the docstring and in
   `cluster-gpu-vs-others/BENCHMARK.md` ("Time" bullet).
 
 ### 3.4 Harness
 
-- [ ] `bench/cluster/final.sh`:
+- [x] `bench/cluster/final.sh`:
   - default runs 10, with 3 for the long cases (§2);
   - remove `airline` from `PROFILE_DATA` (airline is dropped from the paper;
     chess stays for profiling);
@@ -269,7 +276,7 @@ Change it to:
     interleaving (§2);
   - submit the GPU libraries' job as part of the run (`gpulibs`), with the new
     `gpubench.py`.
-- [ ] Every result row records: the commit (`git describe`), the node, the CPU
+- [x] Every result row records: the commit (`git describe`), the node, the CPU
   list, the GPU, `wall_seconds`, and `gpu_startup_seconds` for GPU tools
   (./tree already does; `gpubench.py` adds it).
 

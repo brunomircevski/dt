@@ -29,7 +29,7 @@ COLORS = {"tree": "#2a78d6", "sklearn": "#eb6834", "rpart": "#1baf7a", "j48": "#
           "yadt": "#e87ba4", "tree_cuda": "#008300"}
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 NAMES = {"susy": "SUSY", "higgs": "HIGGS", "covertype": "Covertype", "diabetes": "Diabetes",
-         "airline": "airline", "ecbdl": "ECBDL'14", "ecbdl_15m": "ECBDL'14 (15M sample)",
+         "ecbdl": "ECBDL'14", "ecbdl_15m": "ECBDL'14 (15M sample)",
          "chess_1m": "chess 3×3 (1M)", "chess_10m": "chess 3×3 (10M)",
          "chess_100m": "chess 3×3 (100M)", "chess_1b": "chess 3×3 (1000M)",
          "mnist8m": "MNIST8M", "sorel": "SOREL-20M", "sorel_4m": "SOREL-20M (4M sample)"}

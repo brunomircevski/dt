@@ -1,10 +1,11 @@
 """scikit-learn adapter: fit one tree on a prepared dataset, print one JSON line.
 
-  python sklearn_fit.py data=DIR n_train=N n_test=M n_features=F threads=T \
-      warmup=ROWS eval=0|1 mode=fit [max_depth=D] [ccp_alpha=A] [criterion=gini|entropy] \
+  python sklearn_fit.py train=STEM test=STEM n_train=N n_test=M n_features=F threads=T \
+      eval=0|1 mode=fit [max_depth=D] [ccp_alpha=A] [criterion=gini|entropy] \
       [min_samples_leaf=M]
 
-warmup=ROWS: one untimed fit on the first ROWS training rows first (0 = none).
+One fresh process fits exactly one tree: no warm-up fit before it.
+read_seconds: reading the training rows into NumPy arrays (not timed).
 Timed: DecisionTreeClassifier.fit (one tree, on one thread: scikit-learn does
 not parallelise a single tree). With ccp_alpha the two parts of fit are timed
 apart: growing (fit with ccp_alpha=0) and pruning (_prune_tree() at ccp_alpha,
@@ -26,9 +27,10 @@ F = int(args["n_features"])
 
 
 def read(part, rows):
-    # The first rows only: data= may be a bigger set's folder (prefix_of in datasets.toml).
-    X = np.fromfile(f"{args['data']}/{part}.f32", dtype="<f4", count=rows * F).reshape(rows, F)
-    y = np.fromfile(f"{args['data']}/{part}.y.i32", dtype="<i4", count=rows)
+    # STEM.f32 and STEM.y.i32, the first rows only: STEM may be a bigger set's
+    # (prefix_of in datasets.toml).
+    X = np.fromfile(f"{args[part]}.f32", dtype="<f4", count=rows * F).reshape(rows, F)
+    y = np.fromfile(f"{args[part]}.y.i32", dtype="<i4", count=rows)
     return X, y
 
 
@@ -51,16 +53,15 @@ def fit(X, y):
     return model, grown - start, time.perf_counter() - grown
 
 
+start = time.perf_counter()
 X, y = read("train", int(args["n_train"]))
-warmup = int(args["warmup"])
-if warmup:
-    fit(X[:warmup], y[:warmup])
+read_seconds = time.perf_counter() - start
 model, build, prune = fit(X, y)
 seconds = build + (prune or 0.0)
 peak_kib = next(int(line.split()[1]) for line in open("/proc/self/status")
                 if line.startswith("VmHWM:"))
 
-result = {"train_seconds": seconds, "build_seconds": build,
+result = {"train_seconds": seconds, "read_seconds": read_seconds, "build_seconds": build,
           **({"prune_seconds": prune} if prune is not None else {}),
           "nodes": int(model.tree_.node_count),
           "leaves": int(model.get_n_leaves()), "depth": int(model.get_depth()),

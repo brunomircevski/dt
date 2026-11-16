@@ -95,13 +95,21 @@ bins; no GPU C4.5 exists). Library defaults apart from the settings for an
 equivalent tree.}
 
 \subsection{Protocol and Measurement}
-\plan{Timing: one unpruned tree, depth $\le$ 10, training only (GPU upload and
-presort included, one-time GPU start-up reported apart); peak RAM and VRAM; mean
-and spread over the runs. Accuracy: pruned trees (CART fixed $\alpha$, C4.5 CF
-0.25), not timed. Every run is one fresh process, no warm-up fit; data loading
-not timed. Fairness notes: hybrid CPU threads, input layout. Each implementation
-in its best measured setting: the hybrid's hand-off size is the fastest of a
-sweep (256--32768) per GPU node and dataset at the reported depth, stored in
-bench/handoff\_rows.json and reused; report ./tree's untuned default (10
-$\times$ attributes within [512, 16384]) next to it. Source:
-bench/results/handoff-sweep/.}
+Each run is a fresh process that loads the data and trains one unpruned tree
+of depth at most 10; no warm-up fit is performed and every run is an
+independent execution of the same command. We time all data-dependent
+training work (host-to-device transfer, memory allocation including pool
+growth, presorting or binning, tree construction) and exclude reading the
+input file and runtime start-up (process launch, interpreter or JVM start,
+CUDA context creation, kernel loading, creation of empty memory pools); the
+GPU start-up is reported separately. Each case is run 10 times (3 times where a
+run takes over an hour) in shuffled order on an exclusively allocated node, and
+we report the mean.
+
+\plan{Also: peak RAM and VRAM. Accuracy: pruned trees (CART fixed $\alpha$,
+C4.5 CF 0.25), not timed, later. Fairness notes: hybrid CPU threads, input
+layout. Each implementation in its best measured setting: the hybrid's hand-off
+size is the fastest of a sweep (256--32768) per GPU node and dataset at the
+reported depth, stored in bench/handoff\_rows.json and reused; report ./tree's
+untuned default (10 $\times$ attributes within [512, 16384]) next to it.
+Source: bench/results/handoff-sweep/.}

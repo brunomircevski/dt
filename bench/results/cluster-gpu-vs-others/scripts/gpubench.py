@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""One benchmark case of a GPU decision-tree library: one process, an untimed
-warm-up fit, then REPS timed fits of TREES trees; appends one JSON line per
-timed fit to OUT and saves the last model's test predictions.
+"""One run of a GPU decision-tree library: one fresh process that loads the
+data, does the library's start-up, fits exactly one model (one tree, or one
+forest of TREES trees) under the timer, then (EVAL=1) evaluates it; appends one
+JSON line to OUT and saves the test predictions. No warm-up fit: ten runs are
+ten executions of this command (BENCHMARK-CHANGES.MD, section 1).
 
-  gpubench.py IMPL DATASET CASE REPS OUT PRED_DIR [TREES [DEPTH]]
+  gpubench.py IMPL DATASET CASE OUT PRED_DIR [TREES [DEPTH]]
     IMPL     cuml | xgboost
-    DATASET  higgs | mnist8m | susy | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT/<dataset>)
+    DATASET  higgs | mnist8m | susy | ecbdl_15m | chess_1b   (prepared in $DATA_ROOT: <dataset>/ or <folder>/<dataset>.*)
     CASE     cart   Gini (cuML) or the Gini-equivalent squared error (XGBoost;
                     with more than 2 classes one multi-output tree on the
                     one-hot labels, whose summed squared error is Gini too).
@@ -15,16 +17,34 @@ timed fit to OUT and saves the last model's test predictions.
              num_parallel_tree in one round
     DEPTH    depth limit (default 19)
 
+The phases, in order:
+  1. read     train.f32 / train.y.i32 into host float32 / int32 NumPy arrays
+              (read_seconds; not timed);
+  2. start-up import the library (cuML imports RMM; import_seconds), then
+              create the CUDA context on the chosen GPU with cudaFree(0)
+              (gpu_startup_seconds). CUDA_MODULE_LOADING=EAGER (job.sh) loads
+              the kernels with the context. RMM keeps cuML's default memory
+              resource: nothing is reconfigured or pre-grown, so every
+              allocation fit makes stays timed (as ./tree's pool growth does).
+              startup_seconds = import_seconds + gpu_startup_seconds; not timed;
+  3. timed    from the host arrays to the fitted model (train_seconds):
+              cuML fit (copy to the GPU, binning, growing); XGBoost
+              QuantileDMatrix (dmatrix_seconds) + train (build_seconds);
+  4. EVAL=1   (default) training and test accuracy, test predictions, the tree
+              walk (nodes, depth, root split); EVAL=0 skips all of it, so the
+              process ends with the fitted model (the end-to-end benchmark).
+
 Every library grows trees of depth <= DEPTH with binary splits on <= thresholds,
 all features, all rows (no bootstrap, no feature sampling), no pruning, on its
 default number of histogram bins. With TREES > 1 every tree of the forest is
 the same tree as with TREES = 1, so the time per tree is comparable with one
-tree's. The timed part is everything from the host float32 arrays to the
-fitted model: copy to the GPU, quantile binning, growing.
+tree's.
 
 Environment:
-  WARMUP_ROWS  rows of the untimed warm-up fit (default 50,000; 0 = all rows,
-               a full-size fit that also grows the library's memory pools)
+  EVAL         1 (default) or 0, see above
+  GPU_MEMORY   1 (default): sample the GPU's memory.used every 20 ms with
+               nvidia-smi (gpu_peak_mib: the peak above the idle value read
+               before the start-up); 0: no sampler (run.py samples from outside)
   FOREST       identical (default): the settings above, every tree the same;
                default: each library's own random-forest defaults, only the
                criterion and the depth limit set, so the trees differ:
@@ -34,30 +54,47 @@ Environment:
                nodes is then the mean over the forest's trees, depth the max.
   N_STREAMS    cuML's n_streams (default: 1 for one tree, cuML's default 4
                for a forest, whose trees it grows concurrently, one per stream)
+  TREE_GIT_DESCRIBE  the commit of the benchmark code, recorded in every row
 """
-import json, os, socket, subprocess, sys, threading, time
+import glob, json, os, socket, subprocess, sys, threading, time
 import numpy as np
 
-DATA_ROOT = os.environ.get("DATA_ROOT", os.path.expanduser("~/datasets/bench"))
+DATA_ROOT = os.environ.get("DATA_ROOT", os.path.expanduser("~/datasets"))
 DEPTH = 19  # set by main()
 TREES = 1   # set by main()
 CLASSES = 2  # set by main()
-WARMUP_ROWS = int(os.environ.get("WARMUP_ROWS", 50_000)) or None
+EVAL = os.environ.get("EVAL", "1") == "1"
 BINS = {"cuml": 128, "xgboost": 256}  # each library's default
 FOREST = os.environ.get("FOREST", "identical")
 assert FOREST in ("identical", "default"), FOREST
 
 
+def meta_path(dataset):
+    """<dataset>/meta.json, else <folder>/<dataset>.meta.json (a prefix_of set,
+    or a set in a shared folder), as bench/benchlib.py."""
+    own = f"{DATA_ROOT}/{dataset}/meta.json"
+    return own if os.path.exists(own) else sorted(glob.glob(f"{DATA_ROOT}/*/{dataset}.meta.json"))[0]
+
+
+def stem(dataset, part):
+    """The files' path without .f32 / .y.i32 (bench/benchlib.py stem): a
+    prefix_of set (sorel_4m, ecbdl_15m, chess_100m) is the first rows of its
+    parent's files."""
+    path = meta_path(dataset)
+    m = json.load(open(path))
+    if "prefix_of" in m:
+        return stem(m["prefix_of"], part)
+    folder = os.path.dirname(path)
+    return f"{folder}/{part}" if path.endswith("/meta.json") else f"{folder}/{dataset}"
+
+
 def load(dataset, part):
-    """A prefix_of set (sorel_4m, ecbdl_15m, chess_100m) is the first rows of
-    its parent's files (bench/benchlib.py)."""
-    m = json.load(open(f"{DATA_ROOT}/{dataset}/meta.json"))
+    m = json.load(open(meta_path(dataset)))
     n, F = (m["n_train"] if part == "train" else m["n_test"]), len(m["features"])
     if n == 0:  # no test set
         return np.empty((0, F), np.float32), np.empty(0, np.int32)
-    folder = f"{DATA_ROOT}/{m.get('prefix_of', dataset)}"
-    X = np.fromfile(f"{folder}/{part}.f32", dtype="<f4", count=n * F).reshape(n, F)
-    y = np.fromfile(f"{folder}/{part}.y.i32", dtype="<i4", count=n)
+    X = np.fromfile(f"{stem(dataset, part)}.f32", dtype="<f4", count=n * F).reshape(n, F)
+    y = np.fromfile(f"{stem(dataset, part)}.y.i32", dtype="<i4", count=n)
     return X, y
 
 
@@ -181,7 +218,9 @@ def xgb_fit(X, y, case, trees):
         params = {"device": "cuda", "tree_method": "hist", **objective, **multi,
                   "eta": 1.0, "subsample": 0.8, "colsample_bynode": 0.8, "lambda": 1e-5,
                   "max_depth": DEPTH, "num_parallel_tree": trees, "seed": 0}
-        return xgb.train(params, dtrain, num_boost_round=1), {"dmatrix_seconds": dmatrix}
+        t = time.perf_counter()
+        booster = xgb.train(params, dtrain, num_boost_round=1)
+        return booster, {"dmatrix_seconds": dmatrix, "build_seconds": time.perf_counter() - t}
     # trees > 1: XGBoost's random-forest mode, num_parallel_tree trees in one
     # round on the same gradients; with all rows and features they are the same
     # tree, and XGBoost averages the forest (each leaf scaled by 1/trees).
@@ -199,8 +238,9 @@ def xgb_fit(X, y, case, trees):
               "max_bin": BINS["xgboost"],
               "subsample": 1.0, "colsample_bytree": 1.0,  # nthread: its default, the CPUs it may use
               "max_depth": DEPTH, "grow_policy": "depthwise", "num_parallel_tree": trees}
+    t = time.perf_counter()
     booster = xgb.train(params, dtrain, num_boost_round=1)
-    return booster, {"dmatrix_seconds": dmatrix}
+    return booster, {"dmatrix_seconds": dmatrix, "build_seconds": time.perf_counter() - t}
 
 
 def xgb_predict(booster, X):
@@ -232,51 +272,84 @@ def version(impl):
     return __import__(impl).__version__
 
 
+def cpu_list():
+    """The CPUs this process may run on, as ranges: "0-15,32-47"."""
+    cpus, ranges = sorted(os.sched_getaffinity(0)), []
+    for cpu in cpus:
+        if ranges and cpu == ranges[-1][1] + 1:
+            ranges[-1][1] = cpu
+        else:
+            ranges.append([cpu, cpu])
+    return ",".join(f"{a}-{b}" if a != b else str(a) for a, b in ranges)
+
+
+def start_up(impl):
+    """The library's start-up, before the timer: import it, then create the
+    CUDA context (nothing else: no allocator pool, no fit).
+    -> (import seconds, context seconds, GPU name)."""
+    t = time.perf_counter()
+    if impl == "cuml":
+        import cuml.ensemble  # noqa: F401  (imports RMM)
+    else:
+        import xgboost  # noqa: F401
+    imported = time.perf_counter() - t
+    from cuda.bindings import runtime
+    t = time.perf_counter()
+    error, = runtime.cudaFree(0)
+    context = time.perf_counter() - t
+    assert error == runtime.cudaError_t.cudaSuccess, error
+    error, props = runtime.cudaGetDeviceProperties(0)
+    name = props.name.decode().rstrip("\x00") if error == runtime.cudaError_t.cudaSuccess else None
+    return imported, context, name
+
+
 def main():
     global DEPTH, TREES, CLASSES
-    impl, dataset, case, reps, out, pred_dir = sys.argv[1:7]
+    impl, dataset, case, out, pred_dir = sys.argv[1:6]
     assert case == "cart", "CART only: no GPU library grows C4.5 trees"
-    TREES = int(sys.argv[7]) if len(sys.argv) > 7 else 1
-    DEPTH = int(sys.argv[8]) if len(sys.argv) > 8 else 19
+    TREES = int(sys.argv[6]) if len(sys.argv) > 6 else 1
+    DEPTH = int(sys.argv[7]) if len(sys.argv) > 7 else 19
     fit, info, predict = IMPLS[impl]
-    X, y = load(dataset, "train")
-    # No test set (chess): predict 50,000 training rows instead, no test accuracy.
-    Xt, yt = load(dataset, "test")
-    if not len(yt):
-        Xt, yt = X[:50_000], None
-    CLASSES = int(y.max()) + 1
-    gpu = GpuMemory()
+    gpu = GpuMemory() if os.environ.get("GPU_MEMORY", "1") == "1" else None  # idle value first
+
     t = time.perf_counter()
-    model, _ = fit(X[:WARMUP_ROWS], y[:WARMUP_ROWS], case, TREES)  # imports, CUDA context, JIT
-    warmup = time.perf_counter() - t
-    del model
-    extra = {}
-    if TREES > 1 and FOREST == "identical":  # check on 50,000 rows that the forest predicts as its one tree does
-        forest, _ = fit(X[:50_000], y[:50_000], case, TREES)
-        one, _ = fit(X[:50_000], y[:50_000], case, 1)
-        extra["warmup_agreement_one_tree"] = float(np.mean(predict(forest, Xt) == predict(one, Xt)))
-        del forest, one
-    for rep in range(int(reps)):
-        t = time.perf_counter()
-        model, timing = fit(X, y, case, TREES)
-        seconds = time.perf_counter() - t
-        row = {"impl": impl, "dataset": dataset, "case": case, "bins": BINS[impl], "rep": rep,
-               "trees": TREES, "forest": FOREST, "depth_limit": DEPTH, "train_seconds": seconds, **timing,
-               "warmup_seconds": warmup, "warmup_rows": WARMUP_ROWS or len(X), **extra,
-               "version": version(impl), "host": socket.gethostname(), "time": time.strftime("%F %T")}
-        if impl == "cuml":
-            row["n_streams"] = n_streams()
-        if rep == int(reps) - 1:
-            train_acc, pred, nodes, d, root = info(model, X, y, Xt)
-            if yt is not None:
-                np.save(f"{pred_dir}/{impl}-{case}-{TREES}-{FOREST}.npy", pred)
-            row.update(train_accuracy=train_acc,
-                       test_accuracy=float(np.mean(pred == yt)) if yt is not None else None,
-                       nodes=nodes, depth=d, root=root, gpu_peak_mib=gpu.stop())
-        print(json.dumps(row), flush=True)
-        with open(out, "a") as f:
-            f.write(json.dumps(row) + "\n")
-        del model
+    X, y = load(dataset, "train")
+    read = time.perf_counter() - t
+    CLASSES = int(y.max()) + 1
+    imported, context, gpu_name = start_up(impl)
+
+    t = time.perf_counter()
+    model, timing = fit(X, y, case, TREES)
+    seconds = time.perf_counter() - t
+
+    row = {"impl": impl, "dataset": dataset, "case": case, "bins": BINS[impl],
+           "trees": TREES, "forest": FOREST, "depth_limit": DEPTH, "train_seconds": seconds, **timing,
+           "read_seconds": read, "import_seconds": imported, "gpu_startup_seconds": context,
+           "startup_seconds": imported + context,
+           "n_train_loaded": int(X.shape[0]), "n_features_loaded": int(X.shape[1]),
+           "version": version(impl), "commit": os.environ.get("TREE_GIT_DESCRIBE"),
+           "host": socket.gethostname(), "cpus": cpu_list(), "gpu": gpu_name,
+           "gpu_index": os.environ.get("CUDA_VISIBLE_DEVICES"),
+           "cuda_module_loading": os.environ.get("CUDA_MODULE_LOADING"),
+           "eval": EVAL, "time": time.strftime("%F %T")}
+    if impl == "cuml":
+        row["n_streams"] = n_streams()
+    if EVAL:
+        # No test set (chess): predict 50,000 training rows instead, no test accuracy.
+        Xt, yt = load(dataset, "test")
+        if not len(yt):
+            Xt, yt = X[:50_000], None
+        train_acc, pred, nodes, d, root = info(model, X, y, Xt)
+        if yt is not None:
+            np.save(f"{pred_dir}/{impl}-{case}-{TREES}-{FOREST}.npy", pred)
+        row.update(train_accuracy=train_acc,
+                   test_accuracy=float(np.mean(pred == yt)) if yt is not None else None,
+                   nodes=nodes, depth=d, root=root)
+    if gpu:
+        row["gpu_peak_mib"] = gpu.stop()
+    print(json.dumps(row), flush=True)
+    with open(out, "a") as f:
+        f.write(json.dumps(row) + "\n")
 
 
 if __name__ == "__main__":

@@ -48,13 +48,19 @@ either side: reading the file, prediction, accuracy.
 | build | all GPU levels, hand-offs, the CPU threads finishing small subtrees, assembling the host tree |
 | prune | C4.5 only: collapse of useless splits and training-value thresholds (part of C4.5 even without `--prune`) |
 
-Not in it: CSV parsing; the CUDA context and the pinned staging buffers (4 ×
-32 MB for uploads, 2 × 128 MB for the hand-offs), both made on a background
-thread while the CSV loads (`src/app/main.cpp`).
+Not in it: reading the input; the GPU start-up (the CUDA context with its
+kernels loaded eagerly, a 2 MiB memory pool and the pinned staging buffers: 4 ×
+32 MB for uploads, 2 × 128 MB for the hand-offs), made on a background
+thread while the input loads (`src/app/main.cpp`) and printed as `gpu
+startup`; `train total` starts only after it has finished.
 
-**cuML / XGBoost** (`gpubench.py`): one Python process per case loads
-row-major float32 NumPy arrays, runs an untimed warm-up fit (cuML on all rows,
-XGBoost on 50,000), then 3 timed fits (`time.perf_counter`), reported as means:
+**cuML / XGBoost** (`gpubench.py`, since 2026-11-16): one fresh Python process
+per run, no warm-up fit. It loads row-major float32 NumPy arrays, then does the
+start-up (import the library, which for cuML imports RMM; then the CUDA context
+alone, `cudaFree(0)`, with `CUDA_MODULE_LOADING=EAGER`; RMM stays at cuML's
+default memory resource, nothing reconfigured or pre-grown), then exactly one
+timed fit (`time.perf_counter`). Ten runs are ten processes, in rounds of one
+process per case in a shuffled order (`job.sh`); reported as means:
 
 * cuML `fit(X, y)`: input conversion, host→device copy, quantile binning,
   growing.
@@ -63,7 +69,7 @@ XGBoost on 50,000), then 3 timed fits (`time.perf_counter`), reported as means:
 * `predict` and model export are not timed.
 
 VRAM: peak `nvidia-smi` memory in use above idle, for the libraries over the
-whole process (warm-up included).
+whole process (start-up included).
 
 ## Fairness
 
@@ -83,12 +89,16 @@ and preprocessing (presort against binning).
 3. **Upload path:** ./tree uploads through pinned staging buffers (~55 GB/s
    on the H100 node); cuML copies from pageable memory (typically
    10–25 GB/s). A real engineering win, but it should be shown apart.
-4. The pinned buffers and the CUDA context are made during the untimed CSV
-   load (small).
+4. The pinned buffers and the CUDA context are made during the untimed load
+   (small); the libraries' context and imports are untimed too, but not
+   overlapped with anything.
 
-**In the libraries' favour:** their timed fits follow a warm-up in the same
-process, with a memory pool already grown; ./tree is a cold process every run
-and pays its allocations in `gpu setup`.
+**Neither has a warm-up:** since 2026-11-16 every library fit is a process's
+first and only fit, as ./tree's tree is: memory pools grow inside the timed
+fit for both (./tree in `gpu setup`, cuML's allocations in `fit`), and any JIT or
+first-call cost is timed. Until then the libraries' timed fits followed an
+untimed warm-up fit in the same process (cuML on every row, XGBoost on 50,000
+rows), which favoured them.
 
 **C4.5 has no GPU competitor.** No public GPU C4.5 exists, and an entropy
 (information-gain) tree is a different algorithm (no gain ratio, MDL threshold
@@ -127,5 +137,5 @@ used anywhere as a C4.5 stand-in (removed 2026-11-16).
 3. **Fairness variants:** the libraries with data already on the GPU (CuPy,
    column-major) and with `np.asfortranarray` input; ./tree's build time
    without `gpu setup` next to them.
-4. Optionally: scaling in rows (airline subsamples) for ./tree against cuML,
+4. Optionally: scaling in rows (chess_1m to chess_500m) for ./tree against cuML,
    and an `nsys` profile of cuML.

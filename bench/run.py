@@ -14,17 +14,21 @@ Before anything runs, every prepared file of the datasets is hashed (SHA-256)
 and every CSV row is checked against the binary files (plan.json records the
 hashes), so every tool provably reads the same rows.
 
-Each run (see bench/README.md for why):
-  1. the managed runtimes (Python, R, JVM) fit one untimed warm-up tree;
-  2. the tool times the training itself (data already in memory);
-  3. right after it, the peak resident memory so far is read (VmHWM): load,
-     warm-up and training, before evaluation allocates anything. YaDT, a closed
+Each run is one fresh process that loads the data, does the tool's start-up
+and trains exactly one tree; no tool fits anything before the timed fit (no
+warm-up), so ten runs are ten executions of the same command (see
+bench/README.md, "How time is measured"):
+  1. the tool times the training itself (data already in memory);
+  2. right after it, the peak resident memory so far is read (VmHWM): load
+     and training, before evaluation allocates anything. YaDT, a closed
      binary, cannot do that, so its measured process only trains (and saves
      the tree); its peak is the process's ru_maxrss, and a second, unmeasured
      YaDT process classifies the test rows with the saved tree;
-  4. tree size and training and test accuracy are recorded.
+  3. tree size and training and test accuracy are recorded (--no-eval: none,
+     the process ends with its tree; the end-to-end benchmark).
 The repetitions run in a shuffled order (a new order every repetition), so slow
-drift (heat, background load) spreads over all cases. Every process reports the
+drift (heat, background load) spreads over all cases. A case whose first run
+takes longer than --long-seconds (an hour) runs --long-runs (3) times in all. Every process reports the
 rows and features it loaded; a mismatch with the dataset is an error. After the
 runs, each tool runs --reps times on the tiny _baseline dataset (no warm-up, no
 evaluation): its runtime footprint.
@@ -59,6 +63,19 @@ import benchlib as B
 
 PYTHON = sys.executable
 ADAPTERS = B.BENCH / "adapters"
+# The code measured, in every row. A node without git (hopper on mordor3) gets
+# it from the submitting shell (final.sh, submit.sh: TREE_GIT_DESCRIBE).
+def _commit():
+    if os.environ.get("TREE_GIT_DESCRIBE"):
+        return os.environ["TREE_GIT_DESCRIBE"]
+    try:
+        return subprocess.run(["git", "-C", str(B.ROOT), "describe", "--always", "--dirty",
+                               "--abbrev=12"], capture_output=True, text=True).stdout.strip() or None
+    except OSError:
+        return None
+
+
+COMMIT = _commit()
 
 
 # ------------------------------------------------------------------ measuring
@@ -74,6 +91,25 @@ def gpu_memory_used_mib():
     out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits",
                           f"--id={gpu_index()}"], capture_output=True, text=True, timeout=30, check=True)
     return int(out.stdout.split()[0])
+
+
+_GPU_NAME = {}
+
+
+def gpu_name():
+    """The name of the GPU ./tree and the libraries use (gpu_index())."""
+    if gpu_index() not in _GPU_NAME:
+        _GPU_NAME[gpu_index()] = command_output(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader", f"--id={gpu_index()}"])
+    return _GPU_NAME[gpu_index()]
+
+
+def input_files(dataset, impl):
+    """The files a tool reads for the training rows (--prefetch)."""
+    train = B.stem(dataset, "train")
+    if impl == "yadt":
+        return [B.folder(dataset) / "yadt.names", Path(f"{train}.yadt.csv")]
+    return [B.binary_meta(f"{train}.f32"), Path(f"{train}.f32"), Path(f"{train}.y.i32")]
 
 
 def measure(command, env, timeout, pin=(), gpu=False):
@@ -150,13 +186,21 @@ def measure(command, env, timeout, pin=(), gpu=False):
 
 # ./tree's backends: one binary's command line and output.
 TREE_IMPLS = ("tree", "tree_cuda", "tree_gpu_only", "tree_simple")
+# The GPU libraries, run by cluster-gpu-vs-others' gpubench.py in its venv
+# (GPU_PYTHON); only when --impls names them (the end-to-end benchmark).
+GPU_LIBRARIES = ("cuml", "xgboost")
+GPU_IMPLS = ("tree_cuda", "tree_gpu_only") + GPU_LIBRARIES
+GPUBENCH = B.RESULTS / "cluster-gpu-vs-others" / "scripts" / "gpubench.py"
+GPU_PYTHON = Path(os.environ.get("GPU_PYTHON", Path.home() / "gpu-dt-bench" / "venv" / "bin" / "python"))
 
 
-def adapter_args(dataset, threads, warmup_rows, evaluate):
+def adapter_args(dataset, threads, evaluate):
     m = B.meta(dataset)
-    return [f"data={B.folder(dataset)}", f"n_train={m['n_train']}", f"n_test={m['n_test']}",
+    return [f"train={B.stem(dataset, 'train')}",
+            f"test={B.stem(dataset, 'test') if m['n_test'] else ''}",
+            f"n_train={m['n_train']}", f"n_test={m['n_test']}",
             f"n_features={len(m['features'])}", f"n_classes={len(m['classes'])}",
-            f"threads={threads}", f"warmup={warmup_rows}", f"eval={int(evaluate)}"]
+            f"threads={threads}", f"eval={int(evaluate)}"]
 
 
 def fill(value, alpha):
@@ -224,11 +268,8 @@ def build_command(case, kind, args, scratch, rep=0):
     """-> (argv, extra env, parser of stdout -> result dict)."""
     dataset, protocol, impl, threads = case
     spec = B.PROTOCOLS[protocol]["impls"][impl]
-    evaluate = kind == "run"
+    evaluate = kind == "run" and not args.no_eval
     m = B.meta(dataset)
-    warmup_rows = 0
-    if kind == "run" and B.IMPLS[impl]["warmup"]:
-        warmup_rows = m["n_train"] if args.warmup_rows == "all" else int(args.warmup_rows)
     data = B.DATA / dataset
 
     if impl in TREE_IMPLS:
@@ -252,6 +293,7 @@ def build_command(case, kind, args, scratch, rep=0):
                    if args.profile and kind == "run" else [])
         argv = [str(binary)] + backend + flags \
             + (["--dump", str(dump)] if predict or args.hash_trees else []) \
+            + (["--no-accuracy"] if args.no_eval else []) \
             + profile + B.tree_input(dataset)
 
         def parse(stdout):
@@ -263,10 +305,13 @@ def build_command(case, kind, args, scratch, rep=0):
                                                        stdout).group(1)) / 1000,
                       # The phases of the training time (gpu setup: CUDA only),
                       # and gpu startup: the CUDA context, memory pool and
-                      # staging buffers, made during the load, not in train total.
-                      **{f"{name.replace(' ', '_')}_seconds": float(ms) / 1000
-                         for name, ms in re.findall(r"^  (gpu startup|gpu setup|presort|build|prune)"
-                                                    r"\s+([\d.]+) ms$",
+                      # staging buffers, made during the load, not in train total;
+                      # gpu startup wait: the part of it still running when the
+                      # load ended. load: reading the input file (read_seconds).
+                      **{f"{'read' if name == 'load' else name.replace(' ', '_')}_seconds":
+                         float(ms) / 1000
+                         for name, ms in re.findall(r"^  (load|gpu startup wait|gpu startup|gpu setup|"
+                                                    r"presort|build|prune)\s+([\d.]+) ms$",
                                                     stdout, re.M)},
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features),
@@ -316,10 +361,12 @@ def build_command(case, kind, args, scratch, rep=0):
                                       scratch / "yadt.tree")
         argv = [str(B.YADT), "-fm", str(data / "yadt.names"), "-fd", str(data / "train.yadt.csv"),
                 "-tt", str(threads)] + list(spec)
+        for path in (report, test_report, saved):
+            path.unlink(missing_ok=True)  # never read a previous run's output
         if evaluate:
-            for path in (report, test_report, saved):
-                path.unlink(missing_ok=True)  # never read a previous run's output
             argv += ["-tb", str(saved), "-t", str(report)]
+        elif args.no_eval:  # the end-to-end runs: YaDT still saves its tree, as a user's would
+            argv += ["-tb", str(saved)]
         environment = {"LD_LIBRARY_PATH": str(B.YADT.parent)}
 
         def parse(stdout):
@@ -331,7 +378,9 @@ def build_command(case, kind, args, scratch, rep=0):
             features, rows = re.search(r"pred\. atts: (\d+) classes: \d+ .*rows: (\d+)",
                                        stdout).groups()
             nodes = int(steps[-1][0])
-            result = {"train_seconds": total - load + sum(float(s[2]) for s in steps),
+            build = sum(float(s[2]) for s in steps)
+            result = {"train_seconds": total - load + build,
+                      "read_seconds": load, "index_seconds": total - load, "build_seconds": build,
                       "nodes": nodes, "leaves": (nodes + 1) // 2,  # binary splits only
                       "depth": int(steps[-1][1]),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features)}
@@ -354,8 +403,21 @@ def build_command(case, kind, args, scratch, rep=0):
             return result
         return argv, environment, parse
 
+    if impl in GPU_LIBRARIES:
+        # gpubench.py (cluster-gpu-vs-others): one process, the library's
+        # start-up, one timed fit; its row is its last line of output.
+        argv = [str(GPU_PYTHON), str(GPUBENCH), impl, dataset, "cart", str(scratch / "gpubench.jsonl"),
+                str(scratch), "1", str(spec["depth"])]
+        # OMP_NUM_THREADS: the run's CPUs (base_env's 1 would leave XGBoost's
+        # QuantileDMatrix binning, mostly on the CPU, on one thread).
+        # CUDA_MODULE_LOADING: EAGER unless the caller's environment sets it.
+        environment = {"EVAL": str(int(evaluate)), "GPU_MEMORY": "0", "DATA_ROOT": str(B.DATA),
+                       "CUDA_MODULE_LOADING": os.environ.get("CUDA_MODULE_LOADING", "EAGER"),
+                       "OMP_NUM_THREADS": str(threads)}
+        return argv, environment, lambda stdout: json.loads(stdout.strip().splitlines()[-1])
+
     params = [f"{key}={fill(value, args.alpha)}" for key, value in spec.items()]
-    common = adapter_args(dataset, threads, warmup_rows, evaluate)
+    common = adapter_args(dataset, threads, evaluate)
     if impl == "sklearn":
         argv = [PYTHON, str(ADAPTERS / "sklearn_fit.py")] + common + params
     elif impl == "rpart":
@@ -434,8 +496,7 @@ def machine_info(args):
         "os": command_output(["sh", "-c", ". /etc/os-release && echo $PRETTY_NAME"]),
         "versions": {
             # A node without git (hopper on mordor3) gets it from the submitting shell.
-            "tree_git": os.environ.get("TREE_GIT_DESCRIBE") or command_output(
-                ["git", "-C", str(B.ROOT), "describe", "--always", "--dirty", "--abbrev=12"]),
+            "tree_git": COMMIT,
             "tree_binary": str(B.TREE),
             "tree_cuda_binary": str(B.TREE_CUDA),
             "nvcc": command_output([os.environ.get("NVCC", "/opt/cuda/bin/nvcc"), "--version"])
@@ -461,7 +522,8 @@ def machine_info(args):
         # (e.g. by /dev/shm or page cache) sends a pinned run's pages to the other.
         "numa_mem_free_kb": numa_mem_free_kb(),
         "gpu_index": gpu_index(),
-        "settings": {"alpha": args.alpha, "warmup_rows": args.warmup_rows,
+        "settings": {"alpha": args.alpha, "no_eval": args.no_eval, "prefetch": args.prefetch,
+                     "long_runs": args.long_runs, "long_seconds": args.long_seconds,
                      "java_heap": args.java_heap, "cpus": args.cpus, "membind": args.membind,
                      "drop_cache": args.drop_cache, "reps": args.reps,
                      "timeout": args.timeout, "cooldown": args.cooldown},
@@ -518,15 +580,14 @@ def drop_page_cache(root):
 
 
 def plan_cases(args):
-    datasets = args.datasets or [d.name for d in sorted(B.DATA.iterdir())
-                                 if (d / "meta.json").exists() and d.name != B.BASELINE]
+    datasets = args.datasets or [d for d in B.prepared() if d != B.BASELINE]
     protocols = args.protocols.split(",") if args.protocols else list(B.PROTOCOLS)
-    impls = args.impls.split(",") if args.impls else list(B.IMPLS)
+    impls = args.impls.split(",") if args.impls else [i for i in B.IMPLS if i not in GPU_LIBRARIES]
     all_threads = len(args.cpu_list) if args.cpu_list else os.cpu_count()
     threads = sorted({all_threads if t == "all" else int(t) for t in args.threads.split(",")})
     cases = []
     for dataset in datasets:
-        if not (B.DATA / dataset / "meta.json").exists():
+        if B.meta_path(dataset) is None:
             sys.exit(f"{dataset}: not prepared (bench/prepare.py {dataset})")
         for protocol in protocols:
             for impl in B.PROTOCOLS[protocol]["impls"]:
@@ -545,7 +606,7 @@ BASELINE_PROTOCOL = {"tree": "cart_full", "tree_cuda": "cart_full", "tree_gpu_on
                      "tree_simple": "cart_full",
                      "sklearn": "cart_full",
                      "rpart": "cart_full",
-                     "j48": "c45", "yadt": "c45"}
+                     "j48": "c45", "yadt": "c45"}  # the GPU libraries: none
 
 
 def main():
@@ -567,10 +628,19 @@ def main():
                         help="drop the datasets from the page cache before every process "
                              "(every run records its free memory per NUMA node, mem_free_node*_kb)")
     parser.add_argument("--reps", type=int, default=1, help="runs (fresh processes) per case")
-    parser.add_argument("--warmup-rows", default=str(B.WARMUP_ROWS),
-                        help="rows of the untimed warm-up fit of the managed runtimes "
-                        f"(Python, R, JVM); 'all' = the whole training set, 0 = none "
-                        f"(default {B.WARMUP_ROWS})")
+    parser.add_argument("--long-seconds", type=float, default=3600,
+                        help="a case whose first run takes longer (whole process, seconds) "
+                             "runs only --long-runs times in all (default 3600)")
+    parser.add_argument("--long-runs", type=int, default=3,
+                        help="runs of a case whose first run took longer than --long-seconds "
+                             "(default 3; 0 = no limit)")
+    parser.add_argument("--no-eval", action="store_true",
+                        help="no evaluation: the adapters' eval=0, ./tree --no-accuracy, no "
+                             "prediction; the process ends with its tree (end-to-end benchmark)")
+    parser.add_argument("--prefetch", action="store_true",
+                        help="read the tool's input files into the page cache right before every "
+                             "process (pinned as the run, outside its wall time) and drop them "
+                             "after it (end-to-end benchmark); instead of --drop-cache")
     parser.add_argument("--timeout", type=float, default=1800, help="seconds per process")
     parser.add_argument("--cooldown", type=float, default=0, help="seconds of rest between processes")
     parser.add_argument("--java-heap", default=None, help="JVM -Xmx (default: half of RAM)")
@@ -602,8 +672,8 @@ def main():
     if not args.java_heap:
         total_kb = int(re.search(r"MemTotal:\s+(\d+)", open("/proc/meminfo").read()).group(1))
         args.java_heap = f"{max(1, total_kb // 2 // 1024 // 1024)}g"
-    if args.warmup_rows != "all" and not args.warmup_rows.isdigit():
-        sys.exit("--warmup-rows: a number of rows or 'all'")
+    if args.prefetch and args.drop_cache:
+        sys.exit("--prefetch and --drop-cache exclude each other (--prefetch drops after each run)")
 
     cases = plan_cases(args)
     impls_used = sorted({case[2] for case in cases})
@@ -641,7 +711,6 @@ def main():
             data_files[dataset] = pool.submit(B.verify_dataset, dataset).result()
         print(f"  {dataset}: identical in every format ({time.perf_counter() - start:.0f} s)")
     json.dump({"cases": cases, "protocols": B.PROTOCOLS, "impls": B.IMPLS,
-               "warmup_rows": args.warmup_rows,
                "datasets": {d: B.meta(d) for d in datasets}, "data_files": data_files},
               open(out_dir / "plan.json", "w"), indent=1)
     results = open(out_dir / "results.jsonl", "a")
@@ -684,16 +753,27 @@ def main():
         argv, extra_env, parse = build_command(case, kind, args, scratch, rep)
         if args.drop_cache:
             drop_page_cache(B.DATA)
-        mem_free = numa_mem_free_kb()
-        before = vmstat()
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
         if args.membind is not None:
             pin = ["numactl", f"--membind={args.membind}"] + pin
-        run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl in ("tree_cuda", "tree_gpu_only"))
+        if args.prefetch:  # the input in the page cache, read as the run will place it
+            drop_page_cache(B.DATA)
+            subprocess.run(pin + ["cat"] + [str(f) for f in input_files(dataset, impl)],
+                           stdout=subprocess.DEVNULL, check=True)
+        mem_free = numa_mem_free_kb()
+        before = vmstat()
+        run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl in GPU_IMPLS)
         after = vmstat()
+        if args.prefetch:
+            drop_page_cache(B.DATA)
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
                "threads": threads, "kind": kind, "rep": rep,
                "time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+               # where and what ran: the commit, the node, the CPUs, the GPU
+               "commit": COMMIT, "host": socket.gethostname(),
+               "cpus": ",".join(map(str, args.cpu_list[:threads])) if args.cpu_list else None,
+               "membind": args.membind,
+               **({"gpu": gpu_name(), "gpu_index": gpu_index()} if impl in GPU_IMPLS else {}),
                **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "user_seconds",
                                       "system_seconds", "gpu_peak_bytes") if k in run}}
         if run["timed_out"]:
@@ -703,7 +783,8 @@ def main():
             row["error"] = (run["stderr"] or run["stdout"]).strip()[-2000:]
         else:
             try:
-                row.update(parse(run["stdout"]))
+                # the harness's own fields win (gpubench.py also reports cpus, time, gpu_index)
+                row = {**parse(run["stdout"]), **row}
                 row["status"] = "ok"
             except Exception as error:  # noqa: BLE001 - keep the run, record why
                 row["status"] = "error"
@@ -715,7 +796,8 @@ def main():
                 row["error"] = (f"loaded {loaded[0]} rows x {loaded[1]} features, the dataset "
                                 f"has {m['n_train']} x {len(m['features'])}")
         if row["status"] == "ok" and "peak_rss_train_bytes" not in row:
-            row["peak_rss_train_bytes"] = row["peak_rss_bytes"]  # YaDT: the process only trains
+            # YaDT: the process only trains; the GPU libraries: the whole process
+            row["peak_rss_train_bytes"] = row["peak_rss_bytes"]
         if row["status"] != "ok" and kind != "baseline":
             failed.add(case)
         if args.profile and kind == "run" and impl in TREE_IMPLS:
@@ -738,10 +820,12 @@ def main():
                         if row.get("train_accuracy") is not None else "")
             gpu = (f", GPU {row['gpu_peak_bytes'] / 2**20:,.0f} MiB"
                    if row.get("gpu_peak_bytes") is not None else "")
-            print(f"    ok: train {row['train_seconds']:.4g} s, peak "
-                  f"{row['peak_rss_train_bytes'] / 2**20:,.0f} MiB{gpu}, {row['nodes']:,} nodes, depth "
-                  f"{row['depth']}{accuracy} | process {clock(run['wall_seconds'])}, "
-                  f"elapsed {clock(elapsed)}{eta}", flush=True)
+            peak = (f", peak {row['peak_rss_train_bytes'] / 2**20:,.0f} MiB"
+                    if row.get("peak_rss_train_bytes") else "")
+            shape = (f", {row['nodes']:,} nodes, depth {row['depth']}"
+                     if row.get("nodes") is not None else "")
+            print(f"    ok: train {row['train_seconds']:.4g} s{peak}{gpu}{shape}{accuracy} | process "
+                  f"{clock(run['wall_seconds'])}, elapsed {clock(elapsed)}{eta}", flush=True)
         else:
             reason = row.get("error", "").strip().splitlines()
             print(f"    {row['status'].upper()}: {reason[0][:300] if reason else ''}\n"
@@ -765,11 +849,21 @@ def main():
             rng.shuffle(order)
             schedule += [(case, rep) for case in order]
         for index, (case, rep) in enumerate(schedule):
-            execute(case, "run", rep, [c for c, _ in schedule[index + 1:]])
+            # One run of this case took over --long-seconds: --long-runs runs in all.
+            if (args.long_runs and rep >= args.long_runs and walls[case]
+                    and walls[case][0] > args.long_seconds):
+                progress["done"] += 1
+                print(f"[{progress['done']}/{total}] skipped: {describe(case)} has had "
+                      f"{args.long_runs} runs, its first took {clock(walls[case][0])} "
+                      f"(over {clock(args.long_seconds)})", flush=True)
+                continue
+            execute(case, "run", rep, [c for c, _ in schedule[index + 1:]
+                                       if not (args.long_runs and walls[c]
+                                               and walls[c][0] > args.long_seconds)])
         if not args.no_baseline:
             print("runtime footprint of each tool (200-row _baseline dataset):")
             for rep in range(args.reps):
-                for impl in impls_used:
+                for impl in [i for i in impls_used if i in BASELINE_PROTOCOL]:
                     execute((B.BASELINE, BASELINE_PROTOCOL[impl], impl, 1), "baseline", rep, [])
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Rebuild datasets/{covertype,higgs}.csv from public downloads, byte for byte
-as the copies on the desktop, make datasets/supersymmetry.csv (UCI's order),
-datasets/airline.csv, datasets/ecbdl/ecbdl.csv, datasets/chess/chess_*.csv and
-bench/data/supersymmetry_20k.csv (the desktop's first 20,000 rows, for
-tests/check.sh), and check them all by SHA-256. On mordor3 datasets/ is a link
-to ~/datasets (only the CSVs) and the downloads are in bench/data/downloads.
+"""Rebuild the source CSVs from public downloads, byte for byte as the copies
+on the desktop, and check them all by SHA-256: covertype.csv and higgs.csv,
+supersymmetry.csv (UCI's order) and supersymmetry_20k.csv (the desktop's first
+20,000 rows, for tests/check.sh), ecbdl.csv, chess_*.csv. Every file,
+download or CSV, is in its dataset's folder (DIRS), next to the prepared files:
+datasets/<dataset>/ (on mordor3 datasets/ is a link to ~/datasets, as
+bench/data).
 
-  bench/.venv/bin/python -I bench/cluster/make_datasets.py bench/data/downloads [names...]
+  bench/.venv/bin/python -I bench/cluster/make_datasets.py [names...]
 
-Sources, in <downloads>:
+Sources, in each dataset's folder (DIRS):
   covertype.zip            UCI 31 (covtype.data.gz): same rows and order
   higgs_openml_45570.pq    OpenML 45570 = UCI HIGGS, same rows and order; its
                            doubles are the float32 values of UCI's text, parsed
@@ -27,23 +28,18 @@ Sources, in <downloads>:
                            features and label byte (1 = signal), in file order
   susy_delta.i8            every value's double minus its float32, in float64
                            ulps, row-major in the desktop's order
-  airline_14col.data.bz2   US flights 1987-2008 as in gbm-bench and the XGBoost
-                           GPU paper: 115M rows, 13 features, from
-                           https://kt.ijs.si/elena_ikonomovska/datasets/airline/
-                           (SHA-256 1f13460f...). There is no desktop copy: the
-                           expected SHA-256 is that of the first build (mordor3, 2026-10-14)
-  ecbdl/training_set.arff  ECBDL'14 (protein contact maps, the GECCO 2014 big data
+  training_set.arff        ECBDL'14 (protein contact maps, the GECCO 2014 big data
                            competition): 31,992,921 rows, 631 features, label 0/1.
                            On mordor3 a link to /home/Datasets/ECBDL (60.8 GB).
                            The expected SHA-256 is that of the first build (mordor3, 2026-10-16)
-  chess/chess3x3x*/        a 3x3 checkerboard in Quinlan's C4.5 format (.names, .data,
+  chess3x3x*/              a 3x3 checkerboard in Quinlan's C4.5 format (.names, .data,
                            .test): 1M, 10M, 100M and 1000M rows. Not public: it was
                            in mordor3's ~/chess and was deleted after the first build
-                           (2026-10-19), so datasets/chess/chess_*.csv are the only copies.
+                           (2026-10-19), so the chess_*.csv files are the only copies.
                            Written in ./tree's format (f0,f1 and c0/c1, as prepare.py's
                            train.csv) since 2026-10-22
   (none)                   chess_2b: chess_100m's rows, then 1.9G rows drawn from a fixed seed
-                           (it needs datasets/chess/chess_100m.csv, deleted once the A/B kits
+                           (it needs chess_100m.csv, deleted once the A/B kits
                            of 2026-11 are done: chess_2b.csv is the copy to keep)
 
 A file whose SHA-256 differs from the expected one is left as <name>.csv.mismatch
@@ -64,7 +60,11 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "datasets"
-# sha256sum of the desktop's datasets/ (2026-10-14); airline, ecbdl, chess: of their first build.
+# Each file's dataset folder: OUT/<folder>/ holds the CSV and its downloads.
+DIRS = {"covertype": "covertype", "higgs": "higgs", "supersymmetry": "susy",
+        "supersymmetry_20k": "susy", "ecbdl": "ecbdl",
+        "chess_1b": "chess", "chess_2b": "chess", "chess_100m": "chess"}
+# sha256sum of the desktop's datasets/ (2026-10-14); ecbdl, chess: of their first build.
 EXPECTED = {
     "covertype": "fd7a387defeab82ea260a5be0c42b84e3426b963bb7feb490ffbafdaf89dac77",
     "higgs": "71f566a24e8a03ff51aa6961addc652d44ff8878b28f4198a7f8921f3c6af31c",
@@ -72,7 +72,6 @@ EXPECTED = {
     # its first 20,000 rows (head -n 20001) are supersymmetry_20k.
     "supersymmetry": "d152c7592b4bec4b025931eccdf45b3900f1788903bedbea1332b1ca05b04a24",
     "supersymmetry_20k": "4563a7385202d9e65dca12b36f5c5c0f66967751df2acf73fe100353f297376b",
-    "airline": "255426039068522c2a5fb780b6fe4b31179bdc8988013d15db22ba914a742bcb",
     "ecbdl": "5bc39aecbec956ccb06b77295e292e0166db5f87c8341678b1e0ca35fd67120c",
     # chess: ./tree's format (2026-10-22) of the first build
     # (mordor3, 2026-10-19), from files that no longer exist; chess_2b: its first build.
@@ -201,51 +200,16 @@ def supersymmetry_20k(downloads, out, rows=20_000):
             out.write(text)
 
 
-AIRLINE_COLUMNS = ["Year", "Month", "DayofMonth", "DayofWeek", "CRSDepTime", "CRSArrTime",
-                   "UniqueCarrier", "FlightNum", "ActualElapsedTime", "Origin", "Dest",
-                   "Distance", "Diverted", "ArrDelay"]
-AIRLINE_CODES = ["UniqueCarrier", "Origin", "Dest"]
-
-
-def airline(downloads, out):
-    """gbm-bench's airline: the carrier and airports become integer codes in
-    sorted order (pandas' category codes), the label is ArrDelay > 0. Rows in
-    file order."""
-    import pyarrow as pa
-    import pyarrow.compute as pc
-    import pyarrow.csv as pacsv
-    stream = pa.input_stream(downloads / "airline_14col.data.bz2", compression="bz2")
-    table = pacsv.read_csv(stream, read_options=pacsv.ReadOptions(column_names=AIRLINE_COLUMNS),
-                           convert_options=pacsv.ConvertOptions(column_types={
-                               name: pa.string() if name in AIRLINE_CODES else pa.int32()
-                               for name in AIRLINE_COLUMNS}))
-    assert not any(column.null_count for column in table.columns)
-    for name in AIRLINE_CODES:
-        encoded = pc.dictionary_encode(table[name].combine_chunks())
-        rank = np.argsort(np.argsort(np.array(encoded.dictionary.to_pylist())))
-        codes = rank.astype(np.int32)[encoded.indices.to_numpy()]
-        table = table.set_column(table.column_names.index(name), name, pa.array(codes))
-    delayed = pc.greater(table["ArrDelay"], 0)
-    table = table.drop_columns(["ArrDelay"]).append_column(
-        "Label", pc.if_else(delayed, "delayed", "on_time"))
-    out.write(",".join(table.column_names) + "\n")  # Arrow would quote the names
-    for batch in table.to_batches(max_chunksize=CHUNK * 4):
-        text = pa.BufferOutputStream()
-        pacsv.write_csv(batch, text, pacsv.WriteOptions(include_header=False,
-                                                        quoting_style="none"))
-        out.write(text.getvalue().to_pybytes().decode())
-
-
 def ecbdl(downloads, out):
     """ECBDL'14 from its ARFF: 539 real attributes as float32 (the values
     prepare.py makes of them anyway), the 92 nominal ones (predicted secondary
     structure H/E/C, solvent accessibility 0-4; X = no residue at that window
-    position) as integer codes of their values in sorted order, as airline's
-    carrier and airports; label 0/1 (1 = contact) last. Rows in file order."""
+    position) as integer codes of their values in sorted order; label 0/1
+    (1 = contact) last. Rows in file order."""
     import pyarrow as pa
     import pyarrow.compute as pc
     import pyarrow.csv as pacsv
-    path = downloads / "ecbdl" / "training_set.arff"
+    path = downloads / "training_set.arff"
     names, nominal = [], {}
     with open(path, "rb") as arff:
         while line := arff.readline():
@@ -365,7 +329,7 @@ def chess_csv(path, rows, out):
 def chess(name, part, downloads, out):
     source, train_rows, test_rows = CHESS[name]
     extension, rows = (".data", train_rows) if part == "train" else (".test", test_rows)
-    chess_csv(downloads / "chess" / source / (source + extension), rows, out)
+    chess_csv(downloads / source / (source + extension), rows, out)
 
 
 # Generated chess sets (2026-10-22): the rows of a smaller set first (so the sizes
@@ -442,7 +406,7 @@ def chess_generated(name, downloads, out):
 
 BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmetry,
             "supersymmetry_20k": supersymmetry_20k,
-            "airline": airline, "ecbdl": ecbdl,
+            "ecbdl": ecbdl,
             # chess_1m, 10m and 100m are chess_2b's first rows (prefix_of sets in
             # datasets.toml): since 2026-11-13 no CSVs of their own, and no test files.
             "chess_1b": partial(chess, "chess_1b", "train"),
@@ -450,22 +414,18 @@ BUILDERS = {"covertype": covertype, "higgs": higgs, "supersymmetry": supersymmet
 
 
 def csv_path(name):
-    """chess_* in datasets/chess/, ecbdl in datasets/ecbdl/, the others in datasets/;
-    supersymmetry_20k (a test sample, not a dataset) in bench/data/."""
-    if name == "supersymmetry_20k":
-        return ROOT / "bench" / "data" / f"{name}.csv"
-    folder = "chess" if name.startswith("chess_") else "ecbdl" if name == "ecbdl" else ""
-    return OUT / folder / f"{name}.csv"
+    """datasets/<its dataset>/<name>.csv, next to its downloads."""
+    return OUT / DIRS[name] / f"{name}.csv"
 
 
 def main():
-    downloads = Path(sys.argv[1]).expanduser()
-    names = sys.argv[2:] or list(BUILDERS)
+    names = sys.argv[1:] or list(BUILDERS)
     OUT.mkdir(exist_ok=True)
     failed = False
     for name in names:
         path = csv_path(name)
-        path.parent.mkdir(exist_ok=True)
+        downloads = path.parent
+        path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
             print(f"{path} exists, checking it")
         else:

@@ -1,7 +1,8 @@
 # End to end: from launch to finished tree, step by step (HIGGS)
 
-**Status: designed on 2026-11-16, not yet implemented or run.** This file is
-the specification for the agent that implements and runs it on mordor3. Read
+**Status: implemented on 2026-11-16 (bench/run.py --no-eval --prefetch through
+bench/cluster/job.sh E2E=1, final.sh kind `e2e`, chart bench/e2e_chart.py), not
+yet run.** This file is the specification it was built from. Read
 [BENCHMARK-CHANGES.MD](../../../BENCHMARK-CHANGES.MD) first: its timing rule,
 run counts and problem handling apply here too. Replace this status paragraph
 with the Data line once it has run.
@@ -158,7 +159,16 @@ Also record, per run:
 - peak VRAM above idle (GPU tools);
 - the commit, the node, the CPU list and the GPU.
 
-## Implementation (suggested)
+## Implementation
+
+Built as `bench/run.py` cases: `--no-eval` (./tree `--no-accuracy`, adapters and
+`gpubench.py` `eval=0`), `--prefetch` (the input read into the page cache by a
+pinned `cat` right before each process, dropped after it), `--no-baseline`;
+`bench/cluster/job.sh` with `E2E=1`; `final.sh` plan lines `e2e-epyc-higgs`
+(epyc1) and `e2e-hopper-higgs` (hopper); `bench/e2e_chart.py` draws `chart.png`
+and writes `summary.csv`. The design notes below are kept as written.
+
+### Design (2026-11-16)
 
 - **One scheduler per node** (epyc, hopper).
   - It builds 10 rounds; each round holds every case of that node, in

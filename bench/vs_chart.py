@@ -11,8 +11,10 @@
        cluster-gpu-vs-others/summary.csv
 
 ./tree's bars are the test-set benchmarks' runs (cluster-<dataset>/<backend>-<node>-<dataset>),
-the libraries' the comparison's own: cluster-cpu-vs-others/vs-epyc-<dataset>-<tool>-<algorithm>/
-(bench/run.py) and cluster-gpu-vs-others/<dataset>/<node>/results.jsonl (scripts/gpubench.py).
+the libraries' the comparison's own: cluster-cpu-vs-others/vs-epyc-<dataset>/ (bench/run.py,
+every library in one run, interleaved) and cluster-gpu-vs-others/<dataset>/<node>/results.jsonl
+(scripts/gpubench.py, one process per run). Every bar: the mean of its runs, each a fresh
+process with no warm-up; the whisker spans the fastest to the slowest run.
 
   bench/.venv/bin/python bench/vs_chart.py cpu|gpu [--results bench/results]
 """
@@ -41,12 +43,15 @@ GPU_COLORS = {"hopper": "#2a78d6", "ampere": "#eb6834"}
 GPU_NAMES = {"hopper": "H100 (hopper)", "ampere": "A100 80 GB (ampere)"}
 
 
-def summary(run, protocol):
-    """A run folder's summary.csv row for the protocol, as a bar's numbers, or None."""
+def summary(run, protocol, impl=None, threads=None):
+    """A run folder's summary.csv row for the protocol (and implementation and
+    thread count, in a folder of several), as a bar's numbers, or None."""
     f = run / "summary.csv"
     if not f.exists():
         return None
     for r in csv.DictReader(open(f)):
+        if impl and (r["impl"] != impl or int(r["threads"]) != threads):
+            continue
         if r["protocol"] == protocol and r["status"] == "ok":
             num = lambda k: float(r[k]) if r.get(k) not in (None, "") else None  # noqa: E731
             machine = json.load(open(run / "machine.json"))
@@ -66,13 +71,20 @@ def library(root, dataset, node, impl, case, trees):
     rows = [json.loads(line) for line in open(f)]
     rows = [r for r in rows if r["impl"] == impl and r["case"] == case and r.get("trees") == trees
             and r.get("depth_limit", 10) == 10]
+    if any("startup_seconds" in r for r in rows):
+        # one fit per process (since 2026-11-16): never mixed with the older
+        # warm-up-era rows (10 fits per process) a results.jsonl may still hold
+        rows = [r for r in rows if "startup_seconds" in r]
     if not rows:
         return None
     t = [r["train_seconds"] / trees for r in rows]
     last = rows[-1]
     return {"mean": statistics.mean(t), "sd": statistics.stdev(t) if len(t) > 1 else 0.0, "n": len(t),
-            "min": min(t), "max": max(t), "vram": last.get("gpu_peak_mib", 0) * 2**20,
-            "acc": last.get("test_accuracy"), "nodes": last.get("nodes"), "host": node,
+            "min": min(t), "max": max(t), "vram": max(r.get("gpu_peak_mib") or 0 for r in rows) * 2**20,
+            "acc": last.get("test_accuracy"), "nodes": last.get("nodes"), "host": last.get("host", node),
+            "commit": last.get("commit"), "gpu": last.get("gpu"),
+            "startup": statistics.mean(r["startup_seconds"] for r in rows) if "startup_seconds" in last else None,
+            "module_loading": last.get("cuda_module_loading"),
             "version": last.get("version"), "date": last.get("time", "")[:10]}
 
 
@@ -85,10 +97,7 @@ def seconds(v):
 
 
 def label(b):
-    text = f"{seconds(b['mean'])}"
-    if b["n"] > 1:
-        text += f" ± {seconds(b['sd'])}"
-    text += f" ({b['n']} run{'s' if b['n'] > 1 else ''})"
+    text = f"{seconds(b['mean'])} ({b['n']} run{'s' if b['n'] > 1 else ''})"
     if b.get("ram"):
         text += f"   RAM {b['ram'] / 1e9:.3g} GB"
     if b.get("vram"):
@@ -130,16 +139,16 @@ def panel(ax, bars, title):
 
 def cpu_bars(res, dataset, algo):
     protocol = ALGOS[algo][1]
-    d, v = res / f"cluster-{dataset}", res / "cluster-cpu-vs-others"
-    others = ([("scikit-learn, one thread", "sklearn", f"vs-epyc-{dataset}-sklearn-cart"),
-               ("rpart, one thread", "rpart", f"vs-epyc-{dataset}-rpart-cart")] if algo == "cart"
-              else [("Weka J48, one thread", "j48", f"vs-epyc-{dataset}-j48-c45"),
-                    ("YaDT, one thread", "yadt", f"vs-epyc-{dataset}-yadt-c45"),
-                    ("YaDT, 48 threads", "yadt_multi", f"vs-epyc-{dataset}-yadt-c45-multi")])
+    d, v = res / f"cluster-{dataset}", res / "cluster-cpu-vs-others" / f"vs-epyc-{dataset}"
+    others = ([("scikit-learn, one thread", "sklearn", "sklearn", 1),
+               ("rpart, one thread", "rpart", "rpart", 1)] if algo == "cart"
+              else [("Weka J48, one thread", "j48", "j48", 1),
+                    ("YaDT, one thread", "yadt", "yadt", 1),
+                    ("YaDT, 48 threads", "yadt_multi", "yadt", 48)])
     return [("./tree --simple, one thread", CPU_COLORS["simple"], summary(d / f"simple-epyc-{dataset}", protocol)),
             ("./tree --serial, one thread", CPU_COLORS["serial"], summary(d / f"serial-epyc-{dataset}", protocol)),
             ("./tree --multicore, 48 threads", CPU_COLORS["cpu"], summary(d / f"cpu-epyc-{dataset}", protocol))] + \
-        [(label, CPU_COLORS[key], summary(v / run, protocol)) for label, key, run in others]
+        [(label, CPU_COLORS[key], summary(v, protocol, impl, threads)) for label, key, impl, threads in others]
 
 
 def gpu_bars(res, dataset, algo):
@@ -154,6 +163,19 @@ def gpu_bars(res, dataset, algo):
                   ("XGBoost, forest of 10 / 10", lambda n: library(g, dataset, n, "xgboost", algo, 10))]
     return [(f"{name} — {GPU_NAMES[n].split(' (')[0]}", GPU_COLORS[n], fn(n)) for name, fn in impls
             for n in GPU_COLORS]
+
+
+def few_runs(grid):
+    """The bars with fewer runs than the most, named: with 3 runs, a run takes over an hour."""
+    bars = [(d, a, name, b) for d, row in zip(DATASETS, grid) for a, bs in zip(ALGOS, row)
+            for name, _, b in bs if b]
+    most = max((b["n"] for *_, b in bars), default=0)
+    few = [f"{name.split(' — ')[0].split(',')[0]} {ALGOS[a][0].split(' ')[0]} on {TITLES[d].split(':')[0]}"
+           f" ({b['n']})" for d, a, name, b in bars if b["n"] < most]
+    if not few:
+        return f"Every bar: the mean of {most} fresh-process runs, no warm-up."
+    return (f"Every bar: the mean of {most} fresh-process runs, no warm-up; fewer runs where one run "
+            f"takes over an hour: {'; '.join(few)}.")
 
 
 def provenance(grid):
@@ -182,20 +204,23 @@ def draw(kind, res, out):
                 "all rows and features; epyc (2× AMD EPYC 9255, 48 cores, DDR5-6400)")
         note = ("scikit-learn DecisionTreeClassifier (gini, max_depth 10); rpart (gini, maxdepth 10, cp 0, no "
                 "competitor or surrogate splits); Weka J48 (-U -M 2, its adapter's depth limit 10); YaDT (-np -m 2 "
-                "-depth 10). Every run a fresh process, no warm-up. ./tree --multicore and YaDT 48 threads use both sockets.")
+                "-depth 10). The libraries' runs interleaved in a shuffled order. ./tree --multicore and YaDT 48 threads "
+                "use both sockets.")
     else:
         head = ("./tree against cuML and XGBoost on the GPU: one tree, depth ≤ 10, no pruning, all rows and features; "
                 "one GPU and every CPU of the node")
         note = ("cuML RandomForestClassifier, 1 tree on every row and feature (128 bins, Gini); XGBoost hist, "
                 "squared error, λ 0 (256 bins; = Gini; MNIST8M: one multi-output tree on the one-hot labels).\n"
                 "Forest of 10 / 10: the library's random-forest defaults (cuML bootstrap and √features; XGBoost RF 0.8 "
-                "of rows and features), its time divided by 10. ./tree hybrid: --hybrid, GPU only: --gpu.")
+                "of rows and features), its time divided by 10. ./tree hybrid: --hybrid, GPU only: --gpu. Not timed: "
+                "the CUDA context, kernel loading (eager) and the libraries' imports; timed: from the host arrays "
+                "to the fitted model.")
         fig.legend(handles=[Patch(color=c, label=GPU_NAMES[n]) for n, c in GPU_COLORS.items()],
                    loc="upper right", ncol=2, frameon=False, fontsize=9)
     fig.suptitle(head, x=0.01, y=0.995, ha="left", fontsize=11.5, color=INK, fontweight="bold")
-    fig.text(0.01, 0.005, "Training time (log scale), excluding reading the data: bar = mean of the runs, whisker = "
-             "fastest to slowest; label: mean ± standard deviation (runs), peak memory, test accuracy, tree nodes.\n"
-             + note + "\n" + provenance(grid), fontsize=8, color=MUTED, linespacing=1.5)
+    fig.text(0.01, 0.005, "Training time (log scale), excluding reading the data and start-up: bar = mean of the "
+             "runs, whisker = fastest to slowest; label: mean (runs), peak memory, test accuracy, tree nodes. "
+             + few_runs(grid) + "\n" + note + "\n" + provenance(grid), fontsize=8, color=MUTED, linespacing=1.5)
     fig.tight_layout(rect=(0, 0.075 if kind == "gpu" else 0.06, 1, 0.965), h_pad=3.5, w_pad=2)
     fig.savefig(out, dpi=140, facecolor="white")
     print(out)

@@ -111,6 +111,9 @@ struct Options {
   double repeatWarmup = 0.0;
 
   std::string dumpPath;   // write the tree as text to a file
+  // --no-accuracy: skip the training and test accuracy after training (the
+  // end-to-end benchmark: the process ends with its tree, or its --dump).
+  bool accuracy = true;
   // Write where the training time goes, as JSON (src/core/trace.h).
   std::string profilePath;
 

@@ -28,14 +28,16 @@ trap 'rm -rf "$WORK"' EXIT
 
 datasets=(tests/data/iris.csv tests/data/diabetes.csv tests/data/zero_gain.csv)
 # The supersymmetry sample is the desktop copy's first 20,000 rows: since
-# 2026-10-23 datasets/supersymmetry.csv is in UCI's order, so make_datasets.py
-# writes the sample as bench/data/supersymmetry_20k.csv (older copies: their head).
+# 2026-10-23 supersymmetry.csv is in UCI's order, so make_datasets.py writes
+# the sample as datasets/susy/supersymmetry_20k.csv (older copies: their
+# head). Each dataset's originals are in its folder, datasets/<dataset>/.
 for name in covertype supersymmetry; do
-  if [[ $name == supersymmetry && -f bench/data/supersymmetry_20k.csv ]]; then
-    cp bench/data/supersymmetry_20k.csv "$WORK/${name}_20k.csv"
+  folder=datasets/$name; [[ $name == supersymmetry ]] && folder=datasets/susy
+  if [[ $name == supersymmetry && -f $folder/supersymmetry_20k.csv ]]; then
+    cp "$folder/supersymmetry_20k.csv" "$WORK/${name}_20k.csv"
     datasets+=("$WORK/${name}_20k.csv")
-  elif [[ -f datasets/$name.csv ]]; then
-    head -n 20001 "datasets/$name.csv" > "$WORK/${name}_20k.csv"
+  elif [[ -f $folder/$name.csv ]]; then
+    head -n 20001 "$folder/$name.csv" > "$WORK/${name}_20k.csv"
     datasets+=("$WORK/${name}_20k.csv")
   fi
 done
