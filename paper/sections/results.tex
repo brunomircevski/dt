@@ -2,14 +2,21 @@
 \label{sec:results}
 
 \subsection{Training Time}
-\plan{Overview of every implementation on every dataset
-(Tables~\ref{tab:time-cart} and~\ref{tab:time-c45}): speed-ups of
-\ImplSerialOpt{} over \ImplSerialBase{}, \ImplParallel{} over \ImplSerialOpt{},
-GPU over \ImplParallel{}, and of this work over the existing implementations.
-The tables give means only (at least 10 runs per cell).}
+\plan{All implementations on all datasets
+(Tables~\ref{tab:time-cart} and~\ref{tab:time-c45}); speed-ups between them.}
 
+% CPU cells of this work: ./tree f53347a9 on epyc (bench/results/cluster-<data>/
+% {simple,serial,cpu}-epyc-<data>/summary.csv). Libraries: 2026-11-09/10
+% (cluster-cpu-vs-others, cluster-gpu-vs-others). \tbd: not measured on the
+% final build; GPU and hybrid cells of this work changed after f53347a9
+% (2c688938 hand-off default, 60e3dbe4 memory pool out of train total).
 \begin{table}
-\caption{Training time of one CART tree (depth $\le$ 10, no pruning), mean in seconds. \est{} marks a rough estimate (no run yet); -- not possible (data larger than the GPU's 80\,GB, or no such algorithm). CPU runs on epyc1 (\ImplParallel{} 48 threads, the rest one thread), GPU runs on the H100 (\ImplHybrid{} with 16 CPU threads). Placeholder: every cell will have at least 10 runs.}
+\caption{Training time of one CART tree (depth $\le$ 10, no pruning), mean in
+seconds. \tbd{}: not yet measured on the final build; --: not possible (data
+larger than the GPU's 80\,GB). CPU runs on epyc (\ImplParallel{} 48 threads,
+the rest one thread); GPU runs on the H100 with all 32 CPUs of its server.
+Runs per cell: 5; \ImplSerialBase{} 10 (full ECBDL'14 3, full SOREL-20M 1);
+libraries 10, on HIGGS and MNIST8M only.}
 \label{tab:time-cart}
 \centering
 \scriptsize
@@ -19,30 +26,31 @@ The tables give means only (at least 10 runs per cell).}
 \multicolumn{6}{@{}l}{\textbf{This work}} \\
 Dataset & \ImplSerialBase & \ImplSerialOpt & \ImplParallel & \ImplGpu & \ImplHybrid \\
 \midrule
-SUSY & 70.8 & 2.84 & 0.239 & 0.082 & 0.084 \\
-HIGGS & 236 & 10.4 & 0.607 & 0.150 & 0.151 \\
-ECBDL'14 & 5\,860 & 503 & 13.5 & -- & -- \\
-\quad 15M subsample & 2\,270 & 225 & 6.32 & 2.97 & 2.97 \\
-MNIST8M & 1\,880 & 234 & 5.92 & 3.57 & 3.56 \\
-SOREL-20M & 12\,500 & 878 & 21.8 & -- & -- \\
-\quad 4M subsample & 2\,920 & 234 & 6.43 & 2.87 & 2.87 \\
+SUSY & 70.3 & 2.60 & 0.162 & \tbd & \tbd \\
+HIGGS & 237 & 7.90 & 0.327 & \tbd & \tbd \\
+ECBDL'14 & 5\,970 & 317 & 9.17 & -- & -- \\
+\quad 15M subsample & 2\,316 & 147 & 4.41 & \tbd & \tbd \\
+MNIST8M & 1\,896 & 115 & 3.10 & \tbd & \tbd \\
+SOREL-20M & 12\,501 & 619 & 15.3 & -- & -- \\
+\quad 4M subsample & 2\,939 & 176 & 4.95 & \tbd & \tbd \\
 \specialrule{1.2pt}{1pt}{3pt}
 \multicolumn{6}{@{}l}{\textbf{Existing implementations}} \\
 Dataset & scikit-learn & rpart &  & cuML & XGBoost \\
 \midrule
-SUSY & 86.5 & \est{140} &  & 0.133 & 1.43 \\
-HIGGS & 215 & \est{350} &  & 0.456 & 3.43 \\
-ECBDL'14 & \est{4\,500} & \est{7\,500} &  & -- & -- \\
-\quad 15M subsample & 2\,200 & \est{3\,600} &  & 9.95 & 42.2 \\
-MNIST8M & \est{2\,500} & \est{4\,000} &  & \est{7} & \est{50} \\
-SOREL-20M & \est{13\,000} & \est{21\,000} &  & -- & -- \\
-\quad 4M subsample & \est{3\,500} & \est{6\,000} &  & \est{10} & \est{45} \\
+HIGGS & 217 & \tbd &  & 0.450 & 2.62 \\
+MNIST8M & 1\,005 & \tbd &  & 7.96 & 26.7 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}
-\caption{Training time of one C4.5 tree (depth $\le$ 10, no pruning), mean in seconds. \est{} marks a rough estimate (no run yet); -- not possible (data larger than the GPU's 80\,GB, or no such algorithm). CPU runs on epyc1 (\ImplParallel{} 48 threads, the rest one thread), GPU runs on the H100 (\ImplHybrid{} with 16 CPU threads). Placeholder: every cell will have at least 10 runs. cuML grows an entropy tree, its closest equivalent.}
+\caption{Training time of one C4.5 tree (depth $\le$ 10, no pruning), mean in
+seconds. \tbd{}: not yet measured on the final build; --: not possible (data
+larger than the GPU's 80\,GB). CPU runs on epyc (\ImplParallel{} 48 threads,
+the rest one thread); GPU runs on the H100 with all 32 CPUs of its server.
+Runs per cell: 5; \ImplSerialBase{} 10 (full ECBDL'14 3, full SOREL-20M 1);
+libraries on HIGGS and MNIST8M only, Weka J48 10 runs (MNIST8M 3). No GPU
+library grows C4.5 trees.}
 \label{tab:time-c45}
 \centering
 \scriptsize
@@ -52,24 +60,19 @@ SOREL-20M & \est{13\,000} & \est{21\,000} &  & -- & -- \\
 \multicolumn{6}{@{}l}{\textbf{This work}} \\
 Dataset & \ImplSerialBase & \ImplSerialOpt & \ImplParallel & \ImplGpu & \ImplHybrid \\
 \midrule
-SUSY & 77.2 & 3.10 & 0.249 & 0.109 & 0.112 \\
-HIGGS & 257 & 11.9 & 0.590 & 0.164 & 0.170 \\
-ECBDL'14 & 6\,890 & 623 & 17.6 & -- & -- \\
-\quad 15M subsample & 2\,590 & 277 & 7.81 & 2.99 & 2.99 \\
-MNIST8M & 1\,970 & 209 & 5.64 & 3.71 & 3.68 \\
-SOREL-20M & 12\,900 & 1\,130 & 28.8 & -- & -- \\
-\quad 4M subsample & 3\,090 & 288 & 7.85 & 3.88 & 4.30 \\
+SUSY & 76.7 & 2.48 & 0.172 & \tbd & \tbd \\
+HIGGS & 259 & 7.41 & 0.342 & \tbd & \tbd \\
+ECBDL'14 & 7\,035 & 320 & 9.70 & -- & -- \\
+\quad 15M subsample & 2\,628 & 149 & 4.65 & \tbd & \tbd \\
+MNIST8M & 1\,980 & 113 & 3.27 & \tbd & \tbd \\
+SOREL-20M & 12\,906 & 599 & 15.5 & -- & -- \\
+\quad 4M subsample & 3\,127 & 171 & 5.00 & \tbd & \tbd \\
 \specialrule{1.2pt}{1pt}{3pt}
 \multicolumn{6}{@{}l}{\textbf{Existing implementations}} \\
-Dataset & Weka J48 & YaDT &  & cuML &  \\
+Dataset & Weka J48 & YaDT &  &  &  \\
 \midrule
-SUSY & 230 & \est{46} &  & 0.128 &  \\
-HIGGS & 830 & \est{170} &  & 0.433 &  \\
-ECBDL'14 & \est{50\,000} & \est{10\,000} &  & -- &  \\
-\quad 15M subsample & 24\,200 & \est{4\,800} &  & 9.89 &  \\
-MNIST8M & \est{14\,000} & \est{2\,700} &  & \est{7} &  \\
-SOREL-20M & \est{60\,000} & \est{12\,000} &  & -- &  \\
-\quad 4M subsample & \est{18\,000} & \est{3\,800} &  & \est{10} &  \\
+HIGGS & 833 & \tbd &  &  &  \\
+MNIST8M & 18\,998 & \tbd &  &  &  \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -97,19 +100,18 @@ transfer; GPU share of the hybrid; achieved bandwidth against peak.}
 
 
 \subsection{Energy Consumption}
-\plan{Whole-server power while each implementation trains one tree on
-ECBDL'14 15M (the one dataset every implementation runs on, GPUs included).
-Method: power source and sampling rate (BMC/IPMI for the server, RAPL for the
-CPUs, \texttt{nvidia-smi} for the GPU), idle power measured before the runs
-and subtracted, energy = integral of power over the training time, 10 runs
-each. The CPU implementations run on a CPU node, the GPU ones on a GPU node,
-so the totals compare servers, not only processors. Discuss energy per tree:
-a fast run at high power can still use the least energy.}
+\plan{Whole-server energy per tree on ECBDL'14 15M: PSU meter modelled from
+RAPL and NVML, idle subtracted. A fast run at high power can use the least
+energy.}
 
+% CPU rows: bench/power/results/summary.md at f53347a9 (epyc1). GPU and
+% hybrid rows: \tbd until the rerun (they changed after f53347a9).
 \begin{table}
 \caption{Energy of one tree on ECBDL'14 15M (depth $\le$ 10, no pruning):
-mean training time $t$, mean power $P$ of the whole server above idle, and energy
-$E = P \cdot t$. Placeholder: no measurements yet.}
+mean training time $t$, mean power $P$ of the whole server above idle (at
+the power supply), and energy $E = P \cdot t$. Runs $\times$ trees per run:
+\ImplSerialBase{} $1 \times 1$, \ImplSerialOpt{} $3 \times 1$, the others 3
+processes of repeated trees. \tbd{}: not yet measured on the final build.}
 \label{tab:energy}
 \centering
 \small
@@ -123,8 +125,8 @@ Implementation & Node & $t$ (s) & $P$ (W) & $E$ (kJ) & $t$ (s) & $P$ (W) & $E$ (
 \ImplSerialBase & epyc1  & 2\,328 & 130 & 302  & 2\,603 & 130 & 338  \\
 \ImplSerialOpt  & epyc1  & 147    & 135 & 19.8 & 149    & 135 & 20.1 \\
 \ImplParallel   & epyc1  & 4.54   & 457 & 2.08 & 4.77   & 458 & 2.18 \\
-\ImplGpu        & hopper & 2.46   & 331 & 0.82 & 2.51   & 333 & 0.84 \\
-\ImplHybrid     & hopper & 2.46   & 420 & 1.03 & 2.47   & 426 & 1.05 \\
+\ImplGpu        & hopper & \tbd   & \tbd & \tbd & \tbd  & \tbd & \tbd \\
+\ImplHybrid     & hopper & \tbd   & \tbd & \tbd & \tbd  & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
 \end{table}
