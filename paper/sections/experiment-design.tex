@@ -64,7 +64,8 @@ GPU and is allowed to use all CPU cores of the server. Memory is placed by first
 touch, without explicit NUMA binding. The only exception are transfers to and
 from the GPU, which use buffers and threads on the GPU's NUMA node
 (Section~\ref{sec:impl-gpu}). Our code is compiled with g++ 13.3 (\texttt{-O3})
-and CUDA 12.9 on Ubuntu 24.04.
+and CUDA 12.9 on Ubuntu 24.04. The 512\,GB of dell populate 8 of its 16 memory
+channels: 211\,GB/s with 48 threads (STREAM triad).
 
 \begin{table}
 \caption{Hardware. Every server has two sockets with SMT disabled. CPU, cores
@@ -79,7 +80,7 @@ Node & CPU & Cores & Clock & RAM & GPU \\
 hopper & Xeon Gold 6444Y & 16 & 3.6/4.0  & 1\,TB DDR5-4800   & H100 PCIe 80\,GB \\
 ampere & EPYC 7402       & 24 & 2.8/3.35 & 1\,TB DDR4-3200   & A100 PCIe 80\,GB \\
 epyc   & EPYC 9255       & 24 & 3.25/4.3 & 512\,GB DDR5-6400 & -- \\
-dell   & Xeon Gold 6542Y & 24 & 2.9/4.1  & 1\,TB DDR5-5200   & -- \\
+dell   & Xeon Gold 6542Y & 24 & 2.9/4.1  & 512\,GB DDR5-5200 & -- \\
 \bottomrule
 \end{tabular}
 \end{table}

@@ -428,8 +428,8 @@ def chart(cases, datasets, out):
         "every 5 ms, idle threads ignored, the time shared among the busy ones). While the "
         "training thread drives the GPU, its time is transfer (staging copies) or other (launching, "
         "waiting). · CPU / GPU tells which processor did the step; transfer is between them.",
-        "Multicore: CPU only, every thread of both sockets (epyc: 2× EPYC 9255; dell: dell1, "
-        "2× Xeon Gold 6542Y, 1 TB). Hybrid: the GPU grows "
+        "Multicore: CPU only, every thread of both sockets (epyc: 2× EPYC 9255; dell: "
+        "2× Xeon Gold 6542Y, 512 GB). Hybrid: the GPU grows "
         "the big nodes level by level and hands small nodes (< --handoff-rows) to the CPU threads, "
         "which grow those subtrees meanwhile; that CPU work is hidden behind the GPU and only "
         "shows when the GPU has finished and waits for it. GPU: the GPU grows every "

@@ -8,7 +8,7 @@
 #   cuda-hopper-<data>     H100 PCIe, 2x Xeon Gold 6444Y     --hybrid, every CPU
 #   cuda-ampere-<data>     A100 80GB PCIe, 2x EPYC 7402      --hybrid, every CPU
 #   cpu-epyc-<data>        epyc1: 2x EPYC 9255               --multicore, 48 threads
-#   cpu-dell-<data>        dell1: 2x Xeon Gold 6542Y         --multicore, 48 threads
+#   cpu-dell-<data>        dell3: 2x Xeon Gold 6542Y         --multicore, 48 threads
 #   (only when named:)
 #   gpuonly-hopper-<data>, gpuonly-ampere-<data>             --gpu, every CPU
 #   serial-epyc-<data>, serial-dell-<data>                   --serial, one thread
@@ -76,12 +76,13 @@ for f in tree tree_cpu bench/.tools/rusage bench/.venv/bin/python "$(ls bench/da
     { echo "$f missing: build and prepare first (bench/cluster/README.md)" >&2; exit 1; }
 done
 
-# dell1 is in the dell (12 hours at most) and dell-long (14 days) partitions.
+# dell2-4 are the same 512 GB nodes (dell1, 1 TB with twice the memory bandwidth,
+# is not used); dell3 is in the dell-long partition (14 days), dell4 is not.
 #        name                    partition  node    impls          threads  [protocols  time limit  timeout]
 JOBS=("cuda-hopper-$DATASET     hopper     hopper  tree_cuda      all"
       "cuda-ampere-$DATASET     ampere     ampere  tree_cuda      all"
       "cpu-epyc-$DATASET        epyc       epyc1   tree           all"
-      "cpu-dell-$DATASET        dell-long  dell1   tree           all")
+      "cpu-dell-$DATASET        dell-long  dell3   tree           all")
 # Full ECBDL and SOREL do not fit in 80 GB of GPU memory: CPU nodes only.
 GPU_JOBS=()
 if [ "$DATASET" = ecbdl ] || [ "$DATASET" = sorel ]; then
@@ -92,9 +93,9 @@ OPTIONAL=(${GPU_JOBS[@]+"${GPU_JOBS[@]}"}
           "gpuonly-hopper-$DATASET  hopper     hopper  tree_gpu_only  all"
           "gpuonly-ampere-$DATASET  ampere     ampere  tree_gpu_only  all"
           "serial-epyc-$DATASET     epyc       epyc1   tree           1"
-          "serial-dell-$DATASET     dell-long  dell1   tree           1"
+          "serial-dell-$DATASET     dell-long  dell3   tree           1"
           "simple-epyc-$DATASET     epyc       epyc1   tree_simple    1"
-          "simple-dell-$DATASET     dell-long  dell1   tree_simple    1"
+          "simple-dell-$DATASET     dell-long  dell3   tree_simple    1"
           "vs-epyc-$DATASET-sklearn-cart  epyc  epyc1  sklearn  1  cart_depth10          7-00:00:00  86400"
           "vs-epyc-$DATASET-j48-c45       epyc  epyc1  j48      1  c45_depth10_unpruned  7-00:00:00  86400")
 

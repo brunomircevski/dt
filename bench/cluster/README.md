@@ -4,18 +4,23 @@ Scripts that build, prepare and benchmark ./tree on the faculty's mordor3
 cluster (Politechnika Białostocka, SLURM), and tune it there. The results and
 what each benchmark shows: [bench/results/](../results/README.md).
 
-**The GPU nodes (hopper, ampere) run CUDA only, the CPU nodes (epyc1, dell1)
+**The GPU nodes (hopper, ampere) run CUDA only, the CPU nodes (epyc1, dell4)
 parallel only:** a GPU node's CPU is there to feed the GPU and is not
 benchmarked on its own. epyc2 is the same as epyc1 (within 2%) and takes the
-long one-thread runs; dell2–4 have half dell1's memory channels and 512 GB, up
-to 1.46× slower, so they are not used. turing (RTX 2080 Ti) is not used.
+long one-thread runs. **The dell is a 512 GB node (dell2–4, from 2026-11-17):**
+dell2, dell3 and dell4 are the same (8 × 64 GB in 8 of the 16 memory channels;
+STREAM triad 210–212 GB/s with 48 threads, 17.2–17.4 GB/s with one), and take
+every dell run. dell1 (1 TB, 16 × 64 GB, every channel: 379 GB/s, up to 1.46×
+faster `--multicore`) is not used; its results count as out of date
+(`benchlib.RETIRED_HOSTS`). Logs: `bench/results/dell-nodes/`. turing (RTX
+2080 Ti) is not used.
 
 | Node | CPU | RAM | GPU (GPU used: hopper 2, ampere 0) |
 |---|---|---|---|
 | hopper | 2× Xeon Gold 6444Y (Sapphire Rapids), 32 cores | 1 TB DDR5-4800 | 4× H100 PCIe 80 GB |
 | ampere | 2× EPYC 7402 (Zen 2), 48 cores | 1 TB DDR4-3200 | 2× A100 80 GB + 2× A100 40 GB PCIe (GPU 0, an 80 GB; job.sh never runs on a GPU under 80 GB) |
 | epyc1 | 2× EPYC 9255 (Zen 5), 48 cores | 512 GB DDR5-6400 | – |
-| dell1 | 2× Xeon Gold 6542Y (Emerald Rapids), 48 cores | 1 TB DDR5-5200 | – |
+| dell2–4 | 2× Xeon Gold 6542Y (Emerald Rapids), 48 cores | 512 GB DDR5-5200 (8 × 64 GB) | – |
 
 ## Run it
 
@@ -55,7 +60,7 @@ sbatch -p dell ... bench/setup.sh   # R and the JDK: ~/micromamba/envs/dtbench/b
 TREE_GIT_DESCRIBE="$(git describe --always --abbrev=12)" sbatch bench/cluster/build.sh
 bench/cluster/final.sh -t   # the check: one run of each kind of job, into bench/results/cluster-test/
 bench/cluster/final.sh -n   # the plans only; then move the old run folders they name out of bench/results
-bench/cluster/final.sh      # submit (-N epyc1,epyc2,dell1,dell2,dell3: the CPU nodes only)
+bench/cluster/final.sh      # submit (-N epyc1,epyc2,dell2,dell3,dell4: the CPU nodes only)
 ```
 
 The compute nodes lack `python3-venv`: create the venv there with
@@ -86,6 +91,13 @@ use the bandwidth: on 2026-11-09/10 `--serial` and `--simple` on SUSY and HIGGS
 (one 5% case: a single slow run), so they take one-thread runs only. Full
 ECBDL'14 and SOREL stay on dell1: their peaks are more than dell2's NUMA node 0
 has free (dell1's has twice that).
+
+**From 2026-11-17 dell1 is not used** (final.sh): dell4 (partition
+dell-512GB, one day a job) takes `--multicore`, thread scaling and
+cluster-profiling; dell3 takes `--serial` on full ECBDL'14 and SOREL and
+`--simple` on full SOREL after its own runs. Their peaks (243, 380 and 132 GB)
+fit in 512 GB; one-thread first-touch spreads them over more NUMA nodes than
+on dell1.
 
 How it went: submitted on 2026-11-15 at 09:3x (jobs 20–31), done on 2026-11-16
 at 05:22; the GPU nodes and dell1 took longest (hybrid-vs-gpu-only about 20 h
@@ -149,7 +161,7 @@ unzip CTAN's `fonts/ps-type1/cm-super.zip` into a scratch `TEXMFHOME` with its
 - **`profile.sh`** queues the same job with `run.py --profile` on hopper,
   ampere and epyc1, then (one after the other on each node) again without it
   into `plain/`, to see what profiling costs.
-- **`scaling.sh`** queues the same job on epyc1 and dell1 (by hand; final.sh does it too) with the thread list
+- **`scaling.sh`** queues the same job on epyc1 and dell3 (by hand; final.sh does it too) with the thread list
   `1,2,4,8,12,…,48` (1 thread: `--serial`); `run.log` records the CPU order
   the threads take (`lscpu`).
 - **`tune.sh`** runs a list of ./tree command lines on one node, interleaved
@@ -211,7 +223,7 @@ The data and measurements are those of the other benchmarks
 
 | Backend | Command | Threads |
 |---|---|---|
-| Parallel (epyc1, dell1) | `./tree_cpu --multicore --threads N` | N = every CPU (48) |
+| Parallel (epyc1, dell4) | `./tree_cpu --multicore --threads N` | N = every CPU (48) |
 | CUDA (hopper, ampere) | `./tree --hybrid --threads N` | one GPU, plus N CPU threads on both sockets (hopper 32, ampere 48) for the small subtrees and pruning |
 
 - **Whole nodes.** SLURM on mordor3 hands out cores only: it tracks no GPUs
@@ -230,12 +242,12 @@ The data and measurements are those of the other benchmarks
   GPU's memory (`gpu_index` in `machine.json`). The other GPUs sit idle.
   The depth-10 runs of ec77727 predate this and ran on the GPU's socket
   only (`machine.json` and `run.log` record the CPUs); the final rerun does not.
-- **CPU governors are as the admins set them.** epyc1 `performance`, dell1
+- **CPU governors are as the admins set them.** epyc1 `performance`, dell
   `powersave` (intel_pstate, which still boosts), hopper
   `schedutil`, ampere `ondemand`. A user can't change them; `machine.json`
   records them. All four dell nodes are set alike (checked on 2026-10-14:
   `powersave` on all 48 CPUs, intel_pstate, energy-performance preference
-  `balance_performance`, turbo on), so dell1 stands for all of them. With
+  `balance_performance`, turbo on). With
   intel_pstate, `powersave` is the dynamic governor that still reaches turbo,
   not acpi-cpufreq's `powersave`, which holds the lowest frequency.
 - **dell is noisy at 2–12 threads** (CV 13–17% at 4 threads, cause unknown), and

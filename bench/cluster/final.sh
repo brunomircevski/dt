@@ -8,7 +8,7 @@
 #   bench/cluster/final.sh         # write them and submit
 #   bench/cluster/final.sh -m 5 -k gpu,cpu,scaling,serial,profiling,hybrid
 #                                  # 5 runs a case, only those kinds (the 2026-11-15 rerun)
-#   bench/cluster/final.sh -N epyc1,epyc2,dell1,dell2,dell3
+#   bench/cluster/final.sh -N epyc1,epyc2,dell2,dell3,dell4
 #                                  # only those nodes' chains (the GPU nodes later)
 #   bench/cluster/final.sh -D higgs,susy -k gpu,cpu,scaling,serial,simple,vs,gpulibs,e2e
 #                                  # only those datasets' runs (a first part of the rerun)
@@ -20,12 +20,12 @@
 #   stops any case at 3 runs whose first run took over an hour, e.g. J48 and
 #   maybe rpart on MNIST8M).
 # -N NODES: comma-separated, only these nodes' chains are checked and submitted
-#   (default all: hopper ampere epyc1 epyc2 dell1 dell2 dell3).
+#   (default all: hopper ampere epyc1 epyc2 dell2 dell3 dell4).
 # -D DATASETS: comma-separated, only these datasets' runs (plan lines, gpulibs,
 #   hybrid); a kind left without a dataset is skipped.
 # -k KINDS: comma-separated, default all of
 #   gpu        --hybrid and --gpu on hopper and ampere, every dataset that fits in 80 GB
-#   cpu        --multicore, 48 threads on both sockets, epyc1 and dell1
+#   cpu        --multicore, 48 threads on both sockets, epyc1 and dell4
 #   scaling    the same at 1 (--serial), 2, 4, 8, ..., 48 threads, HIGGS and MNIST8M (cluster-cpu-scaling)
 #   serial     --serial, one thread
 #   simple     --simple, one thread
@@ -35,7 +35,7 @@
 #              one tree and a default forest of 10, one gpubench.py process per run, interleaved;
 #              and the warm variant: one CART tree of cuML, XGBoost (WARM=1) and ./tree
 #              (--warm-up, cluster-gpu-vs-others/warm/, in the hopper and ampere plans)
-#   profiling  ./tree --profile, then the same without (plain/), epyc1, dell1, hopper (cluster-profiling)
+#   profiling  ./tree --profile, then the same without (plain/), epyc1, dell4, hopper (cluster-profiling)
 #   hybrid     hybrid_vs_gpu_only.sh on hopper and ampere (hybrid-vs-gpu-only)
 #   e2e        end to end, HIGGS, every tool (cluster-end-to-end): epyc1 (CPU tools) and
 #              hopper (./tree's GPU backends, cuML, XGBoost), run.py --no-eval --prefetch
@@ -47,21 +47,21 @@
 #   hopper   gpu, hybrid, profiling, gpulibs, e2e      ampere   gpu, hybrid, gpulibs
 #   epyc1    cpu, scaling, profiling, serial (MNIST8M, SOREL 4M), simple (short ones), e2e
 #   epyc2    vs, serial (the other datasets), simple (ECBDL'14, SOREL, SOREL 4M)
-#   dell1    cpu, scaling, profiling, serial (full ECBDL'14 and SOREL: 226 and
-#            354 GiB, more than dell2's NUMA node), simple (full SOREL)
+#   dell4    cpu, scaling, profiling (dell-512GB: one day a job at most)
 #   dell2    serial (ECBDL'14 15M, SOREL 4M), simple (ECBDL'14, SOREL 4M)
-#   dell3    serial (MNIST8M, chess, HIGGS, SUSY), simple (the others)
+#   dell3    serial (MNIST8M, chess, HIGGS, SUSY; then full ECBDL'14 and SOREL),
+#            simple (the others; then full SOREL)
 #
-# epyc2 is epyc1's hardware. dell2 and dell3 have half dell1's memory channels:
-# their one-thread runs are within ~1% of dell1's (bench/cluster/README.md), so
-# only one-thread runs go there. Parallel runs use every CPU; one-thread runs
+# epyc2 is epyc1's hardware. dell2-4 are the same (512 GB, 8 of 16 memory
+# channels; triad 210-212 GB/s on 2026-11-17). dell1 (1 TB, every channel,
+# 379 GB/s) is not used: the paper's dell is a 512 GB node. Parallel runs use every CPU; one-thread runs
 # the node's first CPU, memory first-touch; CUDA runs one GPU and every CPU, its
 # socket's first (job.sh). Depth <= 10, no pruning, CART and C4.5, test accuracy
 # on each dataset's test set (profiling: training accuracy only).
 
 set -euo pipefail
 ALL_KINDS=gpu,cpu,scaling,serial,simple,vs,gpulibs,profiling,hybrid,e2e
-ALL_NODES=hopper,ampere,epyc1,epyc2,dell1,dell2,dell3
+ALL_NODES=hopper,ampere,epyc1,epyc2,dell2,dell3,dell4
 TEST= SUBMIT=1 RUNS= KINDS=$ALL_KINDS NODES=$ALL_NODES ONLY_DATA=
 while getopts "tnm:k:N:D:h" option; do
   case "$option" in
@@ -207,7 +207,7 @@ for node in epyc dell; do
   if want scaling; then for d in $SCALING_DATA; do scaling "$node-1" "$node" "$d"; done; fi
   if want profiling; then profile "$node-1" cpu "$node"; fi
 done
-# --serial: the big ones where the memory is, the rest spread over epyc1/epyc2 and dell1-3
+# --serial: the big ones where the memory is, the rest spread over epyc1/epyc2 and dell2-3
 if want serial; then
   for d in $CPU_DATA; do
     case "$d" in
@@ -222,7 +222,7 @@ if want serial; then
   done
 fi
 # --simple: the short ones on epyc1 and dell3, the long ones (hours a run) on
-# epyc2 after the libraries, on dell2, and full SOREL on dell1 last.
+# epyc2 after the libraries, on dell2, and full SOREL on dell3 last.
 if want simple; then
   for d in $CPU_DATA; do
     case "$d" in
@@ -263,9 +263,9 @@ declare -A CHAIN=(
   [ampere]="ampere hybrid gpulibs"
   [epyc1]="epyc-1 epyc-2 epyc-3 epyc-4"
   [epyc2]="epyc2-1 epyc2-2 epyc2-3"
-  [dell1]="dell-1 dell-2 dell-3"
+  [dell4]="dell-1"
   [dell2]="dell2-1 dell2-2"
-  [dell3]="dell3-1 dell3-2"
+  [dell3]="dell3-1 dell3-2 dell-2 dell-3"
 )
 # -D: only those datasets' plan lines, gpulibs and hybrid runs
 if [ -n "$ONLY_DATA" ]; then
@@ -314,8 +314,9 @@ ls "$PLANS"/final-*.txt > /dev/null 2>&1 && wc -l "$PLANS"/final-*.txt
 # (hybrid_vs_gpu_only.sh) or gpulibs (cluster-gpu-vs-others' job.sh in ~/gpu-dt-bench).
 limit=4-00:00:00; [ -z "$TEST" ] || limit=04:00:00
 chain() {
-  local partition="$1" node="$2" after= id step
+  local partition="$1" node="$2" after= id step limit="$limit"
   shift 2
+  [ "$partition" != dell-512GB ] || [ -n "$TEST" ] || limit=1-00:00:00  # dell4: not in dell-long
   for step in "$@"; do
     if [ "$step" = hybrid ]; then
       want hybrid || continue
@@ -346,7 +347,7 @@ chain() {
   done
 }
 declare -A PARTITION=([hopper]=hopper [ampere]=ampere [epyc1]=epyc [epyc2]=epyc
-                      [dell1]=dell-long [dell2]=dell-long [dell3]=dell-long)
+                      [dell2]=dell-long [dell3]=dell-long [dell4]=dell-512GB)
 for node in ${NODES//,/ }; do
   # shellcheck disable=SC2086  # the steps
   chain "${PARTITION[$node]}" "$node" ${CHAIN[$node]}

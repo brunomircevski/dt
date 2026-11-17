@@ -19,7 +19,7 @@ speed-up over the five datasets.}
 \begin{figure}
 \includegraphics[width=0.49\textwidth]{test-scaling-epyc.pdf}\hfill
 \includegraphics[width=0.49\textwidth]{test-scaling-dell.pdf}
-\caption{Speed-up of \ImplParallel{} over one thread on epyc1 (left) and dell1
+\caption{Speed-up of \ImplParallel{} over one thread on epyc1 (left) and dell
 (right), depth $\le$ 10, unpruned. Labels: speed-up and parallel efficiency at
 48 threads; dotted line: the second socket starts at 25 threads.}
 \label{fig:test-scaling}
@@ -29,7 +29,7 @@ speed-up over the five datasets.}
 \includegraphics[width=\textwidth]{test-profile.pdf}
 \caption{Where the training time goes (percent of the training time; mean of the
 profiled runs, depth $\le$ 10, unpruned). EPYC, Xeon: \ImplParallel{} with 48
-threads on epyc1 and dell1; \ImplGpu{} and \ImplHybrid{} on the H100. Triangle:
+threads on epyc1 and dell; \ImplGpu{} and \ImplHybrid{} on the H100. Triangle:
 share of the time the GPU is busy. Chess: 3$\times$3 board, $10^9$ samples.}
 \label{fig:test-profile}
 \end{figure}

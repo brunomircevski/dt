@@ -351,7 +351,7 @@ def heatmap():
 # ---------------------------------------------------------------- 4. scaling
 def scaling():
     sets = [("higgs", "o", "HIGGS", "#2a78d6"), ("mnist8m", "s", "MNIST8M", "#eb6834")]
-    for node, title in [("epyc", "epyc1: 2 × EPYC 9255"), ("dell", "dell1: 2 × Xeon Gold 6542Y")]:
+    for node, title in [("epyc", "epyc1: 2 × EPYC 9255"), ("dell", "dell: 2 × Xeon Gold 6542Y")]:
         fig, ax = plt.subplots(figsize=(HALF, 1.85))
         ax.plot([1, 48], [1, 48], color=GRID, lw=0.8, zorder=0)
         ax.text(10, 13, "ideal", fontsize=6, color=MUTED, rotation=37)

@@ -534,7 +534,9 @@ thread counts, and equal at 48:
 
 **Nodes.** dell2–4 have half dell1's memory channels and are 1.13× slower on
 SUSY, 1.14× on HIGGS, 1.10–1.17× on airline, 1.30–1.34× on ECBDL 15M and
-1.38–1.46× on MNIST8M, with the same single-thread speed; never mix them. epyc1
+1.38–1.46× on MNIST8M, with the same single-thread speed; never mix them. From 2026-11-17 the final
+runs use dell2–4 only (512 GB, as in the paper; STREAM triad 210–212 GB/s on
+each, dell1 379 GB/s: bench/results/dell-nodes/). epyc1
 and epyc2 are within 2%. dell's single thread is 1.47× slower than epyc's on
 HIGGS and 1.6× on chess 10M, but equal on chess 1000M: core speed on small data,
 memory on big data.

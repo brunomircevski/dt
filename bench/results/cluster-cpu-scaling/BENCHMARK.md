@@ -2,6 +2,8 @@
 
 **Final data (2026-11-15/16):** one build of main (f53347a9, `src/` = d2957ff2; `bench/cluster/final.sh -m 5`), 5 runs per point (the chart's footnote gives the count), run with every other benchmark of the paper. dell's HIGGS runs are a rerun of 2026-11-16 (job 161): the first had a few minutes in which every run of dell1 was slow, presort included. The runs before (f1fe270, 10 runs per point, 2026-11-09/10) are in git at 1e655067. Every tree is grown to depth ≤ 10 without pruning, as in the test-set benchmarks; every thread count built the same tree on both nodes.
 
+**Out of date:** dell's points (⚠, faded on the chart) are from dell1 (1 TB, every memory channel). From 2026-11-17 the dell runs are on a 512 GB node (dell2–4: 8 of 16 channels, 211 GB/s against dell1's 379 GB/s; [bench/cluster/README.md](../../cluster/README.md)); the dell scaling is rerun on dell4.
+
 ![Speed-up over one thread on epyc1 and dell1, HIGGS and MNIST8M, CART and C4.5](chart.png)
 
 ```bash

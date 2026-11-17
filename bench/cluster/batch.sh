@@ -5,8 +5,8 @@
 # (short runs, long runs), instead of one per run. A run that fails does not
 # stop the next. Submit it from the repository root, e.g.
 #
-#   sbatch -p dell -w dell1 --exclusive -t 12:00:00 -o bench/cluster/plans/dell1.log \
-#       bench/cluster/batch.sh bench/cluster/plans/dell1.txt
+#   sbatch -p dell -w dell3 --exclusive -t 12:00:00 -o bench/cluster/plans/dell3.log \
+#       bench/cluster/batch.sh bench/cluster/plans/dell3.txt
 #
 # Plan line: <time limit> <dir> <name> <dataset> <impls> <runs> <protocols> <threads>
 #            <timeout> [VAR=value,VAR=value]  (the limit is the submitter's)

@@ -82,7 +82,7 @@ def summarise(cases):
     return [p for p in B.PROTOCOLS if p in out], out
 
 
-NODES = [("epyc", "epyc1"), ("dell", "dell1")]
+NODES = [("epyc", "epyc1"), ("dell", "dell4")]  # the default host, else machine.json's
 DATASETS = [("higgs", "#2a78d6", "o"), ("mnist8m", "#eb6834", "s")]
 STYLE = {"cart_depth10": ("CART", "-", True), "c45_depth10_unpruned": ("C4.5", "--", False)}
 FIELDS = ["protocol", "threads", "runs", "time_mean", "time_min", "time_max", "speedup",
@@ -133,7 +133,7 @@ def figure(data, out):
     for ax, (node, host) in zip(axes, NODES):
         ax.plot([1, top], [1, top], color=GRID, linewidth=1.5, zorder=0)
         ax.text(top * 0.3, top * 0.3 + 2.5, "ideal", fontsize=9, color=MUTED, rotation=34)
-        if node == "epyc":  # CPUs 0-23 socket 0, 24-47 socket 1; dell1's alternate between the sockets
+        if node == "epyc":  # CPUs 0-23 socket 0, 24-47 socket 1; dell's alternate between the sockets
             half = top // 2
             ax.axvline(half + 0.5, color=MUTED, linewidth=0.8, linestyle=(0, (1, 3)), zorder=0)
             ax.text(half + 1.5, 1.5, "2nd socket \u2192", fontsize=8.5, color=MUTED, va="bottom")
@@ -177,7 +177,7 @@ def figure(data, out):
             ax.spines[side].set_visible(False)
         ax.tick_params(colors=MUTED, labelsize=8.5)
         cpu = B.hardware(machine)["cpu"] if machine else "?"
-        ax.set_title(f"{host}: {cpu}", loc="left", fontsize=10.5, color=INK, fontweight="bold")
+        ax.set_title(f"{(machine or {}).get('host') or host}: {cpu}", loc="left", fontsize=10.5, color=INK, fontweight="bold")
         ax.text(0.01, 0.99, "1 thread \u2192 48 threads:\n" + "\n".join(lines), transform=ax.transAxes,
                 fontsize=8, color=INK, va="top", linespacing=1.4,
                 bbox=dict(facecolor="white", edgecolor=GRID, boxstyle="round,pad=0.4"))
@@ -198,7 +198,7 @@ def figure(data, out):
     fig.text(0.06, 0.012, "\n".join(textwrap.fill(part, 190) for part in (
              f"Speed-up: the 1-thread time (--serial) over the time with n threads (--multicore), {runs_note(data)}.",
              "End label: speed-up (parallel efficiency) at 48 threads. Threads take the CPUs in the kernel's order: on "
-             "epyc1 socket 0's 24 cores, then socket 1's; on dell1 the sockets alternate. Memory first-touch.",
+             "epyc1 socket 0's 24 cores, then socket 1's; on dell the sockets alternate. Memory first-touch.",
              "Every thread count grows the same tree. Training time excludes "
              f"reading the data. ./tree {', '.join(commits)}, run {dates}.",
              *([B.OUT_OF_DATE_NOTE + " (faded lines)."] if any(stale.values()) else []))),

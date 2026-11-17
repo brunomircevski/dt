@@ -534,11 +534,15 @@ def hardware_line(machine, gpu_used):
 # as a placeholder until the rerun replaces it, and the label goes away by
 # itself once the chart is redrawn from the new results. GPU runs (hopper,
 # ampere): one GPU timing rule, an 80 GB GPU, hand-off buffers only for
-# --hybrid (0cff6d1b); every other run: the final harness (03c4e2d2).
+# --hybrid (0cff6d1b); every other run: the final harness (03c4e2d2). A run on
+# dell1 is out of date too: the paper's dell is a 512 GB node (dell2-4, 8 of 16
+# memory channels); dell1 has 1 TB and every channel, 1.8x the bandwidth.
 FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "0cff6d1b"}
 GPU_HOSTS = ("hopper", "ampere")
+RETIRED_HOSTS = ("dell1",)
 OUT_OF_DATE_NOTE = (f"faded, ⚠ out of date: measured before the final protocol (GPU runs before {FINAL_SINCE['gpu']}, "
-                    f"CPU runs before {FINAL_SINCE['cpu']}); a placeholder until the rerun")
+                    f"CPU runs before {FINAL_SINCE['cpu']}) or on dell1 (1 TB; the final dell is a 512 GB node); "
+                    "a placeholder until the rerun")
 
 
 @functools.lru_cache(maxsize=None)
@@ -549,10 +553,12 @@ def _built_on(commit, base):
 
 def out_of_date(commit, host):
     """True if a result of this build (a commit, `git describe` or not) on this host is from
-    before the final protocol, or its build is unknown."""
+    before the final protocol, from a retired host (dell1), or its build is unknown."""
     commit = (commit or "").strip().removesuffix("-dirty")
     commit = commit.rsplit("-g", 1)[-1] if "-g" in commit else commit
     node = (host or "").split(".")[0]
+    if node in RETIRED_HOSTS:
+        return True
     return not commit or not _built_on(commit, FINAL_SINCE["gpu" if node in GPU_HOSTS else "cpu"])
 
 

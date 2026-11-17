@@ -30,7 +30,7 @@ export TREE_GIT_DESCRIBE="$(git describe --always --dirty --abbrev=12)"
 echo "code: $TREE_GIT_DESCRIBE, $DATASET -> bench/results/$DIR, runs per case: $RUNS"
 
 ids=()
-for job in "cpu-epyc-$DATASET epyc epyc1" "cpu-dell-$DATASET dell-long dell1"; do
+for job in "cpu-epyc-$DATASET epyc epyc1" "cpu-dell-$DATASET dell-long dell3"; do
   read -r name partition node <<<"$job"
   # run.py appends to results.jsonl: never mix two runs in one directory.
   if [ -e "bench/results/$DIR/$name/results.jsonl" ]; then

@@ -1,0 +1,16 @@
+== dell3 2026-11-17T18:09:36+01:00
+Model name:                              INTEL(R) XEON(R) GOLD 6542Y
+NUMA node(s):                            4
+MemTotal:       527849712 kB
+0
+dmidecode n/a
+Node 0 MemTotal:       131554832 kB
+Node 1 MemTotal:       132067364 kB
+Node 2 MemTotal:       132116212 kB
+Node 3 MemTotal:       132111304 kB
+powersave
+7.0.0-42-generic
+threads 48  copy 172.5 GB/s  triad 211.6 GB/s  (check 118097.0)
+threads 48  copy 175.1 GB/s  triad 211.6 GB/s  (check 118097.0)
+threads 48  copy 175.4 GB/s  triad 211.8 GB/s  (check 118097.0)
+threads 1  copy 15.4 GB/s  triad 17.2 GB/s  (check 118097.0)

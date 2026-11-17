@@ -5,7 +5,7 @@ Every benchmark here ran on the faculty's mordor3 cluster. Each is one directory
 Inside a benchmark, one directory per run: `<backend>-<node>-<dataset>/`.
 
 - **backend:** `cuda` (`--hybrid`, the CPU takes the small nodes), `gpuonly` (`--gpu`), `cpu` (`--multicore`, 48 threads on both sockets), `serial` (`--serial`, one thread), `simple` (`--simple`, the one-thread reference backend).
-- **node:** `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402) run CUDA only; `epyc` (epyc1, or epyc2 with the same hardware, 2× EPYC 9255) and `dell` (dell1, or dell2/dell3 with the same CPUs for one-thread runs, 2× Xeon Gold 6542Y) run on the CPU only.
+- **node:** `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402) run CUDA only; `epyc` (epyc1, or epyc2 with the same hardware, 2× EPYC 9255) and `dell` (a 512 GB node, dell2, dell3 or dell4, 2× Xeon Gold 6542Y; dell1, 1 TB with every memory channel, is no longer used and its runs are out of date) run on the CPU only.
 - **dataset:** the `bench/datasets.toml` entry, e.g. `higgs`, `ecbdl_15m`, `chess_1b`.
 
 A run directory holds `results.jsonl` (one row per run of a case), `plan.json` (the cases and the dataset's rows, features and split), `machine.json` (hardware, commit, date), `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py`. Two benchmarks differ: `cluster-cpu-vs-others` names its runs `vs-epyc-<dataset>-<tool>-<algorithm>`, and `cluster-gpu-vs-others` keeps one directory per dataset and node (cuML and XGBoost) with the scripts it ran in `scripts/`; it runs outside this repository (`~/gpu-dt-bench`). Both take ./tree's bars from the test-set benchmarks.
