@@ -195,7 +195,7 @@ def save(fig, name):
                  "a placeholder until the rerun", ha="left", va="bottom", fontsize=6.5, color=INK,
                  bbox=dict(boxstyle="round,pad=0.25", fc="#fab219", ec="none"))
     USED.clear()
-    fig.savefig(OUT / f"test-{name}.pdf")
+    fig.savefig(OUT / f"test-{name}.pdf", metadata={"CreationDate": None})  # no date (the font subset tags still vary)
     plt.close(fig)
     print("wrote", OUT / f"test-{name}.pdf")
 
