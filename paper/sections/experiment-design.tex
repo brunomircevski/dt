@@ -116,5 +116,5 @@ C4.5 CF 0.25), not timed, later. Fairness notes: hybrid CPU threads, input
 layout. Each implementation in its best measured setting: the hybrid's hand-off
 size is the fastest of a sweep (256--32768) per GPU node and dataset at the
 reported depth, stored in bench/handoff\_rows.json and reused; report ./tree's
-untuned default (10 $\times$ attributes within [512, 16384]) next to it.
+untuned default ($\min(10F, 2^D)$ within [512, 16384]) next to it.
 Source: bench/results/handoff-sweep/.}

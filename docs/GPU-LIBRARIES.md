@@ -123,7 +123,7 @@ used anywhere as a C4.5 stand-in (removed 2026-11-16).
   from the data layout, the partition, the two-class tile bound and the
   CPU/GPU split. Consumer GPUs (FP64 about 64× slower) are not a target.
 * **./tree is a CPU + GPU hybrid:** nodes below `--handoff-rows` (10 ×
-  features within [512, 16384]) go to the CPU. Report the GPU / CPU share and a thread sweep.
+  features, at most 2^depth limit, within [512, 16384]) go to the CPU. Report the GPU / CPU share and a thread sweep.
 * **Memory cost of exactness:** ./tree uses more VRAM than the libraries on
   HIGGS, SUSY and ECBDL (73.3 GiB against 36–48 GiB on ECBDL) and less on
   chess (25.4 against 42–44 GiB).

@@ -53,8 +53,12 @@ std::size_t handoffRows(const Options &options, std::size_t features) {
   if (gpu.handoffRows > 0) {
     return gpu.handoffRows;
   }
-  return std::clamp(features * GpuOptions::kHandoffRowsPerFeature, GpuOptions::kMinHandoffRows,
-                    GpuOptions::kMaxHandoffRows);
+  std::size_t rows = std::min(features * GpuOptions::kHandoffRowsPerFeature,
+                              GpuOptions::kMaxHandoffRows);
+  if (options.maxDepth >= 0 && options.maxDepth < 63) {
+    rows = std::min(rows, std::size_t{1} << options.maxDepth); // 2^depth limit
+  }
+  return std::max(rows, GpuOptions::kMinHandoffRows);
 }
 
 void printUsage(const char *program) {
@@ -105,7 +109,8 @@ void printUsage(const char *program) {
       << "                           makes only the context then, the rest in the timed setup\n"
       << "  --handoff-rows N         --hybrid: smaller nodes go to the CPU threads\n"
       << "                           (default: " << GpuOptions::kHandoffRowsPerFeature
-      << " x features, between " << GpuOptions::kMinHandoffRows << " and "
+      << " x features, at most 2^depth limit,\n"
+      << "                           between " << GpuOptions::kMinHandoffRows << " and "
       << GpuOptions::kMaxHandoffRows << ")\n"
       << "\n"
       << "Output:\n"

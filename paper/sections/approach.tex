@@ -144,9 +144,16 @@ depth-first on the CPU. A GPU level costs about the same for a thousand
 medium-sized nodes as for a few large ones. CPU threads, in contrast, grow
 small subtrees independently, at a cost roughly proportional to their samples
 times their attributes. Wide datasets
-therefore keep nodes on the GPU longer: by default, $m = 10F$ for $F$
-attributes, clamped to $[512, 16{,}384]$. In our tests, this rule
-chose values close to the best $m$ for each dataset.
+therefore keep nodes on the GPU longer. A depth limit $D$ works the other way:
+a shallow tree reaches the limit almost everywhere, so the GPU runs all $D$
+levels anyway, and a hand-off saves no GPU level but moves the last levels'
+work to the slower CPU. By default,
+\[
+  m = \max\bigl(512,\ \min(10F,\ 2^{D},\ 16{,}384)\bigr)
+\]
+for $F$ attributes, without the $2^{D}$ term when there is no depth limit. In
+our tests, this rule chose values close to the best $m$ for each dataset, with
+and without a depth limit.
 
 Hand-offs are asynchronous. At each level, the GPU gathers the remaining
 attributes of the handed-off children and copies them to host memory in the

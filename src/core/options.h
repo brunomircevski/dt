@@ -60,14 +60,24 @@ struct GpuOptions {
   // --hybrid: nodes with fewer rows are handed off (copied back and finished by
   // the CPU pool) while the GPU keeps working on the large nodes of the next
   // level. 0 = auto (handoffRows()): kHandoffRowsPerFeature × the features,
-  // between kMinHandoffRows and kMaxHandoffRows, for CART and C4.5 alike.
+  // at most 2^D for a depth limit D, between kMinHandoffRows and
+  // kMaxHandoffRows, for CART and C4.5 alike.
   // A node's CPU subtree costs about rows × features, a GPU level little more
-  // for a few wide nodes than for one, so wide data hands off later. Measured
-  // on f53347a9 (no depth limit, A100 + 48 threads and H100 + 32 threads,
-  // bench/results/hybrid-vs-gpu-only/): the fastest value was 256-512 on HIGGS
-  // (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M (2381); this
-  // rule is within 2% of the fastest on all three, where the earlier
-  // rows-based default was 6-12% slower.
+  // for a few wide nodes than for one, so wide data hands off later. Without a
+  // depth limit (f53347a9, A100 + 48 threads and H100 + 32 threads,
+  // bench/results/hybrid-vs-gpu-only/) the fastest value was 256-512 on HIGGS
+  // (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M (2381), and
+  // 10 × features is within 3.4% of the fastest on all three.
+  // A shallow tree reaches its depth limit almost everywhere, so the GPU runs
+  // all D levels anyway: a hand-off saves no GPU level and only moves the
+  // last levels' work to the slower CPU. At depth 10 (291a736f,
+  // bench/results/handoff-sweep/depth10/) the fastest was 512-2048 on every
+  // dataset (ECBDL 4096, but 1024 within 0.6%), and 10 × features alone made
+  // CART 4-11% slower on MNIST8M and SOREL 4M; with the 2^D cap (1024) the
+  // CART runs are within 0.6% of the fastest, C4.5 (flat) within 1.6%. The cap
+  // stops mattering from D = 14; hybrid-vs-gpu-only shows hand-offs of the
+  // no-limit size break even at depth 15 and win from 20. D = 11-13 is
+  // between measurements.
   std::size_t handoffRows = 0;
   static constexpr std::size_t kHandoffRowsPerFeature = 10;
   static constexpr std::size_t kMinHandoffRows = 512;
@@ -145,8 +155,8 @@ const char *algorithmName(Algorithm algorithm);
 unsigned threadCount(const Options &options);
 
 // GPU backends: nodes with fewer rows go to the CPU (--hybrid:
-// options.gpu.handoffRows, or the automatic value for this many training
-// rows; --gpu: 1, none).
+// options.gpu.handoffRows, or the automatic value for this many features and
+// options.maxDepth; --gpu: 1, none).
 std::size_t handoffRows(const Options &options, std::size_t features);
 
 // Parse argv on top of `options`. Throws std::runtime_error on bad input.

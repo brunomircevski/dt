@@ -7,7 +7,8 @@ depth: CART hybrid, CART GPU only, C4.5 hybrid, C4.5 GPU only. A bar is the
 mean training time of its runs, the whisker from the fastest to
 the slowest; above each pair, GPU only / hybrid; under each group, the trees'
 nodes. The title gives the --handoff-rows the hybrid ran with: the value in its
-commands, or ./tree's default (10 x features, between 512 and 16384).
+commands, or ./tree's default (10 x features, at most 2^depth limit, between
+512 and 16384; the title gives its no-limit value).
 
   bench/.venv/bin/python bench/hybrid_chart.py bench/results/hybrid-vs-gpu-only --node ampere
 
@@ -78,9 +79,12 @@ def duration(value):
     return f"{value:.3g} s" if value >= 1 else f"{value * 1e3:.3g} ms"
 
 
-def default_handoff(features):
+def default_handoff(features, depth=None):
     """./tree's default --handoff-rows (src/core/options.cpp: handoffRows())."""
-    return min(max(10 * features, 512), 16384)
+    rows = min(10 * features, 16384)
+    if depth is not None:
+        rows = min(rows, 2 ** depth)
+    return max(rows, 512)
 
 
 def panel(ax, dataset, entry):
@@ -130,7 +134,8 @@ def panel(ax, dataset, entry):
     if used:
         title += f"; hybrid at --handoff-rows {', '.join(f'{v:,}' for v in used)}"
     elif features:
-        title += f"; hybrid at the default --handoff-rows (10 × features: {default_handoff(features):,})"
+        title += (f"; hybrid at the default --handoff-rows (10 × features, at most 2^depth: "
+                  f"{default_handoff(features):,} without a limit)")
     ax.text(0, 1.04, title, transform=ax.transAxes, fontsize=10.5, color=INK, va="bottom")
 
 def main():
