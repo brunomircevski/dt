@@ -4,8 +4,8 @@
 bench/cluster/job.sh E2E=1, final.sh kind `e2e`, chart bench/e2e_chart.py), not
 run on 2026-11-17.** Data: `e2e-epyc-higgs` (epyc1, CPU tools, commit
 8fe0c73d, 10 fresh-process runs per tool and algorithm) and
-`e2e-ampere-higgs` (ampere, A100 80 GB, commit 848496ea, CART only, 3 runs per
-tool, 2026-11-17: ./tree with `--gpu-startup context`, the rule of every
+`e2e-ampere-higgs` (CART) and `e2e-ampere-higgs-c45` (C4.5, ./tree only) (ampere,
+A100 80 GB, commits 848496ea and 10cba04f, 3 runs per tool, 2026-11-17: ./tree with `--gpu-startup context`, the rule of every
 timing run; the earlier hopper runs used `full` and are in git history); `chart.png`, `summary.csv`
 (`bench/e2e_chart.py`). This file is the specification it was built from. Read
 [BENCHMARK-CHANGES.MD](../../../BENCHMARK-CHANGES.MD) first: its timing rule,
@@ -51,6 +51,7 @@ pruning; protocols `cart_depth10` and `c45_depth10_unpruned`.
 | CART | cuML (1 tree) | all CPUs, 1 GPU | ampere |
 | CART | XGBoost (1 tree) | all CPUs, 1 GPU | ampere |
 | C4.5 | ./tree `--simple`, `--serial`, `--multicore` | 1, 1, 48 | epyc |
+| C4.5 | ./tree `--gpu`, `--hybrid` | all 48 CPUs, 1 GPU | ampere (A100 80 GB) |
 | C4.5 | Weka J48 | 1 | epyc |
 | C4.5 | YaDT | 1 and 48 | epyc |
 
@@ -225,4 +226,4 @@ for every tool, and 3–5 bullets on what stands out)*
 |---|---|
 | `chart.png` | the figure above |
 | `summary.csv` | one row per tool, backend and algorithm: mean seconds per step, total, wall time, runs, peak RSS, VRAM |
-| `e2e-epyc-higgs/`, `e2e-ampere-higgs/` | `results.jsonl` (every run of every case on that node), `machine.json`, `run.log` |
+| `e2e-epyc-higgs/`, `e2e-ampere-higgs/`, `e2e-ampere-higgs-c45/` | `results.jsonl` (every run of every case on that node), `machine.json`, `run.log` |
