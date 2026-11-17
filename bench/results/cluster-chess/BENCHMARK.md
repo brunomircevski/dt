@@ -1,7 +1,7 @@
 # Chess 3×3 on the mordor3 cluster: 1M to 1000M rows on two GPU and two CPU servers, CART and C4.5 at depth ≤ 10 without pruning
 
-- **Runs:** every case on hopper and ampere (CUDA `--hybrid` and `--gpu`), and on epyc and dell (`--multicore` on both sockets, `--serial`, `--simple`). 5 runs a case, `--simple` 10 (the tables give the count in brackets, the charts on every bar or legend entry).
-- **Builds:** ./tree at f53347a9 (`src/` = d2957ff2), one build for every node, run on 2026-11-15/16 by `bench/cluster/final.sh -m 5` ([bench/cluster/README.md](../../cluster/README.md#the-final-rerun)). `--simple` was not rerun (its code has not changed): its runs are from 2026-11-11/12, f1fe270e on epyc and ce907ddf on dell. `cpu-dell-chess_1m` and `cpu-dell-chess_10m` are a rerun of 2026-11-16 on dell1: the first runs, in the middle of dell1's batch, took 1.5–2× as long (chess 10M CART 115–147 ms, presort 62–78 ms), while the old and new builds alternated on dell1 gave 53–88 ms (new) and 81–126 ms (old); the rerun, with the batch's 30 s warm-up, 68–111 ms. The runs before (f1fe270e, 10 runs a case, 2026-11-09/12) are in git at 1e655067.
+- **Runs:** every case on hopper and ampere (CUDA `--hybrid` and `--gpu`), and on epyc and dell (`--multicore` on both sockets, `--serial`, `--simple`). Each run a fresh process with no warm-up; 10 runs a case in the final runs, 5 in the 2026-11-15 runs, `--simple` 10 (the tables give the count in brackets, the charts on every bar or legend entry).
+- **Builds:** the final runs (2026-11-17, ./tree 82745fb5, the same tree code as 8fe0c73d): `--multicore` on epyc1, `--serial` on epyc2 and dell3 (dell3's rerun, job 320, recorded as 9c57bbd1, the same build: its first final runs, job 297, took up to 1.5× as long for no cause found — not the input format nor the batch's warm-up, both tested — and were replaced; the same trees). **Out of date** (⚠ in the time tables, faded on the charts, until the rerun): the CUDA runs and dell's `--multicore` (2026-11-15/16, f53347a9, 5 runs, with ./tree's GPU setup untimed; dell1 was down), `--simple` (2026-11-11/12, f1fe270e on epyc, ce907ddf on dell). The 2026-11-15 CPU runs the final ones replace are in git at bae12944^ (`cpu-dell-chess_1m` and `cpu-dell-chess_10m` there are a rerun of 2026-11-16 on dell1, after a first batch that took 1.5–2× as long); the runs before them (f1fe270e, 10 runs a case) at 1e655067.
 - **Each node ran alone** and was reserved whole (`--exclusive`). The GPU runs use one GPU and every CPU of the node, the GPU's socket first: hopper's GPU 2 (NUMA node 1, CPUs 16–31, then 0–15), ampere's GPU 0 (NUMA node 0, CPUs 0–47), memory first-touch (`run.log`).
 - **Same trees:** every case built the same tree on every node and backend (`--hash-trees`), the same as in the runs before: 17 nodes (9 leaves), depth 4, 100% training accuracy, at every size. That is the exact tree of a 3×3 board.
 - **Settings:** ./tree's defaults. `cart_depth10` and `c45_depth10_unpruned`, like every other test-set benchmark: depth ≤ 10 without pruning. The tree stops at depth 4, so the limit never acts. Chess has no test set since f2a4f921: the tree is exact, and the training accuracy is reported.
@@ -39,33 +39,35 @@ The charts:
 
 ![time, RAM and VRAM against the training rows](chart-rows.png)
 
-Training time (`train total`: presort and build, on CUDA also GPU setup and upload; not reading the CSV), mean of the runs (runs in brackets):
+*The time table is current; the notes, the memory table and the sections below describe the 2026-11-15 runs (5 runs a case) and are rewritten after the rerun.*
+
+Training time (`train total`: presort and build, on CUDA also GPU setup and upload; not reading the CSV), mean of the runs (runs in brackets; ⚠: out of date, measured before the final protocol, faded on the charts, until the rerun):
 
 | CART, no pruning | 1M | 10M | 100M | 1000M |
 |---|--:|--:|--:|--:|
-| CUDA hybrid · hopper (H100 PCIe + 32 threads) | 46 ms (5) | 50 ms (5) | 74 ms (5) | 615 ms (5) |
-| CUDA hybrid · ampere (A100 80GB PCIe + 48 threads) | 20 ms (5) | 32 ms (5) | 107 ms (5) | 1.02 s (5) |
-| GPU only · hopper | 48 ms (5) | 46 ms (5) | 75 ms (5) | **609 ms** (5) |
-| GPU only · ampere | 20 ms (5) | **30 ms** (5) | 102 ms (5) | 1.01 s (5) |
-| Multicore · epyc (EPYC 9255, 48 threads) | **15 ms** (5) | 54 ms (5) | 209 ms (5) | 1.58 s (5) |
-| Multicore · dell (Xeon 6542Y, 48 threads) | 41 ms (5) | 84 ms (5) | 388 ms (5) | 2.70 s (5) |
-| Serial · epyc (1 thread) | 18 ms (5) | 224 ms (5) | 2.07 s (5) | 39.01 s (5) |
-| Serial · dell (1 thread) | 37 ms (5) | 395 ms (5) | 4.13 s (5) | 52.15 s (5) |
-| Simple · epyc (1 thread) | 481 ms (10) | 6.20 s (10) | 78.70 s (10) | 922 s (10) |
-| Simple · dell (1 thread) | 487 ms (10) | 6.23 s (10) | 80.98 s (10) | 965 s (10) |
+| CUDA hybrid · hopper (H100 PCIe + 32 threads) | 46 ms (5) ⚠ | 50 ms (5) ⚠ | **74 ms** (5) ⚠ | 615 ms (5) ⚠ |
+| CUDA hybrid · ampere (A100 80GB PCIe + 48 threads) | 20 ms (5) ⚠ | 32 ms (5) ⚠ | 107 ms (5) ⚠ | 1.02 s (5) ⚠ |
+| GPU only · hopper | 48 ms (5) ⚠ | 46 ms (5) ⚠ | 75 ms (5) ⚠ | **609 ms** (5) ⚠ |
+| GPU only · ampere | 20 ms (5) ⚠ | **30 ms** (5) ⚠ | 102 ms (5) ⚠ | 1.01 s (5) ⚠ |
+| Multicore · epyc (EPYC 9255, 48 threads) | **15 ms** (10) | 49 ms (10) | 310 ms (10) | 1.63 s (10) |
+| Multicore · dell (Xeon 6542Y, 48 threads) | 41 ms (5) ⚠ | 84 ms (5) ⚠ | 388 ms (5) ⚠ | 2.70 s (5) ⚠ |
+| Serial · epyc (1 thread) | 19 ms (10) | 225 ms (10) | 2.07 s (10) | 39.05 s (10) |
+| Serial · dell (1 thread) | 36 ms (10) | 385 ms (10) | 4.02 s (10) | 50.66 s (10) |
+| Simple · epyc (1 thread) | 481 ms (10) ⚠ | 6.20 s (10) ⚠ | 78.70 s (10) ⚠ | 922 s (10) ⚠ |
+| Simple · dell (1 thread) | 487 ms (10) ⚠ | 6.23 s (10) ⚠ | 80.98 s (10) ⚠ | 965 s (10) ⚠ |
 
 | C4.5, no pruning | 1M | 10M | 100M | 1000M |
 |---|--:|--:|--:|--:|
-| CUDA hybrid · hopper | 46 ms (5) | 48 ms (5) | 76 ms (5) | 622 ms (5) |
-| CUDA hybrid · ampere | 21 ms (5) | 32 ms (5) | 109 ms (5) | 1.03 s (5) |
-| GPU only · hopper | 48 ms (5) | 46 ms (5) | **71 ms** (5) | **618 ms** (5) |
-| GPU only · ampere | 21 ms (5) | **31 ms** (5) | 102 ms (5) | 1.02 s (5) |
-| Multicore · epyc | **19 ms** (5) | 61 ms (5) | 232 ms (5) | 1.93 s (5) |
-| Multicore · dell | 52 ms (5) | 97 ms (5) | 448 ms (5) | 3.23 s (5) |
-| Serial · epyc | 26 ms (5) | 267 ms (5) | 2.41 s (5) | 42.17 s (5) |
-| Serial · dell | 45 ms (5) | 466 ms (5) | 4.80 s (5) | 58.43 s (5) |
-| Simple · epyc | 598 ms (10) | 7.36 s (10) | 90.33 s (10) | 1,039 s (10) |
-| Simple · dell | 601 ms (10) | 7.32 s (10) | 91.90 s (10) | 1,075 s (10) |
+| CUDA hybrid · hopper | 46 ms (5) ⚠ | 48 ms (5) ⚠ | 76 ms (5) ⚠ | 622 ms (5) ⚠ |
+| CUDA hybrid · ampere | 21 ms (5) ⚠ | 32 ms (5) ⚠ | 109 ms (5) ⚠ | 1.03 s (5) ⚠ |
+| GPU only · hopper | 48 ms (5) ⚠ | 46 ms (5) ⚠ | **71 ms** (5) ⚠ | **618 ms** (5) ⚠ |
+| GPU only · ampere | 21 ms (5) ⚠ | **31 ms** (5) ⚠ | 102 ms (5) ⚠ | 1.02 s (5) ⚠ |
+| Multicore · epyc | **20 ms** (10) | 62 ms (10) | 334 ms (10) | 1.98 s (10) |
+| Multicore · dell | 52 ms (5) ⚠ | 97 ms (5) ⚠ | 448 ms (5) ⚠ | 3.23 s (5) ⚠ |
+| Serial · epyc | 26 ms (10) | 267 ms (10) | 2.41 s (10) | 42.18 s (10) |
+| Serial · dell | 45 ms (10) | 458 ms (10) | 4.64 s (10) | 56.84 s (10) |
+| Simple · epyc | 598 ms (10) ⚠ | 7.36 s (10) ⚠ | 90.33 s (10) ⚠ | 1,039 s (10) ⚠ |
+| Simple · dell | 601 ms (10) ⚠ | 7.32 s (10) ⚠ | 91.90 s (10) ⚠ | 1,075 s (10) ⚠ |
 
 Peak memory (the same for CART and C4.5 within 0.01 GiB):
 
