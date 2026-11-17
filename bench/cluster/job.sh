@@ -44,7 +44,17 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0
 # hopper: node 1, node 0's memory was taken in 2026-10), its
 # CPUs come first and the rest follow (on ampere, CUDA hybrid at no depth limit
 # was up to 1.5x faster on both sockets than on the GPU's; 2026-11-06).
+# Each GPU node's fixed GPU (the paper's placement; free memory alone is a tie
+# on hopper and picked GPU 0 or 2 by chance): hopper GPU 2 on NUMA node 1,
+# ampere GPU 0 (an A100 80 GB) on node 0. Another GPU stops the job unless
+# GPU_ANY=1 (tuning only).
+case "$(hostname -s)" in
+  hopper) GPU_EXPECTED=2 GPU_NUMA=1 ;;
+  ampere) GPU_EXPECTED=0 GPU_NUMA=0 ;;
+  *) GPU_EXPECTED= GPU_NUMA= ;;
+esac
 CUDA=; [[ "$IMPLS" == *tree_cuda* || "$IMPLS" == *tree_gpu_only* || "$IMPLS" == *cuml* || "$IMPLS" == *xgboost* ]] && CUDA=1
+[ -z "${NUMA_NODE:-}" ] && [ -n "$CUDA" ] && [ -n "$GPU_NUMA" ] && NUMA_NODE=$GPU_NUMA
 if [ -z "${NUMA_NODE:-}" ] && [ -n "$CUDA" ]; then
   # The node of a GPU with the most memory (ampere: GPUs 0-1 are A100 80 GB
   # on node 0, GPUs 2-3 A100 40 GB on node 1; free memory alone picked node 1
@@ -90,6 +100,8 @@ if [ -n "$CUDA" ]; then
   gpu_mib="$(nvidia-smi --id="$CUDA_VISIBLE_DEVICES" --query-gpu=memory.total --format=csv,noheader,nounits)"
   [ "${gpu_mib:-0}" -ge "${GPU_MIN_MIB:-80000}" ] ||
     { echo "GPU $CUDA_VISIBLE_DEVICES has ${gpu_mib:-?} MiB, under ${GPU_MIN_MIB:-80000}: not an 80 GB card" >&2; exit 1; }
+  [ -z "$GPU_EXPECTED" ] || [ "$CUDA_VISIBLE_DEVICES" = "$GPU_EXPECTED" ] || [ -n "${GPU_ANY:-}" ] ||
+    { echo "GPU $CUDA_VISIBLE_DEVICES on $(hostname -s), not its fixed GPU $GPU_EXPECTED (GPU_ANY=1 allows it)" >&2; exit 1; }
 fi
 export NVCC=/usr/local/cuda/bin/nvcc LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export PYTHONUNBUFFERED=1

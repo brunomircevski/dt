@@ -93,10 +93,20 @@ ALL_CPUS="0-$((NCPU - 1))"
 # with the most free memory of those (ampere: an A100 80 GB on node 0, never one
 # of its A100 40 GB on node 1); its node's CPUs first, then the rest. A GPU
 # under 80 GB stops the job (GPU_MIN_MIB, default 80000).
+# Each GPU node's fixed GPU (the paper's placement; free memory alone is a tie
+# on hopper and picked GPU 0 or 2 by chance): hopper GPU 2 on NUMA node 1,
+# ampere GPU 0 (an A100 80 GB) on node 0. Another GPU stops the job unless
+# GPU_ANY=1 (tuning only).
+case "$(hostname -s)" in
+  hopper) GPU_EXPECTED=2 GPU_NUMA=1 ;;
+  ampere) GPU_EXPECTED=0 GPU_NUMA=0 ;;
+  *) GPU_EXPECTED= GPU_NUMA= ;;
+esac
 export CUDA_DEVICE_ORDER=PCI_BUS_ID  # CUDA's device numbers = nvidia-smi's
 GPU= GPU_NODE= GPU_CPUS=
 if [ "$KIND" = all ]; then
-  GPU_NODE="$(nvidia-smi --query-gpu=memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
+  GPU_NODE="$GPU_NUMA"
+  [ -n "$GPU_NODE" ] || GPU_NODE="$(nvidia-smi --query-gpu=memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
     while IFS=', ' read -r total bus; do
       node="$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")"
       echo "$total $(numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4 }') $node"
@@ -109,6 +119,8 @@ if [ "$KIND" = all ]; then
   gpu_mib="$(nvidia-smi --id="$GPU" --query-gpu=memory.total --format=csv,noheader,nounits)"
   [ "${gpu_mib:-0}" -ge "${GPU_MIN_MIB:-80000}" ] ||
     { echo "GPU $GPU has ${gpu_mib:-?} MiB, under ${GPU_MIN_MIB:-80000}: not an 80 GB card" >&2; exit 1; }
+  [ -z "$GPU_EXPECTED" ] || [ "$GPU" = "$GPU_EXPECTED" ] || [ -n "${GPU_ANY:-}" ] ||
+    { echo "GPU $GPU on $(hostname -s), not its fixed GPU $GPU_EXPECTED (GPU_ANY=1 allows it)" >&2; exit 1; }
   GPU_CPUS="$(cat "/sys/devices/system/node/node$GPU_NODE/cpulist")$(
     for n in /sys/devices/system/node/node[0-9]*; do
       [ "${n##*node}" = "$GPU_NODE" ] || printf ,%s "$(cat "$n/cpulist")"

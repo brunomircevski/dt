@@ -52,6 +52,16 @@ trap 'exit 143' TERM INT
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1 DATA_ROOT
 # Start-up: the kernels load with the CUDA context, before the timer.
 export CUDA_MODULE_LOADING="${CUDA_MODULE_LOADING:-LAZY}"  # CUDA's default; EAGER: see BENCHMARK.md "Time"
+# Each GPU node's fixed GPU (the paper's placement; free memory alone is a tie
+# on hopper and picked GPU 0 or 2 by chance): hopper GPU 2 on NUMA node 1,
+# ampere GPU 0 (an A100 80 GB) on node 0. Another GPU stops the job unless
+# GPU_ANY=1 (tuning only).
+case "$(hostname -s)" in
+  hopper) GPU_EXPECTED=2 GPU_NUMA=1 ;;
+  ampere) GPU_EXPECTED=0 GPU_NUMA=0 ;;
+  *) GPU_EXPECTED= GPU_NUMA= ;;
+esac
+[ -n "${NUMA_NODE:-}" ] || NUMA_NODE=$GPU_NUMA
 if [ -z "${NUMA_NODE:-}" ]; then  # the GPU with the most memory (see bench/cluster/job.sh)
   # The node of a GPU with the most memory (ampere: GPUs 0-1 are A100 80 GB
   # on node 0, GPUs 2-3 A100 40 GB on node 1; free memory alone picked node 1
@@ -75,6 +85,8 @@ fi
 gpu_mib="$(nvidia-smi --id="$CUDA_VISIBLE_DEVICES" --query-gpu=memory.total --format=csv,noheader,nounits)"
 [ "${gpu_mib:-0}" -ge "${GPU_MIN_MIB:-80000}" ] ||
   { echo "GPU $CUDA_VISIBLE_DEVICES has ${gpu_mib:-?} MiB, under ${GPU_MIN_MIB:-80000}: not an 80 GB card" >&2; exit 1; }
+[ -z "$GPU_EXPECTED" ] || [ "$CUDA_VISIBLE_DEVICES" = "$GPU_EXPECTED" ] || [ -n "${GPU_ANY:-}" ] ||
+  { echo "GPU $CUDA_VISIBLE_DEVICES on $(hostname -s), not its fixed GPU $GPU_EXPECTED (GPU_ANY=1 allows it)" >&2; exit 1; }
 # The CPUs, as ./tree's CUDA runs get them (bench/cluster/job.sh): every CPU
 # of the node, the GPU's NUMA node's first; memory first-touch.
 CPUS="$(cat "/sys/devices/system/node/node$NUMA_NODE/cpulist")$(for n in /sys/devices/system/node/node[0-9]*; do

@@ -1,10 +1,11 @@
 # Sourced by the tuning scripts (ab.sh, tune.sh) on a GPU node: picks the GPU as
-# bench/cluster/job.sh does (a GPU with the most memory, the first on a tie;
-# CUDA_VISIBLE_DEVICES if already set) and stops unless it is an 80 GB card
+# bench/cluster/job.sh does (hopper GPU 2, ampere GPU 0; elsewhere a GPU with the
+# most memory, the first on a tie; CUDA_VISIBLE_DEVICES if already set) and stops unless it is an 80 GB card
 # (ampere: GPUs 0-1 A100 80 GB, GPUs 2-3 A100 40 GB). GPU_MIN_MIB: default 80000.
 # No GPU (nvidia-smi missing): nothing happens.
 if command -v nvidia-smi > /dev/null; then
   export CUDA_DEVICE_ORDER=PCI_BUS_ID  # CUDA's device numbers = nvidia-smi's
+  case "$(hostname -s)" in hopper) CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-2} ;; ampere) CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0} ;; esac
   if [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
     CUDA_VISIBLE_DEVICES="$(nvidia-smi --query-gpu=memory.total,index --format=csv,noheader,nounits |
       sort -s -t, -k1,1nr | head -1 | cut -d, -f2 | tr -d ' ')"

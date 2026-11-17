@@ -541,6 +541,7 @@ def hardware_line(machine, gpu_used):
 # memory channels); dell1 has 1 TB and every channel, 1.8x the bandwidth.
 FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "17d8b2f3", "gpulibs": "0cff6d1b"}
 GPU_LIBRARIES = ("cuml", "xgboost")
+FIXED_GPU = {"hopper": "2", "ampere": "0"}  # each GPU node's GPU (job.sh); another one is out of date
 GPU_HOSTS = ("hopper", "ampere")
 RETIRED_HOSTS = ("dell1",)
 OUT_OF_DATE_NOTE = (f"faded, ⚠ out of date: measured before the final protocol (./tree's GPU runs before {FINAL_SINCE['gpu']}, cuML/XGBoost before {FINAL_SINCE['gpulibs']}, "
@@ -554,13 +555,15 @@ def _built_on(commit, base):
                           capture_output=True).returncode == 0
 
 
-def out_of_date(commit, host, impl=None):
+def out_of_date(commit, host, impl=None, gpu_index=None):
     """True if a result of this build (a commit, `git describe` or not) on this host is from
     before the final protocol, from a retired host (dell1), or its build is unknown."""
     commit = (commit or "").strip().removesuffix("-dirty")
     commit = commit.rsplit("-g", 1)[-1] if "-g" in commit else commit
     node = (host or "").split(".")[0]
     if node in RETIRED_HOSTS:
+        return True
+    if node in FIXED_GPU and gpu_index not in (None, "") and str(gpu_index) != FIXED_GPU[node]:
         return True
     kind = "cpu" if node not in GPU_HOSTS else "gpulibs" if impl in GPU_LIBRARIES else "gpu"
     return not commit or not _built_on(commit, FINAL_SINCE[kind])
@@ -572,7 +575,9 @@ def rows_out_of_date(rows, machine=None):
     machine = machine or {}
     commit = (machine.get("versions") or {}).get("tree_git") or machine.get("commit")
     host = machine.get("host")
+    gpu = machine.get("gpu_index")
     rows = list(rows)
     if not rows:
-        return out_of_date(commit, host)
-    return any(out_of_date(r.get("commit") or commit, r.get("host") or host, r.get("impl")) for r in rows)
+        return out_of_date(commit, host, gpu_index=gpu)
+    return any(out_of_date(r.get("commit") or commit, r.get("host") or host, r.get("impl"),
+                           r.get("gpu_index", gpu)) for r in rows)
