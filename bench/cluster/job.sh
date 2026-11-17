@@ -130,9 +130,11 @@ echo "runs per case: $RUNS"
 # The page cache: the datasets leave it before every process (--drop-cache),
 # except end to end (E2E=1, cluster-end-to-end): the input is read into it
 # right before every process and dropped after it (--prefetch), no
-# evaluation, no footprint runs.
+# evaluation, no footprint runs. ./tree's GPU start-up by the same rule as
+# every timing run (run.py's default --gpu-startup context), so its training
+# time is the one the other benchmarks report.
 CACHE=(--drop-cache)
-[ -z "${E2E:-}" ] || CACHE=(--prefetch --no-eval --no-baseline --gpu-startup full)
+[ -z "${E2E:-}" ] || CACHE=(--prefetch --no-eval --no-baseline)
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
   --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} "${CACHE[@]}" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \

@@ -106,14 +106,14 @@ CUDA context; everything after it is timed for ./tree, cuML and XGBoost alike:
 loading the GPU kernels (CUDA's default, lazy: each at its first launch),
 memory pools, page-locked staging buffers, copy threads, the copy, the build.
 ./tree does this with `--gpu-startup context` (`bench/run.py` passes it to
-every timing run). Its own default (`full`) also loads every kernel and sets
-up its pool, staging buffers and copy threads while the data loads, untimed;
-that design is measured where nothing is excluded, in the end-to-end
-benchmark (`--gpu-startup full`). Why: the libraries link their own CUDA
-runtime, so nothing outside their `fit` can load their kernels or set up their
-pools without running their code (a warm-up), and ./tree's full start-up took
-0.17-0.28 s more than the bare context (HIGGS: about as long as its whole
-timed training).
+every timing run, the end-to-end runs included). Its own default (`full`) also
+loads every kernel and sets up its pool, staging buffers and copy threads while
+the data loads, untimed. Why: the libraries link their own CUDA runtime, so
+nothing outside their `fit` can load their kernels or set up their pools
+without running their code (a warm-up). What `full` gains over `context` end to
+end was measured apart (hopper, 2026-11-17, `gpu-startup-timing.html`): the
+same total GPU work; 130-200 ms faster when the read is longer than the
+start-up (HIGGS from NFS), no difference with a short read.
 
 **The warm variant (a supplement for the GPU comparison only).** The protocol
 above, cold, is the one every chart uses. Beside it, cluster-gpu-vs-others
