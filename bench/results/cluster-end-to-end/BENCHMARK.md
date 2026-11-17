@@ -2,7 +2,10 @@
 
 **Status: implemented on 2026-11-16 (bench/run.py --no-eval --prefetch through
 bench/cluster/job.sh E2E=1, final.sh kind `e2e`, chart bench/e2e_chart.py), not
-yet run.** This file is the specification it was built from. Read
+run on 2026-11-17.** Data: `e2e-epyc-higgs` (epyc1, CPU tools, commit
+8fe0c73d) and `e2e-hopper-higgs` (hopper, H100, commit 001a56c6), 10
+fresh-process runs per tool and algorithm; `chart.png`, `summary.csv`
+(`bench/e2e_chart.py`). This file is the specification it was built from. Read
 [BENCHMARK-CHANGES.MD](../../../BENCHMARK-CHANGES.MD) first: its timing rule,
 run counts and problem handling apply here too. Replace this status paragraph
 with the Data line once it has run.
