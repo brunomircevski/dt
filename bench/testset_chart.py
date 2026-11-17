@@ -32,6 +32,7 @@ than one dataset (ECBDL: the full set on the CPU nodes, the 15M sample on all).
 
 import argparse
 import json
+import textwrap
 import statistics
 from pathlib import Path
 
@@ -121,6 +122,19 @@ def overlay(runs, fix):
                 runs[dataset][name] = {**run, "from": suffix}
             elif old.get("state") is None:
                 old["rerun"] = run["state"]
+
+
+def old_gpu_rule(names, runs):
+    """A note naming the GPU bars measured before the one GPU timing rule
+    (2026-11-17, ./tree --gpu-startup context): their GPU setup was untimed."""
+    old = [n for n in names if n.split("-")[0] in ("cuda", "gpuonly")
+           and any(r.get("status") == "ok" and "gpu_startup_mode" not in r
+                   for c in runs[n]["cases"].values() for r in c)]
+    if not old:
+        return ""
+    return "\n" + textwrap.fill(
+        "not yet redone under the one GPU timing rule (2026-11-17), ./tree's GPU setup (kernels, memory pool, "
+        "staging buffers, 0.1-0.25 s) untimed: " + ", ".join(old), 115)
 
 
 def node_machine(folder, name):
@@ -278,9 +292,11 @@ def chart(dataset, runs, out, notes={}):
     axes[-1].xaxis.set_minor_formatter(NullFormatter())
     axes[0 if side else -1].set_xlabel(f"training time (log scale): mean of each bar's runs (1 to {reps}; every run a fresh process, "
                         "no warm-up), whisker: fastest to slowest\nRAM, VRAM: peak while training, mean of the runs; ./tree "
-                        + ", ".join(sorted({r.get("commit") or "?" for n in names for c in runs[n]["cases"].values()
+                        + ", ".join(sorted({(r.get("commit") or runs[n]["machine"].get("versions", {}).get("tree_git")
+                                             or "?")[:12] for n in names for c in runs[n]["cases"].values()
                                             for r in c if r.get("status") == "ok"}))
-                        + ("; hatched, ⚠: a potential problem (see BENCHMARK.md)" if warned else ""),
+                        + ("; hatched, ⚠: a potential problem (see BENCHMARK.md)" if warned else "")
+                        + old_gpu_rule(names, runs),
                         color=MUTED, fontsize=9)
     split = ("the official test set" if meta.get("spec", {}).get("test_source") or
              meta.get("spec", {}).get("split") == "tail" else "held-out rows")
