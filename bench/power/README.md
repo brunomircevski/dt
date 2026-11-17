@@ -126,7 +126,18 @@ reading of the job** (idle, a staircase of CPU load, every run, the gaps); D
 and W from a grid search (D in 0.1 s steps; W from 0.1 to 10 s). The PSU
 energy of a tree is then the integral of a + b·CPU + c·GPUs + d·busy over
 its training window, at 0.1 s resolution, whatever the meter's refresh.
-"Rest of the server" = PSU − CPU packages − DRAM − the GPU in use.
+"Unused GPUs" = the NVML energy of the node's other GPUs (all four for a
+CPU backend); "rest of the server" = PSU − CPU packages − DRAM − every GPU.
+
+**Without the unused GPUs.** hopper and ampere hold four GPUs; a backend
+uses one (CPU backends none), and the other cards idle at 42–55 W each, so
+~150 W of every GPU tree's power (~20% of its energy) and ~200 W of a CPU
+backend's are cards it does not use. `summary.md` and `chart-energy.png`
+(dashed) also give the energy minus c × the unused GPUs' NVML energy
+(c: the model's GPU coefficient): the same server with only the GPU in
+use. It is a counterfactual (a smaller server has other fans and PSUs),
+for comparing a GPU server with a CPU server; the whole-server number
+stays the measured one.
 
 The job gives the fit the range of loads it needs: idle; a staircase of
 1, 2, 4, …, all CPUs busy (60 s per step; 240 s on ampere, so that its
@@ -147,6 +158,18 @@ nodes, GPU and Hybrid runs with their CPU warm-ups.
    3–5% low (re-analysis of the 2026-11-08 hopper job), which is the error the
    model removes.
 
+4. **Leave the case out**: the model fitted without any reading of the
+   case's own processes (its warm-ups and checks too), so it predicts a
+   load it has never seen; and the held-out readings' mean residual. On the
+   2026-11-16 jobs the energy per tree moved by ≤ 0.5% (ampere's GPU and
+   Hybrid: ≤ 1.1%), so no case's number depends on its own readings.
+5. **No busy term**: the same fit without the busy-CPUs term: ≤ 0.3%.
+6. (one-off, 2026-11-17) dell4's RAPL `psys` domain, Intel's platform power
+   sensor (DC, every 0.1 s, recorded by pwrlog.py): a model with psys alone
+   as input (12.6 W + 1.02·psys) gives every dell4 case's energy within
+   0.6% of the CPU model; the meter reads 18–25 W above psys, about what
+   the PSU loses at 150–550 W.
+
 Why busy CPUs: on epyc1 (AMD) the PSU rises more with one busy core than
 RAPL accounts for. Without the term the model was 1.5–2.3% low on the
 single-thread runs (re-analysis of the 2026-11-07 epyc job); with it, ≤ 0.8%.
@@ -161,13 +184,20 @@ process (240 s on ampere); 3 processes per case, round-robin, 20 s of idle
 before each (Serial-Simple: one process of one tree, 40–90 min).
 
 **Warm-up of the GPU backends.** A GPU or Hybrid tree whose CPU threads were
-idle before it sets up slower: on ampere (current code, the warm-up check in
+idle before it sets up slower (the CPU clocks are low: hopper schedutil,
+ampere ondemand): on ampere (current code, the warm-up check in
 `results/`) trees 3–12 of a process took 5.1–5.5 s instead of 4.3 s (hopper: 2.8 s instead of 2.5 s). A single
-run's tree follows the CSV load, which keeps every core busy, so with
+run's tree follows the data load (every thread reads its part of the .f32
+file), so with
 `--repeat-warmup S` each child spins its threads for S s before its timer: 2 s
 is enough on ampere; hopper needs 5 s (with 2 s its trees were 3–10% slower)
 and the measured runs used 15 s.
-The warm-up is outside the training window, so it is never counted.
+The warm-up is outside the training window, so it is never counted, and it
+does not inflate the window: in the warm-up checks (2026-11-16) the CPU
+packages + GPU used 1–4% *less* energy per tree after 15 s of warm-up than
+after none (hopper GPU: 1,165 against 1,217 J), because the tree is faster.
+What it must match is the time benchmark's single runs (the time check):
+with no warm-up, hopper's GPU trees took 13% longer and cost ~8% more.
 
 **Placement**, as in the time benchmark (`bench/cluster/job.sh`,
 `bench/run.py`): Serial-Simple and Serial-Opt on CPU 0; Multicore on every
