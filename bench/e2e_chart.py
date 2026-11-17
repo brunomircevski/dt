@@ -49,6 +49,8 @@ STEP_HELP = {"other": "wall time minus the steps below: process and runtime star
              "prepare": "./tree GPU setup + presort, XGBoost QuantileDMatrix, YaDT indexing",
              "build": "growing the tree (./tree: + C4.5's collapse)",
              "prepare_build": "one fit call that does both: scikit-learn, rpart, J48, cuML"}
+TIMED = {"prepare", "build", "prepare_build"}  # the training time, what the standard benchmarks time
+TIMED_COLOR = INK
 STEP_COLORS = {"other": "#b4b2a9", "read": "#2a78d6", "gpu_startup": "#6250d6", "prepare": "#eda100",
                "build": "#1baf7a", "prepare_build": "#008300"}
 COMBINED = {"sklearn", "rpart", "j48", "cuml"}  # one call prepares and builds
@@ -131,75 +133,65 @@ def draw(cases, out, notes):
     walls = [c["wall"] for c in cases]
     lo = 10 ** math.floor(math.log10(min(walls)))
     hi = 10 ** math.ceil(math.log10(max(walls)))
-    fig, axes = plt.subplots(len(protocols), 2, figsize=(17, 2.4 + 0.42 * sum(sizes) + 1.2 * len(protocols)),
-                             gridspec_kw={"height_ratios": sizes, "width_ratios": [3, 2]}, squeeze=False)
-    labels = []  # (axes, x0, x1, y, text, step): written after the layout, where they fit
-    for (ax, tx), protocol in zip(axes, protocols):
+    fig, axes = plt.subplots(len(protocols), 1, figsize=(15, 2.4 + 0.5 * sum(sizes) + 1.2 * len(protocols)),
+                             gridspec_kw={"height_ratios": sizes}, squeeze=False)
+    labels = []  # (axes, x0, x1, y, text, step, stale): written after the layout, where they fit
+    for tx, protocol in zip(axes[:, 0], protocols):
         rows = sorted((c for c in cases if c["protocol"] == protocol), key=lambda c: c["wall"])
         for y, c in enumerate(rows):
             col = (lambda k: faded(STEP_COLORS[k])) if c["stale"] else (lambda k: STEP_COLORS[k])
-            left = 0.0
+            # the bar's length is the wall time on the log axis; inside it the steps split the drawn
+            # length linearly by their share
+            at = lambda share: lo * (c["wall"] / lo) ** share  # noqa: E731
+            done = 0.0
             for k in STEPS:
                 share = c["steps"][k] / c["wall"]
                 if share > 0:
                     # a 2px-looking surface gap between segments
-                    ax.barh(y, share, left=left, height=0.62, color=col(k), edgecolor=SURFACE,
-                            linewidth=1.2, zorder=2)
+                    tx.barh(y, at(done + share) - at(done), left=at(done), height=0.62, color=col(k),
+                            edgecolor=SURFACE, linewidth=1.2, zorder=2)
                     if share >= 0.01:
-                        labels.append((ax, left, left + share, y, f"{100 * share:.0f}%", k, c["stale"]))
-                left += share
-            # the same steps in seconds on a log axis, stacked in the same order; the first starts at the
-            # axis floor, and a step's width is log(end / start), not its seconds
-            done = 0.0
-            for k in STEPS:
-                end = done + c["steps"][k]
-                start = max(done, lo)
-                if c["steps"][k] > 0 and end > start:
-                    tx.barh(y, end - start, left=start, height=0.62, color=col(k), edgecolor=SURFACE,
-                            linewidth=1.2, zorder=2)
-                    labels.append((tx, start, end, y, seconds(c["steps"][k]), k, c["stale"]))
-                done = end
+                        labels.append((tx, at(done), at(done + share), y, f"{100 * share:.0f}%", k, c["stale"]))
+                done += share
             if c["overlap"] > 0:  # GPU start-up during the read: hatched over the read segment
                 r0 = c["steps"]["other"]
-                ax.barh(y, c["overlap"] / c["wall"], left=r0 / c["wall"], height=0.62, facecolor="none",
+                h0, h1 = at(r0 / c["wall"]), at((r0 + c["overlap"]) / c["wall"])
+                tx.barh(y, h1 - h0, left=h0, height=0.62, facecolor="none",
                         edgecolor=col("gpu_startup"), hatch="////", linewidth=0, zorder=2.5)
-                h0 = max(r0, lo)
-                if r0 + c["overlap"] > h0:
-                    tx.barh(y, r0 + c["overlap"] - h0, left=h0, height=0.62, facecolor="none",
-                            edgecolor=col("gpu_startup"), hatch="////", linewidth=0, zorder=2.5)
-            tx.text(c["wall"] * 1.12, y, f"{seconds(c['wall'])}  ({c['runs']} runs)" + ("\n⚠ out of date" if c["stale"] else ""),
-                    va="center", fontsize=8.5, color=MUTED if c["stale"] else INK)
-        ax.set_yticks(range(len(rows)), [c["tool"] for c in rows], fontsize=8.5)
-        ax.set_xlim(0, 1)
-        ax.set_xticks([0, 0.25, 0.5, 0.75, 1], ["0%", "25%", "50%", "75%", "100%"])
-        ax.set_title(ALGOS[protocol] + ": share of each step", loc="left", fontsize=10, color=INK,
-                     fontweight="bold")
+            # what the standard benchmarks time (train_seconds = prepare + build), thin, under the bar
+            tx.barh(y + 0.41, c["train"] - lo, left=lo, height=0.11, color=faded(TIMED_COLOR) if c["stale"]
+                    else TIMED_COLOR, zorder=2)
+            tx.text(max(c["train"], lo) * 1.08, y + 0.41, f"timed {seconds(c['train'])} ({100 * c['train'] / c['wall']:.0f}% of end to end)", va="center", fontsize=7.5,
+                    color=MUTED)
+            tx.text(c["wall"] * 1.08, y, f"{seconds(c['wall'])}  ({c['runs']} runs)" + ("\n⚠ out of date" if c["stale"] else ""),
+                    va="center", fontsize=9, color=MUTED if c["stale"] else INK)
         tx.set_xscale("log")
-        tx.set_xlim(lo, hi * 8)  # room for the labels
+        tx.set_xlim(lo, hi * 2.5)  # room for the labels
         tx.set_xticks([10.0 ** e for e in range(round(math.log10(lo)), round(math.log10(hi)) + 1)])
         tx.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: seconds(v)))
         tx.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
-        tx.set_yticks(range(len(rows)), [])
-        tx.set_title("seconds per step, stacked (log scale)", loc="left", fontsize=10, color=INK,
-                     fontweight="bold")
-        for a in (ax, tx):
-            a.set_ylim(-0.6, len(rows) - 0.4)
-            a.invert_yaxis()
-            a.tick_params(colors=MUTED, labelsize=8, length=0)
-            a.grid(axis="x", color=GRID, linewidth=0.6)
-            a.set_axisbelow(True)
-            for side in ("top", "right", "left"):
-                a.spines[side].set_visible(False)
-            a.spines["bottom"].set_color(GRID)
+        tx.set_yticks(range(len(rows)), [c["tool"] for c in rows], fontsize=9)
+        tx.set_title(ALGOS[protocol] + ": wall time (log scale), split by share of each step", loc="left",
+                     fontsize=10, color=INK, fontweight="bold")
+        tx.set_ylim(-0.6, len(rows) - 0.4 + 0.15)
+        tx.invert_yaxis()
+        tx.tick_params(colors=MUTED, labelsize=8.5, length=0)
+        tx.grid(axis="x", color=GRID, linewidth=0.6)
+        tx.set_axisbelow(True)
+        for side in ("top", "right", "left"):
+            tx.spines[side].set_visible(False)
+        tx.spines["bottom"].set_color(GRID)
     dataset = cases[0]["dataset"].upper() if cases else "?"
     fig.suptitle(f"End to end on {dataset}: where a run's wall time goes, launch to finished tree "
-                 "(left: share of each step; right: mean wall time)", x=0.01, y=0.995, ha="left",
+                 "(share of each step, and the part the standard benchmarks time)", x=0.01, y=0.995, ha="left",
                  fontsize=11, color=INK, fontweight="bold")
-    handles = [Patch(color=STEP_COLORS[k], label=f"{STEP_NAMES[k]}: {STEP_HELP[k]}") for k in STEPS]
+    handles = [Patch(color=STEP_COLORS[k], label=f"{STEP_NAMES[k]} ({'TIMED' if k in TIMED else 'not timed'}): "
+                     f"{STEP_HELP[k]}") for k in STEPS]
     if any(c["overlap"] > 0 for c in cases):
         handles.append(Patch(facecolor=STEP_COLORS["read"], edgecolor=STEP_COLORS["gpu_startup"], hatch="////",
                              linewidth=0, label="GPU start-up during the read (./tree, background thread): "
                              "overlapped, so counted once, in the read"))
+    handles.append(Patch(color=TIMED_COLOR, label="thin bar: what the standard benchmarks report, the TIMED steps (training time)"))
     fig.legend(handles=handles,
                loc="upper left", bbox_to_anchor=(0.01, 0.975), ncol=2, frameon=False, fontsize=8.5,
                columnspacing=3)
@@ -252,8 +244,10 @@ def main():
         f"Nodes {', '.join(hosts)} (CPU tools on epyc"
         + (", GPU tools on hopper, H100" if any(h.startswith("hopper") for h in hosts) else "")
         + f"); commit {', '.join(commits)}.",
-        "Right: the same steps stacked in seconds on a log axis; a step's width there shows how much it "
-        "multiplies the time so far, so the steps at the end look shorter than their seconds (see the shares).",
+        "A bar's length is the mean wall time on a log axis; inside it the steps split that length linearly by "
+        "their share (a segment's length is not its seconds on the axis).",
+        "Timed by the standard benchmarks (bench/README.md): only the training, from the data in memory to the "
+        "finished tree; the read, start-up (CPU and GPU) and process exit are not timed.",
     ] + ([B.OUT_OF_DATE_NOTE + "."] if any(c["stale"] for c in cases) else [])
     draw(cases, folder / "chart.png", notes)
 
