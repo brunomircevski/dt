@@ -165,7 +165,8 @@ warmup_of() { case $1 in gpuonly|cuda) echo "--repeat-warmup ${2:-$WARMUP}" ;; e
   fi
 } > "$OUT/machine.txt" 2>&1
 
-python3 bench/power/pwrlog.py 0.1 "$OUT/samples.csv" &
+# the sampler on the last CPU: never on CPU 0 with the one-thread runs
+taskset -c "$((NCPU - 1))" python3 bench/power/pwrlog.py 0.1 "$OUT/samples.csv" &
 SAMPLER=$!
 BUSY=()
 cleanup() {
