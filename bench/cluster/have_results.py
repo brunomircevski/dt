@@ -75,7 +75,9 @@ def complete(cases, rows, runs, long_runs):
 def have_run(target, impls, protocols, threads, runs, long_runs, env=""):
     folder = RESULTS / target
     machine_f, plan_f = folder / "machine.json", folder / "plan.json"
-    if not (machine_f.exists() and plan_f.exists() and (folder / "report.md").exists()):
+    # job.sh writes report.md after every run except end to end (E2E=1)
+    report = "E2E=1" in env.split(",") or (folder / "report.md").exists()
+    if not (machine_f.exists() and plan_f.exists() and report):
         return False
     machine, plan = json.loads(machine_f.read_text()), json.loads(plan_f.read_text())
     args = command_args(machine.get("command", ""))
