@@ -99,6 +99,10 @@ void printUsage(const char *program) {
       << "Run:\n"
       << "  --threads N              CPU threads for loading, evaluation and (multicore,\n"
       << "                           gpu, hybrid) training (0 = every CPU it may run on)\n"
+      << "  --gpu-startup MODE       --gpu, --hybrid: full (default) makes the CUDA context,\n"
+      << "                           loads the kernels and sets up the memory pool and the\n"
+      << "                           page-locked copy buffers while the data loads; context\n"
+      << "                           makes only the context then, the rest in the timed setup\n"
       << "  --handoff-rows N         --hybrid: smaller nodes go to the CPU threads\n"
       << "                           (default: " << GpuOptions::kHandoffRowsPerFeature
       << " x features, between " << GpuOptions::kMinHandoffRows << " and "
@@ -206,6 +210,9 @@ void checkFlagCombination(const Options &options, const std::set<std::string> &g
   if (options.backend != Backend::Hybrid) {
     refuse({"--handoff-rows"}, "is for --hybrid only");
   }
+  if (!usesGpu(options.backend)) {
+    refuse({"--gpu-startup"}, "is for --gpu and --hybrid only");
+  }
 }
 
 } // namespace
@@ -266,6 +273,12 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.accuracy = false;
     } else if (arg == "--profile") {
       options.profilePath = args.value(arg);
+    } else if (arg == "--gpu-startup") {
+      const std::string mode = args.value(arg);
+      if (mode != "full" && mode != "context") {
+        throw std::runtime_error("--gpu-startup: full or context, not " + mode);
+      }
+      options.gpu.contextOnlyStartup = mode == "context";
     } else if (arg == "--handoff-rows") {
       options.gpu.handoffRows = parseCount(arg, args.value(arg));
     } else if (!arg.empty() && arg[0] == '-') {

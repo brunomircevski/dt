@@ -63,7 +63,9 @@ std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &optio
 // page-locked staging buffers (slow: 0.1-0.7 s). Call it early on another
 // thread, e.g. while the dataset loads, so training does not wait for it.
 // `threads`: the most CPU threads its staged copies use (the caller included).
+// `contextOnly` (--gpu-startup context): the CUDA context alone; the rest is
+// made in the timed setup (GpuGrower::setup).
 // Returns its duration in seconds (0 in the CPU-only build).
-double gpuPrepare(unsigned threads);
+double gpuPrepare(unsigned threads, bool contextOnly = false);
 
 } // namespace dt

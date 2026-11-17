@@ -98,8 +98,22 @@ the rule of every timing benchmark since 2026-11-16
 | | Start-up: allowed, before the timer, reported apart | Warm-up: not allowed |
 |---|---|---|
 | What | preparation that does not depend on the data | running real training code before the timed fit |
-| Examples | process launch, interpreter / JVM / R start, imports, CUDA context, eager loading of the GPU kernels (`CUDA_MODULE_LOADING=EAGER`), **empty** memory pools and staging buffers | a fit on a few rows, an untimed full-size fit, growing a memory pool to the data's size, running the split kernels once |
+| Examples | process launch, interpreter / JVM / R start, imports, the bare CUDA context (`cudaFree(0)`) | a fit on a few rows, an untimed full-size fit, growing a memory pool to the data's size, running the split kernels once |
 | Why | every real program pays it once, before its first tree, whatever the data | it leaves the JIT compiled, the pools grown and the caches filled: the timed fit would be a process's second fit, not running the tool once |
+
+**One rule for every GPU tool (since 2026-11-17):** before the timer only the
+CUDA context; everything after it is timed for ./tree, cuML and XGBoost alike:
+loading the GPU kernels (CUDA's default, lazy: each at its first launch),
+memory pools, page-locked staging buffers, copy threads, the copy, the build.
+./tree does this with `--gpu-startup context` (`bench/run.py` passes it to
+every timing run). Its own default (`full`) also loads every kernel and sets
+up its pool, staging buffers and copy threads while the data loads, untimed;
+that design is measured where nothing is excluded, in the end-to-end
+benchmark (`--gpu-startup full`). Why: the libraries link their own CUDA
+runtime, so nothing outside their `fit` can load their kernels or set up their
+pools without running their code (a warm-up), and ./tree's full start-up took
+0.17-0.28 s more than the bare context (HIGGS: about as long as its whole
+timed training).
 
 **What is timed: the training time**, all the work that depends on the data,
 from the data in host memory as the tool's input arrays to the finished tree.
@@ -108,13 +122,13 @@ Each tool measures it with its own monotonic clock:
 | Tool | Start-up (not timed) | Timed |
 |---|---|---|
 | ./tree `--serial`, `--multicore`, `--simple` | none | `train total`: presort and build |
-| ./tree `--gpu`, `--hybrid` | CUDA context, a 2 MiB memory pool, pinned staging buffers (`gpuPrepare`), printed as `gpu startup`; it runs while the data loads, and `train total` starts only after it has finished (`gpu startup wait`: the part still running when the load ended) | `train total`: GPU setup and upload (allocation and pool growth included), presort, build |
+| ./tree `--gpu`, `--hybrid` | the CUDA context (`--gpu-startup context`), printed as `gpu startup`; it runs while the data loads, and `train total` starts only after it has finished (`gpu startup wait`: the part still running when the load ended) | `train total`: GPU setup (kernel loading, memory pool, page-locked staging buffers, copy threads, allocations) and upload, presort, build |
 | scikit-learn | interpreter, imports | `DecisionTreeClassifier.fit` |
 | rpart | R, `library(rpart)` | `rpart()` |
 | Weka J48 | JVM, class loading | `buildClassifier` (HotSpot's JIT compilation during it stays in: a user who trains one tree pays it too) |
 | YaDT (1 and 48 threads) | process start | its `total time` minus its `load time` (parsing the CSV), i.e. its indexing, plus the sum of its per-tree `time` fields (build) |
-| cuML | interpreter, imports (RMM), CUDA context with eager kernels; RMM left at cuML's default, not configured or pre-grown | `fit` from host float32 arrays: copy, binning, build, and every allocation it makes |
-| XGBoost | interpreter, imports, CUDA context with eager kernels | `QuantileDMatrix` from host arrays plus `train` (both recorded) |
+| cuML | interpreter, imports (RMM), the CUDA context; RMM left at cuML's default, not configured or pre-grown | `fit` from host float32 arrays: kernel loading, copy, binning, build, and every allocation it makes |
+| XGBoost | interpreter, imports, the CUDA context; the float32 (MNIST8M: one-hot) labels, the adapter's data preparation | `QuantileDMatrix` from host arrays plus `train` (both recorded), kernel loading included |
 
 **Not timed:** reading the file into memory; start-up (the GPU's is recorded as
 `gpu_startup_seconds`, the rest is only in the whole process's

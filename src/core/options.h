@@ -75,6 +75,15 @@ struct GpuOptions {
   // --gpu grows every node on the GPU: no hand-offs to the CPU, and no host
   // arena for them (C4.5's pruning allocates it when it needs it). With
   // --threads 1 the CPU side is one thread (the staged copies too).
+  //
+  // --gpu-startup context: the start-up before training (`gpu startup`,
+  // overlapping the load) only creates the CUDA context; the kernels load
+  // lazily (CUDA's default) at their first launch, and the memory pool, the
+  // page-locked staging buffers and the copy threads are made in the timed
+  // `gpu setup`. The benchmarks use it to time ./tree exactly as cuML and
+  // XGBoost, whose start-up is their context alone (bench/README.md "How time
+  // is measured"). Default (full): all of that before training.
+  bool contextOnlyStartup = false;
 };
 
 struct Options {

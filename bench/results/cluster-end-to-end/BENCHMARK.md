@@ -107,7 +107,7 @@ the tool.
 |---|---|---|
 | **1. Runtime start, exit and other** | exec, dynamic linking, interpreter/JVM/R start, imports, `library()`, class loading, process exit, and any work not covered by steps 2–5 | **the remainder:** total wall time (from the launcher, below) minus the non-overlapping time of steps 2–5. No clock comparison across processes is needed. |
 | **2. Read data** | file → the tool's in-memory input: NumPy arrays, R data.frame, Weka `Instances`, YaDT's table, ./tree's columns | the tool's monotonic clock around its reading code |
-| **3. GPU start-up** | CUDA context, eager kernel loading, empty memory pool and staging buffers (GPU tools only) | ./tree: `gpu startup`; cuML/XGBoost: the new start-up phase of `gpubench.py` |
+| **3. GPU start-up** | ./tree (`--gpu-startup full`, its default): CUDA context, eager kernel loading, empty memory pool and staging buffers; cuML/XGBoost: the CUDA context (their kernels load lazily inside the fit) | ./tree: `gpu startup`; cuML/XGBoost: the new start-up phase of `gpubench.py` |
 | **4. Prepare** | data-dependent preparation before growing: ./tree's GPU upload (`gpu setup`) and presort; XGBoost's `QuantileDMatrix`; YaDT's indexing | the tool's clock or log |
 | **5. Build** | growing the tree | the tool's clock or log |
 
@@ -146,8 +146,8 @@ only, not to how it works.
 | rpart | `readBin` + `data.frame` | – | `rpart()` (combined) | |
 | J48 | binary → `Instances` | – | `buildClassifier` (combined) | |
 | YaDT | `load time` from its log (text parse) | – | indexing: `total time` − `load time` | build: the sum of its per-tree `time` fields (as `run.py` reads them today) |
-| cuML | `np.fromfile` | context, eager kernels, empty RMM pool | `fit` (combined: copy, binning, build) | |
-| XGBoost | `np.fromfile` | context, eager kernels | `QuantileDMatrix` | `train` |
+| cuML | `np.fromfile` | context (kernels lazily, in `fit`) | `fit` (combined: copy, binning, build) | |
+| XGBoost | `np.fromfile` | context (kernels lazily, in the fit) | `QuantileDMatrix` | `train` |
 
 **Total wall time:** from the `rusage` launcher (fork to `wait4`), as
 `run.py`'s `wall_seconds` is today. For `gpubench.py`, launch it the same way:

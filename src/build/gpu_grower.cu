@@ -329,6 +329,10 @@ private:
   // Everything that does not depend on the tree: the device, the device
   // memory, the upload of the data with the presort, the host arena.
   void setup() {
+    // The page-locked staging buffers and the copy threads, sized by
+    // --threads: made by gpuPrepare() before training, or here (timed) with
+    // --gpu-startup context; the first call decides.
+    staging().prepare(threadCount(options_));
     initDevice();
     const bool keepValues = allocateDevice();
     uploadAndPresort(keepValues);
@@ -1861,9 +1865,12 @@ private:
 
 } // namespace
 
-double gpuPrepare(unsigned threads) {
+double gpuPrepare(unsigned threads, bool contextOnly) {
   const auto start = std::chrono::steady_clock::now();
   CUDA_CHECK(cudaFree(nullptr));
+  if (contextOnly) { // the pool and the staging buffers: in setup(), timed
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  }
   // The first cudaMallocAsync of a process sets up the device's memory pool
   // and blocks the host (27 ms on the H100 node, about 15 ms on the A100
   // node, 9 ms on the RTX 2080 Ti node): in the timed setup, at the first

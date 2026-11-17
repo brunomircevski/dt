@@ -72,6 +72,20 @@ yet, so do not invent one. Mention in the docs that they come later.
 
 ### Per tool
 
+> **Superseded for the GPU tools (2026-11-17, user-approved): one rule for
+> every GPU tool.** Only the bare CUDA context is start-up. Kernel loading
+> (lazy, CUDA's default), memory pools, page-locked staging buffers and copy
+> threads are timed for ./tree (`--gpu-startup context`, which `bench/run.py`
+> passes to every timing run), cuML and XGBoost alike. Reason: the libraries
+> link their own CUDA runtime, so their kernels and pools cannot be set up
+> outside their fit without running their code, while ./tree's full start-up
+> took 0.17-0.28 s more than the bare context on HIGGS, about its whole
+> training time. ./tree's full start-up, overlapped with the read, is
+> measured in the end-to-end benchmark (`--gpu-startup full`). XGBoost's labels
+> (float32, one-hot for MNIST8M) are made before its timer. The library
+> processes run under `taskset` with ./tree's CPU list. The table below is
+> the 2026-11-16 plan.
+
 | Tool | Start-up (not timed, reported) | Timed | Status |
 |---|---|---|---|
 | ./tree `--serial`, `--multicore`, `--simple` | none | `train total`: presort and build | already correct |

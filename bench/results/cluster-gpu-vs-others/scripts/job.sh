@@ -64,6 +64,10 @@ if [ -n "${NUMA_NODE:-}" ]; then
     done || true)"
   [ -n "$CUDA_VISIBLE_DEVICES" ] || { echo "no GPU on NUMA node $NUMA_NODE" >&2; exit 1; }
 fi
+# The CPUs, as ./tree's CUDA runs get them (bench/cluster/job.sh): every CPU
+# of the node, the GPU's NUMA node's first; memory first-touch.
+CPUS="$(cat "/sys/devices/system/node/node$NUMA_NODE/cpulist")$(for n in /sys/devices/system/node/node[0-9]*; do
+  [ "${n##*node}" = "$NUMA_NODE" ] || printf ,%s "$(cat "$n/cpulist")"; done)"
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64
 PY=$B/venv/bin/python
 RUSAGE="${RUSAGE:-}"
@@ -72,7 +76,7 @@ echo "job ${SLURM_JOB_ID:-} on $(hostname), $(nproc) CPUs, $(date '+%F %T'), cod
 echo "$REPS round(s) of one process per case; cases: $IMPLS x $DATASETS x trees:forest $FORESTS; depth <= $DEPTH; results: $RESULTS"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "free memory per NUMA node: $(numactl -H | awk '/ free:/ { printf "%snode %s %d GiB", (n++ ? ", " : ""), $2, $4 / 1024 }')"
-echo "GPU $CUDA_VISIBLE_DEVICES on NUMA node $NUMA_NODE; every CPU, memory first-touch; CUDA_MODULE_LOADING=$CUDA_MODULE_LOADING"
+echo "GPU $CUDA_VISIBLE_DEVICES on NUMA node $NUMA_NODE; CPUs $CPUS (taskset, as ./tree's CUDA runs), memory first-touch; CUDA_MODULE_LOADING=$CUDA_MODULE_LOADING"
 echo "CPU governor: $(cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | sort -u | tr '\n' ' ')"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,driver_version,power.limit --format=csv,noheader
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader | sed 's/^/GPU process: /'
@@ -120,7 +124,7 @@ one() {
   echo "=== $(date +%H:%M:%S) round $round: $impl $dataset, $trees tree(s), $forest${streams:+, N_STREAMS=$streams}"
   start=$(date +%s.%N)
   FOREST=$forest ${streams:+N_STREAMS=$streams} timeout --foreground 14400 \
-    ${RUSAGE:+"$RUSAGE" "$usage"} $PY "$B/gpubench.py" "$impl" "$dataset" cart "$row" "$out/pred" "$trees" "$DEPTH"
+    ${RUSAGE:+"$RUSAGE" "$usage"} taskset -c "$CPUS" $PY "$B/gpubench.py" "$impl" "$dataset" cart "$row" "$out/pred" "$trees" "$DEPTH"
   status=$?
   end=$(date +%s.%N)
   if [ $status -eq 0 ] && [ -s "$row" ]; then

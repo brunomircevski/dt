@@ -48,11 +48,17 @@ either side: reading the file, prediction, accuracy.
 | build | all GPU levels, hand-offs, the CPU threads finishing small subtrees, assembling the host tree |
 | prune | C4.5 only: collapse of useless splits and training-value thresholds (part of C4.5 even without `--prune`) |
 
-Not in it: reading the input; the GPU start-up (the CUDA context with its
-kernels loaded eagerly, a 2 MiB memory pool and the pinned staging buffers: 4 ×
-32 MB for uploads, 2 × 128 MB for the hand-offs), made on a background
+Not in it: reading the input and, in every benchmark run (`--gpu-startup
+context`, since 2026-11-17), only the bare CUDA context, made on a background
 thread while the input loads (`src/app/main.cpp`) and printed as `gpu
-startup`; `train total` starts only after it has finished.
+startup`; `train total` starts only after it has finished. Kernel loading
+(lazy, CUDA's default), the memory pool and the pinned staging buffers (4 ×
+32 MB for uploads, 2 × 128 MB for the hand-offs) and the copy threads are then
+made in the timed `gpu setup`, exactly as the libraries make theirs in their
+fit. ./tree's default (`--gpu-startup full`) makes all of them before training,
+overlapping the load: 0.17-0.28 s more untimed start-up than the bare context
+on HIGGS (hopper, ampere), about as long as the timed training itself, so a
+comparison with it would not be fair; it is measured end to end instead.
 
 **cuML / XGBoost** (`gpubench.py`, since 2026-11-16): one fresh Python process
 per run, no warm-up fit. It loads row-major float32 NumPy arrays, then does the

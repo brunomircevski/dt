@@ -29,6 +29,10 @@ The phases, in order:
               resource: nothing is reconfigured or pre-grown, so every
               allocation fit makes stays timed (as ./tree's pool growth does).
               startup_seconds = import_seconds + gpu_startup_seconds; not timed;
+              XGBoost's float32 (or one-hot) labels are made here too, untimed
+              (the adapter's data preparation: ./tree and cuML get the int32
+              labels as read). The same rule as ./tree --gpu-startup context
+              (bench/run.py): the CUDA context alone before the timer;
   3. timed    from the host arrays to the fitted model (train_seconds):
               cuML fit (copy to the GPU, binning, growing); XGBoost
               QuantileDMatrix (dmatrix_seconds) + train (build_seconds);
@@ -65,6 +69,7 @@ DATA_ROOT = os.environ.get("DATA_ROOT", os.path.expanduser("~/datasets"))
 DEPTH = 19  # set by main()
 TREES = 1   # set by main()
 CLASSES = 2  # set by main()
+LABEL = None  # XGBoost's labels, made by main() before the timer
 EVAL = os.environ.get("EVAL", "1") == "1"
 BINS = {"cuml": 128, "xgboost": 256}  # each library's default
 FOREST = os.environ.get("FOREST", "identical")
@@ -195,6 +200,17 @@ def cuml_info(model, X, y, Xt):
     return acc, pred, nodes, d, f"f{feat} <= {thr:.7g}"
 
 
+def xgb_labels(y):
+    """XGBoost's labels, made before the timer (the adapter's data preparation,
+    as ./tree's int32 labels and cuML's are read ready): float32 class indices;
+    the CART emulation with more than 2 classes: the one-hot labels (the summed
+    squared error of a split is n/2 times the drop in Gini impurity for any
+    number of classes, whatever base_score is, in one round)."""
+    if FOREST == "default" or CLASSES == 2:
+        return y.astype(np.float32)
+    return np.eye(CLASSES, dtype=np.float32)[y]
+
+
 def xgb_fit(X, y, case, trees):
     # reg:squarederror with lambda = 0 on 0/1 labels: every row has hessian 1,
     # so the split gain is the drop in the children's squared error, which is
@@ -213,7 +229,7 @@ def xgb_fit(X, y, case, trees):
     if FOREST == "default":  # XGBRFClassifier's defaults, one round
         import xgboost as xgb
         t = time.perf_counter()
-        dtrain = xgb.QuantileDMatrix(X, label=y.astype(np.float32))
+        dtrain = xgb.QuantileDMatrix(X, label=LABEL)
         dmatrix = time.perf_counter() - t
         objective = ({"objective": "multi:softprob", "num_class": CLASSES} if CLASSES > 2
                      else {"objective": "binary:logistic"})
@@ -228,11 +244,7 @@ def xgb_fit(X, y, case, trees):
     # tree, and XGBoost averages the forest (each leaf scaled by 1/trees).
     import xgboost as xgb
     t = time.perf_counter()
-    # More than 2 classes: the one-hot labels; the summed squared error of a
-    # split is n/2 times the drop in Gini impurity for any number of classes,
-    # whatever base_score is (one round).
-    label = y.astype(np.float32) if CLASSES == 2 else np.eye(CLASSES, dtype=np.float32)[y]
-    dtrain = xgb.QuantileDMatrix(X, label=label, max_bin=BINS["xgboost"])
+    dtrain = xgb.QuantileDMatrix(X, label=LABEL, max_bin=BINS["xgboost"])
     dmatrix = time.perf_counter() - t
     params = {"device": "cuda", "tree_method": "hist", "objective": "reg:squarederror", **multi,
               "eta": 1.0, "lambda": 0.0, "alpha": 0.0, "gamma": 0.0,
@@ -319,6 +331,8 @@ def main():
     read = time.perf_counter() - t
     CLASSES = int(y.max()) + 1
     imported, context, gpu_name = start_up(impl)
+    global LABEL
+    LABEL = xgb_labels(y) if impl == "xgboost" else None  # untimed, see xgb_labels
 
     t = time.perf_counter()
     model, timing = fit(X, y, case, TREES)

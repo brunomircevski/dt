@@ -216,8 +216,9 @@ def draw(kind, res, out):
                 "squared error, λ 0 (256 bins; = Gini; MNIST8M: one multi-output tree on the one-hot labels).\n"
                 "Forest of 10 / 10: the library's random-forest defaults (cuML bootstrap and √features; XGBoost RF 0.8 "
                 "of rows and features), its time divided by 10. ./tree hybrid: --hybrid, GPU only: --gpu. Not timed: "
-                "the CUDA context, ./tree's kernel loading (eager) and the libraries' imports; the libraries load "
-                "their kernels lazily (CUDA's default) inside the fit; timed: from the host arrays to the fitted model.")
+                "the imports and the bare CUDA context, for every tool alike; timed: from the host arrays to the "
+                "fitted model, kernel loading (lazy), memory pools and staging buffers included (./tree --gpu-startup "
+                "context).")
         fig.legend(handles=[Patch(color=c, label=GPU_NAMES[n]) for n, c in GPU_COLORS.items()],
                    loc="upper right", ncol=2, frameon=False, fontsize=9)
     fig.suptitle(head, x=0.01, y=0.995, ha="left", fontsize=11.5, color=INK, fontweight="bold")

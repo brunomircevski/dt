@@ -120,7 +120,7 @@ echo "runs per case: $RUNS"
 # right before every process and dropped after it (--prefetch), no
 # evaluation, no footprint runs.
 CACHE=(--drop-cache)
-[ -z "${E2E:-}" ] || CACHE=(--prefetch --no-eval --no-baseline)
+[ -z "${E2E:-}" ] || CACHE=(--prefetch --no-eval --no-baseline --gpu-startup full)
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
   --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} "${CACHE[@]}" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \

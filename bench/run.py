@@ -28,7 +28,7 @@ bench/README.md, "How time is measured"):
      the process ends with its tree; the end-to-end benchmark).
 The repetitions run in a shuffled order (a new order every repetition), so slow
 drift (heat, background load) spreads over all cases. A case whose first run
-takes longer than --long-seconds (an hour) runs --long-runs (3) times in all. Every process reports the
+trains longer than --long-seconds (an hour) runs --long-runs (3) times in all. Every process reports the
 rows and features it loaded; a mismatch with the dataset is an error. After the
 runs, each tool runs --reps times on the tiny _baseline dataset (no warm-up, no
 evaluation): its runtime footprint.
@@ -281,6 +281,10 @@ def build_command(case, kind, args, scratch, rep=0):
                 backend += ["--handoff-rows", str(rows)]
         elif impl == "tree_gpu_only":
             binary, backend = B.TREE_CUDA, ["--gpu", "--threads", str(threads)]
+        if impl in ("tree_cuda", "tree_gpu_only"):
+            # context: only the CUDA context before the timer, as the GPU
+            # libraries (gpubench.py); full (end to end): ./tree's own start-up
+            backend += ["--gpu-startup", args.gpu_startup]
         elif impl == "tree_simple":
             binary, backend = B.TREE, ["--simple"]
         else:
@@ -633,7 +637,8 @@ def main():
                              "(every run records its free memory per NUMA node, mem_free_node*_kb)")
     parser.add_argument("--reps", type=int, default=1, help="runs (fresh processes) per case")
     parser.add_argument("--long-seconds", type=float, default=3600,
-                        help="a case whose first run takes longer (whole process, seconds) "
+                        help="a case whose first run trains longer (train_seconds; the whole "
+                             "process if it failed) "
                              "runs only --long-runs times in all (default 3600)")
     parser.add_argument("--long-runs", type=int, default=3,
                         help="runs of a case whose first run took longer than --long-seconds "
@@ -665,6 +670,12 @@ def main():
     parser.add_argument("--profile", action="store_true",
                         help="./tree: also write where its training time goes (--profile) to "
                              "<run dir>/profiles/<protocol>-<impl>-t<threads>-r<rep>.json")
+    parser.add_argument("--gpu-startup", choices=("context", "full"), default="context",
+                        help="./tree --gpu/--hybrid: what its untimed start-up does. context "
+                             "(default, every timing run): the CUDA context only, as the GPU "
+                             "libraries; kernels load lazily and the memory pool, staging buffers "
+                             "and copy threads are made in the timed setup. full (end to end): "
+                             "./tree's own start-up, overlapping the load")
     parser.add_argument("--handoff-rows",
                         help="./tree --hybrid (tree_cuda): its --handoff-rows, a number or "
                              "'default' (./tree's own); without it, the value measured best for "
@@ -725,6 +736,9 @@ def main():
     total = len(cases) * args.reps + (0 if args.no_baseline else len(impls_used) * args.reps)
     progress = {"done": 0, "started": time.perf_counter()}
     walls = defaultdict(list)  # case -> whole-process seconds, for the time left
+    # case -> its first run's training time (whole process if it failed): the
+    # --long-seconds rule (3 runs where one run trains for over an hour)
+    first_train = {}
 
     def clock(seconds):
         seconds = int(seconds)
@@ -778,6 +792,9 @@ def main():
                "cpus": ",".join(map(str, args.cpu_list[:threads])) if args.cpu_list else None,
                "membind": args.membind,
                **({"gpu": gpu_name(), "gpu_index": gpu_index()} if impl in GPU_IMPLS else {}),
+               **({"gpu_startup_mode": args.gpu_startup,
+                   "cuda_module_loading": "LAZY" if args.gpu_startup == "context" else "EAGER"}
+                  if impl in ("tree_cuda", "tree_gpu_only") else {}),
                **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "user_seconds",
                                       "system_seconds", "gpu_peak_bytes") if k in run}}
         if run["timed_out"]:
@@ -814,6 +831,7 @@ def main():
         results.write(json.dumps(row) + "\n")
         results.flush()
         walls[case].append(run["wall_seconds"])
+        first_train.setdefault(case, row.get("train_seconds") or run["wall_seconds"])
         elapsed = time.perf_counter() - progress["started"]
         left = time_left(pending)
         eta = f", about {clock(left)} left" if left is not None else ""
@@ -854,16 +872,16 @@ def main():
             schedule += [(case, rep) for case in order]
         for index, (case, rep) in enumerate(schedule):
             # One run of this case took over --long-seconds: --long-runs runs in all.
-            if (args.long_runs and rep >= args.long_runs and walls[case]
-                    and walls[case][0] > args.long_seconds):
+            if (args.long_runs and rep >= args.long_runs and case in first_train
+                    and first_train[case] > args.long_seconds):
                 progress["done"] += 1
                 print(f"[{progress['done']}/{total}] skipped: {describe(case)} has had "
-                      f"{args.long_runs} runs, its first took {clock(walls[case][0])} "
+                      f"{args.long_runs} runs, its first trained for {clock(first_train[case])} "
                       f"(over {clock(args.long_seconds)})", flush=True)
                 continue
             execute(case, "run", rep, [c for c, _ in schedule[index + 1:]
-                                       if not (args.long_runs and walls[c]
-                                               and walls[c][0] > args.long_seconds)])
+                                       if not (args.long_runs and c in first_train
+                                               and first_train[c] > args.long_seconds)])
         if not args.no_baseline:
             print("runtime footprint of each tool (200-row _baseline dataset):")
             for rep in range(args.reps):

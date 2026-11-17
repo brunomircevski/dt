@@ -191,12 +191,13 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   // Load the GPU code with the context, not at the first launch (CUDA's
   // default, lazy): 24 ms of an A100's or an RTX 2080 Ti's training setup
   // otherwise (`CUDA_MODULE_LOADING=LAZY` keeps the default). Set while this
-  // process has one thread.
-  if (usesGpu(options.backend)) {
+  // process has one thread. Not with --gpu-startup context: CUDA's default.
+  const bool contextOnly = options.gpu.contextOnlyStartup;
+  if (usesGpu(options.backend) && !contextOnly) {
     setenv("CUDA_MODULE_LOADING", "EAGER", 0);
   }
   if (usesGpu(options.backend) && !forks) {
-    gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options));
+    gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options), contextOnly);
   }
 
   // The calling thread works too, so threads - 1 workers. Loading and

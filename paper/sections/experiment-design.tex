@@ -101,9 +101,14 @@ independent execution of the same command. We time all data-dependent
 training work (host-to-device transfer, memory allocation including pool
 growth, presorting or binning, tree construction) and exclude reading the
 input file and runtime start-up (process launch, interpreter or JVM start,
-CUDA context creation, kernel loading, creation of empty memory pools); the
-GPU start-up is reported separately. Each case is run 10 times (3 times where a
-run takes over an hour) in shuffled order on an exclusively allocated node, and
+library imports). All GPU tools are held to one rule: only the bare CUDA
+context is created before the timer, while GPU kernel loading (lazy, the CUDA
+default), memory pools, page-locked staging buffers and the host-to-device
+copy are timed for our implementation and for cuML and XGBoost alike. A
+separate end-to-end measurement instead counts
+everything from process launch, including our implementation's overlap of
+GPU initialization with input reading. Each case is run 10 times (3 times where a
+run trains for over an hour) in shuffled order on an exclusively allocated node, and
 we report the mean.
 
 \plan{Also: peak RAM and VRAM. Accuracy: pruned trees (CART fixed $\alpha$,
