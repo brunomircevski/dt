@@ -321,8 +321,8 @@ def build_command(case, kind, args, scratch, rep=0):
                          for name, ms in re.findall(r"^  (load|gpu startup wait|gpu startup|gpu setup|"
                                                     r"presort|build|prune)\s+([\d.]+) ms$",
                                                     stdout, re.M)},
-                      **({"warmup_seconds": float(m.group(1)) / 1000}
-                         if (m := re.search(r"^warm-up tree: ([\d.]+) ms", stdout, re.M)) else {}),
+                      **({"warmup_seconds": float(warm.group(1)) / 1000}
+                         if (warm := re.search(r"^warm-up tree: ([\d.]+) ms", stdout, re.M)) else {}),
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features),
                       "peak_rss_train_bytes": peak * 1024}
