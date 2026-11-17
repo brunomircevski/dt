@@ -195,15 +195,18 @@ def figure(data, out):
     days = sorted({r["time"][:10] for series, _ in data.values() for pts in series.values()
                    for p in pts for r in p["rows"]})
     dates = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
-    fig.text(0.06, 0.012, "\n".join(textwrap.fill(part, 190) for part in (
+    note = "\n".join(textwrap.fill(part, 190) for part in (
              f"Speed-up: the 1-thread time (--serial) over the time with n threads (--multicore), {runs_note(data)}.",
              "End label: speed-up (parallel efficiency) at 48 threads. Threads take the CPUs in the kernel's order: on "
              "epyc1 socket 0's 24 cores, then socket 1's; on dell the sockets alternate. Memory first-touch.",
              "Every thread count grows the same tree. Training time excludes "
              f"reading the data. ./tree {', '.join(commits)}, run {dates}.",
-             *([B.OUT_OF_DATE_NOTE + " (faded lines)."] if any(stale.values()) else []))),
-             fontsize=8.3, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.06, right=0.99, top=0.88, bottom=0.24 if any(stale.values()) else 0.2, wspace=0.08)
+             *([B.OUT_OF_DATE_NOTE + " (faded lines)."] if any(stale.values()) else [])))
+    fig.text(0.06, 0.012, note, fontsize=8.3, color=MUTED, linespacing=1.5)
+    # room for the note (8.3 pt lines at 1.5 spacing) and, above it, the tick labels and "threads"
+    height = fig.get_figheight()
+    bottom = (0.012 * height + (note.count("\n") + 1) * 8.3 * 1.5 / 72 + 0.6) / height
+    fig.subplots_adjust(left=0.06, right=0.99, top=0.88, bottom=bottom, wspace=0.08)
     fig.savefig(out, dpi=150, facecolor="white", **out_of_date_banner(fig, sum(stale.values()), len(stale), "lines"))
     return out
 

@@ -254,7 +254,9 @@ def chart(dataset, runs, out, notes={}):
             if stale:
                 commits = sorted({(r.get("commit") or runs[name]["machine"].get("versions", {}).get("tree_git")
                                    or "?")[:8] for r in rows})
-                warn = [f"out of date ({', '.join(commits)}, before the final protocol)"] + warn
+                hosts = {r.get("host") or runs[name]["machine"].get("host") for r in rows} & set(B.RETIRED_HOSTS)
+                why = f"on {', '.join(sorted(hosts))}" if hosts else "before the final protocol"
+                warn = [f"out of date ({', '.join(commits)}, {why})"] + warn
             if len(times) > 1:
                 ax.plot([min(times), max(times)], [y, y], color=INK, lw=1)
             ax.text(max(times) * 1.06, y + (0.19 if warn else 0), bar_note(rows, same, texts[name]),

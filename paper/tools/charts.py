@@ -191,7 +191,7 @@ def save(fig, name):
     stale = sum(USED)
     if stale:
         what = f"all {len(USED)}" if stale == len(USED) else f"{stale} of {len(USED)}"
-        fig.text(0.0, 1.0, rf"\textbf{{OUT OF DATE}}: {what} results measured before the final protocol; "
+        fig.text(0.0, 1.0, rf"\textbf{{OUT OF DATE}}: {what} results not from the final protocol; "
                  "a placeholder until the rerun", ha="left", va="bottom", fontsize=6.5, color=INK,
                  bbox=dict(boxstyle="round,pad=0.25", fc="#fab219", ec="none"))
     USED.clear()

@@ -63,7 +63,7 @@ def out_of_date_banner(fig, stale, total, unit="bars", faded=True):
     if not stale:
         return {}
     what = f"all {total} {unit}" if stale == total else f"{stale} of {total} {unit}"
-    fig.text(0.01, 1.0, f"⚠ OUT OF DATE: {what} measured before the final protocol{' (faded)' if faded else ''}; "
+    fig.text(0.01, 1.0, f"⚠ OUT OF DATE: {what} not from the final protocol{' (faded)' if faded else ''}; "
              "a placeholder until the rerun", ha="left", va="bottom", fontsize=max(9, 0.55 * fig.get_figwidth()), fontweight="bold", color=INK,
              bbox=dict(boxstyle="round,pad=0.35", fc=STALE_FILL, ec="none"), zorder=10)
     return {"bbox_inches": "tight", "pad_inches": 0.15}
