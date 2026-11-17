@@ -48,16 +48,45 @@ svg .b { font-weight: 600; }
 .card ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink2); }
 .q { margin-top: 30px; border-left: 4px solid var(--gpu); background: var(--card); border-radius: 0 10px 10px 0; padding: 12px 16px; }
 .scroll { overflow-x: auto; }
+dl.terms { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 10px 0 0; font-size: 14px; }
+dl.terms dt { font-weight: 600; } dl.terms dd { margin: 0; color: var(--ink2); }
+@media (max-width: 640px) { dl.terms { grid-template-columns: 1fr; } dl.terms dd { margin-bottom: 6px; } }
+.status { background: var(--card); border-radius: 10px; padding: 14px 18px; margin-top: 12px; }
+.status ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink2); font-size: 14px; }
 </style>
 </head>
 <body>
 <main>
-<h1>GPU start-up and timing: why one run shows 221 ms and the other 114 ms</h1>
-<p class="sub">./tree --gpu, CART depth ≤ 10, HIGGS, H100 (hopper), commit 713914b8. Same tree, same build; the GPU setup sits on different sides of the timer.</p>
+<h1>GPU start-up and timing: <code>full</code> vs <code>context</code></h1>
+<p class="sub">./tree can prepare the GPU in two ways (<code>--gpu-startup full</code> or <code>context</code>). The choice moves ~0.1–0.2 s of work across the benchmark's stopwatch, and changes ./tree's reported GPU training time by up to 2×. This page explains why, shows the measurements, and lays out the options to decide between.</p>
+
+<h2>0 · Background</h2>
+<p class="sub">What a GPU tree builder has to do before it can build, and what the benchmarks time.</p>
+<dl class="terms">
+  <dt>CUDA context</dt><dd>The process's connection to the GPU (driver state, address space). ~0.4–0.7 s, paid once per process by every GPU tool. Nobody can avoid it.</dd>
+  <dt>Kernel loading</dt><dd>Copying the GPU functions (kernels) from the binary onto the GPU. <i>Eager</i>: all of them at once when the context is made. <i>Lazy</i> (CUDA's default): each the first time it runs.</dd>
+  <dt>Memory pool, staging buffers, copy threads</dt><dd>GPU memory reserved up front, page-locked host buffers for fast copies, CPU threads that feed them. Set up once, before the first copy.</dd>
+  <dt>GPU setup (./tree)</dt><dd>Everything before the build that needs the data: upload to the GPU, presort, allocations; plus the pool / buffers / kernels if they are not ready yet.</dd>
+  <dt>Timed training</dt><dd>What every standard benchmark reports: from the data in host memory to the finished tree. Process start, reading the file and the CUDA context are not timed, for every tool.</dd>
+  <dt><code>--gpu-startup full</code></dt><dd>./tree's default. While the file is being read, a background thread makes the context, loads all kernels (eager) and sets up the pool, buffers and copy threads. Training then starts with all of that done, outside the timer.</dd>
+  <dt><code>--gpu-startup context</code></dt><dd>The background thread makes only the context. Kernels load lazily, and the pool, buffers and copy threads are made in the timed GPU setup, exactly as cuML and XGBoost do inside their timed <code>fit</code>.</dd>
+</dl>
+
+<div class="status">
+  <b>Where things stand (2026-11-17)</b>
+  <ul>
+    <li>Every benchmark, end to end included (since commit 848496ea, ampere rerun), runs ./tree with <code>context</code>: one timing rule for all GPU tools.</li>
+    <li><code>full</code> is ./tree's default for users; no benchmark measures it any more except the A/B below.</li>
+    <li>Open decision: keep both modes (A) or keep only <code>context</code> and drop <code>full</code> (D). Section 5.</li>
+  </ul>
+</div>
+
+<h2>The example that started it</h2>
+<p class="sub">./tree --gpu, CART depth ≤ 10, HIGGS, H100 (hopper), commit 713914b8: the standard benchmark (<code>context</code>) and the old end-to-end run (<code>full</code>). Same tree, same build; the GPU setup sits on different sides of the timer.</p>
 
 <div class="hero">
   <div class="tile"><b>221 ms</b><span>reported training, <code>--gpu-startup context</code> (standard benchmarks)</span></div>
-  <div class="tile"><b>114 ms</b><span>reported training, <code>--gpu-startup full</code> (end-to-end run, ./tree's default)</span></div>
+  <div class="tile"><b>114 ms</b><span>reported training, <code>--gpu-startup full</code> (old end-to-end run, ./tree's default; replaced by the ampere rerun)</span></div>
   <div class="tile"><b>66 / 68 ms</b><span>the build itself, in both</span></div>
 </div>
 
@@ -97,21 +126,20 @@ svg .b { font-weight: 600; }
 <p class="note">--gpu: 645 vs 647 ms, the same work. --hybrid: 781 vs 837 ms, but --hybrid on hopper is noisy (p10–p90 of its runs spans ~600 ms). An earlier estimate of "~100 ms more for full" compared different runs and did not hold up.</p>
 
 <h2>4 · What each way of timing would report against the libraries</h2>
-<p class="sub">Same runs, three possible rules. Bars: ./tree --gpu vs cuML and XGBoost (1 tree), CART, HIGGS, H100.</p>
+<p class="sub">Same runs, four possible rules. Bars: ./tree --gpu vs cuML and XGBoost (1 tree), CART, HIGGS, H100. A and D report the same numbers; they differ only in what ./tree does for users.</p>
 <div class="scroll"><svg id="options" viewBox="0 0 1060 300" role="img" aria-label="Reported times under three timing rules"></svg></div>
 <p class="note">Library times: their <code>fit</code> (cuML) / QuantileDMatrix + train (XGBoost) and CUDA context from the end-to-end runs. Rule C: everything after the data is in memory, GPU start-up included (./tree: the part of its start-up still running after the read).</p>
 
 <h2>5 · How to handle it</h2>
-<p class="sub">Recommended: A, now backed by the measurement in section 6.</p>
+<p class="sub">A and D are both fair and need no rerun; the choice is between ./tree's speed with slow reads (A) and one simpler mode (D). B is not fair. C is fair but costly.</p>
 <div class="cards">
   <div class="card">
     <h3>A · Keep the flag (now)</h3>
     <span class="chip ok">fair</span><span class="chip ok">no rerun</span><span class="chip mid">two modes</span>
     <ul>
-      <li>Library comparison: training under one rule (<code>context</code>): 221 ms vs 1.38 s.</li>
-      <li>./tree's overlap is credited in the end-to-end chart (<code>full</code>), where wall time counts.</li>
-      <li>End-to-end chart's "timed" bar should show 221 ms for ./tree GPU rows.</li>
-      <li>Measured (section 6): full is the faster default, never slower.</li>
+      <li>Benchmarks: <code>context</code> (as now): 221 ms vs cuML 1.38 s.</li>
+      <li>Users get <code>full</code>: never slower, 120–200 ms faster when the read is longer than the start-up (section 6).</li>
+      <li>Cost: two code paths; the benchmarks time a mode users don't run by default; the gain is only shown by the A/B on this page.</li>
     </ul>
   </div>
   <div class="card">
@@ -121,6 +149,15 @@ svg .b { font-weight: 600; }
       <li>./tree's setup leaves the timer, the libraries' stays in: 114 ms vs 1.38 s.</li>
       <li>The 2× gain is not faster work, only work moved out of the stopwatch.</li>
       <li>A reviewer would catch it.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>D · Keep only context, drop full</h3>
+    <span class="chip ok">fair</span><span class="chip ok">no rerun</span><span class="chip ok">one mode</span>
+    <ul>
+      <li>./tree always makes only the context in the background; the rest in the timed setup. Benchmarks and users run the same thing.</li>
+      <li>Simplest: no flag, no eager loading, one start-up path in gpuPrepare(). Every benchmark number stays valid.</li>
+      <li>Cost: 120–200 ms slower when the read is longer than the start-up (HIGGS from NFS, MNIST8M from NFS); no difference with a short read.</li>
     </ul>
   </div>
   <div class="card">
@@ -145,7 +182,8 @@ svg .b { font-weight: 600; }
 <p class="note">Process start and exit (~160–440 ms, the same for every mode) are left out: they vary by up to 600 ms between runs and would hide the differences. Every run built the same tree (2,029 / 2,047 nodes). MNIST8M: the GPU start-up always finishes inside the 1.5 s read, so neither mode waits; its setup (~700 ms) is mostly the 25 GB upload, which no start-up mode can move.</p>
 
 <div class="q">
-  <b>Answer:</b> full never loses and wins ~130–200 ms when the read takes longer than the start-up (HIGGS from NFS: read 955 ms). With a short read (HIGGS from memory, 76 ms) all three modes finish within noise of each other: eager kernel loading costs about what it saves. Lazy kernels in full gave no clear gain. <b>Keep full as ./tree's default; use context only where ./tree is timed against libraries.</b>
+  <b>What the measurements say:</b> full never loses. It wins ~130–200 ms when the read takes longer than the start-up (HIGGS from NFS, read 955 ms; MNIST8M from NFS on ampere, ~120 ms less timed setup). With a short read (HIGGS from memory, 76 ms) all three modes finish within noise: eager kernel loading costs about what it saves. Lazy kernels in full gave no clear gain.<br><br>
+  <b>So the decision is A or D:</b> keep <code>full</code> for its 0.1–0.2 s with slow reads (A, two modes), or keep only <code>context</code> for one simple, fair mode at that cost (D). The benchmark numbers are the same either way.
 </div>
 </main>
 
@@ -293,12 +331,13 @@ function options() {
     { t: "A · training, context (now)", v: [221, 1379, 3340], ok: "fair" },
     { t: "B · training, full", v: [114, 1379, 3340], ok: "not fair" },
     { t: "C · from data in memory, full", v: [896, 2078, 4033], ok: "fair" },
+    { t: "D · training, context only", v: [221, 1379, 3340], ok: "fair" },
   ];
   const names = ["./tree --gpu", "cuML", "XGBoost"];
   const colors = [css("--build"), css("--lib"), css("--other")];
-  const PW = 340, max = 4200;
+  const PW = 250, max = 4200;
   panels.forEach((p, k) => {
-    const x0 = k * (PW + 20), S = (PW - 90) / max;
+    const x0 = k * (PW + 18), S = (PW - 80) / max;
     el(svg, "text", { x: x0, y: 16, class: "b" }, p.t);
     el(svg, "text", { x: x0, y: 34, style: `fill:${p.ok === "fair" ? css("--good") : css("--bad")};font-weight:600` }, p.ok === "fair" ? "✓ fair" : "✗ not fair");
     p.v.forEach((v, i) => {
