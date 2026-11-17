@@ -242,7 +242,8 @@ def main():
         "Prepare: ./tree GPU setup + presort, XGBoost QuantileDMatrix, YaDT indexing; one call does both for "
         "scikit-learn, rpart, J48, cuML.",
         f"Nodes {', '.join(hosts)} (CPU tools on epyc"
-        + (", GPU tools on hopper, H100" if any(h.startswith("hopper") for h in hosts) else "")
+        + "".join(f", GPU tools on {n}, {g}" for n, g in (("hopper", "H100"), ("ampere", "A100 80 GB"))
+                  if any(h.startswith(n) for h in hosts))
         + f"); commit {', '.join(commits)}.",
         "A bar's length is the mean wall time on a log axis; inside it the steps split that length linearly by "
         "their share (a segment's length is not its seconds on the axis).",

@@ -3,8 +3,10 @@
 **Status: implemented on 2026-11-16 (bench/run.py --no-eval --prefetch through
 bench/cluster/job.sh E2E=1, final.sh kind `e2e`, chart bench/e2e_chart.py), not
 run on 2026-11-17.** Data: `e2e-epyc-higgs` (epyc1, CPU tools, commit
-8fe0c73d) and `e2e-hopper-higgs` (hopper, H100, commit 001a56c6), 10
-fresh-process runs per tool and algorithm; `chart.png`, `summary.csv`
+8fe0c73d, 10 fresh-process runs per tool and algorithm) and
+`e2e-ampere-higgs` (ampere, A100 80 GB, commit 848496ea, CART only, 3 runs per
+tool, 2026-11-17: ./tree with `--gpu-startup context`, the rule of every
+timing run; the earlier hopper runs used `full` and are in git history); `chart.png`, `summary.csv`
 (`bench/e2e_chart.py`). This file is the specification it was built from. Read
 [BENCHMARK-CHANGES.MD](../../../BENCHMARK-CHANGES.MD) first: its timing rule,
 run counts and problem handling apply here too. Replace this status paragraph
@@ -43,19 +45,18 @@ pruning; protocols `cart_depth10` and `c45_depth10_unpruned`.
 | CART | ./tree `--simple` | 1 | epyc |
 | CART | ./tree `--serial` | 1 | epyc |
 | CART | ./tree `--multicore` | 48 | epyc |
-| CART | ./tree `--gpu`, `--hybrid` | all 32 CPUs, 1 GPU | hopper (H100) |
+| CART | ./tree `--gpu`, `--hybrid` | all 48 CPUs, 1 GPU | ampere (A100 80 GB) |
 | CART | scikit-learn | 1 | epyc |
 | CART | rpart | 1 | epyc |
-| CART | cuML (1 tree) | all CPUs, 1 GPU | hopper |
-| CART | XGBoost (1 tree) | all CPUs, 1 GPU | hopper |
+| CART | cuML (1 tree) | all CPUs, 1 GPU | ampere |
+| CART | XGBoost (1 tree) | all CPUs, 1 GPU | ampere |
 | C4.5 | ./tree `--simple`, `--serial`, `--multicore` | 1, 1, 48 | epyc |
-| C4.5 | ./tree `--gpu`, `--hybrid` | all 32 CPUs, 1 GPU | hopper |
 | C4.5 | Weka J48 | 1 | epyc |
 | C4.5 | YaDT | 1 and 48 | epyc |
 
 Settings per tool are those of `cluster-cpu-vs-others` and
 `cluster-gpu-vs-others`: the same adapters, flags and versions. The CPU tools
-run on epyc1 or epyc2 (the same hardware). The GPU tools run on hopper, with
+run on epyc1 or epyc2 (the same hardware). The GPU tools run on ampere (hopper until 2026-11-17), with
 the GPU and CPU placement of `cluster-gpu-vs-others/scripts/job.sh`.
 
 **Input:** the float32 binary files `bench/data/higgs/train.f32` and
@@ -224,4 +225,4 @@ for every tool, and 3–5 bullets on what stands out)*
 |---|---|
 | `chart.png` | the figure above |
 | `summary.csv` | one row per tool, backend and algorithm: mean seconds per step, total, wall time, runs, peak RSS, VRAM |
-| `e2e-epyc-higgs/`, `e2e-hopper-higgs/` | `results.jsonl` (every run of every case on that node), `machine.json`, `run.log` |
+| `e2e-epyc-higgs/`, `e2e-ampere-higgs/` | `results.jsonl` (every run of every case on that node), `machine.json`, `run.log` |

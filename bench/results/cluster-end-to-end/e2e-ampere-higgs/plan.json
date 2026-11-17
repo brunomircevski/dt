@@ -4,37 +4,25 @@
    "higgs",
    "cart_depth10",
    "cuml",
-   32
+   48
   ],
   [
    "higgs",
    "cart_depth10",
    "xgboost",
-   32
+   48
   ],
   [
    "higgs",
    "cart_depth10",
    "tree_cuda",
-   32
+   48
   ],
   [
    "higgs",
    "cart_depth10",
    "tree_gpu_only",
-   32
-  ],
-  [
-   "higgs",
-   "c45_depth10_unpruned",
-   "tree_cuda",
-   32
-  ],
-  [
-   "higgs",
-   "c45_depth10_unpruned",
-   "tree_gpu_only",
-   32
+   48
   ]
  ],
  "protocols": {
