@@ -10,7 +10,6 @@
 #include "core/tree.h"
 
 #include <cstdio>
-#include <cstdlib>
 #include <fstream>
 #include <future>
 #include <iomanip>
@@ -182,23 +181,15 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   }
   std::cout << " (backend " << backendName(options.backend) << ")\n";
 
-  // The GPU's one-time start-up (CUDA context, memory pool, staging buffers)
-  // is slow; do it while the CSV is being parsed. Its time is reported as
-  // "gpu startup", apart from the training time. Not with --repeat N > 1: a
-  // process may only fork before it uses CUDA.
+  // The GPU's one-time start-up, the CUDA context, is slow; make it while the
+  // data loads. Its time is reported as "gpu startup", apart from the
+  // training time; the rest of the GPU's preparation is in the timed setup
+  // (gpuPrepare()). Not with --repeat N > 1: a process may only fork before
+  // it uses CUDA.
   const bool forks = options.repeat > 1;
   std::future<double> gpuReady;
-  // Load the GPU code with the context, not at the first launch (CUDA's
-  // default, lazy): 24 ms of an A100's or an RTX 2080 Ti's training setup
-  // otherwise (`CUDA_MODULE_LOADING=LAZY` keeps the default). Set while this
-  // process has one thread. Not with --gpu-startup context: CUDA's default.
-  const bool contextOnly = options.gpu.contextOnlyStartup;
-  if (usesGpu(options.backend) && !contextOnly) {
-    setenv("CUDA_MODULE_LOADING", "EAGER", 0);
-  }
   if (usesGpu(options.backend) && !forks) {
-    gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options), contextOnly,
-                          options.backend == Backend::Hybrid);
+    gpuReady = std::async(std::launch::async, gpuPrepare);
   }
 
   // The calling thread works too, so threads - 1 workers. Loading and

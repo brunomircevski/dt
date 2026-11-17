@@ -105,15 +105,17 @@ the rule of every timing benchmark since 2026-11-16
 CUDA context; everything after it is timed for ./tree, cuML and XGBoost alike:
 loading the GPU kernels (CUDA's default, lazy: each at its first launch),
 memory pools, page-locked staging buffers, copy threads, the copy, the build.
-./tree does this with `--gpu-startup context` (`bench/run.py` passes it to
-every timing run, the end-to-end runs included). Its own default (`full`) also
-loads every kernel and sets up its pool, staging buffers and copy threads while
-the data loads, untimed. Why: the libraries link their own CUDA runtime, so
-nothing outside their `fit` can load their kernels or set up their pools
-without running their code (a warm-up). What `full` gains over `context` end to
-end was measured apart (hopper, 2026-11-17, `gpu-startup-timing.html`): the
-same total GPU work; 130-200 ms faster when the read is longer than the
-start-up (HIGGS from NFS), no difference with a short read.
+./tree makes only the CUDA context while the data loads (`gpuPrepare`) and
+everything else in its timed GPU setup, in every run, benchmark or not. Why:
+the libraries link their own CUDA runtime, so nothing outside their `fit` can
+load their kernels or set up their pools without running their code (a
+warm-up). Until 2026-11-17 ./tree had a second mode (`--gpu-startup full`, then
+its default) that also loaded every kernel and set up its pool, staging
+buffers and copy threads during the read, untimed; it was removed for one
+behaviour that benchmarks and users share. What it gained was measured
+(`gpu-startup-timing.html`): the same total GPU work; 120-200 ms when the
+read is longer than the start-up (HIGGS, MNIST8M from NFS), nothing with a
+short read.
 
 **The warm variant (a supplement for the GPU comparison only).** The protocol
 above, cold, is the one every chart uses. Beside it, cluster-gpu-vs-others
@@ -135,7 +137,7 @@ Each tool measures it with its own monotonic clock:
 | Tool | Start-up (not timed) | Timed |
 |---|---|---|
 | ./tree `--serial`, `--multicore`, `--simple` | none | `train total`: presort and build |
-| ./tree `--gpu`, `--hybrid` | the CUDA context (`--gpu-startup context`), printed as `gpu startup`; it runs while the data loads, and `train total` starts only after it has finished (`gpu startup wait`: the part still running when the load ended) | `train total`: GPU setup (kernel loading, memory pool, page-locked staging buffers, copy threads, allocations) and upload, presort, build |
+| ./tree `--gpu`, `--hybrid` | the CUDA context, printed as `gpu startup`; it runs while the data loads, and `train total` starts only after it has finished (`gpu startup wait`: the part still running when the load ended) | `train total`: GPU setup (kernel loading, memory pool, page-locked staging buffers, copy threads, allocations) and upload, presort, build |
 | scikit-learn | interpreter, imports | `DecisionTreeClassifier.fit` |
 | rpart | R, `library(rpart)` | `rpart()` |
 | Weka J48 | JVM, class loading | `buildClassifier` (HotSpot's JIT compilation during it stays in: a user who trains one tree pays it too) |

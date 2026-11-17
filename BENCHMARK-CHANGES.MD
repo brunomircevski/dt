@@ -83,13 +83,13 @@ yet, so do not invent one. Mention in the docs that they come later.
 > **Superseded for the GPU tools (2026-11-17, user-approved): one rule for
 > every GPU tool.** Only the bare CUDA context is start-up. Kernel loading
 > (lazy, CUDA's default), memory pools, page-locked staging buffers and copy
-> threads are timed for ./tree (`--gpu-startup context`, which `bench/run.py`
-> passes to every timing run), cuML and XGBoost alike. Reason: the libraries
+> threads are timed for ./tree (then `--gpu-startup context`; since its removal
+> later that day ./tree's only behaviour), cuML and XGBoost alike. Reason: the libraries
 > link their own CUDA runtime, so their kernels and pools cannot be set up
 > outside their fit without running their code, while ./tree's full start-up
 > took 0.17-0.28 s more than the bare context on HIGGS, about its whole
-> training time. ./tree's full start-up, overlapped with the read, is
-> measured in the end-to-end benchmark (`--gpu-startup full`). XGBoost's labels
+> training time. The end-to-end benchmark uses the same rule (848496ea); what
+> the removed full start-up gained is in `gpu-startup-timing.html`. XGBoost's labels
 > (float32, one-hot for MNIST8M) are made before its timer. The library
 > processes run under `taskset` with ./tree's CPU list. The table below is
 > the 2026-11-16 plan.
@@ -276,7 +276,8 @@ Change it to:
   EAGER vs 1.71 s LAZY, XGBoost 3.11 vs 2.88 s, same trees. So the libraries
   run with LAZY, CUDA's default (job.sh; run.py, `GPULIB_MODULE_LOADING`
   overrides): the kernels a fit uses still load inside it (timed), which
-  favours neither side by more than that. ./tree keeps EAGER (main.cpp).
+  favours neither side by more than that. ./tree loads its kernels lazily
+  too, in its timed setup (since 2026-11-17).
 - [x] **Timed:** exactly what it is today, from host float32 NumPy arrays to
   the fitted model.
   - cuML: `fit` (copy, binning, build).

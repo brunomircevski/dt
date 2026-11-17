@@ -275,8 +275,7 @@ def draw(kind, res, out):
                 "Forest of 10 / 10: the library's random-forest defaults (cuML bootstrap and √features; XGBoost RF 0.8 "
                 "of rows and features), its time divided by 10. ./tree hybrid: --hybrid, GPU only: --gpu. Not timed: "
                 "the imports and the bare CUDA context, for every tool alike; timed: from the host arrays to the "
-                "fitted model, kernel loading (lazy), memory pools and staging buffers included (./tree --gpu-startup "
-                "context).")
+                "fitted model, kernel loading (lazy), memory pools and staging buffers included.")
     fig.suptitle(head, x=0.01, y=0.995, ha="left", va="top", fontsize=11.5, color=INK, fontweight="bold")
     width = NOTE_CHARS if len(algos) == 2 else NOTE_CHARS * 12 // 17  # characters per footnote line
     text = "\n".join(textwrap.fill(part, width) for part in (

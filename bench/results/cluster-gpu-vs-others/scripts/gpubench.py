@@ -32,8 +32,8 @@ The phases, in order:
               startup_seconds = import_seconds + gpu_startup_seconds; not timed;
               XGBoost's float32 (or one-hot) labels are made here too, untimed
               (the adapter's data preparation: ./tree and cuML get the int32
-              labels as read). The same rule as ./tree --gpu-startup context
-              (bench/run.py): the CUDA context alone before the timer;
+              labels as read). The same rule as ./tree: the CUDA context
+              alone before the timer;
   3. timed    from the host arrays to the fitted model (train_seconds):
               cuML fit (copy to the GPU, binning, growing); XGBoost
               QuantileDMatrix (dmatrix_seconds) + train (build_seconds);

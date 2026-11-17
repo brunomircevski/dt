@@ -65,15 +65,18 @@ copies ping-ponged instead (and a third mirrored the host arena, see Memory).
    all sorted values (as big as the columns), and the presort went from
    0.54 to 0.09 s on the H100 node.
 
-The CUDA context itself is created on a background thread while the CSV is
-being parsed (`gpuPrepare`). So is the device's stream-ordered memory pool:
-the first `cudaMallocAsync` of a process blocks the host while the pool is set
-up (27 ms on the H100 node, about 15 ms on the A100 node, 9 ms on the RTX 2080
-Ti node), and it used to fall in the timed setup, at the first level array,
-with the GPU idle ([PERFORMANCE.md](PERFORMANCE.md#november-2026-the-gpu-setups-fixed-cost-mordor3-cluster)).
-This start-up (context, pool, staging buffers) is printed as `gpu startup` and
-is not part of `train total`; `gpu setup` (allocation, upload, GPU presort) is
-([bench/README.md](../bench/README.md#how-time-is-measured)).
+The CUDA context itself is created on a background thread while the data
+loads (`gpuPrepare`), printed as `gpu startup` and not part of `train total`.
+Everything else is in the timed `gpu setup`, as cuML and XGBoost do it inside
+their fit: the kernels (loaded lazily, at their first launch), the device's
+stream-ordered memory pool (the first `cudaMallocAsync` of a process blocks
+the host while it is set up: 27 ms on the H100 node, about 15 ms on the A100
+node, 9 ms on the RTX 2080 Ti node), the page-locked staging buffers and copy
+threads, then allocation, upload and GPU presort
+([bench/README.md](../bench/README.md#how-time-is-measured)). Until
+2026-11-17 the pool, buffers and kernels were made during the load as well
+(`--gpu-startup full`, removed: the same total work, but untimed;
+`gpu-startup-timing.html`).
 
 ## One level
 
@@ -225,10 +228,10 @@ ones, and a GPU holds only so many blocks at once. Now:
   from 64 to 80 (126) registers, 3 (2) blocks per SM instead of 4, and the
   hybrid's levels slower.
 
-The GPU code is loaded with the CUDA context, while the CSV is parsed
-(`CUDA_MODULE_LOADING=EAGER` unless the environment sets it): loaded lazily,
-at the first launch, it cost 24 ms of every tree's timed setup on the RTX 2080
-Ti node.
+The GPU code loads lazily, at each kernel's first launch (CUDA's default),
+inside the timed setup: 24 ms of every tree's setup on the RTX 2080 Ti node
+(loading it eagerly with the context, until 2026-11-17, moved that cost
+before the timer).
 
 The level loop's own host work (planning the level, choosing the splits,
 the partition's targets and moves) runs in parts on the pool when a level

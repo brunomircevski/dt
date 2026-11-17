@@ -59,14 +59,13 @@ std::unique_ptr<Grower> makeSimpleGrower(const Dataset &train);
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &options,
                                       ThreadPool &pool, double &setupSeconds);
 
-// The GPU's one-time start-up: the CUDA context, the memory pool and the
-// page-locked staging buffers (slow: 0.1-0.7 s). Call it early on another
-// thread, e.g. while the dataset loads, so training does not wait for it.
-// `threads`: the most CPU threads its staged copies use (the caller included).
-// `contextOnly` (--gpu-startup context): the CUDA context alone; the rest is
-// made in the timed setup (GpuGrower::setup). `handOff` (--hybrid): also the
-// page-locked hand-off buffers (256 MB), which --gpu never uses.
-// Returns its duration in seconds (0 in the CPU-only build).
-double gpuPrepare(unsigned threads, bool contextOnly = false, bool handOff = false);
+// The GPU's one-time start-up: the CUDA context (slow: 0.4-0.7 s). Call it
+// early on another thread, e.g. while the dataset loads, so training does not
+// wait for it. Everything after the context (the kernels, loaded lazily at
+// their first launch, the memory pool, the page-locked staging buffers and
+// the copy threads) is made in the timed setup (GpuGrower::setup), as cuML
+// and XGBoost make theirs inside their fit (bench/README.md "How time is
+// measured"). Returns its duration in seconds (0 in the CPU-only build).
+double gpuPrepare();
 
 } // namespace dt

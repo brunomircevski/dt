@@ -299,7 +299,7 @@ std::vector<int> gpuNodeCpus() {
 
 // Page-locked staging buffers for copies between the GPU and pageable memory
 // (GpuGrower::uploadStaged, downloadStaged). Allocating them takes tens of
-// milliseconds, so gpuPrepare() does it while the dataset loads. They live as
+// milliseconds, in the timed setup (GpuGrower::setup). They live as
 // long as the process (freeing them at exit would race with the CUDA
 // runtime's teardown).
 //

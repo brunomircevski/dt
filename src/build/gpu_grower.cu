@@ -330,9 +330,8 @@ private:
   // memory, the upload of the data with the presort, the host arena.
   void setup() {
     // The page-locked staging buffers and the copy threads, sized by
-    // --threads, and --hybrid's hand-off buffers: made by gpuPrepare() before
-    // training, or here (timed) with --gpu-startup context; the first call
-    // decides.
+    // --threads, and --hybrid's hand-off buffers (timed, as the GPU
+    // libraries' own; gpuPrepare() makes only the context).
     staging().prepare(threadCount(options_));
     if (options_.backend == Backend::Hybrid) {
       staging().prepareHandOff();
@@ -1870,31 +1869,9 @@ private:
 
 } // namespace
 
-double gpuPrepare(unsigned threads, bool contextOnly, bool handOff) {
+double gpuPrepare() {
   const auto start = std::chrono::steady_clock::now();
   CUDA_CHECK(cudaFree(nullptr));
-  if (contextOnly) { // the pool and the staging buffers: in setup(), timed
-    return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-  }
-  // The first cudaMallocAsync of a process sets up the device's memory pool
-  // and blocks the host (27 ms on the H100 node, about 15 ms on the A100
-  // node, 9 ms on the RTX 2080 Ti node): in the timed setup, at the first
-  // level array, while the GPU idled. Done here, it overlaps the load. The
-  // pool keeps what it frees (as in initDevice()).
-  int device = 0;
-  CUDA_CHECK(cudaGetDevice(&device));
-  cudaMemPool_t memoryPool = nullptr;
-  CUDA_CHECK(cudaDeviceGetDefaultMemPool(&memoryPool, device));
-  std::uint64_t keep = UINT64_MAX;
-  CUDA_CHECK(cudaMemPoolSetAttribute(memoryPool, cudaMemPoolAttrReleaseThreshold, &keep));
-  void *warm = nullptr;
-  CUDA_CHECK(cudaMallocAsync(&warm, std::size_t{2} << 20, cudaStreamPerThread));
-  CUDA_CHECK(cudaFreeAsync(warm, cudaStreamPerThread));
-  CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
-  staging().prepare(threads);
-  if (handOff) {
-    staging().prepareHandOff();
-  }
   return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 

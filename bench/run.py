@@ -281,10 +281,6 @@ def build_command(case, kind, args, scratch, rep=0):
                 backend += ["--handoff-rows", str(rows)]
         elif impl == "tree_gpu_only":
             binary, backend = B.TREE_CUDA, ["--gpu", "--threads", str(threads)]
-        if impl in ("tree_cuda", "tree_gpu_only"):
-            # context: only the CUDA context before the timer, as the GPU
-            # libraries (gpubench.py); full (end to end): ./tree's own start-up
-            backend += ["--gpu-startup", args.gpu_startup]
         elif impl == "tree_simple":
             binary, backend = B.TREE, ["--simple"]
         else:
@@ -424,7 +420,7 @@ def build_command(case, kind, args, scratch, rep=0):
         # says otherwise. cuML and XGBoost link their own CUDA runtime, so EAGER
         # loads *all* their kernels at their first call, inside fit (HIGGS on the
         # A100, 2026-11-17: cuML fit 2.19 s EAGER vs 1.71 s LAZY, XGBoost 3.11 vs
-        # 2.88 s); ./tree sets EAGER for itself (main.cpp).
+        # 2.88 s); ./tree too loads its kernels lazily, in its timed setup.
         environment = {"EVAL": str(int(evaluate)), "GPU_MEMORY": "0", "DATA_ROOT": str(B.DATA),
                        "CUDA_MODULE_LOADING": os.environ.get("GPULIB_MODULE_LOADING", "LAZY"),
                        "OMP_NUM_THREADS": str(threads)}
@@ -676,12 +672,6 @@ def main():
     parser.add_argument("--profile", action="store_true",
                         help="./tree: also write where its training time goes (--profile) to "
                              "<run dir>/profiles/<protocol>-<impl>-t<threads>-r<rep>.json")
-    parser.add_argument("--gpu-startup", choices=("context", "full"), default="context",
-                        help="./tree --gpu/--hybrid: what its untimed start-up does. context "
-                             "(default, every timing run): the CUDA context only, as the GPU "
-                             "libraries; kernels load lazily and the memory pool, staging buffers "
-                             "and copy threads are made in the timed setup. full (end to end): "
-                             "./tree's own start-up, overlapping the load")
     parser.add_argument("--warm-up", action="store_true",
                         help="./tree: train one untimed tree first, then the timed one in the "
                              "same, now warm process (the warm variant of "
@@ -802,9 +792,6 @@ def main():
                "cpus": ",".join(map(str, args.cpu_list[:threads])) if args.cpu_list else None,
                "membind": args.membind,
                **({"gpu": gpu_name(), "gpu_index": gpu_index()} if impl in GPU_IMPLS else {}),
-               **({"gpu_startup_mode": args.gpu_startup,
-                   "cuda_module_loading": "LAZY" if args.gpu_startup == "context" else "EAGER"}
-                  if impl in ("tree_cuda", "tree_gpu_only") else {}),
                **({"warm_up": True} if args.warm_up and impl.startswith("tree") else {}),
                **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "user_seconds",
                                       "system_seconds", "gpu_peak_bytes") if k in run}}
