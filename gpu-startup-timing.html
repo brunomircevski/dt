@@ -76,6 +76,11 @@ svg .b { font-weight: 600; }
 <div class="scroll"><svg id="timeline" viewBox="0 0 1060 330" role="img" aria-label="Timelines of ./tree --gpu with context and full start-up"></svg></div>
 <p class="note">Both measured in the same job, interleaved, 16 threads on one socket (the end-to-end chart uses 32, hence 221 / 114 ms there vs 183 / 106 ms here). "Other" (process start, exit) is drawn as one block at the start. The split of full's start-up into context + rest assumes the context takes the same 529 ms as in context mode. Short read: both modes finish at the same time.</p>
 
+<h3 style="margin:30px 0 4px;font-size:16px">MNIST8M (25 GB) read from NFS: a read much longer than the start-up</h3>
+<p class="sub">./tree --gpu, CART depth ≤ 10, ampere (A100 80 GB, 24 threads on the GPU's socket), job 326, medians of 3 per mode. The read is broken (zigzag); everything else to scale.</p>
+<div class="scroll"><svg id="timeline-mnist" viewBox="0 0 1060 330" role="img" aria-label="Timelines of ./tree --gpu on MNIST8M from NFS with context and full start-up"></svg></div>
+<p class="note">The start-up (0.45–0.59 s) ends long inside the read, so neither mode waits. full's extra start-up work is hidden; context does it in the timed setup instead: <b>3,105 vs 3,223 ms timed, ~120 ms</b> (GPU setup 1,225 vs 1,345 ms; build 1,880 ms in both). The read is drawn the same for both: 20.6 s (median of context's runs); full's runs read in 30.3, 26.1 and 21.7 s, NFS varying between runs (the coldest run came first), not the mode. Process start and exit ~0.3 s.</p>
+
 <h2>2 · Which work is inside the timer</h2>
 <p class="sub">Every GPU tool does the same kinds of work. The question is where each piece lands.</p>
 <div class="legend">
@@ -175,19 +180,23 @@ function seg(svg, x, y, w, h, fill, label, opts = {}) {
 }
 
 // ---------- 1. timelines ----------
-function timeline() {
-  const svg = document.getElementById("timeline"); svg.innerHTML = ""; defs(svg);
-  const X0 = 150, S = 0.72; // px per ms
-  const x = ms => X0 + ms * S;
-  // axis
-  for (let t = 0; t <= 1200; t += 100) {
-    el(svg, "line", { x1: x(t), x2: x(t), y1: 18, y2: 312, stroke: css("--grid"), "stroke-width": 1 });
-    el(svg, "text", { x: x(t), y: 326, "text-anchor": "middle", class: "m" }, t === 0 ? "0" : t + " ms");
+// rows: { name, y, other, read, ctx, extra, wait, setupBase, setupExtra, build }; o.readShown: draw the
+// read this long (ms) with a break, the rest to scale; the axis keeps real time.
+function timeline(id, rows, o = {}) {
+  const svg = document.getElementById(id); svg.innerHTML = ""; defs(svg);
+  const X0 = 150, S = o.S ?? 0.72, step = o.step ?? 100, fmt = o.fmt ?? (t => t === 0 ? "0" : t + " ms");
+  const r0 = rows[0], cut = o.readShown ? r0.other + o.readShown : Infinity, hidden = o.readShown ? r0.read - o.readShown : 0;
+  const x = ms => X0 + (ms <= cut ? ms : ms - hidden) * S;
+  const yAxis = o.height - 4, top = 18;
+  for (let t = 0; t <= (o.tMax ?? 1200); t += step) {
+    if (t > cut && t < cut + hidden) continue;
+    el(svg, "line", { x1: x(t), x2: x(t), y1: top, y2: yAxis - 14, stroke: css("--grid"), "stroke-width": 1 });
+    el(svg, "text", { x: x(t), y: yAxis, "text-anchor": "middle", class: "m" }, fmt(t));
   }
-  const rows = [
-    { name: "full (default)", y: 30, other: 165, read: 76, ctx: 529, extra: 80, wait: 529, setupBase: 38, setupExtra: 0, build: 68 },
-    { name: "context", y: 175, other: 165, read: 76, ctx: 529, extra: 0, wait: 450, setupBase: 38, setupExtra: 78, build: 65 },
-  ];
+  if (o.readShown) {  // the break, across the plot
+    const xb = x(cut) - 10;
+    el(svg, "path", { d: `M${xb - 5},${top} L${xb + 5},${top + 8} M${xb - 5},${yAxis - 22} L${xb + 5},${yAxis - 14}`, stroke: css("--muted"), "stroke-width": 1.5 });
+  }
   for (const r of rows) {
     const H = 30, yb = r.y + 42;
     el(svg, "text", { x: 0, y: r.y + 4, class: "b" }, "./tree --gpu-startup " + r.name.split(" ")[0]);
@@ -197,27 +206,33 @@ function timeline() {
     let t = 0;
     seg(svg, x(t), yb, r.other * S, H, css("--other"), `other ${r.other}`, { dark: true }); t += r.other;
     const readStart = t;
-    seg(svg, x(t), yb, r.read * S, H, css("--read"), "", { tip: `read ${r.read} ms` }); t += r.read;
-    el(svg, "rect", { x: x(t), y: yb, width: r.wait * S - 2, height: H, fill: `url(#${svg.id}-wait)`, rx: 2 });
-    el(svg, "rect", { x: x(t) + r.wait * S / 2 - 52, y: yb + H / 2 - 10, width: 104, height: 20, rx: 3, fill: css("--bg") });
-    el(svg, "text", { x: x(t) + r.wait * S / 2, y: yb + H / 2 + 4, "text-anchor": "middle", class: "b" }, `waits ${r.wait} ms`);
-    t += r.wait;
+    seg(svg, x(t), yb, x(t + r.read) - x(t), H, css("--read"), o.readShown ? `read ${(r.read / 1000).toFixed(1)} s from NFS` : "", { tip: `read ${r.read} ms` });
+    if (o.readShown) {  // zigzag in the read bar
+      const xb = x(cut) - 10;
+      el(svg, "path", { d: `M${xb - 4},${yb - 2} L${xb + 4},${yb + H / 2} L${xb - 4},${yb + H + 2}`, stroke: css("--bg"), "stroke-width": 5, fill: "none" });
+    }
+    t += r.read;
+    if (r.wait) {
+      el(svg, "rect", { x: x(t), y: yb, width: r.wait * S - 2, height: H, fill: `url(#${svg.id}-wait)`, rx: 2 });
+      el(svg, "rect", { x: x(t) + r.wait * S / 2 - 52, y: yb + H / 2 - 10, width: 104, height: 20, rx: 3, fill: css("--bg") });
+      el(svg, "text", { x: x(t) + r.wait * S / 2, y: yb + H / 2 + 4, "text-anchor": "middle", class: "b" }, `waits ${r.wait} ms`);
+      t += r.wait;
+    }
     const timedStart = t;
-    seg(svg, x(t), yb, r.setupBase * S, H, css("--setup"), "", { tip: `GPU setup: upload, presort, allocations ${r.setupBase} ms` }); t += r.setupBase;
+    seg(svg, x(t), yb, r.setupBase * S, H, css("--setup"), o.readShown ? `setup ${r.setupBase}` : "", { dark: true, tip: `GPU setup: upload, presort, allocations ${r.setupBase} ms` }); t += r.setupBase;
     if (r.setupExtra) { seg(svg, x(t), yb, r.setupExtra * S, H, css("--setup"), `+${r.setupExtra}`, { opacity: 0.55, dark: true, tip: `pool, staging buffers, copy threads, kernels on first use ≈${r.setupExtra} ms` }); t += r.setupExtra; }
-    seg(svg, x(t), yb, r.build * S, H, css("--build"), "", { tip: `build ${r.build} ms` }); t += r.build;
+    seg(svg, x(t), yb, r.build * S, H, css("--build"), o.readShown ? `build ${r.build}` : "", { tip: `build ${r.build} ms` }); t += r.build;
     const end = t;
     // GPU thread, starts with the read
     const yg = yb + H + 10;
     seg(svg, x(readStart), yg, r.ctx * S, H, css("--gpu"), `CUDA context ${r.ctx} ms`);
     if (r.extra) seg(svg, x(readStart + r.ctx), yg, r.extra * S, H, css("--gpu"), `+${r.extra}`, { opacity: 0.55, dark: true, tip: `all kernels (eager), pool, staging buffers, copy threads ≈${r.extra} ms` });
-    // read label
-    el(svg, "text", { x: x(readStart) + r.read * S / 2, y: yb - 6, "text-anchor": "middle", class: "m" }, `read ${r.read}`);
+    if (!o.readShown) el(svg, "text", { x: x(readStart) + r.read * S / 2, y: yb - 6, "text-anchor": "middle", class: "m" }, `read ${r.read}`);
     // timer bracket
     const yt = yb - 22;
     el(svg, "path", { d: `M${x(timedStart)},${yt + 8} V${yt} H${x(end) - 2} V${yt + 8}`, stroke: css("--timer"), "stroke-width": 2.5, fill: "none" });
-    el(svg, "text", { x: x(timedStart) - 8, y: yt + 6, "text-anchor": "end", class: "b" }, `timed ${r.setupBase + r.setupExtra + r.build} ms`);
-    el(svg, "text", { x: x(end) + 8, y: yb + 20, class: "m" }, `wall ≈ ${Math.round(end)} ms`);
+    el(svg, "text", { x: x(timedStart) - 8, y: yt + 6, "text-anchor": "end", class: "b" }, `timed ${(r.setupBase + r.setupExtra + r.build).toLocaleString("en")} ms`);
+    el(svg, "text", { x: x(end) + 8, y: yb + 20, class: "m" }, `wall ≈ ${o.readShown ? (end / 1000).toFixed(2) + " s" : Math.round(end) + " ms"}`);
   }
 }
 
@@ -331,7 +346,18 @@ function ab() {
   el(svg, "text", { x: 0, y: 325, class: "m" }, "Bar order in each group: context · full · full with lazy kernels. Hover a bar for its numbers.");
 }
 
-function draw() { timeline(); matrix(); prep(); options(); ab(); }
+function draw() {
+  timeline("timeline", [
+    { name: "full (default)", y: 30, other: 165, read: 76, ctx: 529, extra: 80, wait: 529, setupBase: 38, setupExtra: 0, build: 68 },
+    { name: "context", y: 175, other: 165, read: 76, ctx: 529, extra: 0, wait: 450, setupBase: 38, setupExtra: 78, build: 65 },
+  ], { height: 330 });
+  // MNIST8M from NFS, ampere (job 326), medians of 3; the read drawn the same for both (its NFS speed varied, not the mode)
+  timeline("timeline-mnist", [
+    { name: "full (default)", y: 30, other: 324, read: 20620, ctx: 453, extra: 134, wait: 0, setupBase: 1225, setupExtra: 0, build: 1880 },
+    { name: "context", y: 175, other: 321, read: 20620, ctx: 453, extra: 0, wait: 0, setupBase: 1225, setupExtra: 120, build: 1879 },
+  ], { height: 330, S: 0.175, readShown: 900, tMax: 25000, step: 500, fmt: t => t === 0 ? "0" : (t / 1000) + " s" });
+  matrix(); prep(); options(); ab();
+}
 draw();
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 </script>
