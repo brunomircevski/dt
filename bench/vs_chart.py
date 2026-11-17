@@ -9,6 +9,10 @@
        against cuML (1 tree, and a default forest of 10 / 10) and XGBoost (the
        same, CART only), on the H100 (hopper) and the A100 (ampere); also
        cluster-gpu-vs-others/summary.csv
+  gpu-warm  cluster-gpu-vs-others/chart-warm.png (and summary-warm.csv): the warm
+       variant, CART, one tree: every tool's timed fit is the second identical
+       fit in one process (./tree --warm-up, gpubench.py WARM=1); each label
+       gives the cold time (chart.png's) beside it
 
 ./tree's bars are the test-set benchmarks' runs (cluster-<dataset>/<backend>-<node>-<dataset>),
 the libraries' the comparison's own: cluster-cpu-vs-others/vs-epyc-<dataset>/ (bench/run.py,
@@ -16,7 +20,7 @@ every library in one run, interleaved) and cluster-gpu-vs-others/<dataset>/<node
 (scripts/gpubench.py, one process per run). Every bar: the mean of its runs, each a fresh
 process with no warm-up; the whisker spans the fastest to the slowest run.
 
-  bench/.venv/bin/python bench/vs_chart.py cpu|gpu [--results bench/results]
+  bench/.venv/bin/python bench/vs_chart.py cpu|gpu|gpu-warm [--results bench/results]
 """
 
 import argparse
@@ -65,14 +69,15 @@ def summary(run, protocol, impl=None, threads=None):
     return None
 
 
-def library(root, dataset, node, impl, case, trees):
-    """cuML or XGBoost rows of cluster-gpu-vs-others: one bar (a forest's time / trees)."""
+def library(root, dataset, node, impl, case, trees, warm=False):
+    """cuML or XGBoost rows of cluster-gpu-vs-others: one bar (a forest's time / trees);
+    warm: the warm variant's rows (gpubench.py WARM=1), else the cold ones."""
     f = root / dataset / node / "results.jsonl"
     if not f.exists():
         return None
     rows = [json.loads(line) for line in open(f)]
     rows = [r for r in rows if r["impl"] == impl and r["case"] == case and r.get("trees") == trees
-            and r.get("depth_limit", 10) == 10]
+            and r.get("depth_limit", 10) == 10 and bool(r.get("warm")) == warm]
     if any("startup_seconds" in r for r in rows):
         # one fit per process (since 2026-11-16): never mixed with the older
         # warm-up-era rows (10 fits per process) a results.jsonl may still hold
@@ -109,6 +114,8 @@ def label(b):
         tail.append(f"test {100 * b['acc']:.2f}%")
     if b.get("nodes"):
         tail.append(f"{b['nodes']:,.0f} nodes")
+    if b.get("cold"):
+        tail.append(f"cold {seconds(b['cold'])} ({b['cold'] / b['mean']:.1f}× the warm time)")
     return text + ("   ·  " + ", ".join(tail) if tail else "")
 
 
@@ -167,17 +174,40 @@ def gpu_bars(res, dataset, algo):
             for n in GPU_COLORS]
 
 
-def few_runs(grid):
+def gpu_warm_bars(res, dataset, algo):
+    """The warm variant (CART, one tree): each tool's warm bar, with its cold mean."""
+    protocol = ALGOS[algo][1]
+    d, g = res / f"cluster-{dataset}", res / "cluster-gpu-vs-others"
+    impls = [("./tree hybrid", lambda n: summary(g / "warm" / f"cuda-{n}-{dataset}", protocol),
+              lambda n: summary(d / f"cuda-{n}-{dataset}", protocol)),
+             ("./tree GPU only", lambda n: summary(g / "warm" / f"gpuonly-{n}-{dataset}", protocol),
+              lambda n: summary(d / f"gpuonly-{n}-{dataset}", protocol)),
+             ("cuML, 1 tree", lambda n: library(g, dataset, n, "cuml", algo, 1, warm=True),
+              lambda n: library(g, dataset, n, "cuml", algo, 1)),
+             ("XGBoost, 1 tree", lambda n: library(g, dataset, n, "xgboost", algo, 1, warm=True),
+              lambda n: library(g, dataset, n, "xgboost", algo, 1))]
+    bars = []
+    for name, warm, cold in impls:
+        for n in GPU_COLORS:
+            b, c = warm(n), cold(n)
+            if b and c:
+                b = {**b, "cold": c["mean"]}
+            bars.append((f"{name}, warm — {GPU_NAMES[n].split(' (')[0]}", GPU_COLORS[n], b))
+    return bars
+
+
+def few_runs(grid, algos=ALGOS):
     """The bars with fewer runs than the most, named: with 3 runs, a run takes over an hour."""
-    bars = [(d, a, name, b) for d, row in zip(DATASETS, grid) for a, bs in zip(ALGOS, row)
+    bars = [(d, a, name, b) for d, row in zip(DATASETS, grid) for a, bs in zip(algos, row)
             for name, _, b in bs if b]
     most = max((b["n"] for *_, b in bars), default=0)
     few = list(dict.fromkeys(  # one entry per tool and case, not per node
         f"{name.split(' — ')[0].split(',')[0]} {ALGOS[a][0].split(' ')[0]} on {TITLES[d].split(':')[0]}"
         f" ({b['n']})" for d, a, name, b in bars if b["n"] < most))
+    runs = "fresh-process runs, no warm-up" if not WARM else "runs, each a fresh process's second fit"
     if not few:
-        return f"Every bar: the mean of {most} fresh-process runs, no warm-up."
-    return (f"Every bar: the mean of {most} fresh-process runs, no warm-up; fewer runs (3: one run takes over "
+        return f"Every bar: the mean of {most} {runs}."
+    return (f"Every bar: the mean of {most} {runs}; fewer runs (3: one run takes over "
             f"an hour; 5: the 2026-11-15 rerun, not yet redone): {'; '.join(few)}.")
 
 
@@ -192,13 +222,20 @@ def provenance(grid):
             + f"; nodes {', '.join(hosts)}; run {when}")
 
 
+WARM = False  # set by draw(): the warm variant's chart
+
+
 def draw(kind, res, out):
-    builder = cpu_bars if kind == "cpu" else gpu_bars
-    grid = [[builder(res, d, a) for a in ALGOS] for d in DATASETS]
+    global WARM
+    WARM = kind == "gpu-warm"
+    builder = {"cpu": cpu_bars, "gpu": gpu_bars, "gpu-warm": gpu_warm_bars}[kind]
+    algos = ["cart"] if WARM else list(ALGOS)
+    grid = [[builder(res, d, a) for a in algos] for d in DATASETS]
     per_panel = max(len(bs) for row in grid for bs in row)
-    fig, axes = plt.subplots(len(DATASETS), 2, figsize=(17, 1.9 + 2 * 0.36 * per_panel * len(DATASETS)))
+    fig, axes = plt.subplots(len(DATASETS), len(algos), squeeze=False,
+                             figsize=(17 if len(algos) == 2 else 12, 1.9 + 2 * 0.36 * per_panel * len(DATASETS)))
     for i, d in enumerate(DATASETS):
-        for j, a in enumerate(ALGOS):
+        for j, a in enumerate(algos):
             panel(axes[i][j], grid[i][j], f"{TITLES[d].split(':')[0]}, {ALGOS[a][0]}")
         axes[i][0].annotate(TITLES[d], (0, 1), xycoords="axes fraction", xytext=(0, 22),
                             textcoords="offset points", fontsize=10.5, fontweight="bold", color=INK)
@@ -209,6 +246,17 @@ def draw(kind, res, out):
                 "competitor or surrogate splits); Weka J48 (-U -M 2, its adapter's depth limit 10); YaDT (-np -m 2 "
                 "-depth 10). The libraries' runs interleaved in a shuffled order. ./tree --multicore and YaDT 48 threads "
                 "use both sockets.")
+    elif WARM:
+        head = ("Warm: ./tree against cuML and XGBoost on the GPU, each timed fit the second identical fit "
+                "in one process; one CART tree, depth ≤ 10, all rows and features")
+        note = ("Warm: one untimed fit, the same as the timed one on the same data, first in the same process "
+                "(./tree --warm-up, gpubench.py WARM=1): kernels loaded, memory pools, staging buffers and the "
+                "driver's mappings of the input made. Cold (chart.png, the default protocol): the one fit of a "
+                "fresh process. Settings as chart.png: cuML 128 bins, Gini; XGBoost hist 256 bins, squared error, "
+                "λ 0 (MNIST8M: one multi-output tree on the one-hot labels); ./tree hybrid: --hybrid, GPU only: "
+                "--gpu.")
+        fig.legend(handles=[Patch(color=c, label=GPU_NAMES[n]) for n, c in GPU_COLORS.items()],
+                   loc="upper right", ncol=2, frameon=False, fontsize=9)
     else:
         head = ("./tree against cuML and XGBoost on the GPU: one tree, depth ≤ 10, no pruning, all rows and features; "
                 "one GPU and every CPU of the node")
@@ -224,24 +272,27 @@ def draw(kind, res, out):
     fig.suptitle(head, x=0.01, y=0.995, ha="left", fontsize=11.5, color=INK, fontweight="bold")
     text = "\n".join(textwrap.fill(part, NOTE_CHARS) for part in (
         "Training time (log scale), excluding reading the data and start-up: bar = mean of the runs, whisker = "
-        "fastest to slowest; label: mean (runs), peak memory, test accuracy, tree nodes. " + few_runs(grid),
+        "fastest to slowest; label: mean (runs), peak memory, test accuracy, tree nodes"
+        + (", the cold mean" if WARM else "") + ". " + few_runs(grid, algos),
         *note.split("\n"), provenance(grid)))
-    fig.text(0.01, 0.005, text, fontsize=8, color=MUTED, linespacing=1.5)
+    fig.text(0.01, 0.005, text if len(algos) == 2 else "\n".join(
+        textwrap.fill(line, NOTE_CHARS * 12 // 17) for line in text.split("\n")),
+        fontsize=8, color=MUTED, linespacing=1.5)
     # the footnote's height: 8 pt lines at 1.5 spacing, as a fraction of the figure
     bottom = 0.01 + (text.count("\n") + 1) * 8 * 1.5 / 72 / fig.get_figheight()
     fig.tight_layout(rect=(0, bottom, 1, 0.965), h_pad=3.5, w_pad=2)
     fig.savefig(out, dpi=140, facecolor="white")
     print(out)
-    return grid
+    return grid, algos
 
 
-def write_summary(grid, out):
+def write_summary(grid, out, algos=ALGOS):
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["dataset", "algorithm", "implementation", "gpu", "time_mean", "time_sd", "runs", "time_min",
                     "time_max", "vram_bytes", "test_accuracy", "nodes"])
         for d, row in zip(DATASETS, grid):
-            for a, bars in zip(ALGOS, row):
+            for a, bars in zip(algos, row):
                 for name, color, b in bars:
                     impl, gpu = name.split(" — ")
                     if b:
@@ -252,14 +303,15 @@ def write_summary(grid, out):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("kind", choices=["cpu", "gpu"])
+    parser.add_argument("kind", choices=["cpu", "gpu", "gpu-warm"])
     parser.add_argument("--results", default=str(Path(__file__).resolve().parent / "results"))
     args = parser.parse_args()
     res = Path(args.results)
     target = res / ("cluster-cpu-vs-others" if args.kind == "cpu" else "cluster-gpu-vs-others")
-    grid = draw(args.kind, res, target / "chart.png")
-    if args.kind == "gpu":
-        write_summary(grid, target / "summary.csv")
+    suffix = "-warm" if args.kind == "gpu-warm" else ""
+    grid, algos = draw(args.kind, res, target / f"chart{suffix}.png")
+    if args.kind != "cpu":
+        write_summary(grid, target / f"summary{suffix}.csv", algos)
 
 
 if __name__ == "__main__":
