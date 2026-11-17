@@ -15,10 +15,11 @@
 #
 # Every run is one fresh process that trains one tree, no warm-up
 # (BENCHMARK-CHANGES.MD, section 1).
-# -m RUNS: runs per case for every kind (default: 10, and 3 where one process
-#   trains for over an hour: --simple on full ECBDL'14 and SOREL-20M; run.py also
-#   stops any case at 3 runs whose first run took over an hour, e.g. J48 and
-#   maybe rpart on MNIST8M).
+# -m RUNS: runs per case (default 10).
+# -l LONG: runs of a case where one process trains for over an hour (default 3):
+#   --simple on full ECBDL'14 and SOREL-20M, and in every run.py any case whose
+#   first run trained for over an hour (run.py --long-runs; e.g. J48 and maybe
+#   rpart on MNIST8M). More runs later: -m 20 -l 5.
 # -N NODES: comma-separated, only these nodes' chains are checked and submitted
 #   (default all: hopper ampere epyc1 epyc2 dell2 dell3 dell4).
 # -D DATASETS: comma-separated, only these datasets' runs (plan lines, gpulibs,
@@ -29,12 +30,14 @@
 #   scaling    the same at 1 (--serial), 2, 4, 8, ..., 48 threads, HIGGS and MNIST8M (cluster-cpu-scaling)
 #   serial     --serial, one thread
 #   simple     --simple, one thread
-#   vs         scikit-learn, rpart, YaDT (1 and 48 threads), Weka J48 on epyc2 (cluster-cpu-vs-others):
+#   vs         ./tree (--simple, --serial, --multicore), scikit-learn, rpart, YaDT (1 and 48
+#              threads), Weka J48 on epyc2 (cluster-cpu-vs-others):
 #              one run.py per dataset with every tool, so their runs interleave
 #   gpulibs    cuML and XGBoost on hopper and ampere (cluster-gpu-vs-others, ~/gpu-dt-bench):
-#              one tree and a default forest of 10, one gpubench.py process per run, interleaved;
-#              and the warm variant: one CART tree of cuML, XGBoost (WARM=1) and ./tree
-#              (--warm-up, cluster-gpu-vs-others/warm/, in the hopper and ampere plans)
+#              one tree: ./tree, cuML and XGBoost interleaved in one run.py per node and
+#              dataset (cluster-gpu-vs-others/one-tree/), and the same warm (--warm-up,
+#              cluster-gpu-vs-others/warm/), in the hopper and ampere plans; the default
+#              forests of 10: one gpubench.py process per run, interleaved (gpulibs job)
 #   profiling  ./tree --profile, then the same without (plain/), epyc1, dell4, hopper (cluster-profiling)
 #   hybrid     hybrid_vs_gpu_only.sh on hopper and ampere (hybrid-vs-gpu-only)
 #   e2e        end to end, HIGGS, every tool (cluster-end-to-end): epyc1 (CPU tools) and
@@ -62,12 +65,13 @@
 set -euo pipefail
 ALL_KINDS=gpu,cpu,scaling,serial,simple,vs,gpulibs,profiling,hybrid,e2e
 ALL_NODES=hopper,ampere,epyc1,epyc2,dell2,dell3,dell4
-TEST= SUBMIT=1 RUNS= KINDS=$ALL_KINDS NODES=$ALL_NODES ONLY_DATA=
-while getopts "tnm:k:N:D:h" option; do
+TEST= SUBMIT=1 RUNS=10 LONG=3 KINDS=$ALL_KINDS NODES=$ALL_NODES ONLY_DATA=
+while getopts "tnm:l:k:N:D:h" option; do
   case "$option" in
     t) TEST=1 ;;
     n) SUBMIT= ;;
     m) RUNS="$OPTARG" ;;
+    l) LONG="$OPTARG" ;;
     k) KINDS="$OPTARG" ;;
     N) NODES="$OPTARG" ;;
     D) ONLY_DATA="$OPTARG" ;;
@@ -118,8 +122,9 @@ EXTRA=ACCURACY=--test-accuracy,RUN_EXTRA=--hash-trees  # job.sh: test accuracy, 
 OUT=  # results directory: cluster-<dataset>, or cluster-test with -t
 if [ -n "$TEST" ]; then
   GPU_DATA=susy CPU_DATA=susy SCALING_DATA=higgs GPULIBS_DATA=mnist8m VS_DATA=susy PROFILE_DATA=susy
-  HYBRID_DATA=susy E2E_DATA=susy OUT=cluster-test RUNS=1
+  HYBRID_DATA=susy E2E_DATA=susy OUT=cluster-test RUNS=1 LONG=1
 fi
+EXTRA+=",LONG_RUNS=$LONG"  # job.sh: run.py --long-runs
 
 dir_of() {
   [ -z "$OUT" ] || { echo "$OUT"; return; }
@@ -131,15 +136,14 @@ dir_of() {
   esac
 }
 
-# runs <kind> <dataset>: -m, else 3 where one process takes over an hour
-# (--simple 1.7-2 h on full ECBDL'14 and 3.6-3.9 h on SOREL-20M), else 10.
-# Within a run.py, a case whose first run took over an hour stops at 3 runs
+# runs <kind> <dataset>: -l (3) where one process takes over an hour (--simple
+# 1.7-2 h on full ECBDL'14 and 3.6-3.9 h on SOREL-20M), else -m (10). Within a
+# run.py, a case whose first run took over an hour stops at -l runs
 # (run.py --long-runs; J48 5.3 h on MNIST8M, rpart maybe).
 runs() {
-  [ -z "$RUNS" ] || { echo "$RUNS"; return; }
   case "$1-$2" in
-    simple-ecbdl|simple-sorel) echo 3 ;;
-    *) echo 10 ;;
+    simple-ecbdl|simple-sorel) echo "$LONG" ;;
+    *) echo "$RUNS" ;;
   esac
 }
 
@@ -165,9 +169,12 @@ scaling() {
   line "$1" "${OUT:-cluster-cpu-scaling}" "cpu-$2-$3" "$3" tree "$(runs scaling "$3")" "$P" scaling 14400 \
     RUN_EXTRA=--hash-trees
 }
-# vs <plan> <dataset> <tools>: every library in one run.py, so their runs
-# interleave (each repetition a new shuffled order): scikit-learn and rpart
-# (CART), Weka J48 and YaDT (C4.5) on one thread, YaDT also on every CPU (48).
+# vs <plan> <dataset> <tools>: ./tree and every library in one run.py, so their
+# runs interleave (each repetition a new shuffled order) and a slow stretch of
+# the node hits every tool alike: ./tree --simple and --serial on one thread and
+# --multicore on every CPU (48); scikit-learn and rpart (CART), Weka J48 and
+# YaDT (C4.5) on one thread, YaDT also on every CPU. vs_chart.py draws ./tree's
+# bars from this run too.
 vs() {
   line "$1" "${OUT:-cluster-cpu-vs-others}" "vs-epyc-$2" "$2" "$3" "$(runs vs "$2")" \
     "$P" 1,all 86400 "$EXTRA"
@@ -196,14 +203,20 @@ for gpu in hopper ampere; do
     for d in $GPU_DATA; do plan "$gpu" cuda "$gpu" "$d"; plan "$gpu" gpuonly "$gpu" "$d"; done
   fi
 done
-# The warm variant of cluster-gpu-vs-others (with gpulibs): ./tree's CART tree
-# trained second in one process (--warm-up), as gpubench.py WARM=1.
+# cluster-gpu-vs-others (with gpulibs), one tree: ./tree --hybrid and --gpu,
+# cuML and XGBoost in one run.py per node and dataset, their runs interleaved
+# (a new shuffled order each repetition), one fresh process per run; GPU memory
+# sampled from outside for every tool. C4.5: ./tree only (no library grows it).
+# Then the warm variant the same way: every tool's CART tree trained second in
+# one process (run.py --warm-up: ./tree --warm-up, gpubench.py WARM=1).
+# The forests of 10 stay in gpubench's own job (gpulibs, below).
 if want gpulibs; then
-  for gpu in hopper ampere; do for d in $GPULIBS_DATA; do for backend in cuda gpuonly; do
-    impl=tree_cuda; [ "$backend" = gpuonly ] && impl=tree_gpu_only
-    line "$gpu" "${OUT:-cluster-gpu-vs-others/warm}" "$backend-$gpu-$d" "$d" "$impl" "$(runs gpulibs "$d")" \
-      cart_depth10 all 14400 "$EXTRA,WARM_UP=1"
-  done; done; done
+  for gpu in hopper ampere; do for d in $GPULIBS_DATA; do
+    line "$gpu" "${OUT:-cluster-gpu-vs-others}/one-tree" "vs-$gpu-$d" "$d" \
+      tree_cuda,tree_gpu_only,cuml,xgboost "$(runs gpulibs "$d")" "$P" all 14400 "$EXTRA"
+    line "$gpu" "${OUT:-cluster-gpu-vs-others}/warm" "vs-$gpu-$d" "$d" \
+      tree_cuda,tree_gpu_only,cuml,xgboost "$(runs gpulibs "$d")" cart_depth10 all 14400 "$EXTRA,WARM_UP=1"
+  done; done
 fi
 if want profiling; then profile hopper-2 cuda hopper; profile hopper-2 gpuonly hopper; fi
 for node in epyc dell; do
@@ -241,7 +254,7 @@ if want simple; then
   done
 fi
 if want vs; then
-  for d in $VS_DATA; do vs epyc2-1 "$d" sklearn,rpart,yadt,j48; done
+  for d in $VS_DATA; do vs epyc2-1 "$d" tree,tree_simple,sklearn,rpart,yadt,j48; done
 fi
 if want e2e; then
   for d in $E2E_DATA; do
@@ -310,7 +323,7 @@ ls "$PLANS"/final-*.txt > /dev/null 2>&1 && wc -l "$PLANS"/final-*.txt
 ! want hybrid || [ ${#GPU_NODES[@]} -eq 0 ] ||
   echo "hybrid_vs_gpu_only.sh on ${GPU_NODES[*]}: $HYBRID_DATA, $(runs hybrid x) runs a case"
 ! want gpulibs || [ ${#GPU_NODES[@]} -eq 0 ] ||
-  echo "cuML and XGBoost on ${GPU_NODES[*]}: $GPULIBS_DATA, 1 tree and a forest of 10, $(runs gpulibs x) runs a case"
+  echo "cuML and XGBoost forests of 10 on ${GPU_NODES[*]}: $GPULIBS_DATA, $(runs gpulibs x) runs a case"
 [ -n "$SUBMIT" ] || exit 0
 
 # chain <partition> <node> <step>...: the steps one job each, in order. A step
@@ -337,7 +350,7 @@ chain() {
       cp bench/results/cluster-gpu-vs-others/scripts/{gpubench.py,job.sh} "$G/"
       mkdir -p "$GPULIBS_RESULTS"
       id=$(cd "$G" && IMPLS="cuml xgboost" DATASETS="$GPULIBS_DATA" REPS="$(runs gpulibs x)" DEPTH=10 \
-        FORESTS="1:identical 10:default" WARM_FORESTS="1:identical" RESULTS="$GPULIBS_RESULTS" RUSAGE="$REPO/bench/.tools/rusage" \
+        FORESTS="10:default" RESULTS="$GPULIBS_RESULTS" RUSAGE="$REPO/bench/.tools/rusage" \
         sbatch --parsable -J "gdb-final-$node" -p "$partition" -w "$node" --exclusive -t "$limit" \
         ${after:+--dependency=afterany:$after} -o "$GPULIBS_RESULTS/$node.log" job.sh "$node")
     else

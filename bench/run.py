@@ -423,7 +423,9 @@ def build_command(case, kind, args, scratch, rep=0):
         # 2.88 s); ./tree too loads its kernels lazily, in its timed setup.
         environment = {"EVAL": str(int(evaluate)), "GPU_MEMORY": "0", "DATA_ROOT": str(B.DATA),
                        "CUDA_MODULE_LOADING": os.environ.get("GPULIB_MODULE_LOADING", "LAZY"),
-                       "OMP_NUM_THREADS": str(threads)}
+                       "OMP_NUM_THREADS": str(threads),
+                       # --warm-up: gpubench.py's warm variant, one untimed identical fit first
+                       "WARM": "1" if args.warm_up else "0"}
         return argv, environment, lambda stdout: json.loads(stdout.strip().splitlines()[-1])
 
     params = [f"{key}={fill(value, args.alpha)}" for key, value in spec.items()]
@@ -689,9 +691,9 @@ def main():
                         help="./tree: also write where its training time goes (--profile) to "
                              "<run dir>/profiles/<protocol>-<impl>-t<threads>-r<rep>.json")
     parser.add_argument("--warm-up", action="store_true",
-                        help="./tree: train one untimed tree first, then the timed one in the "
-                             "same, now warm process (the warm variant of "
-                             "cluster-gpu-vs-others; rows get warm_up: true)")
+                        help="./tree, cuML, XGBoost: train one untimed tree first, then the timed "
+                             "one in the same, now warm process (the warm variant of "
+                             "cluster-gpu-vs-others; gpubench.py WARM=1; rows get warm_up: true)")
     parser.add_argument("--handoff-rows",
                         help="./tree --hybrid (tree_cuda): its --handoff-rows, a number or "
                              "'default' (./tree's own); without it, the value measured best for "
@@ -808,7 +810,8 @@ def main():
                "cpus": ",".join(map(str, args.cpu_list[:threads])) if args.cpu_list else None,
                "membind": args.membind,
                **({"gpu": gpu_name(), "gpu_index": gpu_index()} if impl in GPU_IMPLS else {}),
-               **({"warm_up": True} if args.warm_up and impl.startswith("tree") else {}),
+               **({"warm_up": True} if args.warm_up and (impl.startswith("tree") or impl in GPU_LIBRARIES)
+                  else {}),
                **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "user_seconds",
                                       "system_seconds", "gpu_peak_bytes") if k in run}}
         if run["timed_out"]:

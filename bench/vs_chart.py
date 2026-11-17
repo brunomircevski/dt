@@ -59,7 +59,7 @@ def summary(run, protocol, impl=None, threads=None):
     if not f.exists():
         return None
     for r in csv.DictReader(open(f)):
-        if impl and (r["impl"] != impl or int(r["threads"]) != threads):
+        if impl and (r["impl"] != impl or (threads is not None and int(r["threads"]) != threads)):
             continue
         if r["protocol"] == protocol and r["status"] == "ok":
             num = lambda k: float(r[k]) if r.get(k) not in (None, "") else None  # noqa: E731
@@ -151,6 +151,12 @@ def panel(ax, bars, title):
     ax.set_title(title, loc="left", fontsize=9.5, color=INK, fontweight="bold")
 
 
+def first(*bars):
+    """The first bar there is: the interleaved run (./tree with the libraries, since
+    2026-11-17), else the older separate run, a placeholder until the rerun."""
+    return next((b for b in bars if b), None)
+
+
 def cpu_bars(res, dataset, algo):
     protocol = ALGOS[algo][1]
     d, v = res / f"cluster-{dataset}", res / "cluster-cpu-vs-others" / f"vs-epyc-{dataset}"
@@ -159,21 +165,29 @@ def cpu_bars(res, dataset, algo):
               else [("Weka J48, one thread", "j48", "j48", 1),
                     ("YaDT, one thread", "yadt", "yadt", 1),
                     ("YaDT, 48 threads", "yadt_multi", "yadt", 48)])
-    return [("./tree --simple, one thread", CPU_COLORS["simple"], summary(d / f"simple-epyc-{dataset}", protocol)),
-            ("./tree --serial, one thread", CPU_COLORS["serial"], summary(d / f"serial-epyc-{dataset}", protocol)),
-            ("./tree --multicore, 48 threads", CPU_COLORS["cpu"], summary(d / f"cpu-epyc-{dataset}", protocol))] + \
+    return [("./tree --simple, one thread", CPU_COLORS["simple"],
+             first(summary(v, protocol, "tree_simple", 1), summary(d / f"simple-epyc-{dataset}", protocol))),
+            ("./tree --serial, one thread", CPU_COLORS["serial"],
+             first(summary(v, protocol, "tree", 1), summary(d / f"serial-epyc-{dataset}", protocol))),
+            ("./tree --multicore, 48 threads", CPU_COLORS["cpu"],
+             first(summary(v, protocol, "tree", 48), summary(d / f"cpu-epyc-{dataset}", protocol)))] + \
         [(label, CPU_COLORS[key], summary(v, protocol, impl, threads)) for label, key, impl, threads in others]
 
 
 def gpu_bars(res, dataset, algo):
     protocol = ALGOS[algo][1]
     d, g = res / f"cluster-{dataset}", res / "cluster-gpu-vs-others"
-    impls = [("./tree hybrid", lambda n: summary(d / f"cuda-{n}-{dataset}", protocol)),
-             ("./tree GPU only", lambda n: summary(d / f"gpuonly-{n}-{dataset}", protocol))]
+    one = lambda n: g / "one-tree" / f"vs-{n}-{dataset}"  # noqa: E731  (the interleaved run)
+    impls = [("./tree hybrid", lambda n: first(summary(one(n), protocol, "tree_cuda"),
+                                               summary(d / f"cuda-{n}-{dataset}", protocol))),
+             ("./tree GPU only", lambda n: first(summary(one(n), protocol, "tree_gpu_only"),
+                                                 summary(d / f"gpuonly-{n}-{dataset}", protocol)))]
     if algo == "cart":  # no GPU library grows C4.5 trees (an entropy tree is not C4.5)
-        impls += [("cuML, 1 tree", lambda n: library(g, dataset, n, "cuml", algo, 1)),
+        impls += [("cuML, 1 tree", lambda n: first(summary(one(n), protocol, "cuml"),
+                                                   library(g, dataset, n, "cuml", algo, 1))),
                   ("cuML, forest of 10 / 10", lambda n: library(g, dataset, n, "cuml", algo, 10)),
-                  ("XGBoost, 1 tree", lambda n: library(g, dataset, n, "xgboost", algo, 1)),
+                  ("XGBoost, 1 tree", lambda n: first(summary(one(n), protocol, "xgboost"),
+                                                      library(g, dataset, n, "xgboost", algo, 1))),
                   ("XGBoost, forest of 10 / 10", lambda n: library(g, dataset, n, "xgboost", algo, 10))]
     return [(f"{name} — {GPU_NAMES[n].split(' (')[0]}", GPU_COLORS[n], fn(n)) for name, fn in impls
             for n in GPU_COLORS]
@@ -183,14 +197,21 @@ def gpu_warm_bars(res, dataset, algo):
     """The warm variant (CART, one tree): each tool's warm bar, with its cold mean."""
     protocol = ALGOS[algo][1]
     d, g = res / f"cluster-{dataset}", res / "cluster-gpu-vs-others"
-    impls = [("./tree hybrid", lambda n: summary(g / "warm" / f"cuda-{n}-{dataset}", protocol),
-              lambda n: summary(d / f"cuda-{n}-{dataset}", protocol)),
-             ("./tree GPU only", lambda n: summary(g / "warm" / f"gpuonly-{n}-{dataset}", protocol),
-              lambda n: summary(d / f"gpuonly-{n}-{dataset}", protocol)),
-             ("cuML, 1 tree", lambda n: library(g, dataset, n, "cuml", algo, 1, warm=True),
-              lambda n: library(g, dataset, n, "cuml", algo, 1)),
-             ("XGBoost, 1 tree", lambda n: library(g, dataset, n, "xgboost", algo, 1, warm=True),
-              lambda n: library(g, dataset, n, "xgboost", algo, 1))]
+    one = lambda n: g / "one-tree" / f"vs-{n}-{dataset}"  # noqa: E731  (interleaved, cold)
+    hot = lambda n: g / "warm" / f"vs-{n}-{dataset}"  # noqa: E731  (interleaved, warm)
+    impls = [("./tree hybrid", lambda n: first(summary(hot(n), protocol, "tree_cuda"),
+                                               summary(g / "warm" / f"cuda-{n}-{dataset}", protocol)),
+              lambda n: first(summary(one(n), protocol, "tree_cuda"), summary(d / f"cuda-{n}-{dataset}", protocol))),
+             ("./tree GPU only", lambda n: first(summary(hot(n), protocol, "tree_gpu_only"),
+                                                 summary(g / "warm" / f"gpuonly-{n}-{dataset}", protocol)),
+              lambda n: first(summary(one(n), protocol, "tree_gpu_only"),
+                              summary(d / f"gpuonly-{n}-{dataset}", protocol))),
+             ("cuML, 1 tree", lambda n: first(summary(hot(n), protocol, "cuml"),
+                                              library(g, dataset, n, "cuml", algo, 1, warm=True)),
+              lambda n: first(summary(one(n), protocol, "cuml"), library(g, dataset, n, "cuml", algo, 1))),
+             ("XGBoost, 1 tree", lambda n: first(summary(hot(n), protocol, "xgboost"),
+                                                 library(g, dataset, n, "xgboost", algo, 1, warm=True)),
+              lambda n: first(summary(one(n), protocol, "xgboost"), library(g, dataset, n, "xgboost", algo, 1)))]
     bars = []
     for name, warm, cold in impls:
         for n in GPU_COLORS:
