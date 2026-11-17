@@ -7,7 +7,11 @@ run on 2026-11-17.** Data: `e2e-epyc-higgs` (epyc1, CPU tools, commit
 `e2e-ampere-higgs` (CART) and `e2e-ampere-higgs-c45` (C4.5, ./tree only) (ampere,
 A100 80 GB, commits 848496ea and 10cba04f, 3 runs per tool, 2026-11-17: ./tree with `--gpu-startup context`, the rule of every
 timing run; the earlier hopper runs used `full` and are in git history); `chart.png`, `summary.csv`
-(`bench/e2e_chart.py`). This file is the specification it was built from. Read
+(`bench/e2e_chart.py`). The ampere runs were the check for the `--gpu-startup`
+decision (option D, 17d8b2f3: ./tree now always times everything after the CUDA
+context, as `context` did) and are placeholders (out of date: built before
+17d8b2f3); the final runs are `final.sh` kind `e2e`: hopper (H100, ./tree's GPU
+backends, cuML, XGBoost) and epyc1, CART and C4.5, 10 runs. This file is the specification it was built from. Read
 [BENCHMARK-CHANGES.MD](../../../BENCHMARK-CHANGES.MD) first: its timing rule,
 run counts and problem handling apply here too. Replace this status paragraph
 with the Data line once it has run.

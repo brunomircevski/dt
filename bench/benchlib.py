@@ -534,13 +534,16 @@ def hardware_line(machine, gpu_used):
 # as a placeholder until the rerun replaces it, and the label goes away by
 # itself once the chart is redrawn from the new results. GPU runs (hopper,
 # ampere): one GPU timing rule, an 80 GB GPU, hand-off buffers only for
-# --hybrid (0cff6d1b); every other run: the final harness (03c4e2d2). A run on
+# --hybrid, and ./tree without --gpu-startup (only the CUDA context untimed,
+# 17d8b2f3; cuML and XGBoost on the GPU nodes: 0cff6d1b, as 17d8b2f3 changed
+# only ./tree); every other run: the final harness (03c4e2d2). A run on
 # dell1 is out of date too: the paper's dell is a 512 GB node (dell2-4, 8 of 16
 # memory channels); dell1 has 1 TB and every channel, 1.8x the bandwidth.
-FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "0cff6d1b"}
+FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "17d8b2f3", "gpulibs": "0cff6d1b"}
+GPU_LIBRARIES = ("cuml", "xgboost")
 GPU_HOSTS = ("hopper", "ampere")
 RETIRED_HOSTS = ("dell1",)
-OUT_OF_DATE_NOTE = (f"faded, ⚠ out of date: measured before the final protocol (GPU runs before {FINAL_SINCE['gpu']}, "
+OUT_OF_DATE_NOTE = (f"faded, ⚠ out of date: measured before the final protocol (./tree's GPU runs before {FINAL_SINCE['gpu']}, cuML/XGBoost before {FINAL_SINCE['gpulibs']}, "
                     f"CPU runs before {FINAL_SINCE['cpu']}) or on dell1 (1 TB; the final dell is a 512 GB node); "
                     "a placeholder until the rerun")
 
@@ -551,7 +554,7 @@ def _built_on(commit, base):
                           capture_output=True).returncode == 0
 
 
-def out_of_date(commit, host):
+def out_of_date(commit, host, impl=None):
     """True if a result of this build (a commit, `git describe` or not) on this host is from
     before the final protocol, from a retired host (dell1), or its build is unknown."""
     commit = (commit or "").strip().removesuffix("-dirty")
@@ -559,7 +562,8 @@ def out_of_date(commit, host):
     node = (host or "").split(".")[0]
     if node in RETIRED_HOSTS:
         return True
-    return not commit or not _built_on(commit, FINAL_SINCE["gpu" if node in GPU_HOSTS else "cpu"])
+    kind = "cpu" if node not in GPU_HOSTS else "gpulibs" if impl in GPU_LIBRARIES else "gpu"
+    return not commit or not _built_on(commit, FINAL_SINCE[kind])
 
 
 def rows_out_of_date(rows, machine=None):
@@ -571,4 +575,4 @@ def rows_out_of_date(rows, machine=None):
     rows = list(rows)
     if not rows:
         return out_of_date(commit, host)
-    return any(out_of_date(r.get("commit") or commit, r.get("host") or host) for r in rows)
+    return any(out_of_date(r.get("commit") or commit, r.get("host") or host, r.get("impl")) for r in rows)

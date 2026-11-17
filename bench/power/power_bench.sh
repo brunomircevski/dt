@@ -89,20 +89,26 @@ done
 
 NCPU=$(nproc)
 ALL_CPUS="0-$((NCPU - 1))"
-# The GPU: as bench/cluster/job.sh, the first GPU on the NUMA node (among the
-# GPUs' nodes) with the most free memory; its node's CPUs first, then the rest.
+# The GPU: as bench/cluster/job.sh, a GPU with the most memory, on the NUMA node
+# with the most free memory of those (ampere: an A100 80 GB on node 0, never one
+# of its A100 40 GB on node 1); its node's CPUs first, then the rest. A GPU
+# under 80 GB stops the job (GPU_MIN_MIB, default 80000).
+export CUDA_DEVICE_ORDER=PCI_BUS_ID  # CUDA's device numbers = nvidia-smi's
 GPU= GPU_NODE= GPU_CPUS=
 if [ "$KIND" = all ]; then
-  GPU_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
-    while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
-    while read -r node; do
-      numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4, n }'
-    done | sort -rn | head -1 | cut -d' ' -f2)"
-  GPU="$(nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader | tr A-Z a-z |
-    while IFS=', ' read -r index bus; do
-      [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$GPU_NODE" ] && { echo "$index"; break; }
-    done)"
+  GPU_NODE="$(nvidia-smi --query-gpu=memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
+    while IFS=', ' read -r total bus; do
+      node="$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")"
+      echo "$total $(numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4 }') $node"
+    done | sort -k1,1nr -k2,2nr | head -1 | cut -d' ' -f3)"
+  GPU="$(nvidia-smi --query-gpu=index,memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
+    while IFS=', ' read -r index total bus; do
+      [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$GPU_NODE" ] && echo "$total $index"
+    done | sort -s -k1,1nr | head -1 | cut -d' ' -f2 || true)"
   [ -n "$GPU" ] || { echo "no GPU found" >&2; exit 1; }
+  gpu_mib="$(nvidia-smi --id="$GPU" --query-gpu=memory.total --format=csv,noheader,nounits)"
+  [ "${gpu_mib:-0}" -ge "${GPU_MIN_MIB:-80000}" ] ||
+    { echo "GPU $GPU has ${gpu_mib:-?} MiB, under ${GPU_MIN_MIB:-80000}: not an 80 GB card" >&2; exit 1; }
   GPU_CPUS="$(cat "/sys/devices/system/node/node$GPU_NODE/cpulist")$(
     for n in /sys/devices/system/node/node[0-9]*; do
       [ "${n##*node}" = "$GPU_NODE" ] || printf ,%s "$(cat "$n/cpulist")"
