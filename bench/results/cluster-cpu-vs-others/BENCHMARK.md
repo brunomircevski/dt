@@ -2,6 +2,8 @@
 
 One tree per run, grown to depth ≤ 10 without pruning on every training row and feature, scored on the dataset's test set, on epyc (2× EPYC 9255, 48 cores, 512 GB DDR5-6400).
 
+**From the next rerun (final.sh since 2026-11-17): ./tree runs in the same `run.py` as the libraries** (`vs-epyc-<data>`: `--simple`, `--serial` and `--multicore` with scikit-learn, rpart, YaDT and J48, one new shuffled order per repetition), so a slow stretch of the node hits every tool alike. The chart draws ./tree's bars from that run; until it exists, from the separate `cluster-<data>` runs (placeholders).
+
 **Data:** ./tree rerun on 2026-11-15/16 (f53347a9, `src/` = d2957ff2; `--serial` and `--multicore` 5 runs, `--simple` 10 from 2026-11-11, not rerun as its code has not changed); scikit-learn and J48 from 2026-11-09 (10 runs, J48 on MNIST8M 3: a run takes over 5 hours), not rerun: their code and ./tree's trees have not changed. Every label gives its number of runs.
 
 ![./tree against scikit-learn and Weka J48, HIGGS and MNIST8M, CART and C4.5](chart.png)

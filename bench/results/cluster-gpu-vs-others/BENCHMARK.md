@@ -2,6 +2,8 @@
 
 One tree per run, grown to depth ≤ 10 without pruning on every training row and feature, scored on the dataset's test set, on the H100 PCIe of hopper and the A100 80 GB PCIe of ampere: one GPU and every CPU of the node, as ./tree's CUDA runs. cuML and XGBoost also grow a forest of 10 trees with their own random-forest defaults; its time divided by 10 is the bar "forest of 10 / 10".
 
+**From the next rerun (final.sh since 2026-11-17): one tree, ./tree, cuML and XGBoost run in one `run.py` per node and dataset** (`one-tree/vs-<node>-<data>`; the warm variant in `warm/vs-<node>-<data>`), one new shuffled order per repetition, one fresh process per run, GPU memory sampled from outside for every tool; gpubench's own job keeps the forests of 10. The chart draws the one-tree bars from those runs; until they exist, from the separate runs (placeholders).
+
 **Final data (2026-11-17, one timing rule for every GPU tool):** ./tree at 713914b8 (`final.sh -D higgs,susy,mnist8m -k gpu`, jobs 298 hopper and 301 ampere; its bars are the test-set benchmarks' `cluster-<data>/{cuda,gpuonly}-<node>-<data>` runs); cuML and XGBoost at 4e9bf9ab (jobs 303 hopper, 304 ampere, `logs/final-<node>.log`; submitted by hand after jobs 299/302 failed on a results folder renamed under them, so their rows got their commit afterwards, the harness unchanged). 10 runs a case, every one a fresh process with no warm-up. Earlier runs (warm-up fits, ./tree's untimed start-up making its pool and buffers, an A100 40 GB on 2026-11-17 morning) are in git history.
 
 ![./tree against cuML and XGBoost, HIGGS and MNIST8M, CART and C4.5, H100 and A100](chart.png)
