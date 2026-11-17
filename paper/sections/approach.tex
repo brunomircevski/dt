@@ -36,8 +36,6 @@ parallelism across subtrees. \emph{Mixed}: breadth-first on the GPU, depth-first
 on the CPU.}
 \label{tab:impl}
 \centering
-\small
-\setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}llllll@{}}
 \toprule
  & Sorting & Thresholds & Hardware & Parallelism & Node order \\
@@ -152,8 +150,7 @@ work to the slower CPU. By default,
   m = \max\bigl(512,\ \min(10F,\ 2^{D},\ 16{,}384)\bigr)
 \]
 for $F$ attributes, without the $2^{D}$ term when there is no depth limit. In
-our tests, this rule chose values close to the best $m$ for each dataset, with
-and without a depth limit.
+our tests, this rule chose values close to the best $m$ for each dataset.
 
 Hand-offs are asynchronous. At each level, the GPU gathers the remaining
 attributes of the handed-off children and copies them to host memory in the

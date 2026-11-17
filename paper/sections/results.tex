@@ -19,8 +19,6 @@ Runs per cell: 5; \ImplSerialBase{} 10 (full ECBDL'14 3, full SOREL-20M 1);
 libraries 10, on HIGGS and MNIST8M only.}
 \label{tab:time-cart}
 \centering
-\scriptsize
-\setlength{\tabcolsep}{5pt}
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
 \multicolumn{6}{@{}l}{\textbf{This work}} \\
@@ -33,7 +31,7 @@ ECBDL'14 & 5\,970 & 317 & 9.17 & -- & -- \\
 MNIST8M & 1\,896 & 115 & 3.10 & \tbd & \tbd \\
 SOREL-20M & 12\,501 & 619 & 15.3 & -- & -- \\
 \quad 4M subsample & 2\,939 & 176 & 4.95 & \tbd & \tbd \\
-\specialrule{1.2pt}{1pt}{3pt}
+\midrule
 \multicolumn{6}{@{}l}{\textbf{Existing implementations}} \\
 Dataset & scikit-learn & rpart &  & cuML & XGBoost \\
 \midrule
@@ -53,8 +51,6 @@ libraries on HIGGS and MNIST8M only, Weka J48 10 runs (MNIST8M 3); YaDT
 one thread and 48 threads. No GPU library grows C4.5 trees.}
 \label{tab:time-c45}
 \centering
-\scriptsize
-\setlength{\tabcolsep}{5pt}
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
 \multicolumn{6}{@{}l}{\textbf{This work}} \\
@@ -67,7 +63,7 @@ ECBDL'14 & 7\,035 & 320 & 9.70 & -- & -- \\
 MNIST8M & 1\,980 & 113 & 3.27 & \tbd & \tbd \\
 SOREL-20M & 12\,906 & 599 & 15.5 & -- & -- \\
 \quad 4M subsample & 3\,127 & 171 & 5.00 & \tbd & \tbd \\
-\specialrule{1.2pt}{1pt}{3pt}
+\midrule
 \multicolumn{6}{@{}l}{\textbf{Existing implementations}} \\
 Dataset & Weka J48 & YaDT & YaDT, 48 thr. &  &  \\
 \midrule
@@ -113,8 +109,6 @@ the power supply), and energy $E = P \cdot t$. Runs $\times$ trees per run:
 processes of repeated trees. \tbd{}: not yet measured on the final build.}
 \label{tab:energy}
 \centering
-\small
-\setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}llrrrrrr@{}}
 \toprule
  & & \multicolumn{3}{c}{CART} & \multicolumn{3}{c}{C4.5} \\
