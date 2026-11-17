@@ -80,7 +80,7 @@ if [ -n "${NUMA_NODE:-}" ]; then
   gpu="$(nvidia-smi --query-gpu=index,memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
     while IFS=', ' read -r index total bus; do  # the node's GPU with the most memory, the first on a tie
       [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$NUMA_NODE" ] && echo "$total $index"
-    done | sort -s -k1,1nr | head -1 | cut -d' ' -f2)"
+    done | sort -s -k1,1nr | head -1 | cut -d' ' -f2 || true)"
   [ -n "$gpu" ] || { echo "no GPU on NUMA node $NUMA_NODE" >&2; exit 1; }
   CUDA_VISIBLE_DEVICES="$gpu"
 fi
