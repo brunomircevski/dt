@@ -577,7 +577,46 @@ def numa_mem_free_kb():
 
 
 VMSTAT = ("pgscan_kswapd", "pgscan_direct", "pgsteal_kswapd", "pgsteal_direct", "allocstall_normal",
-          "allocstall_movable", "compact_stall", "numa_miss", "numa_foreign", "pgmigrate_success")
+          "allocstall_movable", "compact_stall", "numa_miss", "numa_foreign", "pgmigrate_success",
+          # NUMA placement: pages the run got on its own node vs another one
+          "numa_local", "numa_other",
+          # transparent huge pages: got one, or fell back to 4 KiB pages (fragmented memory)
+          "thp_fault_alloc", "thp_fault_fallback", "thp_collapse_alloc")
+
+
+def throttle_count(cpus):
+    """Thermal throttling events of the CPUs so far (Intel: core and package
+    counters; none on AMD)."""
+    total, found = 0, False
+    for cpu in cpus:
+        for name in ("core_throttle_count", "package_throttle_count"):
+            value = read_text(f"/sys/devices/system/cpu/cpu{cpu}/thermal_throttle/{name}")
+            if value and value.strip().isdigit():
+                total, found = total + int(value), True
+    return total if found else None
+
+
+class ClockSampler:
+    """The run's CPUs' clock (scaling_cur_freq, MHz) every 0.25 s while it runs, from
+    this process (a few sysfs reads a second); mean and minimum of the per-sample
+    means. Untimed: the tool's own clock is unaffected."""
+    def __init__(self, cpus):
+        self.files = [f"/sys/devices/system/cpu/cpu{c}/cpufreq/scaling_cur_freq" for c in cpus]
+        self.means, self.stop = [], threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self):
+        while not self.stop.wait(0.25):
+            khz = [int(v) for v in (read_text(f) for f in self.files) if v and v.strip().isdigit()]
+            if khz:
+                self.means.append(sum(khz) / len(khz) / 1000)
+
+    def result(self):
+        self.stop.set()
+        self.thread.join()
+        return ({"cpu_mhz_mean": round(sum(self.means) / len(self.means)), "cpu_mhz_min": round(min(self.means)),
+                 "cpu_mhz_samples": len(self.means)} if self.means else {})
 
 
 def vmstat():
@@ -798,8 +837,14 @@ def main():
                            stdout=subprocess.DEVNULL, check=True)
         mem_free = numa_mem_free_kb()
         before = vmstat()
+        run_cpus = args.cpu_list[:threads] if args.cpu_list else range(os.cpu_count() or 1)
+        throttle_before = throttle_count(run_cpus)
+        load = (read_text("/proc/loadavg") or "").split()[:3]
+        clock = ClockSampler(run_cpus)
         run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl in GPU_IMPLS)
+        clock = clock.result()
         after = vmstat()
+        throttle_after = throttle_count(run_cpus)
         if args.prefetch:
             drop_page_cache(B.DATA)
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
@@ -845,6 +890,13 @@ def main():
         # page reclaim and remote allocations during the run (SOREL C4.5 on epyc, 2026-10-28:
         # presort 11 s in one run, 34 s in the next two)
         row.update({f"vmstat_{k}": after[k] - before[k] for k in before if k in after})
+        # why a run was slow: the CPU clock over the run, thermal throttling events,
+        # the load just before it (with mem_free_* and vmstat_* above)
+        row.update(clock)
+        if throttle_before is not None and throttle_after is not None:
+            row["throttle_events"] = throttle_after - throttle_before
+        if load:
+            row["loadavg_before"] = " ".join(load)
         results.write(json.dumps(row) + "\n")
         results.flush()
         walls[case].append(run["wall_seconds"])

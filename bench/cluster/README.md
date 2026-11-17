@@ -269,6 +269,15 @@ The data and measurements are those of the other benchmarks
   so a 48-thread run's pages went to node 0 and half the threads read across
   the sockets (ECBDL presort 1.6 → 2.3 s). Each run records its free memory
   per node in `results.jsonl` (`mem_free_node*_kb`).
+- **Every run records why it might have been slow** (`results.jsonl`, outside
+  the timed part, since 2026-11-17): the run's CPUs' clock over the run
+  (`cpu_mhz_mean`, `cpu_mhz_min`: `scaling_cur_freq` every 0.25 s), thermal
+  throttling events (`throttle_events`, Intel nodes), the load before it
+  (`loadavg_before`), free memory per NUMA node (`mem_free_node*_kb`) and the
+  node's counters over the run (`vmstat_*`: pages placed on another NUMA node
+  (`numa_other`, `numa_miss`), huge pages got or refused (`thp_fault_alloc`,
+  `thp_fault_fallback`), memory reclaim and compaction). Unexplained slow runs
+  (dell3's job 297, hopper's drift) can then be traced.
 - **Jobs leave nothing on the node.** The datasets live only in
   `~/datasets` on the login node's /home (every checkout links to it). `job.sh`
   and `build.sh` point `TMPDIR` at a folder of the job (`/tmp/dt-<job>.*`;
