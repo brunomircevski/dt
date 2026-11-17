@@ -15,7 +15,7 @@
 set -euo pipefail
 CASES="$1" REPS="${2:-3}"
 cd "$SLURM_SUBMIT_DIR"
-export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0
+. bench/cluster/gpu80.sh  # an 80 GB GPU, or stop
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 CORES="$(nproc)"
 echo "# $(hostname), $CORES CPUs, job ${SLURM_JOB_ID:-}, $(date '+%F %T'), load $(cut -d' ' -f1-3 /proc/loadavg)"

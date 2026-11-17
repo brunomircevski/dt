@@ -20,7 +20,7 @@ mapfile -t variants < <(grep -v '^\s*#' "$VARIANTS" | grep -v '^\s*$')
 mapfile -t cases < <(grep -v '^\s*#' "$CASES" | grep -v '^\s*$')
 [ -f "$OUT/times.csv" ] || echo "label,case,round,run,train_ms,sha256" > "$OUT/times.csv"
 echo "job ${SLURM_JOB_ID:-} on $(hostname) $(date '+%F %T'): ${#variants[@]} variants, ${#cases[@]} cases, $ROUNDS rounds x $REPEAT"
-nvidia-smi --query-gpu=index,name,pci.bus_id --format=csv,noheader 2>/dev/null
+. "${SLURM_SUBMIT_DIR:-.}/bench/cluster/gpu80.sh"  # an 80 GB GPU, or stop (submitted from the repository root)
 for ((round = 1; round <= ROUNDS; ++round)); do
   for c in "${cases[@]}"; do
     IFS='|' read -r cname cargs cdata <<< "$c"
