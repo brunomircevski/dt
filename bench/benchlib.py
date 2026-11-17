@@ -557,8 +557,11 @@ def _built_on(commit, base):
 
 def out_of_date(commit, host, impl=None, gpu_index=None):
     """True if a result of this build (a commit, `git describe` or not) on this host is from
-    before the final protocol, from a retired host (dell1), or its build is unknown."""
-    commit = (commit or "").strip().removesuffix("-dirty")
+    before the final protocol, from a retired host (dell1) or another GPU than the
+    node's fixed one, built from uncommitted code (-dirty), or its build is unknown."""
+    commit = (commit or "").strip()
+    if commit.endswith("-dirty"):  # built from uncommitted code: not reproducible
+        return True
     commit = commit.rsplit("-g", 1)[-1] if "-g" in commit else commit
     node = (host or "").split(".")[0]
     if node in RETIRED_HOSTS:

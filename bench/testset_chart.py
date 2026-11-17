@@ -245,6 +245,11 @@ def chart(dataset, runs, out, notes={}):
             rerun = runs[name].get("rerun")
             warn = problems(rows, f"old build; rerun {'queued' if rerun == 'queued' else 'running'}" if rerun
                             else note)
+            # a run that failed or timed out is left out of the mean: say so (a timeout
+            # drops the slowest run, so the mean would read low)
+            bad = [r for r in runs[name]["cases"].get(protocol, []) if r["status"] != "ok"]
+            if bad:
+                warn = [f"{len(bad)} of {len(bad) + len(rows)} runs {B.failure(bad[0])}, not in the mean"] + warn
             warned = warned or bool(warn)
             stale = B.rows_out_of_date(rows, runs[name]["machine"])
             stale_bars, all_bars = stale_bars + stale, all_bars + 1

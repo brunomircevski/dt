@@ -43,7 +43,7 @@ Rules:
 | | Start-up (allowed, before the timer, reported separately) | Warm-up (forbidden) |
 |---|---|---|
 | What it is | Preparation that does not depend on the data | Running real training code before the timed fit |
-| Examples | process launch, interpreter/JVM/R start, imports, CUDA context creation, eager loading of GPU kernels (`CUDA_MODULE_LOADING=EAGER`), creating **empty** memory pools and staging buffers | a fit on a few rows, a full-size untimed fit, pre-growing a memory pool to the data's size, running the split kernels once |
+| Examples | process launch, interpreter/JVM/R start, imports, the bare CUDA context (for every GPU tool the only GPU start-up before the timer, since 2026-11-17: kernel loading, memory pools and staging buffers are timed) | a fit on a few rows, a full-size untimed fit, pre-growing a memory pool to the data's size, running the split kernels once |
 | Why | The tool needs it once per process, whatever the data, and every real program pays it before its first tree | It leaves the JIT compiled, memory pools grown and caches filled, so the timed fit is "the second fit in a process", not "running the tool once" |
 
 **Supplement (2026-11-17, user-approved): the warm variant.** The rule above
@@ -97,13 +97,13 @@ yet, so do not invent one. Mention in the docs that they come later.
 | Tool | Start-up (not timed, reported) | Timed | Status |
 |---|---|---|---|
 | ./tree `--serial`, `--multicore`, `--simple` | none | `train total`: presort and build | already correct |
-| ./tree `--gpu`, `--hybrid` | CUDA context, 2 MiB memory pool, pinned staging buffers (`gpuPrepare`, [src/build/gpu_grower.cu:1863](src/build/gpu_grower.cu)), printed as `gpu startup` | `train total`: GPU setup and upload, presort, build | correct; check the binary-input change (§3.1) |
+| ./tree `--gpu`, `--hybrid` | the CUDA context alone (`gpuPrepare`, while the input loads), printed as `gpu startup` | `train total`: GPU setup (lazy kernel loading, memory pool, page-locked staging buffers, copy threads, `--hybrid`'s hand-off buffers) and upload, presort, build | done (17d8b2f3) |
 | scikit-learn | interpreter start and imports | `DecisionTreeClassifier.fit` | warm-up removed in e3362b96; remove its code (§3.2) |
 | rpart | R start, `library(rpart)` | `rpart()` | same |
 | Weka J48 | JVM start, class loading of the adapter | `buildClassifier` (JIT compilation during it stays in) | same |
 | YaDT 1 and 48 threads | process start | dTcmd's `total time` minus its `load time` (CSV parse), which is its indexing, plus the sum of its per-tree `time` fields (build) ([bench/run.py:305](bench/run.py)) | correct |
-| cuML | Python start, imports, CUDA context, eager kernels; RMM left as cuML's default, not reconfigured or pre-grown | `fit` from host float32 arrays: copy, binning, build, and any allocation `fit` makes | **to change** (§3.3) |
-| XGBoost | Python start, imports, CUDA context, eager kernels | `QuantileDMatrix` from host arrays plus `train` | **to change** (§3.3) |
+| cuML | Python start, imports, the CUDA context; RMM left as cuML's default, not reconfigured or pre-grown | `fit` from host float32 arrays: lazy kernel loading, copy, binning, build, and any allocation `fit` makes | done (§3.3) |
+| XGBoost | Python start, imports, the CUDA context | `QuantileDMatrix` from host arrays plus `train` (lazy kernel loading included) | done (§3.3) |
 
 **The JIT question for J48.** Not warming up the JVM is deliberate. HotSpot
 compiles a method after a few thousand calls or loop iterations, which takes
@@ -133,8 +133,8 @@ Replace the `\plan{...}` of "Protocol and Measurement" in
 > training work (host-to-device transfer, memory allocation including pool
 > growth, presorting or binning, tree construction) and exclude reading the
 > input file and runtime start-up (process launch, interpreter or JVM start,
-> CUDA context creation, kernel loading, creation of empty memory pools); the
-> GPU start-up is reported separately. Each case is run 10 times (3 times where a run
+> CUDA context creation); GPU kernel loading, memory pools and staging buffers
+> are timed for every GPU tool, and the CUDA context is reported separately. Each case is run 10 times (3 times where a run
 > takes over an hour) in shuffled order on an exclusively allocated node, and
 > we report the mean.
 

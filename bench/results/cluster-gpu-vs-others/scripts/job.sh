@@ -21,9 +21,9 @@
 #   RUSAGE=<dt clone>/bench/.tools/rusage   the launcher run.py uses (peak RSS,
 #     CPU time); final.sh sets it. wall_seconds is from just before the launch
 #     to the exit, as run.py's.
-#   NUMA_NODE=1   the first GPU on NUMA node 1. Without it the job takes the GPU
-#     on the NUMA node with the most free memory, as ./tree's
-#     bench/cluster/job.sh does (hopper: node 1). Nothing is bound: every
+#   NUMA_NODE=1   the first GPU on NUMA node 1. Without it the job takes the
+#     node's fixed GPU, as ./tree's bench/cluster/job.sh does (hopper GPU 2 on
+#     node 1, ampere GPU 0 on node 0; another GPU stops the job unless GPU_ANY=1). Nothing is bound: every
 #     library runs on its default threads with every CPU of the node and
 #     first-touch memory, as ./tree's CUDA runs.
 #   REPLACE=1   first moves the IMPLS' earlier rows out of each dataset's

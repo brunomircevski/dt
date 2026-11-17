@@ -478,6 +478,13 @@ def ram_modules():
             and d.get("CONFIGURED_SPEED_MTS")]
 
 
+def file_sha256(path):
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def machine_info(args):
     cpus = sorted(Path("/sys/devices/system/cpu").glob("cpu[0-9]*"),
                   key=lambda p: int(p.name[3:]))
@@ -509,6 +516,11 @@ def machine_info(args):
             "tree_git": COMMIT,
             "tree_binary": str(B.TREE),
             "tree_cuda_binary": str(B.TREE_CUDA),
+            # what ran, whatever the commit stamp says: the binaries' SHA-256 and the
+            # commit build.sh built them from (build/COMMIT)
+            "tree_binary_sha256": file_sha256(B.TREE),
+            "tree_cuda_binary_sha256": file_sha256(B.TREE_CUDA),
+            "tree_build_commit": read_text(B.ROOT / "build" / "COMMIT"),
             "nvcc": command_output([os.environ.get("NVCC", "/opt/cuda/bin/nvcc"), "--version"])
             .splitlines()[-1],
             "gpu": command_output(["nvidia-smi", "--query-gpu=name,memory.total,driver_version,"
@@ -652,6 +664,10 @@ def main():
                         help="read the tool's input files into the page cache right before every "
                              "process (pinned as the run, outside its wall time) and drop them "
                              "after it (end-to-end benchmark); instead of --drop-cache")
+    parser.add_argument("--spin", type=float, default=0,
+                        help="seconds of every CPU busy (untimed) right before the first run, "
+                             "after the dataset check: a node idle for a while runs its first "
+                             "seconds slow (powersave governor)")
     parser.add_argument("--timeout", type=float, default=1800, help="seconds per process")
     parser.add_argument("--cooldown", type=float, default=0, help="seconds of rest between processes")
     parser.add_argument("--java-heap", default=None, help="JVM -Xmx (default: half of RAM)")
@@ -858,6 +874,12 @@ def main():
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, stop)
 
+    if args.spin > 0:  # untimed: wake every CPU after the single-threaded dataset check
+        spinners = [subprocess.Popen(["timeout", str(args.spin), "sh", "-c", "while :; do :; done"])
+                    for _ in range(os.cpu_count() or 1)]
+        for p in spinners:
+            p.wait()
+        print(f"every CPU busy for {args.spin:g} s before the first run (untimed)")
     rng = random.Random(args.seed)
     print(f"{len(cases)} cases x {args.reps} run(s), then {len(impls_used)} footprint "
           f"run(s) x {args.reps}: {total} processes. Time left is shown once every case "

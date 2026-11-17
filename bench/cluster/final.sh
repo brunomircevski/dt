@@ -16,7 +16,7 @@
 # Every run is one fresh process that trains one tree, no warm-up
 # (BENCHMARK-CHANGES.MD, section 1).
 # -m RUNS: runs per case for every kind (default: 10, and 3 where one process
-#   takes over an hour: --simple on full ECBDL'14 and SOREL-20M; run.py also
+#   trains for over an hour: --simple on full ECBDL'14 and SOREL-20M; run.py also
 #   stops any case at 3 runs whose first run took over an hour, e.g. J48 and
 #   maybe rpart on MNIST8M).
 # -N NODES: comma-separated, only these nodes' chains are checked and submitted
@@ -47,7 +47,7 @@
 #   hopper   gpu, hybrid, profiling, gpulibs, e2e      ampere   gpu, hybrid, gpulibs
 #   epyc1    cpu, scaling, profiling, serial (MNIST8M, SOREL 4M), simple (short ones), e2e
 #   epyc2    vs, serial (the other datasets), simple (ECBDL'14, SOREL, SOREL 4M)
-#   dell4    cpu, scaling, profiling (dell-512GB: one day a job at most)
+#   dell4    cpu and scaling, then profiling (dell-512GB: one day a job at most)
 #   dell2    serial (ECBDL'14 15M, SOREL 4M), simple (ECBDL'14, SOREL 4M)
 #   dell3    serial (MNIST8M, chess, HIGGS, SUSY; then full ECBDL'14 and SOREL),
 #            simple (the others; then full SOREL)
@@ -99,6 +99,10 @@ CODE=(src Makefile bench/*.py bench/adapters bench/cluster bench/datasets.toml b
 git diff --quiet HEAD -- "${CODE[@]}" ||
   { echo "uncommitted changes in ${CODE[*]}: measure a commit" >&2; exit 1; }
 export TREE_GIT_DESCRIBE="$(git describe --always --abbrev=12)"
+# The binaries must be built from this code (build.sh writes build/COMMIT).
+BUILT="$(cat build/COMMIT 2>/dev/null)"; BUILT="${BUILT%-dirty}"
+{ [ -n "$BUILT" ] && git diff --quiet "${BUILT##*-g}" HEAD -- src Makefile; } ||
+  { echo "./tree is built from ${BUILT:-an unknown commit}, not this src/: rebuild (bench/cluster/build.sh)" >&2; exit 1; }
 PLANS=bench/cluster/plans
 mkdir -p "$PLANS"
 P=cart_depth10,c45_depth10_unpruned
@@ -205,7 +209,7 @@ if want profiling; then profile hopper-2 cuda hopper; profile hopper-2 gpuonly h
 for node in epyc dell; do
   if want cpu; then for d in $CPU_DATA; do plan "$node-1" cpu "$node" "$d"; done; fi
   if want scaling; then for d in $SCALING_DATA; do scaling "$node-1" "$node" "$d"; done; fi
-  if want profiling; then profile "$node-1" cpu "$node"; fi
+  if want profiling; then profile "$node-1b" cpu "$node"; fi  # its own job: dell4's are one day at most
 done
 # --serial: the big ones where the memory is, the rest spread over epyc1/epyc2 and dell2-3
 if want serial; then
@@ -261,9 +265,9 @@ hybrid_runs() {
 declare -A CHAIN=(
   [hopper]="hopper hybrid hopper-2 gpulibs hopper-4"
   [ampere]="ampere hybrid gpulibs"
-  [epyc1]="epyc-1 epyc-2 epyc-3 epyc-4"
+  [epyc1]="epyc-1 epyc-1b epyc-2 epyc-3 epyc-4"
   [epyc2]="epyc2-1 epyc2-2 epyc2-3"
-  [dell4]="dell-1"
+  [dell4]="dell-1 dell-1b"
   [dell2]="dell2-1 dell2-2"
   [dell3]="dell3-1 dell3-2 dell-2 dell-3"
 )

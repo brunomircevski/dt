@@ -33,4 +33,7 @@ mkdir -p bench/.tools
   cc -O2 -static -Wall -o bench/.tools/rusage bench/adapters/rusage.c 2>/dev/null ||
   cc -O2 -Wall -o bench/.tools/rusage bench/adapters/rusage.c
 /usr/local/cuda/bin/cuobjdump --list-elf tree | sed 's/^/kernels: /'
+# the commit these binaries are built from (run.py records it in machine.json;
+# final.sh refuses to submit when src/ or the Makefile changed since)
+[ -z "${TREE_GIT_DESCRIBE:-}" ] || echo "$TREE_GIT_DESCRIBE" > build/COMMIT
 echo "done $(date '+%F %T')"

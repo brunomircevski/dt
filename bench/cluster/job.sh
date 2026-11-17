@@ -142,13 +142,15 @@ echo "runs per case: $RUNS"
 # The page cache: the datasets leave it before every process (--drop-cache),
 # except end to end (E2E=1, cluster-end-to-end): the input is read into it
 # right before every process and dropped after it (--prefetch), no
-# evaluation, no footprint runs.
+# evaluation, no footprint runs. --spin: every CPU busy for SPIN s (default 10)
+# right before the first run, after run.py's single-threaded dataset check
+# (minutes on the big sets), which leaves the other CPUs idle.
 CACHE=(--drop-cache)
 [ -z "${E2E:-}" ] || CACHE=(--prefetch --no-eval --no-baseline)
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
   --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} "${CACHE[@]}" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \
-  ${RUN_EXTRA:-} ${WARM_UP:+--warm-up}
+  --spin "${SPIN:-10}" ${RUN_EXTRA:-} ${WARM_UP:+--warm-up}
 
 if [ -z "${E2E:-}" ]; then
   step "3/3 tables and CSV files"

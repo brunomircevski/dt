@@ -113,7 +113,7 @@ the tool.
 |---|---|---|
 | **1. Runtime start, exit and other** | exec, dynamic linking, interpreter/JVM/R start, imports, `library()`, class loading, process exit, and any work not covered by steps 2–5 | **the remainder:** total wall time (from the launcher, below) minus the non-overlapping time of steps 2–5. No clock comparison across processes is needed. |
 | **2. Read data** | file → the tool's in-memory input: NumPy arrays, R data.frame, Weka `Instances`, YaDT's table, ./tree's columns | the tool's monotonic clock around its reading code |
-| **3. GPU start-up** | ./tree (`--gpu-startup context`, the rule of every timing run since 2026-11-17, so its training time equals the other benchmarks'): the CUDA context; its kernels (lazy), memory pool and staging buffers are made in its timed GPU setup ("prepare"); cuML/XGBoost: the CUDA context (their kernels load lazily inside the fit) | ./tree: `gpu startup`; cuML/XGBoost: the new start-up phase of `gpubench.py` |
+| **3. GPU start-up** | ./tree (the rule of every timing run since 2026-11-17, so its training time equals the other benchmarks'): the CUDA context; its kernels (lazy), memory pool and staging buffers are made in its timed GPU setup ("prepare"); cuML/XGBoost: the CUDA context (their kernels load lazily inside the fit) | ./tree: `gpu startup`; cuML/XGBoost: the new start-up phase of `gpubench.py` |
 | **4. Prepare** | data-dependent preparation before growing: ./tree's GPU upload (`gpu setup`) and presort; XGBoost's `QuantileDMatrix`; YaDT's indexing | the tool's clock or log |
 | **5. Build** | growing the tree | the tool's clock or log |
 
