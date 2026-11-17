@@ -197,7 +197,8 @@ int run(const Options &options, bool &exitWithoutCleanup) {
     setenv("CUDA_MODULE_LOADING", "EAGER", 0);
   }
   if (usesGpu(options.backend) && !forks) {
-    gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options), contextOnly);
+    gpuReady = std::async(std::launch::async, gpuPrepare, threadCount(options), contextOnly,
+                          options.backend == Backend::Hybrid);
   }
 
   // The calling thread works too, so threads - 1 workers. Loading and
@@ -221,6 +222,12 @@ int run(const Options &options, bool &exitWithoutCleanup) {
     exitWithoutCleanup = true; // the child of the last tree
   }
 
+  if (options.warmUp) { // one untimed tree first: the timed one runs in a warm process
+    TrainTimings warmUpTimings;
+    trainTree(data.train, options, pool.get(), warmUpTimings, /*verbose=*/false);
+    std::cout << "warm-up tree: " << std::fixed << std::setprecision(1)
+              << warmUpTimings.total() * 1000.0 << " ms (not timed)" << std::endl;
+  }
   TrainTimings timings;
   timings.gpuStartupSeconds = gpuStartupSeconds;
   const bool profile = !options.profilePath.empty();

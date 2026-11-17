@@ -330,9 +330,13 @@ private:
   // memory, the upload of the data with the presort, the host arena.
   void setup() {
     // The page-locked staging buffers and the copy threads, sized by
-    // --threads: made by gpuPrepare() before training, or here (timed) with
-    // --gpu-startup context; the first call decides.
+    // --threads, and --hybrid's hand-off buffers: made by gpuPrepare() before
+    // training, or here (timed) with --gpu-startup context; the first call
+    // decides.
     staging().prepare(threadCount(options_));
+    if (options_.backend == Backend::Hybrid) {
+      staging().prepareHandOff();
+    }
     initDevice();
     const bool keepValues = allocateDevice();
     uploadAndPresort(keepValues);
@@ -1688,6 +1692,7 @@ private:
       upload(copyJobs_, jobs);
     }
     staging().prepare();
+    staging().prepareHandOff(); // made by setup() (--hybrid); here only if not
     Staging &staging = dt::staging();
     for (const Piece &piece : pieces) {
       const std::size_t part = ringNext_++ % kRingParts;
@@ -1865,7 +1870,7 @@ private:
 
 } // namespace
 
-double gpuPrepare(unsigned threads, bool contextOnly) {
+double gpuPrepare(unsigned threads, bool contextOnly, bool handOff) {
   const auto start = std::chrono::steady_clock::now();
   CUDA_CHECK(cudaFree(nullptr));
   if (contextOnly) { // the pool and the staging buffers: in setup(), timed
@@ -1887,6 +1892,9 @@ double gpuPrepare(unsigned threads, bool contextOnly) {
   CUDA_CHECK(cudaFreeAsync(warm, cudaStreamPerThread));
   CUDA_CHECK(cudaStreamSynchronize(cudaStreamPerThread));
   staging().prepare(threads);
+  if (handOff) {
+    staging().prepareHandOff();
+  }
   return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 }
 

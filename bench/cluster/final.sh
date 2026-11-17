@@ -190,6 +190,15 @@ for gpu in hopper ampere; do
     for d in $GPU_DATA; do plan "$gpu" cuda "$gpu" "$d"; plan "$gpu" gpuonly "$gpu" "$d"; done
   fi
 done
+# The warm variant of cluster-gpu-vs-others (with gpulibs): ./tree's CART tree
+# trained second in one process (--warm-up), as gpubench.py WARM=1.
+if want gpulibs; then
+  for gpu in hopper ampere; do for d in $GPULIBS_DATA; do for backend in cuda gpuonly; do
+    impl=tree_cuda; [ "$backend" = gpuonly ] && impl=tree_gpu_only
+    line "$gpu" "${OUT:-cluster-gpu-vs-others/warm}" "$backend-$gpu-$d" "$d" "$impl" "$(runs gpulibs "$d")" \
+      cart_depth10 all 14400 "$EXTRA,WARM_UP=1"
+  done; done; done
+fi
 if want profiling; then profile hopper-2 cuda hopper; profile hopper-2 gpuonly hopper; fi
 for node in epyc dell; do
   if want cpu; then for d in $CPU_DATA; do plan "$node-1" cpu "$node" "$d"; done; fi
@@ -321,7 +330,7 @@ chain() {
       cp bench/results/cluster-gpu-vs-others/scripts/{gpubench.py,job.sh} "$G/"
       mkdir -p "$GPULIBS_RESULTS"
       id=$(cd "$G" && IMPLS="cuml xgboost" DATASETS="$GPULIBS_DATA" REPS="$(runs gpulibs x)" DEPTH=10 \
-        FORESTS="1:identical 10:default" RESULTS="$GPULIBS_RESULTS" RUSAGE="$REPO/bench/.tools/rusage" \
+        FORESTS="1:identical 10:default" WARM_FORESTS="1:identical" RESULTS="$GPULIBS_RESULTS" RUSAGE="$REPO/bench/.tools/rusage" \
         sbatch --parsable -J "gdb-final-$node" -p "$partition" -w "$node" --exclusive -t "$limit" \
         ${after:+--dependency=afterany:$after} -o "$GPULIBS_RESULTS/$node.log" job.sh "$node")
     else

@@ -128,6 +128,11 @@ struct Options {
   // tree's GPU-only build) set up 10% (H100 server) to 40% (A100 server) slower:
   // the socket's idle power state slows its host-memory copies.
   double repeatWarmup = 0.0;
+  // --warm-up: train one untimed tree on the loaded data first, then the
+  // timed one in the same process: a warm process (kernels loaded, memory
+  // pools and staging buffers made, caches warm), as a library's second fit
+  // (bench/results/cluster-gpu-vs-others, the warm variant).
+  bool warmUp = false;
 
   std::string dumpPath;   // write the tree as text to a file
   // --no-accuracy: skip the training and test accuracy after training (the

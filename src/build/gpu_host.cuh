@@ -319,13 +319,15 @@ struct Staging {
   static constexpr std::size_t kMinCopyThreads = 8;
   char *buffers[kBuffers] = {};
   // The hand-offs' own (GpuGrower::handOff), one per copy stream, each a
-  // part of the device's hand-off ring.
+  // part of the device's hand-off ring: only --hybrid hands off, so only it
+  // makes them (prepareHandOff(); 256 MB of page-locked memory, tens of ms).
   static constexpr int kHandOffBuffers = 2;
   static constexpr std::size_t kHandOffBytes = std::size_t{128} << 20;
   char *handOff[kHandOffBuffers] = {};
   cudaEvent_t done[kBuffers] = {};
   std::unique_ptr<ThreadPool> copiers; // on the GPU's node, if it is known
   std::once_flag once;
+  std::once_flag handOffOnce;
 
   // `threads` (--threads): at most this many threads copy (the caller
   // included), but at least kMinCopyThreads; the first call decides.
@@ -352,11 +354,6 @@ struct Staging {
           buffers[buffer] = static_cast<char *>(memory);
           CUDA_CHECK(cudaEventCreateWithFlags(&done[buffer], cudaEventDisableTiming));
         }
-        for (char *&buffer : handOff) {
-          void *memory = nullptr;
-          CUDA_CHECK(cudaMallocHost(&memory, kHandOffBytes));
-          buffer = static_cast<char *>(memory);
-        }
       }).join();
       // Without the GPU's node, the caller's pool copies when it has enough
       // threads, else unpinned copiers. Never more than the CPUs this process
@@ -375,6 +372,28 @@ struct Staging {
         copiers = std::make_unique<ThreadPool>(static_cast<unsigned>(copyThreads - 1),
                                                cpus.empty() ? std::function<void()>{} : pin);
       }
+    });
+  }
+
+  // The hand-off buffers (--hybrid), on the GPU's node like the others.
+  void prepareHandOff() {
+    std::call_once(handOffOnce, [this]() {
+      const std::vector<int> cpus = gpuNodeCpus();
+      std::thread([&]() {
+        if (!cpus.empty()) {
+          cpu_set_t set;
+          CPU_ZERO(&set);
+          for (const int cpu : cpus) {
+            CPU_SET(cpu, &set);
+          }
+          pthread_setaffinity_np(pthread_self(), sizeof set, &set);
+        }
+        for (char *&buffer : handOff) {
+          void *memory = nullptr;
+          CUDA_CHECK(cudaMallocHost(&memory, kHandOffBytes));
+          buffer = static_cast<char *>(memory);
+        }
+      }).join();
     });
   }
 

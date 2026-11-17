@@ -290,6 +290,10 @@ def build_command(case, kind, args, scratch, rep=0):
         else:
             binary = B.TREE
             backend = ["--serial"] if threads == 1 else ["--multicore", "--threads", str(threads)]
+        if args.warm_up and impl.startswith("tree"):
+            # the warm variant: one untimed tree first in the same process
+            # (as gpubench.py WARM=1 for the libraries)
+            backend += ["--warm-up"]
         dump = scratch / "tree.dump"
         dump.unlink(missing_ok=True)  # never read a previous run's tree
         predict = evaluate and (args.test_accuracy or not args.train_accuracy_only)
@@ -317,6 +321,8 @@ def build_command(case, kind, args, scratch, rep=0):
                          for name, ms in re.findall(r"^  (load|gpu startup wait|gpu startup|gpu setup|"
                                                     r"presort|build|prune)\s+([\d.]+) ms$",
                                                     stdout, re.M)},
+                      **({"warmup_seconds": float(m.group(1)) / 1000}
+                         if (m := re.search(r"^warm-up tree: ([\d.]+) ms", stdout, re.M)) else {}),
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features),
                       "peak_rss_train_bytes": peak * 1024}
@@ -676,6 +682,10 @@ def main():
                              "libraries; kernels load lazily and the memory pool, staging buffers "
                              "and copy threads are made in the timed setup. full (end to end): "
                              "./tree's own start-up, overlapping the load")
+    parser.add_argument("--warm-up", action="store_true",
+                        help="./tree: train one untimed tree first, then the timed one in the "
+                             "same, now warm process (the warm variant of "
+                             "cluster-gpu-vs-others; rows get warm_up: true)")
     parser.add_argument("--handoff-rows",
                         help="./tree --hybrid (tree_cuda): its --handoff-rows, a number or "
                              "'default' (./tree's own); without it, the value measured best for "
@@ -795,6 +805,7 @@ def main():
                **({"gpu_startup_mode": args.gpu_startup,
                    "cuda_module_loading": "LAZY" if args.gpu_startup == "context" else "EAGER"}
                   if impl in ("tree_cuda", "tree_gpu_only") else {}),
+               **({"warm_up": True} if args.warm_up and impl.startswith("tree") else {}),
                **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "user_seconds",
                                       "system_seconds", "gpu_peak_bytes") if k in run}}
         if run["timed_out"]:

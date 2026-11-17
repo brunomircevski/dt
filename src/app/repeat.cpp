@@ -34,7 +34,8 @@ void warmUp(const Options &options, ThreadPool &threads) {
 std::unique_ptr<ThreadPool> prepareChild(const Options &options) {
   auto pool = std::make_unique<ThreadPool>(threadCount(options) - 1);
   if (usesGpu(options.backend)) {
-    gpuPrepare(threadCount(options), options.gpu.contextOnlyStartup);
+    gpuPrepare(threadCount(options), options.gpu.contextOnlyStartup,
+               options.backend == Backend::Hybrid);
   }
   warmUp(options, *pool);
   return pool;

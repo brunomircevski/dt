@@ -3,7 +3,8 @@
 data, does the library's start-up, fits exactly one model (one tree, or one
 forest of TREES trees) under the timer, then (EVAL=1) evaluates it; appends one
 JSON line to OUT and saves the test predictions. No warm-up fit: ten runs are
-ten executions of this command (BENCHMARK-CHANGES.MD, section 1).
+ten executions of this command (BENCHMARK-CHANGES.MD, section 1). The warm
+variant (WARM=1) first makes one untimed identical fit in the same process.
 
   gpubench.py IMPL DATASET CASE OUT PRED_DIR [TREES [DEPTH]]
     IMPL     cuml | xgboost
@@ -73,6 +74,10 @@ LABEL = None  # XGBoost's labels, made by main() before the timer
 EVAL = os.environ.get("EVAL", "1") == "1"
 BINS = {"cuml": 128, "xgboost": 256}  # each library's default
 FOREST = os.environ.get("FOREST", "identical")
+# WARM=1, the warm variant: one untimed fit, the same as the timed one on the
+# same data, first in the same process (kernels loaded, allocator caches and
+# the driver's mappings made); then the timed fit. ./tree: --warm-up.
+WARM = os.environ.get("WARM", "0") == "1"
 assert FOREST in ("identical", "default"), FOREST
 
 
@@ -334,6 +339,15 @@ def main():
     global LABEL
     LABEL = xgb_labels(y) if impl == "xgboost" else None  # untimed, see xgb_labels
 
+    warmup = None
+    if WARM:
+        t = time.perf_counter()
+        model, _ = fit(X, y, case, TREES)
+        del model
+        import gc
+        gc.collect()
+        warmup = time.perf_counter() - t
+
     t = time.perf_counter()
     model, timing = fit(X, y, case, TREES)
     seconds = time.perf_counter() - t
@@ -347,7 +361,9 @@ def main():
            "host": socket.gethostname(), "cpus": cpu_list(), "gpu": gpu_name,
            "gpu_index": os.environ.get("CUDA_VISIBLE_DEVICES"),
            "cuda_module_loading": os.environ.get("CUDA_MODULE_LOADING"),
-           "eval": EVAL, "time": time.strftime("%F %T")}
+           "eval": EVAL, "warm": WARM, "time": time.strftime("%F %T")}
+    if WARM:
+        row["warmup_seconds"] = warmup
     if impl == "cuml":
         row["n_streams"] = n_streams()
     if EVAL:

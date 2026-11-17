@@ -10,7 +10,8 @@
 # 4 up to the node's CPU count (scaling.sh). timeout: seconds per ./tree process
 # (default 3600). RUN_EXTRA (environment): more run.py arguments, e.g.
 # --profile (profile.sh). E2E=1 (environment): the end-to-end runs (see
-# below). ACCURACY (environment, submit.sh -e): run.py's
+# below). WARM_UP=1 (environment): run.py --warm-up, ./tree's warm variant
+# (one untimed tree first in the same process; cluster-gpu-vs-others/warm). ACCURACY (environment, submit.sh -e): run.py's
 # --test-accuracy instead of the default --train-accuracy-only. NUMA_NODE (environment, submit.sh -n): the GPU
 # is the first one attached to that NUMA node instead of GPU 0. CUDA runs
 # always get one (below) and use every CPU of the node, that node's first,
@@ -38,17 +39,21 @@ echo "log: $OUT/run.log, job $SLURM_JOB_ID on $(hostname), started $(date '+%F %
 # through --exclusive, and ./tree uses GPU 0 in nvidia-smi's (PCI) order (with
 # NUMA_NODE the first on that node), the GPU whose memory run.py samples.
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0
-# CUDA runs use both sockets: their GPU is on the NUMA node of a GPU with the
-# most free memory (hopper: node 1, node 0's memory was taken in 2026-10), its
+# CUDA runs use both sockets: their GPU is a GPU with the most memory, on the
+# NUMA node with the most free memory of those (ampere: an A100 80 GB on node 0;
+# hopper: node 1, node 0's memory was taken in 2026-10), its
 # CPUs come first and the rest follow (on ampere, CUDA hybrid at no depth limit
 # was up to 1.5x faster on both sockets than on the GPU's; 2026-11-06).
-CUDA=; [[ "$IMPLS" == *tree_cuda* || "$IMPLS" == *tree_gpu_only* ]] && CUDA=1
+CUDA=; [[ "$IMPLS" == *tree_cuda* || "$IMPLS" == *tree_gpu_only* || "$IMPLS" == *cuml* || "$IMPLS" == *xgboost* ]] && CUDA=1
 if [ -z "${NUMA_NODE:-}" ] && [ -n "$CUDA" ]; then
-  NUMA_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
-    while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
-    while read -r node; do
-      numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4, n }'
-    done | sort -rn | head -1 | cut -d' ' -f2)"
+  # The node of a GPU with the most memory (ampere: GPUs 0-1 are A100 80 GB
+  # on node 0, GPUs 2-3 A100 40 GB on node 1; free memory alone picked node 1
+  # on 2026-11-17), then of those the node with the most free memory.
+  NUMA_NODE="$(nvidia-smi --query-gpu=memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
+    while IFS=', ' read -r total bus; do
+      node="$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")"
+      echo "$total $(numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4 }') $node"
+    done | sort -k1,1nr -k2,2nr | head -1 | cut -d' ' -f3)"
   [ -n "$NUMA_NODE" ] || { echo "no NUMA node with a GPU found" >&2; exit 1; }
 fi
 if [ -n "${NUMA_NODE:-}" ] &&
@@ -72,12 +77,19 @@ MEMBIND=()
 if [ -n "${NUMA_NODE:-}" ]; then
   [ -n "$CUDA" ] || MEMBIND=(--membind "$NUMA_NODE")
   # nvidia-smi's bus id (00000000:2A:00.0) ends in the sysfs one (0000:2a:00.0).
-  gpu="$(nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader | tr A-Z a-z |
-    while IFS=', ' read -r index bus; do
-      [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$NUMA_NODE" ] && { echo "$index"; break; }
-    done || true)"
+  gpu="$(nvidia-smi --query-gpu=index,memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
+    while IFS=', ' read -r index total bus; do  # the node's GPU with the most memory, the first on a tie
+      [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$NUMA_NODE" ] && echo "$total $index"
+    done | sort -s -k1,1nr | head -1 | cut -d' ' -f2)"
   [ -n "$gpu" ] || { echo "no GPU on NUMA node $NUMA_NODE" >&2; exit 1; }
   CUDA_VISIBLE_DEVICES="$gpu"
+fi
+if [ -n "$CUDA" ]; then
+  # Every GPU run is on an 80 GB card (ampere also has two A100 40 GB, GPUs
+  # 2-3): a smaller GPU stops the job (GPU_MIN_MIB, default 80000).
+  gpu_mib="$(nvidia-smi --id="$CUDA_VISIBLE_DEVICES" --query-gpu=memory.total --format=csv,noheader,nounits)"
+  [ "${gpu_mib:-0}" -ge "${GPU_MIN_MIB:-80000}" ] ||
+    { echo "GPU $CUDA_VISIBLE_DEVICES has ${gpu_mib:-?} MiB, under ${GPU_MIN_MIB:-80000}: not an 80 GB card" >&2; exit 1; }
 fi
 export NVCC=/usr/local/cuda/bin/nvcc LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export PYTHONUNBUFFERED=1
@@ -124,7 +136,7 @@ CACHE=(--drop-cache)
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
   --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} "${CACHE[@]}" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \
-  ${RUN_EXTRA:-}
+  ${RUN_EXTRA:-} ${WARM_UP:+--warm-up}
 
 if [ -z "${E2E:-}" ]; then
   step "3/3 tables and CSV files"

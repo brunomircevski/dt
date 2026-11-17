@@ -64,8 +64,9 @@ std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &optio
 // thread, e.g. while the dataset loads, so training does not wait for it.
 // `threads`: the most CPU threads its staged copies use (the caller included).
 // `contextOnly` (--gpu-startup context): the CUDA context alone; the rest is
-// made in the timed setup (GpuGrower::setup).
+// made in the timed setup (GpuGrower::setup). `handOff` (--hybrid): also the
+// page-locked hand-off buffers (256 MB), which --gpu never uses.
 // Returns its duration in seconds (0 in the CPU-only build).
-double gpuPrepare(unsigned threads, bool contextOnly = false);
+double gpuPrepare(unsigned threads, bool contextOnly = false, bool handOff = false);
 
 } // namespace dt

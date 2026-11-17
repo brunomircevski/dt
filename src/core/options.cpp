@@ -124,7 +124,9 @@ void printUsage(const char *program) {
       << "                           as a fresh process's only tree, and print each one's\n"
       << "                           time and Unix start/end\n"
       << "  --repeat-warmup S        with --repeat: keep the threads busy for S seconds\n"
-      << "                           before each tree (as the CSV load does)\n";
+      << "                           before each tree (as the CSV load does)\n"
+      << "  --warm-up                train one untimed tree first, then the timed one\n"
+      << "                           in the same (now warm) process\n";
 }
 
 namespace {
@@ -258,6 +260,8 @@ bool applyCommandLine(int argc, char *argv[], Options &options) {
       options.cart.alpha = options.c45.confidence = value;
     } else if (arg == "--repeat") {
       options.repeat = parseCount(arg, args.value(arg));
+    } else if (arg == "--warm-up") {
+      options.warmUp = true;
     } else if (arg == "--repeat-warmup") {
       options.repeatWarmup = parseReal(arg, args.value(arg));
     } else if (arg == "--holdout") {
@@ -314,6 +318,9 @@ void validateOptions(const Options &options) {
   }
   if (options.repeat > 1 && !options.profilePath.empty()) {
     throw std::runtime_error("--profile traces one tree: use it without --repeat");
+  }
+  if (options.warmUp && (options.repeat > 0 || !options.profilePath.empty())) {
+    throw std::runtime_error("--warm-up: not with --repeat or --profile");
   }
   if (options.algorithm == Algorithm::Cart) {
     if (options.cart.prune && options.cart.alpha < 0.0) {

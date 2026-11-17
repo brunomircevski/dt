@@ -14,6 +14,9 @@
 # Environment (all optional):
 #   IMPLS="cuml xgboost"  DATASETS="higgs mnist8m"  REPS=10  DEPTH=10
 #   FORESTS="1:identical 10:default"
+#   WARM_FORESTS="1:identical"   also these cases warm (gpubench.py WARM=1: one
+#     untimed identical fit first in the same process, then the timed one);
+#     default none
 #   RESULTS=$HOME/gpu-dt-bench/results   where results go
 #   RUSAGE=<dt clone>/bench/.tools/rusage   the launcher run.py uses (peak RSS,
 #     CPU time); final.sh sets it. wall_seconds is from just before the launch
@@ -35,7 +38,7 @@
 #SBATCH -J gdb-bench
 set -uo pipefail
 NODE="$1" REPS="${REPS:-10}" IMPLS="${IMPLS:-cuml xgboost}" DATASETS="${DATASETS:-higgs mnist8m}"
-DEPTH="${DEPTH:-10}" FORESTS="${FORESTS:-1:identical}"
+DEPTH="${DEPTH:-10}" FORESTS="${FORESTS:-1:identical}" WARM_FORESTS="${WARM_FORESTS:-}"
 B=$HOME/gpu-dt-bench RESULTS="${RESULTS:-$HOME/gpu-dt-bench/results}"
 DATA_ROOT="${DATA_ROOT:-$HOME/datasets}"
 SCRATCH=$(mktemp -d /tmp/gdb.XXXXXX)  # node-local tmpfs
@@ -49,21 +52,29 @@ trap 'exit 143' TERM INT
 export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0 PYTHONUNBUFFERED=1 DATA_ROOT
 # Start-up: the kernels load with the CUDA context, before the timer.
 export CUDA_MODULE_LOADING="${CUDA_MODULE_LOADING:-LAZY}"  # CUDA's default; EAGER: see BENCHMARK.md "Time"
-if [ -z "${NUMA_NODE:-}" ]; then  # the GPU on the node with the most free memory
-  NUMA_NODE="$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader | tr A-Z a-z |
-    while read -r bus; do cat "/sys/bus/pci/devices/${bus: -12}/numa_node"; done | sort -u |
-    while read -r node; do
-      numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4, n }'
-    done | sort -rn | head -1 | cut -d' ' -f2)"
+if [ -z "${NUMA_NODE:-}" ]; then  # the GPU with the most memory (see bench/cluster/job.sh)
+  # The node of a GPU with the most memory (ampere: GPUs 0-1 are A100 80 GB
+  # on node 0, GPUs 2-3 A100 40 GB on node 1; free memory alone picked node 1
+  # on 2026-11-17), then of those the node with the most free memory.
+  NUMA_NODE="$(nvidia-smi --query-gpu=memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
+    while IFS=', ' read -r total bus; do
+      node="$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")"
+      echo "$total $(numactl -H | awk -v n="$node" '$1 == "node" && $2 == n && $3 == "free:" { print $4 }') $node"
+    done | sort -k1,1nr -k2,2nr | head -1 | cut -d' ' -f3)"
 fi
 if [ -n "${NUMA_NODE:-}" ]; then
   # nvidia-smi's bus id (00000000:2A:00.0) ends in the sysfs one (0000:2a:00.0).
-  CUDA_VISIBLE_DEVICES="$(nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader | tr A-Z a-z |
-    while IFS=', ' read -r index bus; do
-      [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$NUMA_NODE" ] && { echo "$index"; break; }
-    done || true)"
+  CUDA_VISIBLE_DEVICES="$(nvidia-smi --query-gpu=index,memory.total,pci.bus_id --format=csv,noheader,nounits | tr A-Z a-z |
+    while IFS=', ' read -r index total bus; do  # the node's GPU with the most memory, the first on a tie
+      [ "$(cat "/sys/bus/pci/devices/${bus: -12}/numa_node")" = "$NUMA_NODE" ] && echo "$total $index"
+    done | sort -s -k1,1nr | head -1 | cut -d' ' -f2)"
   [ -n "$CUDA_VISIBLE_DEVICES" ] || { echo "no GPU on NUMA node $NUMA_NODE" >&2; exit 1; }
 fi
+# Every GPU run is on an 80 GB card (ampere also has two A100 40 GB, GPUs
+# 2-3): a smaller GPU stops the job (GPU_MIN_MIB, default 80000).
+gpu_mib="$(nvidia-smi --id="$CUDA_VISIBLE_DEVICES" --query-gpu=memory.total --format=csv,noheader,nounits)"
+[ "${gpu_mib:-0}" -ge "${GPU_MIN_MIB:-80000}" ] ||
+  { echo "GPU $CUDA_VISIBLE_DEVICES has ${gpu_mib:-?} MiB, under ${GPU_MIN_MIB:-80000}: not an 80 GB card" >&2; exit 1; }
 # The CPUs, as ./tree's CUDA runs get them (bench/cluster/job.sh): every CPU
 # of the node, the GPU's NUMA node's first; memory first-touch.
 CPUS="$(cat "/sys/devices/system/node/node$NUMA_NODE/cpulist")$(for n in /sys/devices/system/node/node[0-9]*; do
@@ -73,7 +84,7 @@ PY=$B/venv/bin/python
 RUSAGE="${RUSAGE:-}"
 [ -z "$RUSAGE" ] || [ -x "$RUSAGE" ] || { echo "RUSAGE=$RUSAGE is not executable" >&2; exit 1; }
 echo "job ${SLURM_JOB_ID:-} on $(hostname), $(nproc) CPUs, $(date '+%F %T'), code ${TREE_GIT_DESCRIBE:-unknown}"
-echo "$REPS round(s) of one process per case; cases: $IMPLS x $DATASETS x trees:forest $FORESTS; depth <= $DEPTH; results: $RESULTS"
+echo "$REPS round(s) of one process per case; cases: $IMPLS x $DATASETS x trees:forest $FORESTS${WARM_FORESTS:+, warm: $WARM_FORESTS}; depth <= $DEPTH; results: $RESULTS"
 echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "free memory per NUMA node: $(numactl -H | awk '/ free:/ { printf "%snode %s %d GiB", (n++ ? ", " : ""), $2, $4 / 1024 }')"
 echo "GPU $CUDA_VISIBLE_DEVICES on NUMA node $NUMA_NODE; CPUs $CPUS (taskset, as ./tree's CUDA runs), memory first-touch; CUDA_MODULE_LOADING=$CUDA_MODULE_LOADING"
@@ -108,22 +119,24 @@ done
 # is not C4.5, so C4.5 has no GPU competitor.
 CASES=()
 for dataset in $DATASETS; do for impl in $IMPLS; do for forest in $FORESTS; do
-  CASES+=("$impl $dataset ${forest%%:*} ${forest#*:}")
+  CASES+=("$impl $dataset ${forest%%:*} ${forest#*:} 0")
+done; for forest in $WARM_FORESTS; do
+  CASES+=("$impl $dataset ${forest%%:*} ${forest#*:} 1")
 done; done; done
 
-# one <round> <impl> <dataset> <trees> <forest> [N_STREAMS]: one fresh process,
+# one <round> <impl> <dataset> <trees> <forest> <warm> [N_STREAMS]: one fresh process,
 # its row (gpubench.py's) completed with the launcher's measurements and
 # appended to the dataset's results.jsonl. A process that does not finish in 4
 # hours is reported as such; --foreground keeps it in the job's process
 # group, so scancel stops it.
 one() {
-  local round="$1" impl="$2" dataset="$3" trees="$4" forest="$5" streams="${6:-}"
+  local round="$1" impl="$2" dataset="$3" trees="$4" forest="$5" warm="$6" streams="${7:-}"
   local out=$RESULTS/$dataset/$NODE row=$SCRATCH/row.jsonl usage=$SCRATCH/rusage start end status
   rm -f "$row" "$usage"
   drop_cache "$dataset"
-  echo "=== $(date +%H:%M:%S) round $round: $impl $dataset, $trees tree(s), $forest${streams:+, N_STREAMS=$streams}"
+  echo "=== $(date +%H:%M:%S) round $round: $impl $dataset, $trees tree(s), $forest$([ "$warm" = 1 ] && echo ", warm")${streams:+, N_STREAMS=$streams}"
   start=$(date +%s.%N)
-  FOREST=$forest ${streams:+N_STREAMS=$streams} timeout --foreground 14400 \
+  FOREST=$forest WARM=$warm ${streams:+N_STREAMS=$streams} timeout --foreground 14400 \
     ${RUSAGE:+"$RUSAGE" "$usage"} taskset -c "$CPUS" $PY "$B/gpubench.py" "$impl" "$dataset" cart "$row" "$out/pred" "$trees" "$DEPTH"
   status=$?
   end=$(date +%s.%N)
@@ -140,7 +153,7 @@ print(json.dumps(row))
 EOF
     return 0
   fi
-  echo "{\"failed\": \"$impl $dataset $trees $forest\", \"round\": $round, \"status\": $status, \"n_streams\": \"$streams\"}" |
+  echo "{\"failed\": \"$impl $dataset $trees $forest\", \"warm\": $warm, \"round\": $round, \"status\": $status, \"n_streams\": \"$streams\"}" |
     tee -a "$out/failed.jsonl"
   return $status
 }
@@ -150,11 +163,11 @@ for round in $(seq 1 "$REPS"); do
   mapfile -t order < <(printf '%s\n' "${CASES[@]}" | $PY -c 'import random, sys
 cases = sys.stdin.read().splitlines(); random.Random(int(sys.argv[1])).shuffle(cases); print("\n".join(cases))' "$round")
   for c in "${order[@]}"; do
-    read -r impl dataset trees forest <<< "$c"
-    one "$round" $impl $dataset $trees $forest
+    read -r impl dataset trees forest warm <<< "$c"
+    one "$round" $impl $dataset $trees $forest $warm
     status=$?  # 124: timed out, not worth a second try
     if [ $status -ne 0 ] && [ $status -ne 124 ] && [ "$impl" = cuml ] && [ "$trees" -gt 1 ]; then
-      one "$round" $impl $dataset $trees $forest 1
+      one "$round" $impl $dataset $trees $forest $warm 1
     fi
   done
 done
