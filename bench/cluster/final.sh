@@ -20,6 +20,9 @@
 #   --simple on full ECBDL'14 and SOREL-20M, and in every run.py any case whose
 #   first run trained for over an hour (run.py --long-runs; e.g. J48 and maybe
 #   rpart on MNIST8M). More runs later: -m 20 -l 5.
+# -F: run everything again. Without it a run whose folder already holds it,
+#   complete and current (bench/cluster/have_results.py), is kept: not run, not
+#   moved (plans/kept.txt lists them); so are cuML's and XGBoost's forests.
 # -N NODES: comma-separated, only these nodes' chains are checked and submitted
 #   (default all: hopper ampere epyc1 epyc2 dell2 dell3 dell4).
 # -D DATASETS: comma-separated, only these datasets' runs (plan lines, gpulibs,
@@ -65,13 +68,14 @@
 set -euo pipefail
 ALL_KINDS=gpu,cpu,scaling,serial,simple,vs,gpulibs,profiling,hybrid,e2e
 ALL_NODES=hopper,ampere,epyc1,epyc2,dell2,dell3,dell4
-TEST= SUBMIT=1 RUNS=10 LONG=3 KINDS=$ALL_KINDS NODES=$ALL_NODES ONLY_DATA=
-while getopts "tnm:l:k:N:D:h" option; do
+TEST= SUBMIT=1 RUNS=10 LONG=3 RERUN= KINDS=$ALL_KINDS NODES=$ALL_NODES ONLY_DATA=
+while getopts "tnFm:l:k:N:D:h" option; do
   case "$option" in
     t) TEST=1 ;;
     n) SUBMIT= ;;
     m) RUNS="$OPTARG" ;;
     l) LONG="$OPTARG" ;;
+    F) RERUN=1 ;;
     k) KINDS="$OPTARG" ;;
     N) NODES="$OPTARG" ;;
     D) ONLY_DATA="$OPTARG" ;;
@@ -150,10 +154,28 @@ runs() {
 # line <plan> <dir> <name> <dataset> <impls> <runs> <protocols> <threads> <timeout> [environment]:
 # one line of a batch.sh plan (the first field, a time limit, is not used:
 # the batch job has its own).
-line() { local plan="$1"; shift; echo "- $*" >> "$PLANS/final-$plan.txt"; }
+# A run whose folder already holds it, complete and current (the same command,
+# every case's runs, nothing out of date: have_results.py), is kept, not run
+# again (listed in plans/kept.txt); -F runs everything.
+line() {
+  local plan="$1"; shift
+  if [ -z "$RERUN$TEST" ] &&
+     bench/.venv/bin/python bench/cluster/have_results.py run "$1/$2" "$4" "$6" "$7" "$5" "$LONG" "${9:-}"; then
+    echo "$1/$2" >> "$PLANS/kept.txt"
+    return
+  fi
+  echo "- $*" >> "$PLANS/final-$plan.txt"
+}
 # plan <plan> <backend> <node> <dataset>: a test-set run
 plan() {
   local backend="$2" node="$3" dataset="$4" impls threads timeout=14400
+  # epyc's ./tree runs of the vs datasets are measured in the vs job, interleaved
+  # with the libraries, and copied into cluster-<data> (have_results.py split,
+  # charts.sh): measured once
+  if [ "$node" = epyc ] && want vs && [[ " $VS_DATA " == *" $dataset "* ]] &&
+     [[ "$backend" == cpu || "$backend" == serial || "$backend" == simple ]]; then
+    return
+  fi
   case "$backend" in
     cuda) impls=tree_cuda threads=all ;;
     gpuonly) impls=tree_gpu_only threads=all ;;
@@ -197,7 +219,7 @@ profile() {
   done
 }
 
-rm -f "$PLANS"/final-*.txt
+rm -f "$PLANS"/final-*.txt "$PLANS/kept.txt"
 for gpu in hopper ampere; do
   if want gpu; then
     for d in $GPU_DATA; do plan "$gpu" cuda "$gpu" "$d"; plan "$gpu" gpuonly "$gpu" "$d"; done
@@ -320,6 +342,7 @@ fi
 clash=$(echo "$clash" | sed '/^$/d')
 [ -z "$clash" ] || { echo "already has results (move it away first):"; echo "$clash"; exit 1; } >&2
 ls "$PLANS"/final-*.txt > /dev/null 2>&1 && wc -l "$PLANS"/final-*.txt
+[ ! -s "$PLANS/kept.txt" ] || echo "kept (complete and current, not run again): $(wc -l < "$PLANS/kept.txt") runs, $PLANS/kept.txt"
 ! want hybrid || [ ${#GPU_NODES[@]} -eq 0 ] ||
   echo "hybrid_vs_gpu_only.sh on ${GPU_NODES[*]}: $HYBRID_DATA, $(runs hybrid x) runs a case"
 ! want gpulibs || [ ${#GPU_NODES[@]} -eq 0 ] ||
@@ -349,7 +372,17 @@ chain() {
       want gpulibs || continue
       cp bench/results/cluster-gpu-vs-others/scripts/{gpubench.py,job.sh} "$G/"
       mkdir -p "$GPULIBS_RESULTS"
-      id=$(cd "$G" && IMPLS="cuml xgboost" DATASETS="$GPULIBS_DATA" REPS="$(runs gpulibs x)" DEPTH=10 \
+      local todo= d
+      for d in $GPULIBS_DATA; do  # the forests already there, complete and current, are kept
+        if [ -z "$RERUN$TEST" ] && bench/.venv/bin/python bench/cluster/have_results.py gpulibs \
+             "bench/results/cluster-gpu-vs-others/$d/$node/results.jsonl" cuml,xgboost "$(runs gpulibs x)"; then
+          echo "gpulibs on $node: $d's forests kept" >&2
+          continue
+        fi
+        todo+="${todo:+ }$d"
+      done
+      [ -n "$todo" ] || continue
+      id=$(cd "$G" && IMPLS="cuml xgboost" DATASETS="$todo" REPS="$(runs gpulibs x)" DEPTH=10 \
         FORESTS="10:default" RESULTS="$GPULIBS_RESULTS" RUSAGE="$REPO/bench/.tools/rusage" \
         sbatch --parsable -J "gdb-final-$node" -p "$partition" -w "$node" --exclusive -t "$limit" \
         ${after:+--dependency=afterany:$after} -o "$GPULIBS_RESULTS/$node.log" job.sh "$node")

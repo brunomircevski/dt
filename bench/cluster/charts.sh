@@ -19,6 +19,11 @@ R=bench/results
 paper=1
 [ "${1:-}" = --no-paper ] && paper=
 
+# ./tree's epyc runs of the vs datasets, measured with the libraries: copied into
+# cluster-<data> (final.sh does not run them twice)
+for v in "$R"/cluster-cpu-vs-others/vs-epyc-*/; do
+  [ -e "$v/results.jsonl" ] && $PY bench/cluster/have_results.py split "$v"
+done
 for d in susy higgs mnist8m ecbdl sorel chess; do
   [ -d "$R/cluster-$d" ] && $PY bench/testset_chart.py "$R/cluster-$d"
 done
