@@ -27,7 +27,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
-from chart import GRID, INK, MUTED, NAMES, seconds_tick  # noqa: E402
+import benchlib as B  # noqa: E402
+from chart import GRID, INK, MUTED, NAMES, faded, out_of_date_banner, seconds_tick  # noqa: E402
 from machines_chart import COLORS  # noqa: E402  (the validated backend colours)
 
 DEPTHS = [5, 10, 15, 20, 25, 30, None]  # None: no depth limit
@@ -87,6 +88,9 @@ def default_handoff(features, depth=None):
     return max(rows, 512)
 
 
+STALE = [0, 0]  # out-of-date bars, all bars (panel() counts them)
+
+
 def panel(ax, dataset, entry):
     width = 0.2
     labels = []
@@ -104,8 +108,11 @@ def panel(ax, dataset, entry):
                 means[backend] = mean
                 nodes.setdefault(algorithm, set()).add(rows[0]["nodes"])
                 x = g + (a * 2 + b - 1.5) * width
-                ax.bar(x, mean, width * 0.92, color=tint(COLORS[color_key], LIGHT[algorithm]),
-                       edgecolor=COLORS[color_key], linewidth=0.6, zorder=2)
+                old = B.rows_out_of_date(rows, entry["machine"])
+                STALE[0], STALE[1] = STALE[0] + old, STALE[1] + 1
+                fill, edge = tint(COLORS[color_key], LIGHT[algorithm]), COLORS[color_key]
+                ax.bar(x, mean, width * 0.92, color=faded(fill) if old else fill,
+                       edgecolor=faded(edge) if old else edge, linewidth=0.6, zorder=2)
                 ax.plot([x, x], [min(times), max(times)], color=INK, linewidth=0.8, zorder=3)
             if len(means) == 2:
                 ratio = means["gpuonly"] / means["cuda"]
@@ -189,11 +196,12 @@ def main():
         "threads while the GPU goes on with the next level. GPU only (--gpu): every node, down to the "
         "leaves, on the GPU.\n"
         "Above each pair: GPU-only time / hybrid time (above 1: hybrid faster). Under each group: the tree's nodes "
-        "(the same in both modes). --handoff-rows: ./tree's default unless the title says otherwise (BENCHMARK.md).")
+        "(the same in both modes). --handoff-rows: ./tree's default unless the title says otherwise (BENCHMARK.md)."
+        + ("\n" + B.OUT_OF_DATE_NOTE + " (faded bars)." if STALE[0] else ""))
     fig.text(0.06, 0.012, details, fontsize=7.8, color=MUTED, va="bottom", wrap=True)
     fig.tight_layout(rect=(0.02, 0.09, 1, 0.94), h_pad=3)
     out = args.folder / f"chart-{args.node}.png"
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, **out_of_date_banner(fig, *STALE))
     print(out)
 
 

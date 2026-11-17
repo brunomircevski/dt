@@ -37,6 +37,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 from matplotlib.ticker import FuncFormatter, NullFormatter  # noqa: E402
 
+import benchlib as B  # noqa: E402
+from chart import faded, out_of_date_banner  # noqa: E402
+
 NOTE_CHARS = 215  # footnote characters per line at 8 pt on the 17-inch-wide figure
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 DATASETS = ["higgs", "mnist8m"]
@@ -65,6 +68,7 @@ def summary(run, protocol, impl=None, threads=None):
                     "min": num("time_min"), "max": num("time_max"), "ram": num("peak_rss"),
                     "vram": num("gpu_peak"), "acc": num("test_accuracy"), "nodes": num("nodes"),
                     "host": machine.get("host"), "commit": machine.get("versions", {}).get("tree_git"),
+                    "stale": B.rows_out_of_date([], machine),
                     "date": machine.get("started", "")[:10]}
     return None
 
@@ -89,7 +93,7 @@ def library(root, dataset, node, impl, case, trees, warm=False):
     return {"mean": statistics.mean(t), "sd": statistics.stdev(t) if len(t) > 1 else 0.0, "n": len(t),
             "min": min(t), "max": max(t), "vram": max(r.get("gpu_peak_mib") or 0 for r in rows) * 2**20,
             "acc": last.get("test_accuracy"), "nodes": last.get("nodes"), "host": last.get("host", node),
-            "commit": last.get("commit"), "gpu": last.get("gpu"),
+            "commit": last.get("commit"), "gpu": last.get("gpu"), "stale": B.rows_out_of_date(rows),
             "startup": statistics.mean(r["startup_seconds"] for r in rows) if "startup_seconds" in last else None,
             "module_loading": last.get("cuda_module_loading"),
             "version": last.get("version"), "date": last.get("time", "")[:10]}
@@ -129,9 +133,10 @@ def panel(ax, bars, title):
         if not b:
             ax.text(lo * 1.15, yy, "no run yet", va="center", fontsize=8, color=MUTED, style="italic")
             continue
-        ax.barh(yy, b["mean"], left=lo, height=0.68, color=color, zorder=2)
+        ax.barh(yy, b["mean"], left=lo, height=0.68, color=faded(color) if b.get("stale") else color, zorder=2)
         ax.plot([b["min"], b["max"]], [yy, yy], color=INK, linewidth=1, zorder=3)
-        ax.text(b["max"] * 1.12, yy, label(b), va="center", fontsize=7.8, color=INK)
+        ax.text(b["max"] * 1.12, yy, ("⚠ out of date · " if b.get("stale") else "") + label(b), va="center",
+                fontsize=7.8, color=MUTED if b.get("stale") else INK)
     ax.set_yticks(y, [name for name, _, _ in bars], fontsize=8.5)
     ax.set_xscale("log")
     ax.set_xlim(lo, hi)
@@ -191,7 +196,7 @@ def gpu_warm_bars(res, dataset, algo):
         for n in GPU_COLORS:
             b, c = warm(n), cold(n)
             if b and c:
-                b = {**b, "cold": c["mean"]}
+                b = {**b, "cold": c["mean"], "stale": b["stale"] or c["stale"]}
             bars.append((f"{name}, warm — {GPU_NAMES[n].split(' (')[0]}", GPU_COLORS[n], b))
     return bars
 
@@ -220,6 +225,11 @@ def provenance(grid):
     when = f"{dates[0]} to {dates[-1]}" if len(dates) > 1 else (dates[0] if dates else "?")
     return (f"./tree {', '.join(commits) or '?'}" + (f"; libraries {', '.join(versions)}" if versions else "")
             + f"; nodes {', '.join(hosts)}; run {when}")
+
+
+def stale(grid):
+    """The number of out-of-date bars."""
+    return sum(1 for row in grid for bs in row for *_, b in bs if b and b.get("stale"))
 
 
 WARM = False  # set by draw(): the warm variant's chart
@@ -274,14 +284,15 @@ def draw(kind, res, out):
         "Training time (log scale), excluding reading the data and start-up: bar = mean of the runs, whisker = "
         "fastest to slowest; label: mean (runs), peak memory, test accuracy, tree nodes"
         + (", the cold mean" if WARM else "") + ". " + few_runs(grid, algos),
-        *note.split("\n"), provenance(grid)))
+        *note.split("\n"), provenance(grid), *([B.OUT_OF_DATE_NOTE + "."] if stale(grid) else [])))
     fig.text(0.01, 0.005, text if len(algos) == 2 else "\n".join(
         textwrap.fill(line, NOTE_CHARS * 12 // 17) for line in text.split("\n")),
         fontsize=8, color=MUTED, linespacing=1.5)
     # the footnote's height: 8 pt lines at 1.5 spacing, as a fraction of the figure
     bottom = 0.01 + (text.count("\n") + 1) * 8 * 1.5 / 72 / fig.get_figheight()
     fig.tight_layout(rect=(0, bottom, 1, 0.965), h_pad=3.5, w_pad=2)
-    fig.savefig(out, dpi=140, facecolor="white")
+    fig.savefig(out, dpi=140, facecolor="white",
+                **out_of_date_banner(fig, stale(grid), sum(1 for row in grid for bs in row for *_, b in bs if b)))
     print(out)
     return grid, algos
 
@@ -290,14 +301,14 @@ def write_summary(grid, out, algos=ALGOS):
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["dataset", "algorithm", "implementation", "gpu", "time_mean", "time_sd", "runs", "time_min",
-                    "time_max", "vram_bytes", "test_accuracy", "nodes"])
+                    "time_max", "vram_bytes", "test_accuracy", "nodes", "out_of_date"])
         for d, row in zip(DATASETS, grid):
             for a, bars in zip(algos, row):
                 for name, color, b in bars:
                     impl, gpu = name.split(" — ")
                     if b:
                         w.writerow([d, a, impl, gpu, b["mean"], b["sd"], b["n"], b["min"], b["max"],
-                                    b.get("vram"), b.get("acc"), b.get("nodes")])
+                                    b.get("vram"), b.get("acc"), b.get("nodes"), int(bool(b.get("stale")))])
     print(out)
 
 

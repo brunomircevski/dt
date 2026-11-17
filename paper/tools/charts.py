@@ -24,6 +24,7 @@ Styles:
 
 import csv
 import json
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -42,6 +43,11 @@ ROOT = Path(__file__).resolve().parents[2]
 RES = ROOT / "bench" / "results"
 OUT = ROOT / "paper" / "figs"
 sys.path.insert(0, str(ROOT / "bench"))
+import benchlib as B  # noqa: E402
+
+# Whether each result a figure reads is out of date (benchlib.out_of_date: measured before the
+# final protocol); save() puts a banner on the figure while any is, and starts the next figure.
+USED = []
 
 FULL, HALF = 4.80, 2.35  # inches: LNCS \textwidth and a bit under half of it
 
@@ -98,6 +104,7 @@ def summary(path):
     f = path / "summary.csv"
     if not f.exists():
         return rows
+    USED.append(B.rows_out_of_date([], json.load(open(path / "machine.json"))))
     for r in csv.DictReader(open(f)):
         if r["status"] != "ok":
             continue
@@ -139,9 +146,11 @@ def gpu_other(dataset, impl, algo, host="hopper", trees=1):
     if not f.exists():
         return None
     rows = [json.loads(l) for l in open(f)]
-    rows = [r for r in rows if r["impl"] == impl and r["case"] == algo and r.get("trees") == trees]
+    rows = [r for r in rows if r["impl"] == impl and r["case"] == algo and r.get("trees") == trees
+            and not r.get("warm")]
     if not rows:
         return None
+    USED.append(B.rows_out_of_date(rows))
     t = [r["train_seconds"] for r in rows]
     last = rows[-1]
     return {"time_mean": statistics.mean(t), "time_min": min(t), "time_max": max(t),
@@ -179,6 +188,13 @@ def log_axis(ax, axis="y", lo=None, hi=None):
 
 def save(fig, name):
     OUT.mkdir(exist_ok=True)
+    stale = sum(USED)
+    if stale:
+        what = f"all {len(USED)}" if stale == len(USED) else f"{stale} of {len(USED)}"
+        fig.text(0.0, 1.0, rf"\textbf{{OUT OF DATE}}: {what} results measured before the final protocol; "
+                 "a placeholder until the rerun", ha="left", va="bottom", fontsize=6.5, color=INK,
+                 bbox=dict(boxstyle="round,pad=0.25", fc="#fab219", ec="none"))
+    USED.clear()
     fig.savefig(OUT / f"test-{name}.pdf")
     plt.close(fig)
     print("wrote", OUT / f"test-{name}.pdf")
@@ -343,6 +359,7 @@ def scaling():
         ax.text(25, 1.5, "2nd socket $\\rightarrow$", fontsize=5.5, color=MUTED, va="bottom")
         for ds, m, dl, c in sets:
             f = RES / "cluster-cpu-scaling" / f"cpu-{node}-{ds}" / "scaling.csv"
+            USED.append(B.rows_out_of_date([], json.load(open(f.parent / "machine.json"))))
             end = {}
             for algo in ("cart", "c45"):
                 rr = [x for x in csv.DictReader(open(f)) if x["protocol"] == PROTO[algo]]
@@ -480,6 +497,7 @@ def profile():
     modes = [("cpu-epyc", "EPYC"), ("cpu-dell", "Xeon"), ("gpuonly-hopper", "GPU-Based"),
              ("cuda-hopper", "Hybrid")]
     cases = P.load(RES / "cluster-profiling", datasets)
+    USED.extend(c["stale"] for c in cases.values())
     fig, axes = plt.subplots(1, 2, figsize=(FULL, 2.25), sharey=True)
     for ax, (proto, algo) in zip(axes, P.PROTOCOLS):
         y, ticks = 0, []
@@ -598,6 +616,10 @@ def power_rows():
                     v[k] = x
             key = dict(P_IMPLS)[r["impl"]]
             out[(key, r["node"], r["algo"])] = v
+        for host, _ in P_NODES:  # each node's power job: its machine.txt's commit
+            machine = POWER / "results" / host / "machine.txt"
+            commit = re.search(r"^commit (\S+)", machine.read_text(), re.M) if machine.exists() else None
+            USED.append(B.out_of_date(commit and commit.group(1), host))
     return out
 
 

@@ -30,7 +30,7 @@ import numpy as np  # noqa: E402
 from matplotlib.patches import Patch, Rectangle  # noqa: E402
 
 import benchlib as B  # noqa: E402
-from chart import GRID, INK, MUTED, NAMES  # noqa: E402
+from chart import GRID, INK, MUTED, NAMES, faded, out_of_date_banner  # noqa: E402
 
 DATASETS = ["chess_10m", "chess_50m", "chess_100m", "chess_500m", "chess_1b", "chess_2b",
             "higgs", "ecbdl_15m"]
@@ -214,7 +214,7 @@ def load(root, datasets):
                 traces = [json.load(open(run / row["profile"])) for row in rows]
                 cases[(mode, dataset, protocol)] = {
                     "row": mean_row(rows), "trace": traces[0], "machine": machine, "runs": len(rows),
-                    "parts": mean_parts(traces),
+                    "parts": mean_parts(traces), "stale": B.rows_out_of_date(rows, machine),
                     "plain": mean_row(plain[protocol]) if protocol in plain else None}
     return cases
 
@@ -282,7 +282,7 @@ def draw_panel(ax, cases, datasets, mode, protocol):
         bottom = 0.0
         for key in ordered(parts):
             share = 100 * parts[key] / total
-            color = COLOR[key[0]]
+            color = faded(COLOR[key[0]]) if case["stale"] else COLOR[key[0]]
             ax.add_patch(Rectangle((x - width / 2, bottom), width, share, facecolor=color,
                                    edgecolor="white", linewidth=1.6, zorder=2))
             if key[1] == "GPU":  # GPU work: hatched
@@ -437,13 +437,14 @@ def chart(cases, datasets, out):
         "CART = cart_depth10 (Gini, -d 10, unpruned); C4.5 = c45_depth10_unpruned (gain ratio, "
         "-d 10, unpruned: only C4.5's tidy-up after growing, counted as other). Same trees in "
         "every mode.",
-    ]
+    ] + ([B.OUT_OF_DATE_NOTE + " (faded bars)."] if any(c["stale"] for c in cases.values()) else [])
     y -= 0.004 * unit
     for note in notes:
         lines = textwrap.wrap(note, 400)
         fig.text(0.01, y, "\n".join(lines), fontsize=10.8, color=MUTED, va="top", linespacing=1.35)
         y -= (0.0066 * len(lines) + 0.005) * unit
-    fig.savefig(out, dpi=150, facecolor="white")
+    fig.savefig(out, dpi=150, facecolor="white",
+                **out_of_date_banner(fig, sum(c["stale"] for c in cases.values()), len(cases)))
     print(out)
 
 

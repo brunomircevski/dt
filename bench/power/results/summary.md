@@ -98,14 +98,14 @@ Time per tree (./tree's train time) against the first tree of each process and t
 |---|---|---|---|---|---|
 | Serial-Simple | epyc | CART | 2,328 s | 2,328 s (+0.0%) | 2,316 s (+0.5%) |
 | Serial-Simple | epyc | C4.5 | 2,603 s | 2,603 s (+0.0%) | 2,628 s (-1.0%) |
-| Serial-Opt | epyc | CART | 147 s | 147 s (+0.0%) | 147 s (-0.0%) |
+| Serial-Opt | epyc | CART | 147 s | 147 s (+0.0%) | 148 s (-0.7%) |
 | Serial-Opt | epyc | C4.5 | 149 s | 149 s (+0.0%) | 149 s (+0.4%) |
-| Multicore | epyc | CART | 4.54 s | 4.48 s (+1.4%) | 4.41 s (+3.1%) ! |
-| Multicore | epyc | C4.5 | 4.77 s | 4.69 s (+1.5%) | 4.65 s (+2.6%) |
+| Multicore | epyc | CART | 4.54 s | 4.48 s (+1.4%) | 4.47 s (+1.7%) |
+| Multicore | epyc | C4.5 | 4.77 s | 4.69 s (+1.5%) | 4.73 s (+0.7%) |
 | Serial-Simple | dell | CART | 2,589 s | 2,589 s (+0.0%) | 2,541 s (+1.9%) |
 | Serial-Simple | dell | C4.5 | 2,867 s | 2,867 s (+0.0%) | 2,820 s (+1.7%) |
-| Serial-Opt | dell | CART | 243 s | 243 s (+0.0%) | 256 s (-5.1%) ! |
-| Serial-Opt | dell | C4.5 | 254 s | 254 s (+0.0%) | 266 s (-4.6%) ! |
+| Serial-Opt | dell | CART | 243 s | 243 s (+0.0%) | 252 s (-3.6%) ! |
+| Serial-Opt | dell | C4.5 | 254 s | 254 s (+0.0%) | 261 s (-2.9%) |
 | Multicore | dell | CART | 11.2 s | 11.2 s (-0.2%) | – |
 | Multicore | dell | C4.5 | 13.4 s | 13.4 s (-0.3%) | – |
 | Serial-Simple | ampere | CART | 4,470 s | 4,470 s (+0.0%) | – |

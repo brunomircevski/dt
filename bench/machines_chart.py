@@ -64,7 +64,6 @@ PROTOCOLS = {p: TITLES[p] for p in ("cart_alpha", "c45")}  # the panels; --proto
 # and its thresholds, part of growing; the bars are not split.
 UNPRUNED = {"cart_full", "c45_unpruned", "cart_full_nodepth"}
 # The files ./tree and the evaluation read: equal hashes = the same rows.
-DATA_FILES = ("train.csv", "train.f32", "train.y.i32", "test.f32", "test.y.i32")
 LEFT = 0.215  # figure fraction left of the panels, for the row labels
 # Result directories are <backend>-<machine>-<dataset>; what to call each machine.
 MACHINES = {"pc": "desktop", "legion": "laptop"}
@@ -135,7 +134,8 @@ AVERAGE = statistics.mean
 def bars(run, reference):
     """-> one dict per ./tree case of the run that went well."""
     rows = [json.loads(line) for source in sources(run) for line in open(source / "results.jsonl")]
-    info = B.hardware(json.load(open(run / "machine.json")))
+    machine = json.load(open(run / "machine.json"))
+    info = B.hardware(machine)
     out = []
     for protocol in PROTOCOLS:
         # single: one thread only (serial), or every thread count but 1; None: any
@@ -160,7 +160,7 @@ def bars(run, reference):
             prune = [r["prune_seconds"] for r in ok if r.get("prune_seconds") is not None]
             setup = [r["gpu_setup_seconds"] for r in ok if r.get("gpu_setup_seconds") is not None]
             out.append({"protocol": protocol, "backend": backend, "hardware": hardware,
-                        "run": run, "reference": reference,
+                        "run": run, "reference": reference, "stale": B.rows_out_of_date(ok, machine),
                         "time": AVERAGE(r["train_seconds"] for r in ok),
                         "times": [r["train_seconds"] for r in ok],
                         "ram": AVERAGE(r["peak_rss_train_bytes"] for r in ok) / 2**30,
@@ -188,9 +188,12 @@ def check_same(runs):
     if len(datasets) != 1:
         raise SystemExit(f"the runs used different datasets: {sorted(datasets)}")
     dataset = datasets.pop()
-    for name in DATA_FILES:  # chess has no test files
-        if len({plan["data_files"][dataset].get(name) for plan in plans}) != 1:
-            raise SystemExit(f"{dataset}/{name} differs between the runs: not the same data")
+    # The files' hashes, not their names: the flat layout (chess/) names them by their stem
+    # (chess_2b.f32, read with --rows), the old one train.f32; the same bytes either way.
+    if len({tuple(sorted(h for name, h in plan["data_files"][dataset].items()
+                         if name.endswith((".f32", ".y.i32", ".csv")) and "yadt" not in name))
+            for plan in plans}) != 1:
+        raise SystemExit(f"{dataset}: the data files differ between the runs: not the same data")
     return dataset, plans[0]["datasets"][dataset]
 
 

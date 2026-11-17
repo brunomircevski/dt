@@ -32,7 +32,7 @@ from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter  # noqa: 
 
 import benchlib as B  # noqa: E402
 import machines_chart as M  # noqa: E402
-from chart import GRID, INK, MUTED, NAMES  # noqa: E402
+from chart import GRID, INK, MUTED, NAMES, faded, out_of_date_banner  # noqa: E402
 
 MARKERS = ["o", "s", "^", "D", "v"]  # per machine of a backend, in the order given
 
@@ -152,6 +152,11 @@ def main():
                 ax.plot([e["rows"] for e in points], [e[field] for e in points], color=color,
                         linewidth=2, marker=marker[key], markersize=8, markeredgecolor="white",
                         markeredgewidth=1.5, zorder=3)
+                old = [e for e in points if e["stale"]]
+                if old:  # out of date: a faded marker over the line's
+                    ax.plot([e["rows"] for e in old], [e[field] for e in old], linestyle="none",
+                            marker=marker[key], markersize=8, color=faded(color), markeredgecolor="white",
+                            markeredgewidth=1.5, zorder=5)
                 if field == "time":  # whisker: fastest to slowest run
                     for e in points:
                         ax.plot([e["rows"]] * 2, [min(e["times"]), max(e["times"])], color=color,
@@ -259,7 +264,8 @@ def main():
              + "Time: ./tree's 'train total' (presort, build, prune; CUDA also upload and "
              "device sort), not reading the CSV. Log-log axes.\nRAM: peak RSS of the process "
              "up to the end of training. VRAM: peak GPU memory during the process above idle, "
-             "CUDA context included (nvidia-smi, every 10 ms).",
+             "CUDA context included (nvidia-smi, every 10 ms)."
+             + ("\n" + B.OUT_OF_DATE_NOTE + " (faded points)." if any(e["stale"] for e in entries) else ""),
              fontsize=8, color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=0.06, right=0.92, top=0.985 - (header + 1.45) / inches,
                         bottom=1.0 / inches)
@@ -268,7 +274,8 @@ def main():
         fig.text(box.x0, box.y1 + 0.62 / inches, title, fontsize=11.5, color=INK,
                  fontweight="bold", va="bottom")
         fig.text(box.x0, box.y1 + 0.42 / inches, trees, fontsize=8, color=MUTED, va="bottom")
-    fig.savefig(args.out, dpi=150, facecolor="white")
+    fig.savefig(args.out, dpi=150, facecolor="white",
+                **out_of_date_banner(fig, sum(e["stale"] for e in entries), len(entries), "points"))
     print(args.out)
 
 

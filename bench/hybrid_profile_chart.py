@@ -40,7 +40,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.patches import Patch, Rectangle  # noqa: E402
 
-from chart import GRID, INK, MUTED, NAMES  # noqa: E402
+import benchlib as B  # noqa: E402
+from chart import GRID, INK, MUTED, NAMES, faded, out_of_date_banner  # noqa: E402
 from hybrid_chart import DEPTHS, protocol  # noqa: E402
 from profile_share_chart import coverage, mean_row, runs, seconds_text, text_color  # noqa: E402
 
@@ -123,18 +124,20 @@ def load(folder, node, dataset):
             parts = {key: sum(s[0][key] for s in splits) / len(splits) for key, _, _ in PARTS}
             cases[(mode, proto)] = {
                 "row": mean_row(rows), "runs": len(rows), "parts": parts,
+                "stale": B.rows_out_of_date(rows, machine),
                 "cpu_thread_seconds": sum(s[1] for s in splits) / len(splits),
                 "plain": mean_row(plain[proto]) if proto in plain else None}
     return cases, machine, shallow
 
 
-def draw_segment(ax, x, width, bottom, share, key):
-    color = COLOR[key]
+def draw_segment(ax, x, width, bottom, share, key, stale=False):
+    color = faded(COLOR[key]) if stale else COLOR[key]
     ax.add_patch(Rectangle((x - width / 2, bottom), width, share, facecolor=color,
                            edgecolor="white", linewidth=1.2, zorder=2))
     if key == "both":  # CPU stripes over the GPU's blue
         ax.add_patch(Rectangle((x - width / 2, bottom), width, share, facecolor="none",
-                               edgecolor=CPU_GREEN, hatch="//", linewidth=0, zorder=3))
+                               edgecolor=faded(CPU_GREEN) if stale else CPU_GREEN, hatch="//", linewidth=0,
+                               zorder=3))
         ax.add_patch(Rectangle((x - width / 2, bottom), width, share, facecolor="none",
                                edgecolor="white", linewidth=1.2, zorder=3))
 
@@ -149,7 +152,8 @@ def bar(ax, x, width, case, seconds, top):
         height = parts[key] if seconds else share
         if height <= 0:
             continue
-        draw_segment(ax, x, width, bottom, height, key)
+        draw_segment(ax, x, width, bottom, height, key, case["stale"])
+        color = faded(color) if case["stale"] else color
         of_axis = 100 * height / top
         if of_axis >= 4.5:
             if seconds:
@@ -211,6 +215,7 @@ def panel(ax, cases, algorithm, title, modes, seconds, top):
 
 def chart(cases, machine, shallow, node, dataset, out, modes=MODES, seconds=False):
     single = len(modes) == 1
+    shown = [c for (mode, _), c in cases.items() if mode in dict(modes)]
     fig, axes = plt.subplots(len(ALGORITHMS), 1, figsize=(15, 13.5))
     top = max(case["row"]["train_seconds"] for (mode, _), case in cases.items()
               if mode in dict(modes)) if seconds else 100
@@ -264,10 +269,12 @@ def chart(cases, machine, shallow, node, dataset, out, modes=MODES, seconds=Fals
              "copies; else host (launching kernels, waiting, assembling the tree, C4.5's tidy-up). "
              "CPU threads are sampled every 5 ms.\nHybrid: nodes with fewer rows than --handoff-rows "
              "are copied to the host and grown by the CPU threads while the GPU goes on with the "
-             "next level." + ("" if single else " GPU only: every node on the GPU; the CPU only drives it."),
+             "next level." + ("" if single else " GPU only: every node on the GPU; the CPU only drives it.")
+             + ("\n" + B.OUT_OF_DATE_NOTE + " (faded bars)." if any(c["stale"] for c in shown) else ""),
              fontsize=9.2, color=MUTED, va="bottom", linespacing=1.4)
-    fig.tight_layout(rect=(0, 0.07, 1, 0.89), h_pad=6)
-    fig.savefig(out, dpi=150, facecolor="white")
+    fig.tight_layout(rect=(0, 0.085 if any(c["stale"] for c in shown) else 0.07, 1, 0.89), h_pad=6)
+    fig.savefig(out, dpi=150, facecolor="white",
+                **out_of_date_banner(fig, sum(c["stale"] for c in shown), len(shown)))
     print(out)
 
 

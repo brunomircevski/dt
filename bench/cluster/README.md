@@ -113,16 +113,25 @@ run records its test accuracy and the SHA-256 of its tree. The datasets the
 GPUs cannot hold (full ECBDL'14 and SOREL) run on the CPU nodes only.
 
 When a chain is done, copy its run folders into this repository's
-bench/results (scp) and redraw the charts on the PC:
+bench/results (on mordor3 they are written there already), copy the GPU
+libraries' rows (`~/gpu-dt-bench/<results>/<dataset>/<node>/` into
+`bench/results/cluster-gpu-vs-others/<dataset>/<node>/`) and redraw every chart:
 
 ```bash
-for d in susy higgs mnist8m ecbdl sorel; do bench/.venv/bin/python bench/testset_chart.py bench/results/cluster-$d; done
-bench/.venv/bin/python bench/scaling_chart.py bench/results/cluster-cpu-scaling
-bench/.venv/bin/python bench/vs_chart.py cpu
-bench/.venv/bin/python bench/vs_chart.py gpu   # after copying ~/gpu-dt-bench/results-final/<data>/<node>/
-bench/.venv/bin/python bench/rows_chart.py bench/results/cluster-chess/{cuda-hopper,cuda-ampere,cpu-epyc,cpu-dell,serial-epyc,serial-dell,gpuonly-hopper,gpuonly-ampere}-chess_{1m,10m,100m,1b} \
-    --out bench/results/cluster-chess/chart-rows.png
+bench/cluster/charts.sh             # --no-paper: without paper/figs
 ```
+
+A result measured before the final protocol (`FINAL_SINCE` in
+`bench/benchlib.py`: GPU runs before 0cff6d1b, CPU runs before 03c4e2d2, by
+each row's commit, else its machine.json's) is drawn faded and labelled "out of
+date", with a banner over the chart naming how many of its marks are; once the
+rerun's results replace it, the next `charts.sh` drops the marks and the banner
+by themselves. The power charts and paper/figs carry the banner only.
+paper/tools/charts.py needs LaTeX with cm-super (not on mordor3's login node:
+unzip CTAN's `fonts/ps-type1/cm-super.zip` into a scratch `TEXMFHOME` with its
+`pfb`, `afm`, `dvips/*.map`, `*.enc` and `type1ec.sty`, set `TEXMFVAR` and
+`TEXMFCONFIG` beside it, and `updmap-user --enable Map=cm-super-t1.map` and
+`Map=cm-super-ts1.map`).
 
 - **`build.sh`** runs on hopper because the CPU nodes have no CUDA toolkit. It
   builds with `NVCC=/usr/local/cuda/bin/nvcc` and `-gencode` for sm_75, sm_80

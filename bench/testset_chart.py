@@ -32,7 +32,6 @@ than one dataset (ECBDL: the full set on the CPU nodes, the 15M sample on all).
 
 import argparse
 import json
-import textwrap
 import statistics
 from pathlib import Path
 
@@ -43,7 +42,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.ticker import FuncFormatter, NullFormatter  # noqa: E402
 
 import benchlib as B  # noqa: E402
-from chart import GRID, INK, MUTED, NAMES, seconds_tick  # noqa: E402
+from chart import GRID, INK, MUTED, NAMES, faded, out_of_date_banner, seconds_tick  # noqa: E402
 from machines_chart import COLORS  # noqa: E402  (the validated backend colours)
 
 # One panel per algorithm, both without pruning: the test-set protocols (depth 10), or
@@ -122,19 +121,6 @@ def overlay(runs, fix):
                 runs[dataset][name] = {**run, "from": suffix}
             elif old.get("state") is None:
                 old["rerun"] = run["state"]
-
-
-def old_gpu_rule(names, runs):
-    """A note naming the GPU bars measured before the one GPU timing rule
-    (2026-11-17, ./tree --gpu-startup context): their GPU setup was untimed."""
-    old = [n for n in names if n.split("-")[0] in ("cuda", "gpuonly")
-           and any(r.get("status") == "ok" and "gpu_startup_mode" not in r
-                   for c in runs[n]["cases"].values() for r in c)]
-    if not old:
-        return ""
-    return "\n" + textwrap.fill(
-        "not yet redone under the one GPU timing rule (2026-11-17), ./tree's GPU setup (kernels, memory pool, "
-        "staging buffers, 0.1-0.25 s) untimed: " + ", ".join(old), 115)
 
 
 def node_machine(folder, name):
@@ -221,6 +207,7 @@ def chart(dataset, runs, out, notes={}):
     reps = max(len(rows) for run in runs.values() for rows in run["cases"].values())
     panels = [(p, PANELS[p]) for p in PROTOCOLS if any(p in run["cases"] for run in runs.values())]
     warned = False
+    stale_bars, all_bars = 0, 0
     test_set = any(r.get("test_accuracy") is not None for run in runs.values()
                    for rows in run["cases"].values() for r in rows)
     side = len(panels) > 1 and BAR * span > TALL  # tall panels: side by side, sharing the bars' labels
@@ -259,14 +246,22 @@ def chart(dataset, runs, out, notes={}):
             warn = problems(rows, f"old build; rerun {'queued' if rerun == 'queued' else 'running'}" if rerun
                             else note)
             warned = warned or bool(warn)
-            ax.barh(y, mean - low, left=low, height=0.62, color=COLORS[BACKENDS[backend][0]],
+            stale = B.rows_out_of_date(rows, runs[name]["machine"])
+            stale_bars, all_bars = stale_bars + stale, all_bars + 1
+            color = COLORS[BACKENDS[backend][0]]
+            ax.barh(y, mean - low, left=low, height=0.62, color=faded(color) if stale else color,
                     hatch="////" if warn else None, edgecolor=WARN if warn else None, lw=0)
+            if stale:
+                commits = sorted({(r.get("commit") or runs[name]["machine"].get("versions", {}).get("tree_git")
+                                   or "?")[:8] for r in rows})
+                warn = [f"out of date ({', '.join(commits)}, before the final protocol)"] + warn
             if len(times) > 1:
                 ax.plot([min(times), max(times)], [y, y], color=INK, lw=1)
             ax.text(max(times) * 1.06, y + (0.19 if warn else 0), bar_note(rows, same, texts[name]),
-                    va="center", fontsize=8, color=INK)
+                    va="center", fontsize=8, color=MUTED if stale else INK)
             if warn:
-                ax.text(max(times) * 1.06, y - 0.21, "⚠ " + "; ".join(warn), va="center", fontsize=7, color=WARN)
+                ax.text(max(times) * 1.06, y - 0.21, "⚠ " + "; ".join(warn), va="center", fontsize=7,
+                        color=WARN if warn[stale:] else MUTED)
         ax.set_title(title + (f":  {next(iter(texts.values()))}" if same and texts else ""),
                      loc="left", fontsize=9.5, color=INK)
         ax.title.set_fontweight("bold")
@@ -296,7 +291,7 @@ def chart(dataset, runs, out, notes={}):
                                              or "?")[:12] for n in names for c in runs[n]["cases"].values()
                                             for r in c if r.get("status") == "ok"}))
                         + ("; hatched, ⚠: a potential problem (see BENCHMARK.md)" if warned else "")
-                        + old_gpu_rule(names, runs),
+                        + ("\n" + B.OUT_OF_DATE_NOTE if stale_bars else ""),
                         color=MUTED, fontsize=9)
     split = ("the official test set" if meta.get("spec", {}).get("test_source") or
              meta.get("spec", {}).get("split") == "tail" else "held-out rows")
@@ -315,7 +310,7 @@ def chart(dataset, runs, out, notes={}):
               else "./tree, no depth limit, no pruning; accuracy on the training rows"),
              fontsize=9, color=MUTED)
     fig.tight_layout(rect=(0, 0, 1, 1 - 0.7 / height))
-    fig.savefig(out, dpi=150)
+    fig.savefig(out, dpi=150, **out_of_date_banner(fig, stale_bars, all_bars))
     plt.close(fig)
     print(out)
 

@@ -33,8 +33,10 @@ Every tool sees the same float32 values: the CSVs print them exactly (9
 significant digits), the binary files hold them as they are.
 """
 
+import functools
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -523,3 +525,44 @@ def hardware_line(machine, gpu_used):
     info = hardware(machine)
     gpu = f"GPU {info['gpu']}" if gpu_used and info["gpu"] else "no GPU used"
     return f"CPU {info['cpu']}  ·  RAM {info['ram']}  ·  {gpu}"
+
+
+# ---------------------------------------------------------------- out of date
+#
+# The final protocol (BENCHMARK-CHANGES.MD) starts at these commits. A result
+# from an older build is out of date: every chart draws it faded and labelled
+# as a placeholder until the rerun replaces it, and the label goes away by
+# itself once the chart is redrawn from the new results. GPU runs (hopper,
+# ampere): one GPU timing rule, an 80 GB GPU, hand-off buffers only for
+# --hybrid (0cff6d1b); every other run: the final harness (03c4e2d2).
+FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "0cff6d1b"}
+GPU_HOSTS = ("hopper", "ampere")
+OUT_OF_DATE_NOTE = (f"faded, ⚠ out of date: measured before the final protocol (GPU runs before {FINAL_SINCE['gpu']}, "
+                    f"CPU runs before {FINAL_SINCE['cpu']}); a placeholder until the rerun")
+
+
+@functools.lru_cache(maxsize=None)
+def _built_on(commit, base):
+    return subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", base, commit],
+                          capture_output=True).returncode == 0
+
+
+def out_of_date(commit, host):
+    """True if a result of this build (a commit, `git describe` or not) on this host is from
+    before the final protocol, or its build is unknown."""
+    commit = (commit or "").strip().removesuffix("-dirty")
+    commit = commit.rsplit("-g", 1)[-1] if "-g" in commit else commit
+    node = (host or "").split(".")[0]
+    return not commit or not _built_on(commit, FINAL_SINCE["gpu" if node in GPU_HOSTS else "cpu"])
+
+
+def rows_out_of_date(rows, machine=None):
+    """True if any of a bar's rows is out of date: each row's commit and host, else its
+    machine.json's (a run folder's: versions.tree_git and host; gpubench's: commit and host)."""
+    machine = machine or {}
+    commit = (machine.get("versions") or {}).get("tree_git") or machine.get("commit")
+    host = machine.get("host")
+    rows = list(rows)
+    if not rows:
+        return out_of_date(commit, host)
+    return any(out_of_date(r.get("commit") or commit, r.get("host") or host) for r in rows)

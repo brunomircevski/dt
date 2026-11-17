@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 
 import benchlib as B  # noqa: E402
-from chart import GRID, INK, MUTED, NAMES  # noqa: E402
+from chart import GRID, INK, MUTED, NAMES, faded, out_of_date_banner  # noqa: E402
 
 # Categorical slots 1-5 of the reference palette (slots 1-2, CART and C4.5,
 # validated: CVD dE 24.7); both CART variants are CART, so they share slot 1.
@@ -127,6 +127,8 @@ def runs_note(data):
 
 def figure(data, out):
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.6), sharey=True)
+    stale = {key: B.rows_out_of_date([r for pts in series.values() for p in pts for r in p["rows"]], machine)
+             for key, (series, machine) in data.items()}
     top = max(p["threads"] for series, _ in data.values() for pts in series.values() for p in pts)
     for ax, (node, host) in zip(axes, NODES):
         ax.plot([1, top], [1, top], color=GRID, linewidth=1.5, zorder=0)
@@ -145,6 +147,8 @@ def figure(data, out):
             if (node, dataset) not in data:
                 continue
             series, machine = data[(node, dataset)]
+            old = stale[(node, dataset)]
+            color = faded(color) if old else color
             one = []
             for protocol, (algo, ls, filled) in STYLE.items():
                 points = series.get(protocol)
@@ -154,9 +158,9 @@ def figure(data, out):
                 sp = [p["speedup"] for p in points]
                 ax.plot(t, sp, linestyle=ls, color=color, linewidth=1.8, marker=marker, markersize=5,
                         markerfacecolor=color if filled else "white", markeredgewidth=1.2, zorder=3)
-                ends.append((sp[-1], t[-1], color, f"{sp[-1]:.0f}\u00d7 ({100 * points[-1]['efficiency']:.0f}%)"))
+                ends.append((sp[-1], t[-1], MUTED if old else color, f"{sp[-1]:.0f}\u00d7 ({100 * points[-1]['efficiency']:.0f}%)"))
                 one.append(f"{algo} {points[0]['time_mean']:.3g} s \u2192 {points[-1]['time_mean']:.3g} s")
-            lines.append(f"{NAMES.get(dataset, dataset)}: " + ", ".join(one))
+            lines.append(("⚠ out of date · " if old else "") + f"{NAMES.get(dataset, dataset)}: " + ", ".join(one))
         # end labels, pushed apart where they would overlap
         placed = []
         for y, x, color, text in sorted(ends):
@@ -196,10 +200,11 @@ def figure(data, out):
              "End label: speed-up (parallel efficiency) at 48 threads. Threads take the CPUs in the kernel's order: on "
              "epyc1 socket 0's 24 cores, then socket 1's; on dell1 the sockets alternate. Memory first-touch.",
              "Every thread count grows the same tree. Training time excludes "
-             f"reading the data. ./tree {', '.join(commits)}, run {dates}.")),
+             f"reading the data. ./tree {', '.join(commits)}, run {dates}.",
+             *([B.OUT_OF_DATE_NOTE + " (faded lines)."] if any(stale.values()) else []))),
              fontsize=8.3, color=MUTED, linespacing=1.5)
-    fig.subplots_adjust(left=0.06, right=0.99, top=0.88, bottom=0.2, wspace=0.08)
-    fig.savefig(out, dpi=150, facecolor="white")
+    fig.subplots_adjust(left=0.06, right=0.99, top=0.88, bottom=0.24 if any(stale.values()) else 0.2, wspace=0.08)
+    fig.savefig(out, dpi=150, facecolor="white", **out_of_date_banner(fig, sum(stale.values()), len(stale), "lines"))
     return out
 
 

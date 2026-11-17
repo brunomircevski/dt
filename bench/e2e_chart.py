@@ -33,6 +33,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
+import benchlib as B  # noqa: E402
+from chart import faded, out_of_date_banner  # noqa: E402
+
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#ffffff"
 STEPS = ["other", "read", "gpu_startup", "prepare", "build", "prepare_build"]
 STEP_NAMES = {"other": "runtime start, exit, other", "read": "read data",
@@ -97,7 +100,8 @@ def collect(folder):
                     if "gpu_startup_seconds" in rows[0] else None,
                     "peak_rss": statistics.mean(r["peak_rss_bytes"] for r in rows),
                     "vram": max((r.get("gpu_peak_bytes") or 0) for r in rows) or None,
-                    "commits": {r.get("commit") for r in rows}, "hosts": {r.get("host") for r in rows}})
+                    "commits": {r.get("commit") for r in rows}, "hosts": {r.get("host") for r in rows},
+                    "stale": B.rows_out_of_date(rows)})
     return out
 
 
@@ -118,13 +122,16 @@ def draw(cases, out, notes):
                 share = c["steps"][k] / c["wall"]
                 if share > 0:
                     # a 2px-looking surface gap between segments
-                    ax.barh(y, share, left=left, height=0.62, color=STEP_COLORS[k], edgecolor=SURFACE,
+                    ax.barh(y, share, left=left, height=0.62, color=faded(STEP_COLORS[k]) if c["stale"]
+                            else STEP_COLORS[k], edgecolor=SURFACE,
                             linewidth=1.2, zorder=2)
                     if share >= 0.07:
                         ax.text(left + share / 2, y, f"{100 * share:.0f}%", ha="center", va="center",
-                                fontsize=7, color="white" if k not in ("other", "prepare") else INK, zorder=3)
+                                fontsize=7, color="white" if k not in ("other", "prepare") and not c["stale"]
+                                else INK, zorder=3)
                 left += share
-            ax.text(1.01, y, f"{seconds(c['wall'])}  ({c['runs']} runs)", va="center", fontsize=8.5, color=INK)
+            ax.text(1.01, y, f"{seconds(c['wall'])}  ({c['runs']} runs)" + ("\n⚠ out of date" if c["stale"] else ""),
+                    va="center", fontsize=8.5, color=MUTED if c["stale"] else INK)
         ax.set_yticks(range(len(rows)), [c["tool"] for c in rows], fontsize=8.5)
         ax.set_xlim(0, 1)
         ax.set_ylim(-0.6, len(rows) - 0.4)
@@ -145,7 +152,8 @@ def draw(cases, out, notes):
                loc="upper left", bbox_to_anchor=(0.01, 0.965), ncol=6, frameon=False, fontsize=8)
     fig.text(0.01, 0.005, "\n".join(notes), fontsize=7.6, color=MUTED, linespacing=1.5)
     fig.tight_layout(rect=(0, 0.03 + 0.016 * len(notes), 0.9, 0.94), h_pad=2.5)
-    fig.savefig(out, dpi=140, facecolor="white")
+    fig.savefig(out, dpi=140, facecolor="white",
+                **out_of_date_banner(fig, sum(c["stale"] for c in cases), len(cases)))
     print(out)
 
 
@@ -182,7 +190,7 @@ def main():
         "Prepare: ./tree GPU setup + presort, XGBoost QuantileDMatrix, YaDT indexing; one call does both for "
         "scikit-learn, rpart, J48, cuML.",
         f"Nodes {', '.join(hosts)} (CPU tools on epyc, GPU tools on hopper, H100); commit {', '.join(commits)}.",
-    ]
+    ] + ([B.OUT_OF_DATE_NOTE + "."] if any(c["stale"] for c in cases) else [])
     draw(cases, folder / "chart.png", notes)
 
 

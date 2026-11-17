@@ -59,6 +59,18 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # bench/
+import benchlib as B  # noqa: E402
+from chart import out_of_date_banner  # noqa: E402
+
+# Jobs measured before the final protocol (benchlib.out_of_date: each job's machine.txt commit),
+# all jobs; main() sets it, save() puts a banner on every chart while any is out of date.
+STALE = [0, 0]
+
+
+def save(fig, path, **kwargs):
+    fig.savefig(path, **{**kwargs, **out_of_date_banner(fig, *STALE, unit="power jobs", faded=False)})
+
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 IMPLS = {"simple": "Serial-Simple", "serial": "Serial-Opt", "parallel": "Multicore",
          "gpuonly": "GPU", "cuda": "Hybrid"}
@@ -775,7 +787,7 @@ def chart_power(folder, summary):
     fig.tight_layout(rect=(0, 0.08, 1, 0.95))
     fig.text(0.99, 0.01, "Simple = Serial-Simple, Opt = Serial-Opt, Multi = Multicore", ha="right", va="bottom",
              fontsize=8, color=MUTED)
-    fig.savefig(folder / "chart-power.png", dpi=150)
+    save(fig, folder / "chart-power.png", dpi=150)
     plt.close(fig)
 
 
@@ -810,7 +822,7 @@ def chart_energy(folder, summary):
     fig.tight_layout(rect=(0, 0.06, 1, 0.95))
     fig.text(0.99, 0.01, "Simple = Serial-Simple, Opt = Serial-Opt, Multi = Multicore", ha="right", va="bottom",
              fontsize=8, color=MUTED)
-    fig.savefig(folder / "chart-energy.png", dpi=150)
+    save(fig, folder / "chart-energy.png", dpi=150)
     plt.close(fig)
 
 
@@ -849,7 +861,7 @@ def chart_energy_split(folder, summary):
     fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=8.5)
     fig.suptitle("ECBDL'14 15M: where the training energy goes", fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0.1, 1, 0.95))
-    fig.savefig(folder / "chart-energy-split.png", dpi=150)
+    save(fig, folder / "chart-energy-split.png", dpi=150)
     plt.close(fig)
 
 
@@ -873,7 +885,7 @@ def chart_time(folder, summary):
     fig.suptitle("ECBDL'14 15M: training time per tree during the power runs", fontsize=11, color=INK,
                  x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0, 1, 0.94))
-    fig.savefig(folder / "chart-time.png", dpi=150)
+    save(fig, folder / "chart-time.png", dpi=150)
     plt.close(fig)
 
 
@@ -940,7 +952,7 @@ def chart_scatter(folder, summary):
     ax.set_title("ECBDL'14 15M: time and energy per tree (grey lines: constant power)",
                  fontsize=11, color=INK, loc="left")
     fig.tight_layout()
-    fig.savefig(folder / "chart-time-energy.png", dpi=150)
+    save(fig, folder / "chart-time-energy.png", dpi=150)
     plt.close(fig)
 
 
@@ -1140,7 +1152,7 @@ def chart_cpu_gpu(folder, summary):
                            f"Means of runs × trees: {n} (every tree a fresh process's only tree)",
                            fontsize=9.5, color=INK, loc="left")
             fig.tight_layout()
-            fig.savefig(folder / f"chart-cpu-gpu-{node}-{algo}.png", dpi=150)
+            save(fig, folder / f"chart-cpu-gpu-{node}-{algo}.png", dpi=150)
             plt.close(fig)
 
 
@@ -1239,7 +1251,7 @@ def chart_meter(folder, jobs):
     fig.suptitle("The PSU meter modelled from the fast sensors (RAPL CPU packages + DRAM, NVML GPUs, every 0.1 s)",
                  fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    fig.savefig(folder / "chart-meter.png", dpi=140)
+    save(fig, folder / "chart-meter.png", dpi=140)
     plt.close(fig)
 
 
@@ -1272,7 +1284,7 @@ def chart_methods(folder, summary):
     fig.suptitle("PSU energy per tree: the meter model against the meter (trees of a few seconds: "
                  "only the model resolves them)", fontsize=10.5, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    fig.savefig(folder / "chart-methods.png", dpi=140, bbox_inches="tight")
+    save(fig, folder / "chart-methods.png", dpi=140, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -1298,7 +1310,7 @@ def chart_warmup(folder, warmup):
         style(ax)
         ax.legend(fontsize=7, frameon=False)
     fig.tight_layout()
-    fig.savefig(folder / "chart-warmup.png", dpi=140)
+    save(fig, folder / "chart-warmup.png", dpi=140)
     plt.close(fig)
 
 
@@ -1354,7 +1366,7 @@ def chart_traces(folder, jobs, rows):
     fig.suptitle("Power over time, first run of each case (W against seconds since the process started)",
                  fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0.06, 1, 0.97))
-    fig.savefig(folder / "chart-traces.png", dpi=120)
+    save(fig, folder / "chart-traces.png", dpi=120)
     plt.close(fig)
 
 
@@ -1366,6 +1378,8 @@ def main():
             continue
         if (sub / "samples.csv").exists() or (sub / "samples.csv.gz").exists():
             jobs[sub.name] = Job(sub)
+    commits = {name: re.search(r"^commit (\S+)", job.machine, re.M) for name, job in jobs.items()}
+    STALE[:] = [sum(B.out_of_date(m and m.group(1), jobs[name].host) for name, m in commits.items()), len(jobs)]
     rows = []
     for name, job in jobs.items():
         if job.has_psu:

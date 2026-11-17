@@ -45,6 +45,30 @@ def seconds_label(value):
     return f"{value:.3g} s" if value >= 1 else f"{value * 1e3:.3g} ms"
 
 
+# Out-of-date results (benchlib.out_of_date): a faded mark, a "⚠ out of date" label and a
+# banner over the figure; all three go away when the chart is redrawn from the rerun's results.
+STALE_FILL = "#fab219"  # the reference palette's status "warning"; ink #0b0b0b on it
+
+
+def faded(color, keep=0.35):
+    """`color` mixed with white: an out-of-date mark."""
+    r, g, b = matplotlib.colors.to_rgb(color)
+    return matplotlib.colors.to_hex((1 - keep + keep * r, 1 - keep + keep * g, 1 - keep + keep * b))
+
+
+def out_of_date_banner(fig, stale, total, unit="bars", faded=True):
+    """When `stale` of the figure's `total` marks are out of date: a banner above the figure
+    (call it last, after any layout); faded=False: the marks themselves are not faded. Returns the savefig keywords that keep the banner in the
+    image (a tight bounding box), {} when nothing is out of date."""
+    if not stale:
+        return {}
+    what = f"all {total} {unit}" if stale == total else f"{stale} of {total} {unit}"
+    fig.text(0.01, 1.0, f"⚠ OUT OF DATE: {what} measured before the final protocol{' (faded)' if faded else ''}; "
+             "a placeholder until the rerun", ha="left", va="bottom", fontsize=max(9, 0.55 * fig.get_figwidth()), fontweight="bold", color=INK,
+             bbox=dict(boxstyle="round,pad=0.35", fc=STALE_FILL, ec="none"), zorder=10)
+    return {"bbox_inches": "tight", "pad_inches": 0.15}
+
+
 def collect(run):
     rows = [json.loads(line) for line in open(run / "results.jsonl")]
     times, memory, tree, status = defaultdict(list), defaultdict(list), {}, {}

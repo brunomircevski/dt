@@ -95,6 +95,11 @@ nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,nohead
 for dataset in $DATASETS; do
   OUT=$RESULTS/$dataset/$NODE
   mkdir -p "$OUT/pred"
+  # Write through the folder as gpubench.py will, or stop: a folder renamed and made again under
+  # the same name on another host can stay stale in this node's NFS cache, so that every case
+  # fails (2026-11-17: jobs 299/302, results-final).
+  $PY -c 'import sys; open(sys.argv[1] + "/.probe", "w").close()' "$OUT/pred" ||
+    { echo "cannot write $OUT/pred from $(hostname)" >&2; exit 1; }
   MACHINE=$OUT/machine.json
   [ -e "$MACHINE" ] && MACHINE=$OUT/machine-${SLURM_JOB_ID:-$$}.json
   {
