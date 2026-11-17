@@ -23,6 +23,7 @@ import argparse
 import csv
 import json
 import statistics
+import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -32,6 +33,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 from matplotlib.ticker import FuncFormatter, NullFormatter  # noqa: E402
 
+NOTE_CHARS = 215  # footnote characters per line at 8 pt on the 17-inch-wide figure
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 DATASETS = ["higgs", "mnist8m"]
 TITLES = {"higgs": "HIGGS: 10,500,000 training rows, 28 features, 2 classes; test 500,000 rows",
@@ -170,12 +172,13 @@ def few_runs(grid):
     bars = [(d, a, name, b) for d, row in zip(DATASETS, grid) for a, bs in zip(ALGOS, row)
             for name, _, b in bs if b]
     most = max((b["n"] for *_, b in bars), default=0)
-    few = [f"{name.split(' — ')[0].split(',')[0]} {ALGOS[a][0].split(' ')[0]} on {TITLES[d].split(':')[0]}"
-           f" ({b['n']})" for d, a, name, b in bars if b["n"] < most]
+    few = list(dict.fromkeys(  # one entry per tool and case, not per node
+        f"{name.split(' — ')[0].split(',')[0]} {ALGOS[a][0].split(' ')[0]} on {TITLES[d].split(':')[0]}"
+        f" ({b['n']})" for d, a, name, b in bars if b["n"] < most))
     if not few:
         return f"Every bar: the mean of {most} fresh-process runs, no warm-up."
-    return (f"Every bar: the mean of {most} fresh-process runs, no warm-up; fewer runs where one run "
-            f"takes over an hour: {'; '.join(few)}.")
+    return (f"Every bar: the mean of {most} fresh-process runs, no warm-up; fewer runs (3: one run takes over "
+            f"an hour; 5: the 2026-11-15 rerun, not yet redone): {'; '.join(few)}.")
 
 
 def provenance(grid):
@@ -213,15 +216,19 @@ def draw(kind, res, out):
                 "squared error, λ 0 (256 bins; = Gini; MNIST8M: one multi-output tree on the one-hot labels).\n"
                 "Forest of 10 / 10: the library's random-forest defaults (cuML bootstrap and √features; XGBoost RF 0.8 "
                 "of rows and features), its time divided by 10. ./tree hybrid: --hybrid, GPU only: --gpu. Not timed: "
-                "the CUDA context, kernel loading (eager) and the libraries' imports; timed: from the host arrays "
-                "to the fitted model.")
+                "the CUDA context, ./tree's kernel loading (eager) and the libraries' imports; the libraries load "
+                "their kernels lazily (CUDA's default) inside the fit; timed: from the host arrays to the fitted model.")
         fig.legend(handles=[Patch(color=c, label=GPU_NAMES[n]) for n, c in GPU_COLORS.items()],
                    loc="upper right", ncol=2, frameon=False, fontsize=9)
     fig.suptitle(head, x=0.01, y=0.995, ha="left", fontsize=11.5, color=INK, fontweight="bold")
-    fig.text(0.01, 0.005, "Training time (log scale), excluding reading the data and start-up: bar = mean of the "
-             "runs, whisker = fastest to slowest; label: mean (runs), peak memory, test accuracy, tree nodes. "
-             + few_runs(grid) + "\n" + note + "\n" + provenance(grid), fontsize=8, color=MUTED, linespacing=1.5)
-    fig.tight_layout(rect=(0, 0.075 if kind == "gpu" else 0.06, 1, 0.965), h_pad=3.5, w_pad=2)
+    text = "\n".join(textwrap.fill(part, NOTE_CHARS) for part in (
+        "Training time (log scale), excluding reading the data and start-up: bar = mean of the runs, whisker = "
+        "fastest to slowest; label: mean (runs), peak memory, test accuracy, tree nodes. " + few_runs(grid),
+        *note.split("\n"), provenance(grid)))
+    fig.text(0.01, 0.005, text, fontsize=8, color=MUTED, linespacing=1.5)
+    # the footnote's height: 8 pt lines at 1.5 spacing, as a fraction of the figure
+    bottom = 0.01 + (text.count("\n") + 1) * 8 * 1.5 / 72 / fig.get_figheight()
+    fig.tight_layout(rect=(0, bottom, 1, 0.965), h_pad=3.5, w_pad=2)
     fig.savefig(out, dpi=140, facecolor="white")
     print(out)
     return grid

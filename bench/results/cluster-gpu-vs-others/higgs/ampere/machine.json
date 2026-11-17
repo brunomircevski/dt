@@ -1,6 +1,6 @@
 {"host": "ampere", "cpu": "AMD EPYC 7402 24-Core Processor",
- "cpus": 48, "gpu": "NVIDIA A100 80GB PCIe, 81920 MiB",
+ "cpus": 48, "gpu": "NVIDIA A100-PCIE-40GB, 40960 MiB",
  "driver": "615.71.09",
  "cuda": "Cuda compilation tools, release 12.9, V12.9.86",
- "numa_node": "0", "gpu_index": 0,
- "tree_commit": "b014290", "dataset": "higgs", "date": "2026-11-09 19:07:40"}
+ "numa_node": "1", "gpu_index": 2,
+ "commit": "001a56c60e21", "dataset": "higgs", "date": "2026-11-17 00:36:28"}

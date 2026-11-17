@@ -15,6 +15,7 @@ import argparse
 import csv
 import json
 import statistics
+import textwrap
 from collections import defaultdict
 from pathlib import Path
 
@@ -110,17 +111,18 @@ def load(base):
 
 def runs_note(data):
     """'10 runs per point' or the counts that differ, for the footnote."""
-    counts = defaultdict(set)
+    counts = defaultdict(int)
+    per_dataset = defaultdict(set)
     for (node, dataset), (series, _) in data.items():
         for protocol, points in series.items():
             for p in points:
-                counts[p["runs"]].add(f"{NAMES.get(dataset, dataset)} {p['threads']}")
-    if len(counts) == 1:
-        n = next(iter(counts))
-        return f"mean of {n} runs per point" if n > 1 else "one run per point"
-    common = max(counts, key=lambda n: len(counts[n]))
-    rest = "; ".join(f"{n} runs: " + ", ".join(sorted(v)) for n, v in sorted(counts.items()) if n != common)
-    return f"mean of {common} runs per point ({rest} threads)"
+                counts[p["runs"]] += 1
+                per_dataset[NAMES.get(dataset, dataset)].add(p["runs"])
+    common = max(counts, key=counts.get)
+    what = f"mean of {common} fresh-process runs per point, no warm-up" if common > 1 else "one run per point"
+    rest = [f"{name} {min(n)}" + (f"–{max(n)}" if len(n) > 1 else "") + " runs"
+            for name, n in sorted(per_dataset.items()) if n != {common}]
+    return what + (f" ({'; '.join(rest)}: the 2026-11-15 rerun, not yet redone)" if rest else "")
 
 
 def figure(data, out):
@@ -189,11 +191,12 @@ def figure(data, out):
     days = sorted({r["time"][:10] for series, _ in data.values() for pts in series.values()
                    for p in pts for r in p["rows"]})
     dates = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
-    fig.text(0.06, 0.012,
-             f"Speed-up: the 1-thread time (--serial) over the time with n threads (--multicore), {runs_note(data)}.\n"
+    fig.text(0.06, 0.012, "\n".join(textwrap.fill(part, 190) for part in (
+             f"Speed-up: the 1-thread time (--serial) over the time with n threads (--multicore), {runs_note(data)}.",
              "End label: speed-up (parallel efficiency) at 48 threads. Threads take the CPUs in the kernel's order: on "
-             "epyc1 socket 0's 24 cores, then socket 1's; on dell1 the sockets alternate. Memory first-touch.\nEvery thread count grows the same tree. Training time excludes "
-             f"reading the data. ./tree {', '.join(commits)}, run {dates}.",
+             "epyc1 socket 0's 24 cores, then socket 1's; on dell1 the sockets alternate. Memory first-touch.",
+             "Every thread count grows the same tree. Training time excludes "
+             f"reading the data. ./tree {', '.join(commits)}, run {dates}.")),
              fontsize=8.3, color=MUTED, linespacing=1.5)
     fig.subplots_adjust(left=0.06, right=0.99, top=0.88, bottom=0.2, wspace=0.08)
     fig.savefig(out, dpi=150, facecolor="white")

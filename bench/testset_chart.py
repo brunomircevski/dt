@@ -6,7 +6,7 @@ bar per run (node and backend), on a log scale, the bars grouped by backend (--s
 --serial, parallel on one socket, on both, CUDA hybrid, GPU only), the nodes under each. Tall panels go
 side by side, sharing the bars' labels. A bar is the mean training time
 of its runs, a whisker from the fastest to the slowest. Next to each bar:
-the time ± its standard deviation, the number of runs, and peak RAM (and VRAM
+the mean time, the number of runs, and peak RAM (and VRAM
 on a GPU) as numbers, the means of the runs. A run folder still in the queue
 or running is drawn as "queued" or "still running". cluster-chess (no depth
 limit, training accuracy only) gets the same chart, one per size.
@@ -182,9 +182,7 @@ def tree_text(rows):
 
 def bar_note(rows, same, text):
     times = [r["train_seconds"] for r in rows]
-    time = duration(statistics.mean(times))
-    if len(times) > 1:
-        time += f" ± {duration(statistics.stdev(times))}"
+    time = duration(statistics.mean(times))  # means only (BENCHMARK-CHANGES.MD)
     runs = f"{len(times)} run" + ("s" if len(times) > 1 else "")
     memory = f"RAM {gib(statistics.mean(r['peak_rss_train_bytes'] for r in rows))}"
     gpu = [r["gpu_peak_bytes"] for r in rows if r.get("gpu_peak_bytes") is not None]
@@ -278,8 +276,10 @@ def chart(dataset, runs, out, notes={}):
     axes[-1].set_xticks(ticks if len(ticks) < 9 else [t for t in ticks if str(t).lstrip("0.")[0] == "1"])
     axes[-1].xaxis.set_major_formatter(FuncFormatter(lambda v, _: seconds_tick(v)))
     axes[-1].xaxis.set_minor_formatter(NullFormatter())
-    axes[0 if side else -1].set_xlabel(f"training time (log scale): mean ± standard deviation of each bar's runs (1 to {reps}), "
-                        "whisker: fastest to slowest\nRAM, VRAM: peak while training, mean of the runs"
+    axes[0 if side else -1].set_xlabel(f"training time (log scale): mean of each bar's runs (1 to {reps}; every run a fresh process, "
+                        "no warm-up), whisker: fastest to slowest\nRAM, VRAM: peak while training, mean of the runs; ./tree "
+                        + ", ".join(sorted({r.get("commit") or "?" for n in names for c in runs[n]["cases"].values()
+                                            for r in c if r.get("status") == "ok"}))
                         + ("; hatched, ⚠: a potential problem (see BENCHMARK.md)" if warned else ""),
                         color=MUTED, fontsize=9)
     split = ("the official test set" if meta.get("spec", {}).get("test_source") or
@@ -305,8 +305,8 @@ def chart(dataset, runs, out, notes={}):
 
 
 def table(dataset, runs):
-    """The runs as a Markdown table (BENCHMARK.md), in the chart's order: training time mean ±
-    standard deviation per protocol, the number of runs, peak RAM and VRAM (means)."""
+    """The runs as a Markdown table (BENCHMARK.md), in the chart's order: training time mean
+    per protocol, the number of runs, peak RAM and VRAM (means)."""
     names, _, _, _ = layout(runs)
     panels = [p for p in PROTOCOLS if any(p in run["cases"] for run in runs.values())]
     titles = [PANELS[p].split(",")[0] for p in panels]
@@ -322,7 +322,7 @@ def table(dataset, runs):
         for p in panels:
             times = [r["train_seconds"] for r in ok[p]]
             cells.append("–" if not times else duration(statistics.mean(times)) +
-                         (f" ± {duration(statistics.stdev(times))}" if len(times) > 1 else ""))
+                         "")
         counts = sorted({len(ok[p]) for p in panels if ok[p]})
         ram = statistics.mean(r["peak_rss_train_bytes"] for r in rows) / 2**30
         gpu = [r["gpu_peak_bytes"] for r in rows if r.get("gpu_peak_bytes") is not None]
