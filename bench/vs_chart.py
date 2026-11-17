@@ -258,15 +258,15 @@ def draw(kind, res, out):
                 "use both sockets.")
     elif WARM:
         head = ("Warm: ./tree against cuML and XGBoost on the GPU, each timed fit the second identical fit "
-                "in one process; one CART tree, depth ≤ 10, all rows and features")
+                "in one process;\none CART tree, depth ≤ 10, all rows and features")
         note = ("Warm: one untimed fit, the same as the timed one on the same data, first in the same process "
                 "(./tree --warm-up, gpubench.py WARM=1): kernels loaded, memory pools, staging buffers and the "
                 "driver's mappings of the input made. Cold (chart.png, the default protocol): the one fit of a "
                 "fresh process. Settings as chart.png: cuML 128 bins, Gini; XGBoost hist 256 bins, squared error, "
                 "λ 0 (MNIST8M: one multi-output tree on the one-hot labels); ./tree hybrid: --hybrid, GPU only: "
-                "--gpu.")
-        fig.legend(handles=[Patch(color=c, label=GPU_NAMES[n]) for n, c in GPU_COLORS.items()],
-                   loc="upper right", ncol=2, frameon=False, fontsize=9)
+                "--gpu. ./tree on MNIST8M is slower warm than cold: each fit allocates its GPU buffers (about 53 GB) "
+                "and uploads the data in its timed setup, and the second fit's setup takes longer than the "
+                "first's (A100: 2.4-2.6 s against 1.3-1.5 s; its build time is the same).")
     else:
         head = ("./tree against cuML and XGBoost on the GPU: one tree, depth ≤ 10, no pruning, all rows and features; "
                 "one GPU and every CPU of the node")
@@ -277,20 +277,22 @@ def draw(kind, res, out):
                 "the imports and the bare CUDA context, for every tool alike; timed: from the host arrays to the "
                 "fitted model, kernel loading (lazy), memory pools and staging buffers included (./tree --gpu-startup "
                 "context).")
-        fig.legend(handles=[Patch(color=c, label=GPU_NAMES[n]) for n, c in GPU_COLORS.items()],
-                   loc="upper right", ncol=2, frameon=False, fontsize=9)
-    fig.suptitle(head, x=0.01, y=0.995, ha="left", fontsize=11.5, color=INK, fontweight="bold")
-    text = "\n".join(textwrap.fill(part, NOTE_CHARS) for part in (
+    fig.suptitle(head, x=0.01, y=0.995, ha="left", va="top", fontsize=11.5, color=INK, fontweight="bold")
+    width = NOTE_CHARS if len(algos) == 2 else NOTE_CHARS * 12 // 17  # characters per footnote line
+    text = "\n".join(textwrap.fill(part, width) for part in (
         "Training time (log scale), excluding reading the data and start-up: bar = mean of the runs, whisker = "
         "fastest to slowest; label: mean (runs), peak memory, test accuracy, tree nodes"
         + (", the cold mean" if WARM else "") + ". " + few_runs(grid, algos),
         *note.split("\n"), provenance(grid), *([B.OUT_OF_DATE_NOTE + "."] if stale(grid) else [])))
-    fig.text(0.01, 0.005, text if len(algos) == 2 else "\n".join(
-        textwrap.fill(line, NOTE_CHARS * 12 // 17) for line in text.split("\n")),
-        fontsize=8, color=MUTED, linespacing=1.5)
-    # the footnote's height: 8 pt lines at 1.5 spacing, as a fraction of the figure
+    fig.text(0.01, 0.005, text, fontsize=8, color=MUTED, linespacing=1.5)
+    # the footnote's and the title's heights (8 pt and 11.5 pt lines), as fractions of the figure
     bottom = 0.01 + (text.count("\n") + 1) * 8 * 1.5 / 72 / fig.get_figheight()
-    fig.tight_layout(rect=(0, bottom, 1, 0.965), h_pad=3.5, w_pad=2)
+    top = 1 - (0.005 + ((head.count("\n") + 1) * 11.5 * 1.3 + 14) / 72 / fig.get_figheight())
+    if kind != "cpu":  # under the title, at the right
+        fig.legend(handles=[Patch(color=c, label=GPU_NAMES[n]) for n, c in GPU_COLORS.items()],
+                   loc="upper right", bbox_to_anchor=(0.995, top + 4 / 72 / fig.get_figheight()),
+                   ncol=2, frameon=False, fontsize=9)
+    fig.tight_layout(rect=(0, bottom, 1, top), h_pad=3.5, w_pad=2)
     fig.savefig(out, dpi=140, facecolor="white",
                 **out_of_date_banner(fig, stale(grid), sum(1 for row in grid for bs in row for *_, b in bs if b)))
     print(out)
