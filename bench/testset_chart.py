@@ -317,7 +317,8 @@ def chart(dataset, runs, out, notes={}):
 
 def table(dataset, runs):
     """The runs as a Markdown table (BENCHMARK.md), in the chart's order: training time mean
-    per protocol, the number of runs, peak RAM and VRAM (means)."""
+    per protocol, the number of runs, peak RAM and VRAM (means); a run from before the final
+    protocol is marked out of date, as on the chart."""
     names, _, _, _ = layout(runs)
     panels = [p for p in PROTOCOLS if any(p in run["cases"] for run in runs.values())]
     titles = [PANELS[p].split(",")[0] for p in panels]
@@ -338,6 +339,10 @@ def table(dataset, runs):
         ram = statistics.mean(r["peak_rss_train_bytes"] for r in rows) / 2**30
         gpu = [r["gpu_peak_bytes"] for r in rows if r.get("gpu_peak_bytes") is not None]
         what = BACKENDS[backend][1].replace("Parallel", "parallel")
+        if B.rows_out_of_date(rows, runs[name]["machine"]):  # as on the chart
+            commits = sorted({(r.get("commit") or runs[name]["machine"].get("versions", {}).get("tree_git")
+                               or "?")[:8] for r in rows})
+            what += f" ⚠ out of date ({', '.join(commits)})"
         lines.append(f"| {node}, {what} | {'/'.join(map(str, counts))} | {' | '.join(cells)} | "
                      f"{ram:.1f} | {f'{statistics.mean(gpu) / 2**30:.1f}' if gpu else '–'} |")
     return "\n".join(lines)
