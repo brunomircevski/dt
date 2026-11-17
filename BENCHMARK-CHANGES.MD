@@ -46,6 +46,14 @@ Rules:
 | Examples | process launch, interpreter/JVM/R start, imports, CUDA context creation, eager loading of GPU kernels (`CUDA_MODULE_LOADING=EAGER`), creating **empty** memory pools and staging buffers | a fit on a few rows, a full-size untimed fit, pre-growing a memory pool to the data's size, running the split kernels once |
 | Why | The tool needs it once per process, whatever the data, and every real program pays it before its first tree | It leaves the JIT compiled, memory pools grown and caches filled, so the timed fit is "the second fit in a process", not "running the tool once" |
 
+**Supplement (2026-11-17, user-approved): the warm variant.** The rule above
+stays the protocol of every chart. The GPU comparison also reports, on its own
+chart and labelled warm, one CART tree timed as the second identical fit of a
+process after one untimed fit, for every GPU tool alike (./tree `--warm-up`,
+gpubench.py `WARM=1`): cuML's first fit of a process pays a one-time first copy
+of its NumPy input (MNIST8M on the H100: 11.2 s, then 2.1 s), and readers of a
+GPU comparison expect to see both.
+
 ### What is timed: the training time
 
 The training time is **all work that depends on the data**, from the data

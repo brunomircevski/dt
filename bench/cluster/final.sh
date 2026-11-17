@@ -32,7 +32,9 @@
 #   vs         scikit-learn, rpart, YaDT (1 and 48 threads), Weka J48 on epyc2 (cluster-cpu-vs-others):
 #              one run.py per dataset with every tool, so their runs interleave
 #   gpulibs    cuML and XGBoost on hopper and ampere (cluster-gpu-vs-others, ~/gpu-dt-bench):
-#              one tree and a default forest of 10, one gpubench.py process per run, interleaved
+#              one tree and a default forest of 10, one gpubench.py process per run, interleaved;
+#              and the warm variant: one CART tree of cuML, XGBoost (WARM=1) and ./tree
+#              (--warm-up, cluster-gpu-vs-others/warm/, in the hopper and ampere plans)
 #   profiling  ./tree --profile, then the same without (plain/), epyc1, dell1, hopper (cluster-profiling)
 #   hybrid     hybrid_vs_gpu_only.sh on hopper and ampere (hybrid-vs-gpu-only)
 #   e2e        end to end, HIGGS, every tool (cluster-end-to-end): epyc1 (CPU tools) and
@@ -69,7 +71,7 @@ while getopts "tnm:k:N:D:h" option; do
     k) KINDS="$OPTARG" ;;
     N) NODES="$OPTARG" ;;
     D) ONLY_DATA="$OPTARG" ;;
-    *) sed -n '2,59p' "$0"; exit 2 ;;
+    *) sed -n '2,60p' "$0"; exit 2 ;;
   esac
 done
 for n in ${NODES//,/ }; do

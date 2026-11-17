@@ -13,7 +13,7 @@ to 1.46× slower, so they are not used. turing (RTX 2080 Ti) is not used.
 | Node | CPU | RAM | GPU (GPU used: hopper 2, ampere 0) |
 |---|---|---|---|
 | hopper | 2× Xeon Gold 6444Y (Sapphire Rapids), 32 cores | 1 TB DDR5-4800 | 4× H100 PCIe 80 GB |
-| ampere | 2× EPYC 7402 (Zen 2), 48 cores | 1 TB DDR4-3200 | 2× A100 80 GB + 2× A100 40 GB PCIe (GPU 0, used: 80 GB) |
+| ampere | 2× EPYC 7402 (Zen 2), 48 cores | 1 TB DDR4-3200 | 2× A100 80 GB + 2× A100 40 GB PCIe (GPU 0, an 80 GB; job.sh never runs on a GPU under 80 GB) |
 | epyc1 | 2× EPYC 9255 (Zen 5), 48 cores | 512 GB DDR5-6400 | – |
 | dell1 | 2× Xeon Gold 6542Y (Emerald Rapids), 48 cores | 1 TB DDR5-5200 | – |
 
@@ -72,7 +72,7 @@ Every kind's jobs per node (this rerun left out `simple`, `vs` and `gpulibs`):
 
 | Node | Jobs, in order |
 |---|---|
-| hopper | `--hybrid` and `--gpu` on SUSY, HIGGS, MNIST8M, ECBDL'14 15M, SOREL 4M, chess 1M–1000M; hybrid-vs-gpu-only; cluster-profiling (`--hybrid`, `--gpu`); cuML and XGBoost (`gpulibs`) |
+| hopper | `--hybrid` and `--gpu` on SUSY, HIGGS, MNIST8M, ECBDL'14 15M, SOREL 4M, chess 1M–1000M; hybrid-vs-gpu-only; cluster-profiling (`--hybrid`, `--gpu`); cuML and XGBoost, and the warm variant of cuML, XGBoost and ./tree (`gpulibs`) |
 | ampere | the same `--hybrid` and `--gpu` runs; hybrid-vs-gpu-only; cuML and XGBoost |
 | epyc1 | `--multicore` 48 threads on every dataset, thread scaling (HIGGS, MNIST8M), cluster-profiling, `--serial` on MNIST8M and SOREL 4M, `--simple` on all but ECBDL'14, SOREL and SOREL 4M |
 | epyc2 | scikit-learn and Weka J48 (`vs`), `--serial` on the other datasets, `--simple` on ECBDL'14, SOREL and SOREL 4M |

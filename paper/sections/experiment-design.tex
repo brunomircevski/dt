@@ -107,7 +107,11 @@ default), memory pools, page-locked staging buffers and the host-to-device
 copy are timed for our implementation and for cuML and XGBoost alike. A
 separate end-to-end measurement instead counts
 everything from process launch, including our implementation's overlap of
-GPU initialization with input reading. Each case is run 10 times (3 times where a
+GPU initialization with input reading. For the GPU comparison we also
+report, separately and labelled as such, a warm variant in which every tool's
+timed fit is the second identical fit of one process, after an untimed one; it
+isolates one-time first-fit costs, such as cuML's first transfer of its
+NumPy input to the GPU. Each case is run 10 times (3 times where a
 run trains for over an hour) in shuffled order on an exclusively allocated node, and
 we report the mean.
 

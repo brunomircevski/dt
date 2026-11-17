@@ -110,6 +110,13 @@ first-call cost is timed. Until then the libraries' timed fits followed an
 untimed warm-up fit in the same process (cuML on every row, XGBoost on 50,000
 rows), which favoured them.
 
+**The warm variant, apart** (since 2026-11-17): every GPU tool, ./tree too,
+also gets one CART tree timed as a process's second identical fit, after an
+untimed one (./tree `--warm-up`, gpubench.py `WARM=1`), on its own chart
+(cluster-gpu-vs-others/chart-warm.png) beside the cold time. It shows the
+one-time costs of a first fit: cuML's first copy of the NumPy input is the
+largest (MNIST8M on the H100: 11.2 s, a second copy 2.1 s).
+
 **C4.5 has no GPU competitor.** No public GPU C4.5 exists, and an entropy
 (information-gain) tree is a different algorithm (no gain ratio, MDL threshold
 cost or MinSplit), so the libraries run CART only. cuML's entropy tree is not

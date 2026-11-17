@@ -115,6 +115,19 @@ pools without running their code (a warm-up), and ./tree's full start-up took
 0.17-0.28 s more than the bare context (HIGGS: about as long as its whole
 timed training).
 
+**The warm variant (a supplement for the GPU comparison only).** The protocol
+above, cold, is the one every chart uses. Beside it, cluster-gpu-vs-others
+also reports a warm variant for one CART tree on HIGGS and MNIST8M: the same
+timer, but on the second identical fit of a process, after one untimed fit on
+the same data (./tree `--warm-up`, `bench/run.py --warm-up`; gpubench.py
+`WARM=1`). The same definition holds for every tool, so the variant is fair
+too. Why it is there: a GPU tool's first fit pays one-time costs that a
+long-lived process (a service, a notebook, a forest) pays only once. The
+largest is cuML's: its first copy of a NumPy input to the GPU took 11.2 s for
+MNIST8M's 25 GB on the H100, the next one 2.1 s, so a cold cuML fit took
+about 20 s and a warm one 8 s. Warm numbers appear only on their own chart
+(`chart-warm.png`), labelled warm, each with its cold time beside it.
+
 **What is timed: the training time**, all the work that depends on the data,
 from the data in host memory as the tool's input arrays to the finished tree.
 Each tool measures it with its own monotonic clock:
