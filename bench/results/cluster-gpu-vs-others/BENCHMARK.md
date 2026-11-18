@@ -1,10 +1,10 @@
 # GPU vs others: ./tree against cuML and XGBoost on HIGGS and MNIST8M (CART)
 
-Training time of one depth-limited CART tree (depth ≤ 10, no pruning, every training row and feature) per fresh process, on hopper's H100 PCIe 80 GB (GPU 2) with every CPU of the node: ./tree `--gpu` and `--hybrid` (exact: every distinct value is a candidate split), cuML (128 quantile bins) and XGBoost (256 bins). The trees are comparable, not identical. The four tools run in one `bench/run.py` per dataset, their runs interleaved in a new shuffled order each repetition; every run is a fresh process that trains exactly one tree with no warm-up, so this is cold, one-tree latency, not the time per tree of repeated training. Every tool uploads its data through the same code, pinned to the GPU's NUMA node. Every run records a timeline: when each phase of its timed training started and ended.
+Training time of one depth-limited CART tree (depth ≤ 10, and on HIGGS also depth ≤ 30; no pruning, every training row and feature) per fresh process, on hopper's H100 PCIe 80 GB (GPU 2) with every CPU of the node: ./tree `--gpu` and `--hybrid` (exact: every distinct value is a candidate split), cuML (128 quantile bins) and XGBoost (256 bins). The trees are comparable, not identical. The four tools run in one `bench/run.py` per dataset, their runs interleaved in a new shuffled order each repetition; every run is a fresh process that trains exactly one tree with no warm-up, so this is cold, one-tree latency, not the time per tree of repeated training. Every tool uploads its data through the same code, pinned to the GPU's NUMA node. Every run records a timeline: when each phase of its timed training started and ended.
 
-**Data (2026-11-18, job 397, 10 runs a case, ./tree at 7c39d6a3):** the protocol below. Until 7c39d6a3 the libraries' copy threads were not pinned to the GPU's NUMA node (gpubench.py's lookup failed silently; jobs 395 and 396); pinned, their HIGGS upload takes 39 ms instead of 45–65 ms. The earlier protocol (each library uploading in its own way, a warm variant, forests of 10, the A100 node) is in git history up to 8ba60fae.
+**Data (2026-11-18, job 397, 10 runs a case, ./tree at 7c39d6a3):** the protocol below. Until 7c39d6a3 the libraries' copy threads were not pinned to the GPU's NUMA node (gpubench.py's lookup failed silently; jobs 395 and 396); pinned, their HIGGS upload takes 39 ms instead of 45–65 ms. **Depth ≤ 30 (HIGGS):** 2026-11-18, job 410, 10 runs a case, ./tree at 608b387f, `--hybrid` at its default `--handoff-rows` (512). The earlier protocol (each library uploading in its own way, a warm variant, forests of 10, the A100 node) is in git history up to 8ba60fae.
 
-![One CART tree per fresh process on the H100: each tool's phases, ./tree, cuML and XGBoost, HIGGS and MNIST8M](chart.png)
+![One CART tree per fresh process on the H100: each tool's phases, ./tree, cuML and XGBoost, HIGGS and MNIST8M at depth ≤ 10, HIGGS at depth ≤ 30](chart.png)
 
 ```bash
 bench/cluster/final.sh -k gpulibs   # queues the runs on hopper (needs ~/gpu-dt-bench/venv and bench/.tools/libuploader.so)
@@ -53,12 +53,37 @@ bench/cluster/charts.sh             # among them gpu_steps_chart.py: chart.png, 
 - **Totals:** `./tree --gpu` trains its exact tree 2.4–2.5× faster than cuML and 2.4–3.3× faster than XGBoost, from the same host data through the same upload. The libraries' upload reaches 46–51 GB/s on MNIST8M (HIGGS's 1.2 GB is too short a copy for full speed).
 - **Where the time goes:** most of the libraries' time is in their build (cuML 302 ms and 4.56 s, XGBoost 259 ms and 4.45 s, against ./tree's 65 ms and 1.42 s) and in XGBoost's binning. These phases are not like for like: cuML's build also allocates its working memory, and ./tree's build starts from columns already presorted.
 - **The presort hides inside the upload:** its first kernel starts 7–10 ms after the upload starts (the first attribute has to arrive), and its last one ends within 1 ms of the upload's end. On MNIST8M ./tree's upload takes 0.71 s against the libraries' 0.50–0.56 s for the same 25.4 GB: the presort kernels running at the same time slow the copies. Without the overlap the 0.7 s of presort would come after the upload.
-- **The x·log x table's copy costs 26–33 ms** (14% of HIGGS `--gpu`), computing it 1.6–1.8 ms: a 512 KB `cudaMemcpyAsync` from pageable memory, which the host waits for. A copy through the staging buffers, or computing the table on the GPU, would remove most of it (not done yet).
+- **The x·log x table's copy costs 26–33 ms** (14% of HIGGS `--gpu`), computing it 1.6–1.8 ms: a 512 KB `cudaMemcpyAsync` from pageable memory, which the host waits for. Small enough to leave as it is.
 - **--hybrid against --gpu:** its 256 MB of page-locked hand-off buffers take 103–106 ms, the whole difference between the two. Its CPU build runs during the last levels (HIGGS for 15 ms, MNIST8M for 376 ms) and ends before the GPU build does: at depth 10 it gains nothing on these datasets.
 - **cuML's prepare (148–191 ms)** is its input checks: the NaN/inf scan, the classes and the lazy loading of the kernels it uses. Its binning is inside its build: `nsys` shows that cuML computes its 128 quantiles from a row sample in about 0.2 ms of GPU time, and 98% of its build's GPU time is `buildHistogramsKernel`.
 - **XGBoost's prepare is its quantile binning** (`QuantileDMatrix`, then freeing the raw device copy): 150 ms on HIGGS, 2.32 s on MNIST8M (784 attributes).
 - **Similar trees, not identical:** XGBoost's tree on MNIST8M is ./tree's tree (2,047 nodes, the same test accuracy); cuML's has the same size. On HIGGS the libraries' trees differ in a few nodes because of their bins (2,039 and 2,031 against 2,029). Test accuracy is within 0.05 points.
 - **VRAM:** ./tree keeps presorted 8-byte entries for every value (49 GiB on MNIST8M). cuML keeps its bins and needs half as much. XGBoost needs the most (67 GiB) for its multi-output histograms (10 classes × 784 attributes × 256 bins per node), even with its histogram cache limited to 128 nodes.
+
+## A deep tree: HIGGS, depth ≤ 30
+
+Where `--hybrid`'s CPU subtrees pay off: the tree has 2.2M nodes, most of them small. Mean of 10 runs, in seconds (× slower than `./tree --gpu`; ± standard deviation):
+
+| HIGGS, depth ≤ 30 | ./tree --gpu (exact) | ./tree --hybrid (exact) | cuML 26.10 (128 bins) | XGBoost 3.4.1 (256 bins) |
+|---|--:|--:|--:|--:|
+| total | 0.959 ± 0.019 | **0.843** ± 0.041 (0.88×) | 4.49 ± 0.17 (4.7×) | 23.79 ± 0.07 (24.8×) |
+| test accuracy, nodes, VRAM | 68.77%, 2,158,499, 4.2 GiB | 68.77%, 2,158,499, 3.4 GiB | 68.19%, 2,609,289, 1.9 GiB | 68.19%, 2,340,295, 2.9 GiB |
+
+| HIGGS, depth ≤ 30 (ms) | ./tree --gpu | ./tree --hybrid | cuML | XGBoost |
+|---|--:|--:|--:|--:|
+| staging buffers, copy threads | 0–62 | 0–61 | 0–62 | 0–60 |
+| hand-off buffers | | 61–166 | | |
+| device memory | 62–77 | 166–181 | | |
+| upload | 77–124 | 181–229 | 62–131 | 60–104 |
+| presort (GPU kernels) | 87–125 | 190–229 | | |
+| x·log x table, its copy | 124–126, 126–159 | 229–230, 230–264 | | |
+| input checks / quantile binning | | | 131–322 | 104–262 |
+| build | 159–960 | 265–844 | 322–4,486 | 262–23,789 |
+| CPU build (subtrees) | | 315–824 | | |
+
+- **--hybrid is 1.14× faster than --gpu:** its build takes 578 ms against 801 ms, because its CPUs grow the small subtrees from 50 ms into the build to its end while the GPU goes on with the large nodes. Its hand-off buffers (105 ms) take back part of the gain. (hybrid-vs-gpu-only measured 1.34× at this depth on hopper with 5 runs at f53347a9.)
+- **The libraries fall far behind on a deep tree:** cuML 4.7× and XGBoost 24.8× slower than `--gpu`, against 2.4–2.5× at depth 10. Their build works per node (histograms of every node's rows over every attribute's bins), and this tree has a thousand times more nodes; ./tree's level costs grow with rows, not nodes. XGBoost's 23.5 s build is almost all of its time.
+- **Their trees differ more:** with only 128 or 256 candidate splits per attribute, cuML grows 21% and XGBoost 8% more nodes than the exact tree, and both test 0.58 points lower (68.19% against 68.77%).
 
 ## The sections
 
@@ -84,8 +109,8 @@ Sections of ./tree under 2 ms (the wait for the presort's end, the host arena, t
 | Implementation | Version | Settings |
 |---|---|---|
 | **./tree --gpu** and **--hybrid** | the commit under test | `--cart -d 10` (exact Gini), no pruning, every CPU of the node (`--hybrid` finishes small subtrees on them) |
-| **cuML** `RandomForestClassifier` | 26.10 | `n_estimators=1, bootstrap=False, max_samples=1.0, max_features=1.0, n_bins=128, max_depth=10, split_criterion="gini", n_streams=1` |
-| **XGBoost** | 3.4.1, `device="cuda", tree_method="hist"` | `reg:squarederror`, `eta=1, lambda=0, alpha=0, gamma=0, min_child_weight=1`, `max_bin=256`, `max_depth=10`, `grow_policy="depthwise"`, one round. On 0/1 labels the gain is n/2 × the drop in Gini impurity, so this is CART on the bins. MNIST8M (10 classes): one multi-output tree (`multi_strategy="multi_output_tree"`, `max_cached_hist_node=128`) on one-hot labels, whose summed squared error is again n/2 × the Gini drop. |
+| **cuML** `RandomForestClassifier` | 26.10 | `n_estimators=1, bootstrap=False, max_samples=1.0, max_features=1.0, n_bins=128, max_depth=10` (30), ` split_criterion="gini", n_streams=1` |
+| **XGBoost** | 3.4.1, `device="cuda", tree_method="hist"` | `reg:squarederror`, `eta=1, lambda=0, alpha=0, gamma=0, min_child_weight=1`, `max_bin=256`, `max_depth=10` (30), `grow_policy="depthwise"`, one round. On 0/1 labels the gain is n/2 × the drop in Gini impurity, so this is CART on the bins. MNIST8M (10 classes): one multi-output tree (`multi_strategy="multi_output_tree"`, `max_cached_hist_node=128`) on one-hot labels, whose summed squared error is again n/2 × the Gini drop. |
 
 ## The protocol
 
@@ -111,14 +136,15 @@ cuML needs its own venv (`GPU_PYTHON`, default `~/gpu-dt-bench/venv/bin/python`;
   --extra-index-url=https://pypi.nvidia.com
 # a plan line for bench/cluster/batch.sh (final.sh writes these)
 - cluster-gpu-vs-others/one-tree vs-hopper-higgs higgs tree_gpu_only,tree_cuda,cuml,xgboost 10 cart_depth10 all 14400 ACCURACY=--test-accuracy
+- cluster-gpu-vs-others/one-tree vs-hopper-higgs-depth30 higgs tree_gpu_only,tree_cuda,cuml,xgboost 10 cart_depth30 all 14400 ACCURACY=--test-accuracy,HANDOFF=default
 ```
 
 ## Files
 
 | File | Content |
 |---|---|
-| `chart.png` | HIGGS and MNIST8M: each tool's phases (set-up, hand-off buffers, upload, prepare, build, CPU build) on a timeline, with total, test accuracy, nodes, VRAM and spread (`bench/gpu_steps_chart.py`) |
-| `summary.csv` | one row per dataset, tool and recorded section (with the bar it is drawn in): mean start, end and length and the tool's total (mean, standard deviation, min, max), VRAM, test accuracy, nodes, commit |
-| `one-tree/vs-hopper-<dataset>/` | the run folders: `results.jsonl` (every run of every tool, each step's time), `plan.json`, `machine.json`, `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py` |
+| `chart.png` | HIGGS and MNIST8M at depth ≤ 10, HIGGS at depth ≤ 30: each tool's phases (set-up, hand-off buffers, upload, prepare, build, CPU build) on a timeline, with total, test accuracy, nodes, VRAM and spread (`bench/gpu_steps_chart.py`) |
+| `summary.csv` | one row per dataset, depth limit, tool and recorded section (with the bar it is drawn in): mean start, end and length and the tool's total (mean, standard deviation, min, max), VRAM, test accuracy, nodes, commit |
+| `one-tree/vs-hopper-<dataset>[-depth30]/` | the run folders: `results.jsonl` (every run of every tool, each step's time), `plan.json`, `machine.json`, `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py` |
 | `scripts/gpubench.py` | one cuML or XGBoost run (called by `bench/run.py`) |
 | `scripts/requirements-freeze.txt` | the venv's pinned versions |

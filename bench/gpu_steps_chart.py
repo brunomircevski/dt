@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""cluster-gpu-vs-others: one CART tree (depth <= 10) per tool on one GPU, as a
+"""cluster-gpu-vs-others: one CART tree (depth <= 10; HIGGS also <= 30) per tool on one GPU, as a
 timeline with the same bars for every tool (set-up, upload, prepare, build;
 --hybrid also its hand-off buffers and CPU build), each a thin bar on its own lane from the
 moment it started to the moment it ended, so bars that ran at the same time
 (./tree's presort during its upload) overlap. ./tree --gpu and --hybrid, cuML,
 XGBoost; every run a fresh process with no warm-up, all uploading through
-./tree's staged upload. Reads cluster-gpu-vs-others/one-tree/vs-<node>-<dataset>/results.jsonl
-(bench/run.py; each row's "timeline"), writes chart.png and summary.csv there.
+./tree's staged upload. Reads cluster-gpu-vs-others/one-tree/vs-<node>-<panel>/results.jsonl
+(bench/run.py; each row's "timeline"), writes chart.png and summary.csv there. A
+panel is a dataset at depth <= 10, or <dataset>-depth<D> at depth <= D.
 
-  bench/.venv/bin/python bench/gpu_steps_chart.py [--node hopper] [--datasets higgs,mnist8m]
+  bench/.venv/bin/python bench/gpu_steps_chart.py [--node hopper] [--panels higgs,mnist8m,higgs-depth30]
 
 Where the times come from (all since the timer started, the mean of the runs):
   ./tree    its "span" lines: host clock around each section; the presort's
@@ -63,12 +64,19 @@ HEAD = 1.1       # the tool's lane (its total, then its facts below it) to its f
 INCH = 0.15      # one lane's height in inches
 
 
-def load(node, dataset, merged=True):
+def panel_of(panel):
+    """"higgs" -> ("higgs", 10), "higgs-depth30" -> ("higgs", 30)."""
+    dataset, _, depth = panel.partition("-depth")
+    return dataset, int(depth or 10)
+
+
+def load(node, panel, merged=True):
     """Each tool's runs: its bars (merged) or its recorded sections, mean start and end."""
-    path = RESULTS / "one-tree" / f"vs-{node}-{dataset}" / "results.jsonl"
+    dataset, depth = panel_of(panel)
+    path = RESULTS / "one-tree" / f"vs-{node}-{panel}" / "results.jsonl"
     rows = [json.loads(line) for line in open(path)] if path.exists() else []
     rows = [r for r in rows if r.get("status") == "ok" and r.get("kind", "run") == "run"
-            and r.get("protocol", "cart_depth10") == "cart_depth10" and r.get("timeline")]
+            and r.get("protocol", "cart_depth10") == f"cart_depth{depth}" and r.get("timeline")]
     tools = []
     for impl, label in TOOLS:
         mine = [r for r in rows if r["impl"] == impl]
@@ -144,15 +152,20 @@ def lanes_of(tools):
 
 def draw(ax, tools):
     lanes, height = lanes_of(tools)
-    right = max(t["mean"] for t in tools)
+    totals = sorted(t["mean"] for t in tools)
+    right = totals[-1]
+    clipped = len(totals) > 1 and totals[-1] > 2.5 * totals[-2]
+    if clipped:  # one tool far slower than the rest: cut the axis after the next one, its bar runs off it
+        right = totals[-2] * 1.15
     ref = next((t["mean"] for t in tools if t["impl"] == "tree_gpu_only"), None)
     min_width = right * 0.0025  # a section too short to see is drawn this wide
     ticks, names = [], []
     for y, t, s in lanes:
         if s is None:  # the tool's header lane: its whole training, and its total
             note = f"total {t['mean']:.3g} s"
-            if ref and not t["impl"].startswith("tree"):
-                note += f" ({t['mean'] / ref:.1f}× ./tree --gpu)"
+            if ref and t["impl"] != "tree_gpu_only":
+                ratio = t["mean"] / ref
+                note += f" ({ratio:.2f}× ./tree --gpu)" if ratio < 1 else f" ({ratio:.1f}× ./tree --gpu)"
             total = ax.text(0, y, note, va="center", fontsize=8.5, color=INK,
                             fontweight="bold")
             ax.annotate(facts(t), xy=(1, 0.5), xycoords=total, xytext=(8, 0), textcoords="offset points",
@@ -163,10 +176,14 @@ def draw(ax, tools):
         colour = CATEGORIES[s["name"]][0]
         label = s["name"]
         for start, end in s["segments"]:
-            width = max(end - start, min_width)
+            width = max(min(end, right) - start, min_width)
             ax.barh(y, width, left=start, height=BAR, color=colour, linewidth=0)
         text = duration(s["seconds"])
-        ax.text(start + width + right * 0.008, y, text, va="center", fontsize=7, color=MUTED)
+        if end > right:  # runs off the cut axis
+            ax.text(right, y, f"{text} →", va="center", ha="right", fontsize=7, color=INK,
+                    bbox={"facecolor": WHITE, "edgecolor": "none", "pad": 1})
+        else:
+            ax.text(start + width + right * 0.008, y, text, va="center", fontsize=7, color=MUTED)
         ticks.append(y)
         names.append(label)
     ax.set_yticks(ticks, names)
@@ -175,7 +192,9 @@ def draw(ax, tools):
         tick.set_color(MUTED if s else INK)
         tick.set_fontweight("normal" if s else "bold")
     ax.set_ylim(height - GAP + 0.2, -0.8)
-    ax.set_xlim(0, right * 1.1)
+    ax.set_xlim(0, right if clipped else right * 1.1)
+    if clipped:
+        ax.spines["bottom"].set_bounds(0, right)
 
 
 def facts(t):
@@ -205,13 +224,13 @@ def style(ax, title):
 def write_summary(grid, out):
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["dataset", "implementation", "gpu", "section", "bar", "start_mean", "end_mean",
+        w.writerow(["dataset", "depth_limit", "implementation", "gpu", "section", "bar", "start_mean", "end_mean",
                     "seconds_mean", "cpu_work_seconds", "cpu_tasks", "runs", "time_mean", "time_sd", "time_min",
                     "time_max", "vram_bytes", "test_accuracy", "nodes", "commit"])
-        for dataset, tools in grid:
+        for panel, tools in grid:
             for t in tools:
                 for s in [None] + t["sections"]:
-                    w.writerow([dataset, t["label"], t["gpu"],
+                    w.writerow([*panel_of(panel), t["label"], t["gpu"],
                                 "total" if s is None else s["name"],
                                 "" if s is None else BAR_OF.get(s["name"], "build") or "(inside build)",
                                 f"{0.0 if s is None else s['start']:.5f}",
@@ -226,19 +245,20 @@ def write_summary(grid, out):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--node", default="hopper")
-    parser.add_argument("--datasets", default="higgs,mnist8m")
+    parser.add_argument("--panels", default="higgs,mnist8m,higgs-depth30")
     args = parser.parse_args()
-    grid = [(d, tools) for d in args.datasets.split(",") if (tools := load(args.node, d))]
+    grid = [(p, tools) for p in args.panels.split(",") if (tools := load(args.node, p))]
     if not grid:
         raise SystemExit("no results with a timeline")
     heights = [lanes_of(tools)[1] for _, tools in grid]
     fig, axes = plt.subplots(len(grid), 1, figsize=(12, 2.0 + INCH * sum(heights)), squeeze=False,
                              gridspec_kw={"height_ratios": heights})
-    for ax, (dataset, tools) in zip(axes[:, 0], grid):
+    for ax, (panel, tools) in zip(axes[:, 0], grid):
+        dataset, depth = panel_of(panel)
         draw(ax, tools)
-        style(ax, TITLES.get(dataset, dataset))
+        style(ax, f"{TITLES.get(dataset, dataset)}, depth ≤ {depth}")
     gpu = grid[0][1][0]["gpu"]
-    fig.suptitle(f"One CART tree per fresh process, depth ≤ 10, on one {gpu} ({args.node}): each tool's phases",
+    fig.suptitle(f"One CART tree per fresh process on one {gpu} ({args.node}): each tool's phases",
                  x=0.01, y=1 - 0.12 / fig.get_figheight(), ha="left", fontsize=13, color=INK, fontweight="bold")
     fig.legend(handles=[plt.Rectangle((0, 0), 1, 1, color=c[0]) for c in CATEGORIES.values()],
                labels=[c[1] for c in CATEGORIES.values()], loc="upper left", bbox_to_anchor=(0.01, 1 - 0.36 / fig.get_figheight()),
@@ -253,12 +273,13 @@ def main():
             "Every tool uploads through ./tree's staged upload, pinned to the GPU's NUMA node "
             "(bench/adapters/uploader.cpp). Exact: every distinct value is a candidate split; bins: only quantile "
             "bin edges (XGBoost: squared error with λ = 0 on 0/1 or one-hot labels = Gini). The trees are "
-            "comparable, not identical.")
+            "comparable, not identical. ./tree --hybrid hands nodes under 512 rows to the CPUs "
+            "(at depth ≤ 10 the value measured best, at depth ≤ 30 its default).")
     fig.text(0.01, 0.005, textwrap.fill(note, 190), fontsize=7.5, color=MUTED, va="bottom")
     top = 1 - 1.2 / fig.get_figheight()
     fig.tight_layout(rect=(0, 0.75 / fig.get_figheight(), 1, top))
     fig.savefig(RESULTS / "chart.png", dpi=160)
-    write_summary([(d, load(args.node, d, merged=False)) for d, _ in grid], RESULTS / "summary.csv")
+    write_summary([(p, load(args.node, p, merged=False)) for p, _ in grid], RESULTS / "summary.csv")
     print(RESULTS / "chart.png")
 
 

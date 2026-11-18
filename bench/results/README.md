@@ -8,7 +8,7 @@ Inside a benchmark, one directory per run: `<backend>-<node>-<dataset>/`.
 - **node:** `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402) run CUDA only; `epyc` (epyc1, or epyc2 with the same hardware, 2× EPYC 9255) and `dell` (a 512 GB node, dell2, dell3 or dell4, 2× Xeon Gold 6542Y; dell1, 1 TB with every memory channel, is no longer used and its runs are out of date) run on the CPU only.
 - **dataset:** the `bench/datasets.toml` entry, e.g. `higgs`, `ecbdl_15m`, `chess_1b`.
 
-A run directory holds `results.jsonl` (one row per run of a case), `plan.json` (the cases and the dataset's rows, features and split), `machine.json` (hardware, commit, date), `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py`. Two benchmarks differ: `cluster-cpu-vs-others` names its runs `vs-epyc-<dataset>-<tool>-<algorithm>` and takes ./tree's bars from the test-set benchmarks. `cluster-gpu-vs-others` runs ./tree, cuML and XGBoost together in `one-tree/vs-hopper-<dataset>` (the libraries' runner in `scripts/`).
+A run directory holds `results.jsonl` (one row per run of a case), `plan.json` (the cases and the dataset's rows, features and split), `machine.json` (hardware, commit, date), `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py`. Two benchmarks differ: `cluster-cpu-vs-others` names its runs `vs-epyc-<dataset>-<tool>-<algorithm>` and takes ./tree's bars from the test-set benchmarks. `cluster-gpu-vs-others` runs ./tree, cuML and XGBoost together in `one-tree/vs-hopper-<dataset>[-depth30]` (the libraries' runner in `scripts/`).
 
 The runs are SLURM jobs: `bench/cluster/final.sh` queues all of them (one chain of jobs per node), `bench/cluster/submit.sh` single ones; each runs `bench/run.py --run-id cluster-<what>/<run>`, which writes into `bench/results/<run-id>/`. Setup, data and every submit command are in [bench/cluster/README.md](../cluster/README.md).
 
@@ -42,7 +42,7 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 | Directory | What | Main result |
 |---|---|---|
 | [`cluster-cpu-vs-others`](cluster-cpu-vs-others/BENCHMARK.md) | ./tree `--simple`, `--serial`, `--multicore` on epyc against scikit-learn (CART) and Weka J48 (C4.5), one thread | HIGGS: `--multicore` 660× scikit-learn and 2,400× J48, `--serial` 27× and 112×; the same trees (J48's C4.5 on HIGGS 923 against 935 nodes). |
-| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--gpu` and `--hybrid` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree on hopper's H100, every tool uploading through the same code, a timeline of each run's phases; one tree per fresh process | One CART tree (10 runs): ./tree `--gpu` (exact) 2.4–2.5× faster than cuML (128 bins) and 2.4–3.3× than XGBoost (256 bins), on comparable trees. |
+| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--gpu` and `--hybrid` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree on hopper's H100, every tool uploading through the same code, a timeline of each run's phases; one tree per fresh process | One CART tree (10 runs): ./tree `--gpu` (exact) 2.4–2.5× faster than cuML (128 bins) and 2.4–3.3× than XGBoost (256 bins), on comparable trees; HIGGS at depth ≤ 30: 4.7× and 24.8×, `--hybrid` 1.14× faster than `--gpu`. |
 
 **Energy** (not timed; the whole server at the PSU, from a meter model fitted per node):
 

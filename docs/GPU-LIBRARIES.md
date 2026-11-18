@@ -5,7 +5,8 @@ timed on each side and where the comparison is still not even. Results,
 settings and the scripts are in
 [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
 (one CART tree per fresh process, depth ≤ 10, no pruning, hopper's H100;
-2026-11-18, job 397, 10 runs a case, ./tree at 7c39d6a3).
+2026-11-18, job 397, 10 runs a case, ./tree at 7c39d6a3; HIGGS at depth ≤ 30:
+job 410, ./tree at 608b387f).
 
 ## The result in one sentence
 
@@ -17,6 +18,11 @@ upload code. cuML and XGBoost split only at 128 and 256 histogram bins: their
 trees are comparable, not identical, and their test accuracy is within 0.05
 points. The totals are the comparison; each tool's phases have its own
 boundaries and only explain where its time goes.
+
+On a deep tree the gap widens: HIGGS at depth ≤ 30 (2.2M nodes) takes
+`./tree --hybrid` 0.84 s and `--gpu` 0.96 s, cuML 4.5 s (4.7× `--gpu`) and
+XGBoost 23.8 s (24.8×). There the libraries' trees are 8–21% larger and test
+0.58 points lower.
 
 ## Why the design is faster
 
@@ -116,11 +122,14 @@ cost or MinSplit), so the libraries run CART only.
 * **./tree --hybrid is a CPU + GPU hybrid:** nodes below `--handoff-rows`
   (10 × features, at most 2^depth limit, within [512, 16384]) go to the CPU.
   At depth 10 on these datasets its build is the same as `--gpu`'s and its
-  set-up 0.1 s longer.
+  set-up 0.1 s longer; at depth 30 on HIGGS its build is 0.22 s shorter, 1.14×
+  faster in all.
 * **Memory cost of exactness:** ./tree keeps presorted 8-byte entries for every
   value: more VRAM than cuML on both datasets, less than XGBoost on MNIST8M.
-* **Depth:** the GPU's lead shrinks as trees deepen (HIGGS CART against
-  epyc: 4× at depth 10, 1.1× unlimited), and depth 10 underfits
+* **Depth:** against the GPU libraries the lead grows with depth (HIGGS:
+  2.4–2.5× at depth 10, 4.7× and 24.8× at depth 30), because their build
+  works per node. Against ./tree's own CPU backend it shrinks (HIGGS CART
+  against epyc: 4× at depth 10, 1.1× unlimited), and depth 10 underfits
   ([PERFORMANCE.md](PERFORMANCE.md#october-2026-what-the-benchmarks-showed-mordor3-cluster)).
   State the depth with every figure.
 * **Single tree:** cuML is designed for forests, XGBoost for boosting; the
@@ -128,13 +137,9 @@ cost or MinSplit), so the libraries run CART only.
 
 ## Experiments still missing
 
-1. **The x·log x table's copy** (26–33 ms, 14% of HIGGS `--gpu`; the
-   timeline shows the table itself takes 1.6–1.8 ms): a 512 KB copy from
-   pageable memory. Copying it through the staging buffers or computing it on
-   the GPU should remove most of it.
-2. **Per-kernel profile of tree construction** for all three tools (`nsys`),
+1. **Per-kernel profile of tree construction** for all three tools (`nsys`),
    to compare the libraries' histogram kernels with ./tree's sweep and
    partition.
-3. **Clean ablation** on one commit: a `--handoff-rows` sweep and a
+2. **Clean ablation** on one commit: a `--handoff-rows` sweep and a
    `--threads` sweep; the bitmap, fused next-level histograms, tile bound
    and asynchronous hand-off ring would need compile-time switches.
