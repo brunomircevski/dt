@@ -1,6 +1,7 @@
 %% ------------------------------------------------------------------------
 %% TEMPORARY: chart-style test section. Remove before submission.
-%% Figures: paper/figs/test-*.pdf, made by paper/tools/charts.py from bench/results.
+%% Figures: paper/figs/test-*.pdf, made by paper/tools/charts.py from bench/results;
+%% paper/figs/diagram-*.pdf, made by paper/tools/diagrams/*.py (schematic).
 %% ------------------------------------------------------------------------
 \newpage
 
@@ -65,6 +66,16 @@ lighter shade; the part of that power drawn by the CPUs and the GPU in use
 (hatched: the CPUs during a GPU run); and the energy per tree, time $\times$
 power. Time and energy are on logarithmic scales.}
 \label{fig:energy}
+\end{figure}
+
+\begin{figure}
+\includegraphics[width=\textwidth]{diagram-task-parallel.pdf}
+\caption{Task parallelism in \ImplParallel{} (schematic). (a)~A small tree; box
+width is proportional to the node's samples, colour shows the thread that grows
+it, dark nodes are split by attribute on all threads. (b)~The four threads over
+time: after splitting a node of at least 4,096 samples, a thread passes one
+child to the pool (arrows) and continues with the other.}
+\label{fig:task-parallel}
 \end{figure}
 
 \clearpage
