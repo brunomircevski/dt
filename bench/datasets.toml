@@ -2,7 +2,7 @@
 # bench/data/<name>/ (train/test split in every tool's input format). Since
 # 2026-11-16 each dataset's originals sit next to its prepared files in
 # datasets/<name>/ (on mordor3 datasets/ and bench/data are both ~/datasets);
-# the variants (susy_500k, covertype_10k) read their full set's originals.
+# the variant (covertype_10k) reads its full set's originals.
 #
 # Keys:
 #   source         CSV file, relative to the repository root (header row required)
@@ -72,14 +72,6 @@ source = "datasets/higgs/higgs.csv"
 drop = ["Id"]
 split = "tail"
 test_rows = 500_000
-
-[susy_500k]
-source = "datasets/susy/supersymmetry.csv"
-drop = ["Id"]
-split = "tail"
-test_rows = 500_000
-train_rows = 500_000
-max_test_rows = 100_000
 
 # ECBDL'14 (protein contact maps, GECCO 2014 big data competition): 32M rows,
 # 631 features (92 nominal ones as integer codes), label 0/1 (~2% contacts).
