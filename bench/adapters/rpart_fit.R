@@ -24,15 +24,28 @@ for (arg in commandArgs(trailingOnly = TRUE)) {
 n_features <- as.integer(args$n_features)
 mode <- args$mode
 
+# The rows are read in chunks straight into the frame's columns: one readBin of
+# rows * n_features values overflows R's integers on MNIST8M (6.3e9), and a
+# whole matrix plus its data.frame copy would hold the data three times.
 read_part <- function(part, rows) {
   con <- file(paste0(args[[part]], ".f32"), "rb")  # STEM.f32: train= / test=
-  values <- readBin(con, "numeric", n = rows * n_features, size = 4, endian = "little")
+  columns <- lapply(seq_len(n_features), function(j) numeric(rows))
+  chunk <- max(1L, as.integer(2^24 %/% n_features))  # rows a chunk: ~16M values
+  done <- 0L
+  while (done < rows) {
+    k <- min(chunk, rows - done)
+    values <- matrix(readBin(con, "numeric", n = k * n_features, size = 4, endian = "little"),
+                     nrow = k, byrow = TRUE)
+    at <- (done + 1L):(done + k)
+    for (j in seq_len(n_features)) columns[[j]][at] <- values[, j]
+    done <- done + k
+  }
   close(con)
   con <- file(paste0(args[[part]], ".y.i32"), "rb")
   labels <- readBin(con, "integer", n = rows, size = 4, endian = "little")
   close(con)
-  frame <- as.data.frame(matrix(values, nrow = rows, byrow = TRUE))
-  names(frame) <- paste0("f", seq_len(n_features) - 1)
+  frame <- structure(columns, names = paste0("f", seq_len(n_features) - 1),
+                     class = "data.frame", row.names = c(NA_integer_, -rows))
   frame$class <- factor(labels)
   frame
 }
@@ -53,6 +66,12 @@ fit <- function(frame) {
   model
 }
 
+# rpart() crashes (segfault in its C code) once rows x features passes 2^31 - 1
+# (MNIST8M: 8.1M x 784 = 6.3e9, 2026-11-18): stop with a clear error instead
+if (as.numeric(args$n_train) * n_features > .Machine$integer.max) {
+  stop(sprintf("rpart cannot fit %s rows x %d features: over 2^31 - 1 values (rpart() segfaults)",
+               args$n_train, n_features))
+}
 start <- Sys.time()
 train <- read_part("train", as.integer(args$n_train))
 read_seconds <- as.numeric(difftime(Sys.time(), start, units = "secs"))
