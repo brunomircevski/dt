@@ -19,7 +19,7 @@ Where the times come from (all since the timer started, the mean of the runs):
   cuML,     gpubench.py: the host clock at each section's end, after
   XGBoost   cudaDeviceSynchronize, so its GPU work is inside it
 """
-import argparse, csv, json, statistics as st, textwrap
+import argparse, csv, json, math, statistics as st, textwrap
 from collections import defaultdict
 from pathlib import Path
 
@@ -170,7 +170,9 @@ def windows_of(tools):
         else:
             clusters.append([x, x])
     out = [(0.0, clusters[0][1] + 0.12 * lead)]
-    out += [(lo - 0.12 * lead, hi + 0.3 * lead) for lo, hi in clusters[1:]]  # room for the label after the end
+    for lo, hi in clusters[1:]:  # room for the label after the end, and the whole second nearest the end
+        whole = round(hi)
+        out.append((min(lo - 0.12 * lead, whole - 0.05 * lead), max(hi + 0.3 * lead, whole + 0.05 * lead)))
     return out
 
 
@@ -188,7 +190,8 @@ def axis_scale(ax, windows, gap):
     ax.set_xscale("function", functions=(lambda v: np.interp(v, data, shown), lambda v: np.interp(v, shown, data)))
     ticks = []
     for i, (lo, hi) in enumerate(windows):
-        ticks += [v for v in MaxNLocator(6 if i == 0 else 2).tick_values(lo, hi) if lo <= v <= hi]
+        ticks += ([v for v in MaxNLocator(6).tick_values(lo, hi) if lo <= v <= hi] if i == 0
+                  else list(range(math.ceil(lo), math.floor(hi) + 1)))  # after a break: whole seconds
     ax.set_xticks(ticks, [f"{v:g}" for v in ticks])
     for (_, hi), (lo, _) in zip(windows, windows[1:]):  # the cut: a break mark on the axis
         ax.text((hi + lo) / 2, 0, "//", transform=ax.get_xaxis_transform(), ha="center", va="center",
