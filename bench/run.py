@@ -840,9 +840,9 @@ def main():
         run_cpus = args.cpu_list[:threads] if args.cpu_list else range(os.cpu_count() or 1)
         throttle_before = throttle_count(run_cpus)
         load = (read_text("/proc/loadavg") or "").split()[:3]
-        clock = ClockSampler(run_cpus)
+        sampler = ClockSampler(run_cpus)
         run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl in GPU_IMPLS)
-        clock = clock.result()
+        cpu_clock = sampler.result()
         after = vmstat()
         throttle_after = throttle_count(run_cpus)
         if args.prefetch:
@@ -892,7 +892,7 @@ def main():
         row.update({f"vmstat_{k}": after[k] - before[k] for k in before if k in after})
         # why a run was slow: the CPU clock over the run, thermal throttling events,
         # the load just before it (with mem_free_* and vmstat_* above)
-        row.update(clock)
+        row.update(cpu_clock)
         if throttle_before is not None and throttle_after is not None:
             row["throttle_events"] = throttle_after - throttle_before
         if load:
