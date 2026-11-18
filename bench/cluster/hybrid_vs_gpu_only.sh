@@ -3,7 +3,7 @@
 # dataset, the depth runs of ./tree --hybrid and ./tree --gpu, each through
 # job.sh (the same GPU and threads, every CPU of the node). The hybrid's
 # --handoff-rows: the value measured best for the node, dataset and depth limit
-# (bench/handoff_rows.json, by handoff_sweep.sh; run.py takes it).
+# (tuning/handoff/handoff_rows.json, by tuning/handoff/handoff_sweep.sh; run.py takes it).
 # Submit it from the repository root:
 #
 #   sbatch -p hopper -w hopper --exclusive -t 8:00:00 -o bench/results/hybrid-vs-gpu-only/hopper.log \
@@ -15,7 +15,7 @@
 # made once more with ./tree --profile, into $DIR/profile/{cuda,gpuonly}-<node>-<dataset>/
 # (results.jsonl + profiles/*.json; chart: bench/hybrid_profile_chart.py).
 # $DIR/sweep/ holds the no-limit --handoff-rows sweep of f53347a9 (the
-# "nodepth" values in bench/handoff_rows.json, and ./tree's default). Environment (for a quick check of the script): DIR,
+# "nodepth" values in tuning/handoff/handoff_rows.json, and ./tree's default). Environment (for a quick check of the script): DIR,
 # DATASETS, RUNS, PROTOCOLS, PROFILE_DATASETS ("" for none).
 
 set -uo pipefail

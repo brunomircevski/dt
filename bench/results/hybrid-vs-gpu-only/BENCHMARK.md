@@ -16,7 +16,7 @@ where it was the smallest; and MNIST8M (8.1M × 784) in between. The trees are
 the same in both modes (node counts under each group). The hybrid runs at the
 fastest `--handoff-rows` of a sweep on the same node and dataset
 ([the sweep](#--handoff-rows-the-sweep)). Its picks are now stored in
-`bench/handoff_rows.json` ("nodepth"); later runs take them from there (and the
+`tuning/handoff/handoff_rows.json` ("nodepth"); later runs take them from there (and the
 depth-10 sweep's value for depth 10) instead of sweeping again
 ([bench/README.md](../../README.md#the-hybrids-hand-off-size)).
 
