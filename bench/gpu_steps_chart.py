@@ -26,6 +26,8 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.ticker import MaxNLocator
 
 RESULTS = Path(__file__).resolve().parent / "results" / "cluster-gpu-vs-others"
 TOOLS = [("tree_gpu_only", "./tree --gpu"), ("tree_cuda", "./tree --hybrid"),
@@ -150,15 +152,58 @@ def lanes_of(tools):
     return out, y
 
 
+def windows_of(tools):
+    """The x ranges the axis shows, at one scale: everything if the slowest tool
+    is less than 4x ./tree's slowest; else ./tree's whole run, and around every
+    later moment something ends (a library's last phases), with the empty
+    stretches between them cut out of the axis."""
+    lead = max((t["mean"] for t in tools if t["impl"].startswith("tree")), default=0)
+    right = max(t["mean"] for t in tools)
+    if not lead or right <= 4 * lead:
+        return [(0.0, right * 1.1)]
+    events = sorted({x for t in tools for s in t["sections"] for seg in s["segments"] for x in seg}
+                    | {t["mean"] for t in tools})
+    clusters = [[0.0, lead]]
+    for x in events:
+        if x <= clusters[-1][1] + lead:  # close to the last one: the same window
+            clusters[-1][1] = max(clusters[-1][1], x)
+        else:
+            clusters.append([x, x])
+    out = [(0.0, clusters[0][1] + 0.12 * lead)]
+    out += [(lo - 0.12 * lead, hi + 0.3 * lead) for lo, hi in clusters[1:]]  # room for the label after the end
+    return out
+
+
+def axis_scale(ax, windows, gap):
+    """Draw the windows side by side, each cut-out stretch as `gap` seconds of axis."""
+    data, shown, x = [], [], 0.0
+    for i, (lo, hi) in enumerate(windows):
+        if i:
+            x += gap
+        data += [lo, hi]
+        shown += [x, x + hi - lo]
+        x += hi - lo
+    data = [data[0] - 1e6] + data + [data[-1] + 1e6]  # linear beyond the ends
+    shown = [shown[0] - 1e6] + shown + [shown[-1] + 1e6]
+    ax.set_xscale("function", functions=(lambda v: np.interp(v, data, shown), lambda v: np.interp(v, shown, data)))
+    ticks = []
+    for i, (lo, hi) in enumerate(windows):
+        ticks += [v for v in MaxNLocator(6 if i == 0 else 2).tick_values(lo, hi) if lo <= v <= hi]
+    ax.set_xticks(ticks, [f"{v:g}" for v in ticks])
+    for (_, hi), (lo, _) in zip(windows, windows[1:]):  # the cut: a pale band and a break mark on the axis
+        ax.axvspan(hi, lo, color=GRID, alpha=0.45, linewidth=0, zorder=0)
+        ax.text((hi + lo) / 2, 0, "//", transform=ax.get_xaxis_transform(), ha="center", va="center",
+                fontsize=9, color=MUTED, fontweight="bold", bbox={"facecolor": WHITE, "edgecolor": "none", "pad": 0.5})
+    ax.set_xlim(windows[0][0], windows[-1][1])
+    ax.set_xlabel("seconds since the timer started (mean of the runs; // the axis skips a stretch where nothing ends)")
+
+
 def draw(ax, tools):
     lanes, height = lanes_of(tools)
-    totals = sorted(t["mean"] for t in tools)
-    right = totals[-1]
-    clipped = len(totals) > 1 and totals[-1] > 2.5 * totals[-2]
-    if clipped:  # one tool far slower than the rest: cut the axis after the next one, its bar runs off it
-        right = totals[-2] * 1.15
+    windows = windows_of(tools)
+    span = windows[0][1]  # the first window's width sets the smallest bar
     ref = next((t["mean"] for t in tools if t["impl"] == "tree_gpu_only"), None)
-    min_width = right * 0.0025  # a section too short to see is drawn this wide
+    min_width = span * 0.0025 / 1.1  # a section too short to see is drawn this wide
     ticks, names = [], []
     for y, t, s in lanes:
         if s is None:  # the tool's header lane: its whole training, and its total
@@ -176,14 +221,9 @@ def draw(ax, tools):
         colour = CATEGORIES[s["name"]][0]
         label = s["name"]
         for start, end in s["segments"]:
-            width = max(min(end, right) - start, min_width)
-            ax.barh(y, width, left=start, height=BAR, color=colour, linewidth=0)
-        text = duration(s["seconds"])
-        if end > right:  # runs off the cut axis
-            ax.text(right, y, f"{text} →", va="center", ha="right", fontsize=7, color=INK,
-                    bbox={"facecolor": WHITE, "edgecolor": "none", "pad": 1})
-        else:
-            ax.text(start + width + right * 0.008, y, text, va="center", fontsize=7, color=MUTED)
+            ax.barh(y, max(end - start, min_width), left=start, height=BAR, color=colour, linewidth=0)
+        ax.annotate(duration(s["seconds"]), xy=(max(end, start + min_width), y), xytext=(4, 0),
+                    textcoords="offset points", va="center", fontsize=7, color=MUTED)
         ticks.append(y)
         names.append(label)
     ax.set_yticks(ticks, names)
@@ -192,9 +232,10 @@ def draw(ax, tools):
         tick.set_color(MUTED if s else INK)
         tick.set_fontweight("normal" if s else "bold")
     ax.set_ylim(height - GAP + 0.2, -0.8)
-    ax.set_xlim(0, right if clipped else right * 1.1)
-    if clipped:
-        ax.spines["bottom"].set_bounds(0, right)
+    if len(windows) > 1:
+        axis_scale(ax, windows, gap=0.08 * span)
+    else:
+        ax.set_xlim(*windows[0])
 
 
 def facts(t):
@@ -255,8 +296,8 @@ def main():
                              gridspec_kw={"height_ratios": heights})
     for ax, (panel, tools) in zip(axes[:, 0], grid):
         dataset, depth = panel_of(panel)
-        draw(ax, tools)
         style(ax, f"{TITLES.get(dataset, dataset)}, depth ≤ {depth}")
+        draw(ax, tools)
     gpu = grid[0][1][0]["gpu"]
     fig.suptitle(f"One CART tree per fresh process on one {gpu} ({args.node}): each tool's phases",
                  x=0.01, y=1 - 0.12 / fig.get_figheight(), ha="left", fontsize=13, color=INK, fontweight="bold")
