@@ -918,69 +918,6 @@ def chart_energy(folder, summary):
     plt.close(fig)
 
 
-def chart_energy_split(folder, summary):
-    """Where the energy goes: each component's share, split into idle and above idle."""
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.8), sharey=True)
-    used = set()
-    for ax, (algo, title) in zip(axes, ALGOS.items()):
-        cases = ordered(summary, algo)
-        for i, s in enumerate(cases):
-            left = 0.0
-            for c, (_, color) in COMPONENTS.items():
-                if f"E_{c}" not in s:
-                    continue
-                used.add(c)
-                idle = min(s[f"Eidle_{c}"], s[f"E_{c}"]) / s["energy_J"] * 100
-                dyn = max(s[f"E_{c}"] - s[f"Eidle_{c}"], 0) / s["energy_J"] * 100
-                ax.barh(i, idle, left=left, color=color, alpha=0.38, height=0.7, edgecolor="white", lw=0.5)
-                ax.barh(i, dyn, left=left + idle, color=color, height=0.7, edgecolor="white", lw=0.5)
-                if dyn > 7:
-                    ax.text(left + idle + dyn / 2, i, f"{dyn:.0f}%", ha="center", va="center",
-                            fontsize=7.5, color="white")
-                if idle > 7:
-                    ax.text(left + idle / 2, i, f"{idle:.0f}%", ha="center", va="center", fontsize=7.5,
-                            color=INK)
-                left += idle + dyn
-        ax.set_yticks(range(len(cases)), [label(s) for s in cases], fontsize=8.5)
-        ax.invert_yaxis()
-        ax.set_xlim(0, 100)
-        ax.set_xlabel("share of the energy per tree (%)", color=INK)
-        unit_ticks(ax, "x", "%")
-        ax.set_title(title, fontsize=11, color=INK, loc="left")
-        style(ax)
-    handles = [Patch(color=COMPONENTS[c][1], label=COMPONENTS[c][0]) for c in COMPONENTS if c in used]
-    handles.append(Patch(facecolor="#999", alpha=0.38, label="lighter part: what idle power would have used"))
-    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, fontsize=8.5)
-    fig.suptitle("ECBDL'14 15M: where the training energy goes", fontsize=11, color=INK, x=0.01, ha="left")
-    fig.tight_layout(rect=(0, 0.1, 1, 0.95))
-    save(fig, folder / "chart-energy-split.png", dpi=150)
-    plt.close(fig)
-
-
-def chart_time(folder, summary):
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.6), sharey=True)
-    for ax, (algo, title) in zip(axes, ALGOS.items()):
-        cases = ordered(summary, algo)
-        for i, s in enumerate(cases):
-            ax.barh(i, s["train_s"], color=IMPL_COLORS[s["impl"]], height=0.7)
-            ax.text(s["train_s"] * 1.08, i, f"{fmt_s(s['train_s'])} ± {s['train_s_sd'] / s['train_s'] * 100:.1f}%"
-                    f"  ({trees(s)})", va="center", fontsize=8, color=INK)
-        ax.set_xscale("log")
-        ax.set_yticks(range(len(cases)), [label(s) for s in cases], fontsize=8.5)
-        ax.invert_yaxis()
-        ax.set_xlim(right=ax.get_xlim()[1] * 12)
-        ax.set_xlabel("training time per tree (s, log scale)", color=INK)
-        unit_ticks(ax, "x", "s")
-        ax.set_title(title, fontsize=11, color=INK, loc="left")
-        ax.grid(axis="x", color=GRID, which="both")
-        style(ax)
-    fig.suptitle("ECBDL'14 15M: training time per tree during the power runs", fontsize=11, color=INK,
-                 x=0.01, ha="left")
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
-    save(fig, folder / "chart-time.png", dpi=150)
-    plt.close(fig)
-
-
 def chart_scatter(folder, summary):
     """Time against energy, linear axes, with lines of constant power; an inset zooms
     in on the fast implementations, which sit in the corner at this scale."""
@@ -1049,8 +986,8 @@ def chart_scatter(folder, summary):
 
 
 def chart_cpu_gpu(folder, summary):
-    """Nodes with CPU (RAPL) and GPU (NVML) sensors: one chart per node and
-    algorithm. Each implementation gets up to six thin bars on three log axes:
+    """Nodes with CPU (RAPL) and GPU (NVML) sensors: one chart per node, one
+    panel per algorithm (CART above C4.5). Each implementation gets up to six thin bars on three log axes:
     energy per tree (CPU + GPU, stacked; and the PSU, the whole server), mean
     power while training (CPU, GPU and PSU, one bar each) and time per tree.
     Every bar's lighter bottom part ends at the idle value (power: the node's
@@ -1128,7 +1065,10 @@ def chart_cpu_gpu(folder, summary):
              "t": "time"}
     fs = 6.3
     for node in nodes:
-        for algo in [a for a in ALGOS if any(s["node"] == node and s["algo"] == a for s in cases)]:
+        algos = [a for a in ALGOS if any(s["node"] == node and s["algo"] == a for s in cases)]
+        node_gpu = any("E_gpu" in s for s in cases if s["node"] == node)
+        fig, axs = plt.subplots(len(algos), 1, figsize=(22 if node_gpu else 15, 6.4 * len(algos)), squeeze=False)
+        for row, (algo, ax_e) in enumerate(zip(algos, axs[:, 0])):
             ss = sorted([s for s in cases if s["node"] == node and s["algo"] == algo],
                         key=lambda s: IMPL_ORDER.index(s["impl"]))
             has_psu = all(finite(s.get("psu_J")) for s in ss)
@@ -1152,7 +1092,6 @@ def chart_cpu_gpu(folder, summary):
                 return groups, {k: v - mid for k, v in off.items()}
 
             lay = [layout(s) for s in ss]
-            fig, ax_e = plt.subplots(figsize=(22 if has_gpu else 15, 7.6))
             ax_p = ax_e.twinx()
             ax_t = ax_e.twinx()
             ax_t.spines["right"].set_position(("axes", 1.055 if has_gpu else 1.085))
@@ -1225,9 +1164,10 @@ def chart_cpu_gpu(folder, summary):
             handles += [Patch(color=light("#777"), label="light part: idle (number under its top edge)"),
                         Patch(color="#777", label="dark part: what the run adds above idle"),
                         Patch(color=TIME, label="time per tree")]
-            ax_e.legend(handles=handles, fontsize=8, frameon=False, loc="upper right", ncol=3,
-                        title="Number above a bar: its mean value. Idle energy = idle power × time.",
-                        title_fontsize=8)
+            if row == 0:
+                ax_e.legend(handles=handles, fontsize=8, frameon=False, loc="upper right", ncol=3,
+                            title="Number above a bar: its mean value. Idle energy = idle power × time.",
+                            title_fontsize=8)
             n = ", ".join(f"{IMPLS[s['impl']]} {s['runs']}×{s['repeat']}" for s in ss)
             hw = NODE_HW.get(node, node)
             what = ("both CPU packages (RAPL) and the whole server at the PSU (no GPU)" if has_psu and not has_gpu
@@ -1239,13 +1179,15 @@ def chart_cpu_gpu(folder, summary):
                 m = METERS[node]
                 psu_note = (f" PSU: the meter (refresh {m['period_s']:.0f} s) modelled from the fast sensors, "
                             f"fit rms {m['rms_W']:.0f} W.")
-            ax_e.set_title(f"{ALGOS[algo]}: energy, power and time to train one tree on ECBDL'14 15M "
-                           f"(depth ≤ 10), {hw}\nMeasured: {what}.{psu_note}\n"
-                           f"Means of runs × trees: {n} (every tree a fresh process's only tree)",
-                           fontsize=9.5, color=INK, loc="left")
-            fig.tight_layout()
-            save(fig, folder / f"chart-cpu-gpu-{node}-{algo}.png", dpi=150)
-            plt.close(fig)
+            ax_e.set_title(f"{ALGOS[algo]}. Means of runs × trees: {n}", fontsize=10.5, color=INK, loc="left",
+                           fontweight="bold")
+            if row == 0:
+                fig.suptitle(f"Energy, power and time to train one tree on ECBDL'14 15M (depth ≤ 10), {hw}\n"
+                             f"Measured: {what}.{psu_note} Every tree a fresh process's only tree.",
+                             fontsize=9.5, color=INK, x=0.01, ha="left")
+        fig.tight_layout()
+        save(fig, folder / f"chart-cpu-gpu-{node}.png", dpi=150)
+        plt.close(fig)
 
 
 
@@ -1491,8 +1433,6 @@ def main():
     write_tables(folder, jobs, rows, summary, warmup)
     chart_power(folder, summary)
     chart_energy(folder, summary)
-    chart_energy_split(folder, summary)
-    chart_time(folder, summary)
     chart_scatter(folder, summary)
     chart_traces(folder, jobs, rows)
     chart_cpu_gpu(folder, summary)

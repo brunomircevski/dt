@@ -56,10 +56,14 @@ SOREL-20M do not fit in the 80\,GB of VRAM).}
 
 \begin{figure}
 \includegraphics[width=\textwidth]{test-energy.pdf}
-\caption{Training one C4.5 tree on ECBDL'14 15M (depth $\le$ 10, unpruned).
-Server power and energy: the whole server at the PSU, idle included. CPU+GPU
-power: CPU packages (RAPL) and the GPU in use (NVML). CPU implementations on
-epyc and dell, GPU implementations on ampere (A100) and hopper (H100).}
+\caption{Time, power and energy to train one C4.5 tree on the ECBDL'14 15M
+subsample (depth $\le$ 10, unpruned). Each row is one implementation on one
+server: the CPU implementations on epyc and dell, the GPU implementations on
+the A100 and H100 servers. From left to right: training time; mean power of
+the whole server while training, with the share the idle server would draw in a
+lighter shade; the part of that power drawn by the CPUs and the GPU in use
+(hatched: the CPUs during a GPU run); and the energy per tree, time $\times$
+power. Time and energy are on logarithmic scales.}
 \label{fig:energy}
 \end{figure}
 

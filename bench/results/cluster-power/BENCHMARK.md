@@ -61,10 +61,9 @@ What it shows:
 ![power while training](chart-power.png)
 
 Per node, CPU, GPU and PSU energy and power side by side:
-[epyc1](chart-cpu-gpu-epyc-cart.png), [dell4](chart-cpu-gpu-dell-cart.png),
-[ampere](chart-cpu-gpu-ampere-cart.png), [hopper](chart-cpu-gpu-hopper-cart.png)
-(and `-c45`); where the energy goes: [chart-energy-split.png](chart-energy-split.png);
-time against energy: [chart-time-energy.png](chart-time-energy.png); power
+[epyc1](chart-cpu-gpu-epyc.png), [dell4](chart-cpu-gpu-dell.png),
+[ampere](chart-cpu-gpu-ampere.png), [hopper](chart-cpu-gpu-hopper.png)
+(CART above C4.5); time against energy: [chart-time-energy.png](chart-time-energy.png); power
 over time of each case's first process: [chart-traces.png](chart-traces.png).
 
 ## The meter model

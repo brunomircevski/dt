@@ -593,7 +593,7 @@ def bars():
 # bench/results/cluster-power/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
 # energy at the PSU (each node's meter modelled from the fast sensors, bench/results/cluster-power/BENCHMARK.md);
 # components: CPU packages (RAPL), DRAM (RAPL, Intel nodes), the GPU in use (NVML), the rest.
-POWER = ROOT / "bench" / "power"
+POWER = ROOT / "bench" / "results" / "cluster-power"
 P_NODES = [("epyc1", "epyc"), ("dell4", "dell"), ("ampere", "ampere"), ("hopper", "hopper")]
 P_IMPLS = [("simple", "simple"), ("serial", "serial"), ("parallel", "cpu"), ("gpuonly", "gpuonly"),
            ("cuda", "cuda")]  # (power_bench name, STYLE key)
@@ -604,7 +604,7 @@ P_GPU = {"ampere": "A100", "hopper": "H100"}
 def power_rows():
     """{(STYLE key, node short name, algo): row with floats} from every power result."""
     out = {}
-    f = POWER / "results" / "summary.csv"
+    f = POWER / "summary.csv"
     shorts = {short for _, short in P_NODES}
     if f.exists():
         for r in csv.DictReader(open(f)):
@@ -619,7 +619,7 @@ def power_rows():
             key = dict(P_IMPLS)[r["impl"]]
             out[(key, r["node"], r["algo"])] = v
         for host, _ in P_NODES:  # each node's power job: its machine.txt's commit
-            machine = POWER / "results" / host / "machine.txt"
+            machine = POWER / host / "machine.txt"
             commit = re.search(r"^commit (\S+)", machine.read_text(), re.M) if machine.exists() else None
             USED.append(B.out_of_date(commit and commit.group(1), host))
     return out
