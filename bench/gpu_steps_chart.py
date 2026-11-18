@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """cluster-gpu-vs-others: one CART tree (depth <= 10) per tool on one GPU, as a
-timeline: every section of the timed training is a thin bar from the moment it
-started to the moment it ended, one lane per section, so sections that run at
-the same time (./tree's presort during its upload, --hybrid's CPU subtrees
-during its GPU levels) overlap. ./tree --gpu and --hybrid, cuML, XGBoost; every
-run a fresh process with no warm-up, all uploading through ./tree's staged
-upload. Reads cluster-gpu-vs-others/one-tree/vs-<node>-<dataset>/results.jsonl
+timeline with the same bars for every tool (set-up, upload, prepare, build;
+--hybrid also its hand-off buffers and CPU build), each a thin bar on its own lane from the
+moment it started to the moment it ended, so bars that ran at the same time
+(./tree's presort during its upload) overlap. ./tree --gpu and --hybrid, cuML,
+XGBoost; every run a fresh process with no warm-up, all uploading through
+./tree's staged upload. Reads cluster-gpu-vs-others/one-tree/vs-<node>-<dataset>/results.jsonl
 (bench/run.py; each row's "timeline"), writes chart.png and summary.csv there.
 
   bench/.venv/bin/python bench/gpu_steps_chart.py [--node hopper] [--datasets higgs,mnist8m]
@@ -30,41 +30,40 @@ RESULTS = Path(__file__).resolve().parent / "results" / "cluster-gpu-vs-others"
 TOOLS = [("tree_gpu_only", "./tree --gpu"), ("tree_cuda", "./tree --hybrid"),
          ("cuml", "cuML"), ("xgboost", "XGBoost")]
 INK, MUTED, GRID, WHITE = "#0b0b0b", "#52514e", "#e4e3df", "#ffffff"
-# category -> (colour, legend); the reference palette's slots 1-5, in order
+# The same sections for every tool; each run's detailed timeline (results.jsonl,
+# summary.csv) is merged into them. category -> (colour, legend); the reference
+# palette's slots 1-4; hand-off buffers and CPU build lighter steps of set-up's and build's
 CATEGORIES = {
-    "set-up": ("#2a78d6", "Set-up: buffers, device memory, tables"),
-    "upload": ("#eb6834", "Upload to the GPU (the same code for every tool)"),
-    "prepare": ("#1baf7a", "Presort (./tree) · input checks (cuML) · quantile binning (XGBoost)"),
+    "set-up": ("#2a78d6", "Set-up: staging buffers, copy threads; ./tree also all its device memory at once "
+                          "(the libraries allocate theirs inside their other bars)"),
+    "hand-off buffers": ("#86b6ef", "Hand-off buffers: ./tree --hybrid's 256 MB page-locked buffers for handing nodes to the CPUs"),
+    "upload": ("#eb6834", "Upload to the GPU: the same code for every tool"),
+    "prepare": ("#1baf7a", "Prepare: ./tree's presort (during the upload) and x·log x table · cuML's input checks · "
+                           "XGBoost's quantile binning"),
     "build": ("#eda100", "Build the tree"),
-    "cpu": ("#e87ba4", "CPU subtrees (./tree --hybrid, on the node's CPUs)"),
+    "CPU build": ("#f5c96a", "CPU build: ./tree --hybrid finishes small subtrees on the node's CPUs during its build "
+                             "(from the first subtree's start to the last one's end)"),
 }
-# a section's category and its label on the chart (unlisted: build)
-SECTIONS = {
-    "staging buffers": ("set-up", "staging buffers, copy threads"),
-    "hand-off buffers": ("set-up", "hand-off buffers"),
-    "device memory": ("set-up", "device memory"),
-    "upload": ("upload", "upload"),
-    "presort (GPU)": ("prepare", "presort (GPU kernels)"),
-    "x log x table": ("set-up", "x·log x table"),
-    "x log x table copy": ("set-up", "x·log x table copy"),
-    "input checks": ("prepare", "input checks"),
-    "quantile binning": ("prepare", "quantile binning"),
-    "build": ("build", "build the tree"),
-    "cpu subtrees": ("cpu", "CPU subtrees"),
-    "build tree": ("build", "build the tree"),
+# a recorded section -> the bar it is drawn in
+BAR_OF = {
+    "staging buffers": "set-up", "device memory": "set-up", "hand-off buffers": "hand-off buffers",
+    "upload": "upload",
+    "presort (GPU)": "prepare", "x log x table": "prepare", "x log x table copy": "prepare",
+    "input checks": "prepare", "quantile binning": "prepare", "free raw copy": "prepare",
+    "build": "build", "build tree": "build", "fit's end": "build",
+    "cpu subtrees": "CPU build",
 }
-# sections too short to tell anything on their own (< 1% of the run), drawn as
-# part of the one they follow
-MERGE = {"free raw copy": "quantile binning", "fit's end": "build tree"}
 TITLES = {"higgs": "HIGGS (10.5M rows × 28 features, 2 classes)",
           "mnist8m": "MNIST8M (8.1M rows × 784 features, 10 classes)"}
-LANE = 1.0       # one lane per section
-BAR = 0.42       # the bar's thickness in a lane
-GAP = 0.9        # space between tools
-HEAD = 1.5       # the tool's lane (its total, then its facts below it) to its first section
+LANE = 1.0       # one lane per bar
+BAR = 0.62       # the bar's thickness in a lane
+GAP = 0.6        # space between tools
+HEAD = 1.1       # the tool's lane (its total, then its facts below it) to its first bar
+INCH = 0.15      # one lane's height in inches
 
 
-def load(node, dataset):
+def load(node, dataset, merged=True):
+    """Each tool's runs: its bars (merged) or its recorded sections, mean start and end."""
     path = RESULTS / "one-tree" / f"vs-{node}-{dataset}" / "results.jsonl"
     rows = [json.loads(line) for line in open(path)] if path.exists() else []
     rows = [r for r in rows if r.get("status") == "ok" and r.get("kind", "run") == "run"
@@ -79,23 +78,25 @@ def load(node, dataset):
         for r in mine:
             timeline = {}
             for s in r["timeline"]:
-                name = MERGE.get(s["name"], s["name"])
-                if name in timeline:
-                    timeline[name]["start"] = min(timeline[name]["start"], s["start"])
-                    timeline[name]["end"] = max(timeline[name]["end"], s["end"])
-                else:
-                    timeline[name] = dict(s, name=name)
-            for s in timeline.values():
-                if s["name"] not in spans:
-                    order.append(s["name"])
-                spans[s["name"]].append((s["start"], s["end"], s.get("busy", 0.0), s.get("tasks", 0)))
+                name = BAR_OF.get(s["name"], "build") if merged else s["name"]
+                if name is None:
+                    continue
+                timeline.setdefault(name, []).append((s["start"], s["end"], s.get("busy", 0.0), s.get("tasks", 0)))
+            for name, pieces in timeline.items():
+                if name not in spans:
+                    order.append(name)
+                spans[name].append(pieces)
         sections = []
         for name in order:
-            runs = spans[name]
-            start, end = st.mean(x[0] for x in runs), st.mean(x[1] for x in runs)
-            sections.append({"name": name, "start": start, "end": end,
-                             "seconds": st.mean(x[1] - x[0] for x in runs), "runs": len(runs),
-                             "busy": st.mean(x[2] for x in runs), "tasks": st.mean(x[3] for x in runs)})
+            runs = [joined(pieces) for pieces in spans[name]]  # each run: [(start, end)], touching pieces joined
+            if len({len(r) for r in runs}) > 1:  # the runs disagree: one segment from first start to last end
+                runs = [[(r[0][0], r[-1][1])] for r in runs]
+            segments = [(st.mean(r[i][0] for r in runs), st.mean(r[i][1] for r in runs)) for i in range(len(runs[0]))]
+            raw = spans[name]
+            sections.append({"name": name, "start": segments[0][0], "end": segments[-1][1], "segments": segments,
+                             "seconds": st.mean(sum(e - b for b, e in r) for r in runs), "runs": len(runs),
+                             "busy": st.mean(sum(p[2] for p in pieces) for pieces in raw),
+                             "tasks": st.mean(sum(p[3] for p in pieces) for pieces in raw)})
         sections.sort(key=lambda s: (s["start"], s["end"]))
         times = [r["train_seconds"] for r in mine]
         vram = [r["gpu_peak_bytes"] for r in mine if r.get("gpu_peak_bytes")]
@@ -106,6 +107,18 @@ def load(node, dataset):
                       "vram": st.mean(vram) if vram else None, "test": last.get("test_accuracy"),
                       "nodes": last.get("nodes"), "gpu": last.get("gpu"), "commit": last.get("commit")})
     return tools
+
+
+def joined(pieces, slack=0.002):
+    """Pieces of one bar in one run as segments: pieces that touch or overlap
+    (within `slack` seconds) are one segment."""
+    out = []
+    for start, end, *_ in sorted(pieces):
+        if out and start <= out[-1][1] + slack:
+            out[-1] = (out[-1][0], max(out[-1][1], end))
+        else:
+            out.append((start, end))
+    return out
 
 
 def duration(seconds):
@@ -135,33 +148,32 @@ def draw(ax, tools):
     ticks, names = [], []
     for y, t, s in lanes:
         if s is None:  # the tool's header lane: its whole training, and its total
-            ax.barh(y, t["mean"], left=0, height=BAR * 0.35, color=MUTED, alpha=0.35, linewidth=0)
             note = f"total {t['mean']:.3g} s"
             if ref and not t["impl"].startswith("tree"):
                 note += f" ({t['mean'] / ref:.1f}× ./tree --gpu)"
-            ax.text(t["mean"] + right * 0.01, y, note, va="center", fontsize=8.5, color=INK,
-                    fontweight="bold")
-            ax.text(t["mean"] + right * 0.01, y + 0.62, facts(t), va="center", fontsize=7, color=MUTED)
+            total = ax.text(0, y, note, va="center", fontsize=8.5, color=INK,
+                            fontweight="bold")
+            ax.annotate(facts(t), xy=(1, 0.5), xycoords=total, xytext=(8, 0), textcoords="offset points",
+                        va="center", fontsize=7, color=MUTED)
             ticks.append(y)
             names.append(t["label"])
             continue
-        category, label = SECTIONS.get(s["name"], ("build", s["name"]))
-        colour = CATEGORIES[category][0]
-        width = max(s["end"] - s["start"], min_width)
-        ax.barh(y, width, left=s["start"], height=BAR, color=colour, linewidth=0)
+        colour = CATEGORIES[s["name"]][0]
+        label = s["name"]
+        for start, end in s["segments"]:
+            width = max(end - start, min_width)
+            ax.barh(y, width, left=start, height=BAR, color=colour, linewidth=0)
         text = duration(s["seconds"])
-        if s["tasks"]:
-            text += f"; {duration(s['busy'])} of CPU work in {s['tasks']:.0f} tasks"
-        ax.text(s["start"] + width + right * 0.008, y, text, va="center", fontsize=7, color=MUTED)
+        ax.text(start + width + right * 0.008, y, text, va="center", fontsize=7, color=MUTED)
         ticks.append(y)
         names.append(label)
     ax.set_yticks(ticks, names)
     for tick, (_, _, s) in zip(ax.get_yticklabels(), lanes):
-        tick.set_fontsize(7.5 if s else 9.5)
+        tick.set_fontsize(7.5 if s else 9)
         tick.set_color(MUTED if s else INK)
         tick.set_fontweight("normal" if s else "bold")
     ax.set_ylim(height - GAP + 0.2, -0.8)
-    ax.set_xlim(0, right * 1.3)
+    ax.set_xlim(0, right * 1.1)
 
 
 def facts(t):
@@ -191,7 +203,7 @@ def style(ax, title):
 def write_summary(grid, out):
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["dataset", "implementation", "gpu", "section", "category", "start_mean", "end_mean",
+        w.writerow(["dataset", "implementation", "gpu", "section", "bar", "start_mean", "end_mean",
                     "seconds_mean", "cpu_work_seconds", "cpu_tasks", "runs", "time_mean", "time_sd", "time_min",
                     "time_max", "vram_bytes", "test_accuracy", "nodes", "commit"])
         for dataset, tools in grid:
@@ -199,7 +211,7 @@ def write_summary(grid, out):
                 for s in [None] + t["sections"]:
                     w.writerow([dataset, t["label"], t["gpu"],
                                 "total" if s is None else s["name"],
-                                "" if s is None else SECTIONS.get(s["name"], ("build",))[0],
+                                "" if s is None else BAR_OF.get(s["name"], "build") or "(inside build)",
                                 f"{0.0 if s is None else s['start']:.5f}",
                                 f"{t['mean'] if s is None else s['end']:.5f}",
                                 f"{t['mean'] if s is None else s['seconds']:.5f}",
@@ -218,7 +230,7 @@ def main():
     if not grid:
         raise SystemExit("no results with a timeline")
     heights = [lanes_of(tools)[1] for _, tools in grid]
-    fig, axes = plt.subplots(len(grid), 1, figsize=(12, 2.2 + 0.2 * sum(heights)), squeeze=False,
+    fig, axes = plt.subplots(len(grid), 1, figsize=(12, 2.0 + INCH * sum(heights)), squeeze=False,
                              gridspec_kw={"height_ratios": heights})
     for ax, (dataset, tools) in zip(axes[:, 0], grid):
         draw(ax, tools)
@@ -227,21 +239,22 @@ def main():
     fig.suptitle(f"One CART tree, depth ≤ 10, on one {gpu} ({args.node}): when each section runs",
                  x=0.01, y=1 - 0.12 / fig.get_figheight(), ha="left", fontsize=13, color=INK, fontweight="bold")
     fig.legend(handles=[plt.Rectangle((0, 0), 1, 1, color=c[0]) for c in CATEGORIES.values()],
-               labels=[c[1] for c in CATEGORIES.values()], loc="upper left", bbox_to_anchor=(0.01, 1 - 0.38 / fig.get_figheight()),
-               ncol=3, frameon=False, fontsize=8.5, labelcolor=INK)
-    note = ("Every run a fresh process, no warm-up; one lane per section, from its start to its end (mean of the "
-            "runs), so sections that run at the same time overlap; the grey bar is the whole timed training. "
-            "Not timed: reading the data into host RAM (column-major float32 for every tool), importing the "
-            "library, the CUDA context. cuML and XGBoost upload through ./tree's own staged upload "
-            "(bench/adapters/uploader.cpp). ./tree's presort span is measured on the GPU (CUDA events): it "
-            "sorts each feature as soon as it is uploaded. cuML's 128 bins are computed inside its build from a "
-            "row sample (< 1 ms of GPU time, nsys). ./tree is exact (every distinct value); cuML splits on 128 "
-            "quantile bins, XGBoost on 256 (squared error with λ = 0 on 0/1 or one-hot labels = Gini).")
+               labels=[c[1] for c in CATEGORIES.values()], loc="upper left", bbox_to_anchor=(0.01, 1 - 0.36 / fig.get_figheight()),
+               ncol=1, frameon=False, fontsize=8, handlelength=1.6, labelspacing=0.3, labelcolor=INK)
+    note = ("Every run a fresh process, no warm-up. Each bar runs from its start to its end (mean of the runs); "
+            "bars that overlap ran at the same time (./tree's presort runs on the GPU while the data uploads, "
+            "measured with CUDA events); the build ends at the tool's total. The same bars for every tool: "
+            "summary.csv has each tool's recorded sections. Not timed: reading the data into host RAM "
+            "(column-major float32 for every tool), importing the library, the CUDA context. cuML and XGBoost "
+            "upload through ./tree's own staged upload (bench/adapters/uploader.cpp). cuML's 128 bins are "
+            "computed inside its build from a row sample (< 1 ms of GPU time, nsys). ./tree is exact (every "
+            "distinct value); cuML splits on 128 quantile bins, XGBoost on 256 (squared error with λ = 0 on 0/1 "
+            "or one-hot labels = Gini).")
     fig.text(0.01, 0.005, textwrap.fill(note, 190), fontsize=7.5, color=MUTED, va="bottom")
-    top = 1 - 0.95 / fig.get_figheight()
+    top = 1 - 1.2 / fig.get_figheight()
     fig.tight_layout(rect=(0, 0.75 / fig.get_figheight(), 1, top))
     fig.savefig(RESULTS / "chart.png", dpi=160)
-    write_summary(grid, RESULTS / "summary.csv")
+    write_summary([(d, load(args.node, d, merged=False)) for d, _ in grid], RESULTS / "summary.csv")
     print(RESULTS / "chart.png")
 
 
