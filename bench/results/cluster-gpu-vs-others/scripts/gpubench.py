@@ -124,20 +124,8 @@ def predict_chunks(predict, X, chunk=1_000_000):
 
 # ------------------------------------------------------------------ the upload
 
-def gpu_node_cpus():
-    """The CPUs of the GPU's NUMA node this process may use (./tree's gpuNodeCpus)."""
-    try:
-        from cuda.bindings import runtime
-        _, bus = runtime.cudaDeviceGetPCIBusId(32, 0)
-        bus = (bus.decode() if isinstance(bus, bytes) else str(bus)).rstrip("\x00").lower()
-        node = int(open(f"/sys/bus/pci/devices/{bus[-12:]}/numa_node").read())
-        text = open(f"/sys/devices/system/node/node{node}/cpulist").read().strip()
-    except Exception:  # noqa: BLE001 - unknown node: copy threads unpinned, as ./tree
-        return []
-    cpus = [c for part in text.split(",") for c in
-            range(int(part.split("-")[0]), int(part.split("-")[-1]) + 1)]
-    allowed = os.sched_getaffinity(0)
-    return [c for c in cpus if c in allowed]
+def numa_nodes():
+    return len([d for d in os.listdir("/sys/devices/system/node") if d.startswith("node") and d[4:].isdigit()])
 
 
 class Uploader:
@@ -145,12 +133,14 @@ class Uploader:
     def __init__(self):
         self.lib = ctypes.CDLL(UPLOADER)
         self.lib.staged_create.restype = ctypes.c_void_p
-        self.lib.staged_create.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+        self.lib.staged_create.argtypes = []
+        self.lib.staged_cpus.argtypes = [ctypes.c_void_p]
         self.lib.staged_copy.argtypes = [ctypes.c_void_p] * 3 + [ctypes.c_size_t]
-        self.cpus = gpu_node_cpus()
+        self.cpus = 0
 
-    def start(self):  # timed: the buffers and copy threads
-        self.handle = self.lib.staged_create((ctypes.c_int * len(self.cpus))(*self.cpus), len(self.cpus))
+    def start(self):  # timed: the buffers and copy threads, pinned to the GPU's node as ./tree's
+        self.handle = self.lib.staged_create()
+        self.cpus = self.lib.staged_cpus(self.handle)
 
     def upload(self, host):
         """host array (C- or F-contiguous) -> a CuPy array of the same layout."""
@@ -303,12 +293,14 @@ def main():
     else:
         model = xgb_fit(dev, depth, classes, timer, float(y.mean()))
     seconds = time.perf_counter() - start
+    if uploader.cpus == 0 and numa_nodes() > 1:  # ./tree pins its copies there: so must the libraries'
+        sys.exit("gpubench.py: the upload's copy threads are not pinned to the GPU's NUMA node")
 
     row = {"impl": impl, "dataset": dataset, "case": case, "bins": BINS[impl], "trees": 1,
            "depth_limit": depth, "train_seconds": seconds, **steps, "timeline": timeline,
            "upload_bytes": int(X.nbytes + labels.nbytes), "layout": "column-major",
            "read_seconds": read, "import_seconds": imported, "gpu_startup_seconds": context,
-           "startup_seconds": imported + context, "uploader_cpus": len(uploader.cpus),
+           "startup_seconds": imported + context, "uploader_cpus": uploader.cpus,
            "n_train_loaded": int(X.shape[0]), "n_features_loaded": int(X.shape[1]),
            "version": __import__(impl).__version__, "commit": os.environ.get("TREE_GIT_DESCRIBE"),
            "host": socket.gethostname(), "cpus": cpu_list(), "gpu": gpu_name,

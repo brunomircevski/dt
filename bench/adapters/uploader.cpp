@@ -10,8 +10,12 @@
 #include <cuda_runtime.h>
 #include <pthread.h>
 #include <sched.h>
+#include <algorithm>
+#include <cctype>
 #include <condition_variable>
+#include <cstdio>
 #include <cstring>
+#include <string>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -20,6 +24,44 @@ namespace {
 constexpr int kBuffers = 4;
 constexpr size_t kBytes = size_t{32} << 20;
 constexpr size_t kCopyThreads = 32;
+
+// The CPUs of the GPU's NUMA node that this process may use; empty if that is
+// unknown or the machine has a single node. A copy of ./tree's gpuNodeCpus()
+// (src/build/gpu_host.cuh).
+std::vector<int> gpuNodeCpus() {
+  int device = 0;
+  char busId[32] = {};
+  if (cudaGetDevice(&device) != cudaSuccess ||
+      cudaDeviceGetPCIBusId(busId, sizeof busId, device) != cudaSuccess) {
+    return {};
+  }
+  std::string id(busId);
+  std::transform(id.begin(), id.end(), id.begin(), [](unsigned char c) { return std::tolower(c); });
+  int node = -1;
+  if (std::FILE *file = std::fopen(("/sys/bus/pci/devices/" + id + "/numa_node").c_str(), "r")) {
+    if (std::fscanf(file, "%d", &node) != 1) node = -1;
+    std::fclose(file);
+  }
+  std::FILE *file =
+      node < 0 ? nullptr
+               : std::fopen(("/sys/devices/system/node/node" + std::to_string(node) + "/cpulist").c_str(), "r");
+  if (!file) return {};
+  cpu_set_t allowed;
+  CPU_ZERO(&allowed);
+  sched_getaffinity(0, sizeof allowed, &allowed);
+  std::vector<int> cpus;
+  int first = 0;
+  while (std::fscanf(file, "%d", &first) == 1) {
+    int last = first;
+    if (std::fscanf(file, "-%d", &last) != 1) last = first;
+    for (int cpu = first; cpu <= last; ++cpu)
+      if (cpu < CPU_SETSIZE && CPU_ISSET(cpu, &allowed)) cpus.push_back(cpu);
+    if (std::fgetc(file) != ',') break;
+  }
+  std::fclose(file);
+  if (static_cast<int>(cpus.size()) == CPU_COUNT(&allowed)) return {};  // one node: nothing to choose
+  return cpus;
+}
 
 void pinTo(const std::vector<int> &cpus) {
   if (cpus.empty()) return;
@@ -81,6 +123,7 @@ struct Pool {  // parts-1 workers + the caller, like ThreadPool::parallelFor
 
 struct Staged {
   Pool *pool = nullptr;
+  int cpus = 0;  // copy threads pinned to the GPU's node (0: unpinned)
   char *buffers[kBuffers] = {};
   cudaEvent_t done[kBuffers] = {};
   cudaStream_t stream = nullptr;
@@ -88,10 +131,13 @@ struct Staged {
 }  // namespace
 
 extern "C" {
-// cpus: the GPU's NUMA node's CPUs; the caller pins itself to them for the copies too.
-void *staged_create(const int *cpus, int ncpus) {
-  std::vector<int> c(cpus, cpus + ncpus);
+// The buffers and copy threads, on the current device's NUMA node (as ./tree's
+// Staging::prepare: the buffers allocated by a thread pinned to its CPUs, the
+// copy workers pinned to them, the caller copying too).
+void *staged_create() {
+  const std::vector<int> c = gpuNodeCpus();
   auto *s = new Staged;
+  s->cpus = static_cast<int>(c.size());
   std::thread([&] {
     pinTo(c);
     for (int b = 0; b < kBuffers; ++b) {
@@ -104,6 +150,9 @@ void *staged_create(const int *cpus, int ncpus) {
   s->pool = new Pool(static_cast<int>(n), c);
   return s;
 }
+
+// How many CPUs the copy threads are pinned to (0: not pinned).
+int staged_cpus(void *handle) { return static_cast<Staged *>(handle)->cpus; }
 
 int staged_copy(void *handle, void *target, const void *source, size_t bytes) {
   auto *s = static_cast<Staged *>(handle);
