@@ -67,8 +67,10 @@ copies ping-ponged instead (and a third mirrored the host arena, see Memory).
 
 The CUDA context itself is created on a background thread while the data
 loads (`gpuPrepare`), printed as `gpu startup` and not part of `train total`.
-Everything else is in the timed `gpu setup`, as cuML and XGBoost do it inside
-their fit: the kernels (loaded lazily, at their first launch), the device's
+Everything else is in the timed `gpu setup` (printed in four parts: `setup
+buffers`, `setup allocate`, `setup upload`, `setup finish`), as cuML and
+XGBoost pay theirs inside the timer (they upload through a copy of this upload,
+`bench/adapters/uploader.cpp`): the kernels (loaded lazily, at their first launch), the device's
 stream-ordered memory pool (the first `cudaMallocAsync` of a process blocks
 the host while it is set up: 27 ms on the H100 node, about 15 ms on the A100
 node, 9 ms on the RTX 2080 Ti node), the page-locked staging buffers and copy

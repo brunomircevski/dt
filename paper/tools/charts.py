@@ -141,13 +141,15 @@ def cpu_other(dataset, impl, algo):
     return summary(RES / "cluster-cpu-vs-others" / f"vs-epyc-{dataset}-{impl}-{algo}").get(PROTO[algo])
 
 
-def gpu_other(dataset, impl, algo, host="hopper", trees=1):
-    f = RES / "cluster-gpu-vs-others" / dataset / host / "results.jsonl"
-    if not f.exists():
+def gpu_other(dataset, impl, algo, host="hopper"):
+    """cuML / XGBoost: one tree, cold, the same staged upload as ./tree
+    (bench/gpu_steps_chart.py). CART only: no GPU library grows C4.5 trees."""
+    f = RES / "cluster-gpu-vs-others" / "one-tree" / f"vs-{host}-{dataset}" / "results.jsonl"
+    if algo != "cart" or not f.exists():
         return None
     rows = [json.loads(l) for l in open(f)]
-    rows = [r for r in rows if r["impl"] == impl and r["case"] == algo and r.get("trees") == trees
-            and not r.get("warm")]
+    rows = [r for r in rows if r["impl"] == impl and r.get("kind", "run") == "run" and r.get("status") == "ok"
+            and r.get("protocol", PROTO[algo]) == PROTO[algo]]
     if not rows:
         return None
     USED.append(B.rows_out_of_date(rows))
@@ -155,7 +157,7 @@ def gpu_other(dataset, impl, algo, host="hopper", trees=1):
     last = rows[-1]
     return {"time_mean": statistics.mean(t), "time_min": min(t), "time_max": max(t),
             "test_accuracy": last.get("test_accuracy"), "nodes": last.get("nodes"),
-            "gpu_peak": last.get("gpu_peak_mib", 0) * 2**20}
+            "gpu_peak": max(r.get("gpu_peak_bytes") or 0 for r in rows)}
 
 
 def sec(v, _=None):

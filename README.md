@@ -18,8 +18,8 @@ interchangeable backends, the paper's five implementations, that produce the
 * [docs/CUDA.md](docs/CUDA.md) — the GPU builder, kernel by kernel.
 * [docs/SIMPLE.md](docs/SIMPLE.md) — every difference between `--simple`
   and `--serial`, and why the tree is the same.
-* [docs/GPU-LIBRARIES.md](docs/GPU-LIBRARIES.md) — how `--hybrid` is compared
-  with cuML and XGBoost: what is timed, fairness, caveats.
+* [docs/GPU-LIBRARIES.md](docs/GPU-LIBRARIES.md) — how `--gpu` and `--hybrid`
+  are compared with cuML and XGBoost: what is timed, fairness, caveats.
 * [bench/README.md](bench/README.md) — CPU benchmark against scikit-learn,
   rpart, Weka J48 and YaDT (time and memory).
 * [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — timings of the serial,

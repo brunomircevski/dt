@@ -539,7 +539,7 @@ def hardware_line(machine, gpu_used):
 # only ./tree); every other run: the final harness (03c4e2d2). A run on
 # dell1 is out of date too: the paper's dell is a 512 GB node (dell2-4, 8 of 16
 # memory channels); dell1 has 1 TB and every channel, 1.8x the bandwidth.
-FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "17d8b2f3", "gpulibs": "0cff6d1b"}
+FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "17d8b2f3", "gpulibs": "13e44a29"}
 GPU_LIBRARIES = ("cuml", "xgboost")
 FIXED_GPU = {"hopper": "2", "ampere": "0"}  # each GPU node's GPU (job.sh); another one is out of date
 GPU_HOSTS = ("hopper", "ampere")

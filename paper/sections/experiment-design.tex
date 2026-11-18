@@ -101,17 +101,17 @@ independent execution of the same command. We time all data-dependent
 training work (host-to-device transfer, memory allocation including pool
 growth, presorting or binning, tree construction) and exclude reading the
 input file and runtime start-up (process launch, interpreter or JVM start,
-library imports). All GPU tools are held to one rule: only the bare CUDA
-context is created before the timer, while GPU kernel loading (lazy, the CUDA
-default), memory pools, page-locked staging buffers and the host-to-device
-copy are timed for our implementation and for cuML and XGBoost alike. A
-separate end-to-end measurement instead counts
-everything from process launch, including our implementation's overlap of
-GPU initialization with input reading. For the GPU comparison we also
-report, separately and labelled as such, a warm variant in which every tool's
-timed fit is the second identical fit of one process, after an untimed one; it
-isolates one-time first-fit costs, such as cuML's first transfer of its
-NumPy input to the GPU. Each case is run 10 times (3 times where a
+library imports). All GPU tools are held to one rule: every tool starts from the same
+column-major single-precision copy of the data in host memory, and only the
+bare CUDA context is created before the timer. The timed part runs from that
+host copy to the finished tree. cuML and XGBoost upload their input through a
+C++ copy of our implementation's staged upload (page-locked buffers on the GPU's
+NUMA node, parallel copy threads, asynchronous transfers), so the
+host-to-device transfer is the same code for every tool. GPU kernel loading
+(lazy, the CUDA default), memory pools and allocation are timed for all of
+them alike. Each GPU run also records the time of its steps: set-up, upload,
+preparation (our presort, which overlaps the upload; cuML's input checks;
+XGBoost's quantile binning) and tree construction. Each case is run 10 times (3 times where a
 run trains for over an hour) in shuffled order on an exclusively allocated node, and
 we report the mean.
 

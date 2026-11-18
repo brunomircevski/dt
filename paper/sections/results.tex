@@ -6,8 +6,10 @@
 (Tables~\ref{tab:time-cart} and~\ref{tab:time-c45}); speed-ups between them.}
 
 % CPU cells of this work: ./tree f53347a9 on epyc (bench/results/cluster-<data>/
-% {simple,serial,cpu}-epyc-<data>/summary.csv). Libraries: 2026-11-09/10
-% (cluster-cpu-vs-others, cluster-gpu-vs-others). \tbd: not measured on the
+% {simple,serial,cpu}-epyc-<data>/summary.csv). CPU libraries: 2026-11-09/10
+% (cluster-cpu-vs-others). GPU libraries: \tbd until the rerun of
+% cluster-gpu-vs-others (one tree, equal staged upload; draft 2026-11-18, 3 runs:
+% HIGGS cuML 0.589, XGBoost 0.519; MNIST8M 5.38, 7.44). \tbd: not measured on the
 % final build; GPU and hybrid cells of this work changed after f53347a9
 % (2c688938 hand-off default, 60e3dbe4 memory pool out of train total).
 \begin{table}
@@ -35,8 +37,8 @@ SOREL-20M & 12\,501 & 619 & 15.3 & -- & -- \\
 \multicolumn{6}{@{}l}{\textbf{Existing implementations}} \\
 Dataset & scikit-learn & rpart &  & cuML & XGBoost \\
 \midrule
-HIGGS & 217 & \tbd &  & 0.450 & 2.62 \\
-MNIST8M & 1\,005 & \tbd &  & 7.96 & 26.7 \\
+HIGGS & 217 & \tbd &  & \tbd & \tbd \\
+MNIST8M & 1\,005 & \tbd &  & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -78,8 +80,9 @@ MNIST8M & 18\,998 & \tbd & \tbd &  &  \\
 time, memory, test accuracy, same trees.}
 
 \subsection{Comparison with GPU Libraries}
-\plan{Against cuML and XGBoost: one tree, and per tree of a 10-tree forest;
-accuracy of exact versus binned trees; VRAM.}
+\plan{Against cuML and XGBoost on the H100: one tree each, cold, the same
+staged upload for every tool; time of each step (set-up, upload, presort or
+binning, build); accuracy of exact versus binned trees; VRAM.}
 
 \subsection{Performance Across Hardware}
 \plan{All ./tree backends on the four nodes, per dataset: serial, one and two
