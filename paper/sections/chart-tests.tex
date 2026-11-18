@@ -78,5 +78,15 @@ child to the pool (arrows) and continues with the other.}
 \label{fig:task-parallel}
 \end{figure}
 
+\begin{figure}
+\includegraphics[width=\textwidth]{diagram-small-nodes.pdf}
+\caption{Small nodes in a deep tree (HIGGS, CART, depth $\le$ 30, unpruned).
+(a)~Samples of each level by the size of their node. (b)~With $m = 512$,
+\ImplHybrid{} grows 97\% of the nodes from level 20 on on the CPU, but only
+50--71\% of the samples. (c)~Schematic: after the hand-offs (orange), CPU
+threads grow the small subtrees while the GPU's remaining levels get shorter.}
+\label{fig:small-nodes}
+\end{figure}
+
 \clearpage
 %% ------------------------------------------------------------ end TEMPORARY
