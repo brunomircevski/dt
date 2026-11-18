@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Energy of ./tree's backends from bench/power/power_bench.sh jobs: tables and charts.
+"""Energy of ./tree's backends from bench/results/cluster-power/scripts/power_bench.sh jobs: tables and charts.
 
-  bench/.venv/bin/python bench/power/analyze.py bench/power/results
+  bench/.venv/bin/python bench/results/cluster-power/scripts/analyze.py bench/results/cluster-power
 
 The folder holds one job folder per node (epyc1/, dell4/, ampere/, hopper/),
 each with markers.txt, machine.txt, samples.csv.gz (pwrlog.py, every 0.1 s)
@@ -72,7 +72,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # bench/
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))  # bench/
 import benchlib as B  # noqa: E402
 from chart import out_of_date_banner  # noqa: E402
 
@@ -735,7 +735,7 @@ def method_check(summary):
 # Serial-Opt and Serial-Simple on dell2, which has dell4's half memory
 # channels, its Multicore on dell1 (all channels: not comparable).
 TIME_BENCH = Path(os.environ.get("POWER_TIME_BENCH",
-                                 Path(__file__).resolve().parent.parent / "results" / "cluster-ecbdl"))
+                                 Path(__file__).resolve().parents[2] / "cluster-ecbdl"))
 TIME_PREFIX = {"simple": "simple", "serial": "serial", "parallel": "cpu", "gpuonly": "gpuonly", "cuda": "cuda"}
 TIME_SKIP = {("dell", "parallel")}
 TIME_TOLERANCE = 0.03

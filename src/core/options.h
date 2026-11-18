@@ -111,7 +111,7 @@ struct Options {
   // another, and print each one's training window as Unix times (0 = one
   // tree, no windows printed). With N > 1 every tree is trained in a forked
   // child process, so each one starts as a fresh process's only tree would
-  // (bench/power); the last one is the one evaluated and dumped.
+  // (bench/results/cluster-power); the last one is the one evaluated and dumped.
   std::size_t repeat = 0;
   // --repeat-warmup: seconds that each --repeat tree's child keeps its threads
   // busy before its timer starts, as a single run's CSV load does before its

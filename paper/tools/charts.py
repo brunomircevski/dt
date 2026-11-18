@@ -19,7 +19,7 @@ Styles:
   profile   100 % stacked bars: where the training time goes, per backend
   bars      grouped bars, log scale: the five implementations on every dataset
   energy    time, mean power and total energy of one C4.5 tree on ECBDL'14 15M,
-            epyc and hopper, from bench/power/results/summary.csv
+            epyc and hopper, from bench/results/cluster-power/summary.csv
 """
 
 import csv
@@ -588,8 +588,8 @@ def bars():
 
 
 # ---------------------------------------------------------------- power (energy per tree)
-# bench/power/results/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
-# energy at the PSU (each node's meter modelled from the fast sensors, bench/power/README.md);
+# bench/results/cluster-power/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
+# energy at the PSU (each node's meter modelled from the fast sensors, bench/results/cluster-power/BENCHMARK.md);
 # components: CPU packages (RAPL), DRAM (RAPL, Intel nodes), the GPU in use (NVML), the rest.
 POWER = ROOT / "bench" / "power"
 P_NODES = [("epyc1", "epyc"), ("dell4", "dell"), ("ampere", "ampere"), ("hopper", "hopper")]

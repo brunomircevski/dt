@@ -44,6 +44,12 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 | [`cluster-cpu-vs-others`](cluster-cpu-vs-others/BENCHMARK.md) | ./tree `--simple`, `--serial`, `--multicore` on epyc against scikit-learn (CART) and Weka J48 (C4.5), one thread | HIGGS: `--multicore` 660× scikit-learn and 2,400× J48, `--serial` 27× and 112×; the same trees (J48's C4.5 on HIGGS 923 against 935 nodes). |
 | [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--hybrid` and `--gpu` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree and a default forest of 10, H100 and A100 | One CART tree: ./tree 2.9–3.9× faster than cuML and 9–20× than XGBoost; cuML's default forest is faster per tree. |
 
+**Energy** (not timed; the whole server at the PSU, from a meter model fitted per node):
+
+| Directory | What | Main result |
+|---|---|---|
+| [`cluster-power`](cluster-power/BENCHMARK.md) | energy per tree of ./tree's five backends on epyc1, dell4, ampere and hopper, ECBDL'14 15M, depth ≤ 10, CART and C4.5 | Per CART tree the H100 uses the least: 1.81 kJ on the GPU, 33% less than Multicore on epyc1 (2.70 kJ). |
+
 ## A new node or machine
 
 - **Another mordor3 node:** add a line to the job table in `bench/cluster/submit.sh` (run name, partition, node, implementation, threads) and name the run after it, e.g. `cpu-<node>-<dataset>`. [bench/cluster/README.md](../cluster/README.md) has the settings each node needs.

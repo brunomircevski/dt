@@ -2,7 +2,7 @@
 """Sample every power source a normal user can read, every DT seconds, until
 killed (SIGTERM or SIGINT), and write CSV.
 
-  python3 bench/power/pwrlog.py [DT=0.1] [OUT=stdout]
+  python3 bench/results/cluster-power/scripts/pwrlog.py [DT=0.1] [OUT=stdout]
 
 Columns:
   t          Unix time of the sample

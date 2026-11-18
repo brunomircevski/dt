@@ -187,7 +187,7 @@ must be the same in every repetition; `report.py` marks a case where they are
 not. `run.py --no-eval` skips all of it (the end-to-end runs).
 
 **`./tree --repeat` is not used for timing.** It serves only the power
-benchmark (`bench/power`, whose `--repeat-warmup` is part of its energy method)
+benchmark (`bench/results/cluster-power`, whose `--repeat-warmup` is part of its energy method)
 and A/B tests of code changes (`bench/cluster/ab.sh`).
 
 **Machine hygiene (record it; `run.py` writes `machine.json`):**

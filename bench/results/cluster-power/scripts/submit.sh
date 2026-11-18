@@ -2,9 +2,9 @@
 # Submit power_bench.sh jobs, one per node, from the repository root (on the
 # mordor3 login node):
 #
-#   bench/power/submit.sh [-o OUT] [-d JOBID] [-c] NODE... [VAR=value...]
+#   bench/results/cluster-power/scripts/submit.sh [-o OUT] [-d JOBID] [-c] NODE... [VAR=value...]
 #
-#   -o OUT    results folder (default bench/power/results); the job writes OUT/<node>/
+#   -o OUT    results folder (default bench/results/cluster-power); the job writes OUT/<node>/
 #   -d JOBID  start after that job ends (afterany), e.g. the node's last time-benchmark job
 #   -c        the warm-up check alone (CHECK_ONLY=1, GPU nodes), into OUT/check-<node>/
 #   VAR=value power_bench.sh settings for every job given (they override the node's)
@@ -15,7 +15,7 @@
 # (bench/cluster/build.sh) at the commit in TREE_GIT_DESCRIBE (default: git
 # describe of this checkout).
 set -euo pipefail
-OUT=bench/power/results DEP= CHECK=
+OUT=bench/results/cluster-power DEP= CHECK=
 while getopts "o:d:c" option; do
   case "$option" in
     o) OUT="$OPTARG" ;;
@@ -51,7 +51,7 @@ for node in "${NODES[@]}"; do
   fi
   [ ! -e "$dir/markers.txt" ] || { echo "$dir has a job's results already" >&2; exit 1; }
   mkdir -p "$dir"
-  cmd="env $(printf '%q ' "TREE_GIT_DESCRIBE=$DESCRIBE" "${env[@]}" "${EXTRA[@]}")bench/power/power_bench.sh $kind $(printf %q "$dir")"
+  cmd="env $(printf '%q ' "TREE_GIT_DESCRIBE=$DESCRIBE" "${env[@]}" "${EXTRA[@]}")bench/results/cluster-power/scripts/power_bench.sh $kind $(printf %q "$dir")"
   id=$(sbatch --parsable -p "$p" -w "$node" --exclusive -t "$t" -J "$name" ${DEP:+-d afterany:$DEP} \
          -o "$dir/job.log" --wrap "$cmd")
   echo "$node: job $id ($cmd)"

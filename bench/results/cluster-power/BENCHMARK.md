@@ -4,7 +4,7 @@ ECBDL'14 15M (the first 15M rows of ECBDL'14's train.csv, 631 features),
 depth ≤ 10, no pruning, CART and C4.5. Code f53347a9 (the build of the 2026-11-15
 time benchmark rerun, `~/dt-final`). Jobs 169 (epyc1), 170 (dell4), 173
 (ampere) and 174 (hopper), 2026-11-15/16; the warm-up checks 171 and 172.
-Method: [../README.md](../README.md#method). Every table, with more columns:
+Method: [Method](#method). Every table, with more columns:
 [summary.md](summary.md); every process: [runs.csv](runs.csv); the meter
 models: [meter.csv](meter.csv).
 
@@ -98,7 +98,7 @@ short window is what the model replaces: on the November 8 hopper job it was
 ## Time check
 
 The time per tree against the time benchmark
-([../../../results/cluster-ecbdl](../../../results/cluster-ecbdl), single
+([../cluster-ecbdl](../cluster-ecbdl), single
 runs, 5 a case, same code): within 3% except
 
 - **Serial-Opt on dell4, 5% faster** (243 s against 256 s): the time
@@ -141,3 +141,134 @@ The measured runs used 2 s on ampere and 15 s on hopper (bold).
 - ampere has no DRAM sensor (AMD): its memory is in "rest of the server";
   so is epyc1's. The rest also holds the other, idle GPUs (ampere 3 × ~48 W,
   hopper 3 × ~51 W).
+
+## Method
+
+### The problem: the whole-server meters are slow
+
+The number that compares a CPU server with a GPU server is the energy of the
+whole server, measured at the power supply (PSU). Every node has such a
+meter, but none is fast enough for a tree that takes 2.4 s (H100), 4.3 s
+(A100) or 4.5 s (Multicore on epyc1):
+
+| Node | PSU meter | refresh | what a reading is |
+|---|---|---|---|
+| hopper | ACPI power meter (Intel Node Manager) | 1 s | an average over ~1.25 s |
+| dell4 | ACPI power meter (iDRAC) | 2.1 s | an average over ~2.5 s |
+| epyc1 | ACPI power meter (iDRAC) | 4–10 s (median 6.3 s) | an average over ~2.5 s |
+| ampere | BMC (IPMI DCMI, `/run/power/psu_W`) | 59 s | one point reading (~2.5 s average) |
+
+(The averaging windows are fitted, see below.) The fast sensors, RAPL
+(CPU packages and, on the Intel nodes, DRAM) and NVML (each GPU's energy
+counter), cover only parts of the server: not the fans, disks, network,
+board, the other GPUs or the PSU's own losses (on hopper about 30% of the
+energy of a GPU tree).
+
+### The solution: model the meter from the fast sensors
+
+`pwrlog.py` reads every sensor every 0.1 s for the whole job. For each node,
+`analyze.py` then fits the meter itself:
+
+    reading(t) = mean over [t − D − W, t − D] of  a + b·CPU + c·GPUs + d·busy
+
+where CPU = RAPL packages + DRAM (W), GPUs = the NVML power of every GPU
+(W), busy = the number of busy CPUs (`/proc/stat`), D is the meter's delay
+and W its averaging window. a, b, c, d come from least squares over **every
+reading of the job** (idle, a staircase of CPU load, every run, the gaps); D
+and W from a grid search (D in 0.1 s steps; W from 0.1 to 10 s). The PSU
+energy of a tree is then the integral of a + b·CPU + c·GPUs + d·busy over
+its training window, at 0.1 s resolution, whatever the meter's refresh.
+"Unused GPUs" = the NVML energy of the node's other GPUs (all four for a
+CPU backend); "rest of the server" = PSU − CPU packages − DRAM − every GPU.
+
+**Without the unused GPUs.** hopper and ampere hold four GPUs; a backend
+uses one (CPU backends none), and the other cards idle at 42–55 W each, so
+~150 W of every GPU tree's power (~20% of its energy) and ~200 W of a CPU
+backend's are cards it does not use. `summary.md` and `chart-energy.png`
+(dashed) also give the energy minus c × the unused GPUs' NVML energy
+(c: the model's GPU coefficient): the same server with only the GPU in
+use. It is a counterfactual (a smaller server has other fans and PSUs),
+for comparing a GPU server with a CPU server; the whole-server number
+stays the measured one.
+
+The job gives the fit the range of loads it needs: idle; a staircase of
+1, 2, 4, …, all CPUs busy (60 s per step; 240 s on ampere, so that its
+once-a-minute meter samples each step); all five backends; and, on the GPU
+nodes, GPU and Hybrid runs with their CPU warm-ups.
+
+**Checks** (`BENCHMARK.md`, `chart-meter.png`, `chart-methods.png`):
+
+1. The coefficients fitted on the first and on the second half of the job
+   alone, and the energy each half's model gives.
+2. The mean residual (reading − model) of the readings whose averaging
+   window lies inside a case's training windows: a bias of the model during
+   that backend's trees would show here.
+3. The meter's own energy over the same windows (readings held, shifted back
+   by D + W/2; ampere: the mean of its point readings in the windows). It
+   needs windows much longer than the meter's refresh: it agrees with the
+   model within ~1.5% on every long window, and on 2–3 s GPU trees it is
+   3–5% low (re-analysis of the 2026-11-08 hopper job), which is the error the
+   model removes.
+
+4. **Leave the case out**: the model fitted without any reading of the
+   case's own processes (its warm-ups and checks too), so it predicts a
+   load it has never seen; and the held-out readings' mean residual. On the
+   2026-11-16 jobs the energy per tree moved by ≤ 0.5% (ampere's GPU and
+   Hybrid: ≤ 1.1%), so no case's number depends on its own readings.
+5. **No busy term**: the same fit without the busy-CPUs term: ≤ 0.3%.
+6. (one-off, 2026-11-17) dell4's RAPL `psys` domain, Intel's platform power
+   sensor (DC, every 0.1 s, recorded by pwrlog.py): a model with psys alone
+   as input (12.6 W + 1.02·psys) gives every dell4 case's energy within
+   0.6% of the CPU model; the meter reads 18–25 W above psys, about what
+   the PSU loses at 150–550 W.
+
+Why busy CPUs: on epyc1 (AMD) the PSU rises more with one busy core than
+RAPL accounts for. Without the term the model was 1.5–2.3% low on the
+single-thread runs (re-analysis of the 2026-11-07 epyc job); with it, ≤ 0.8%.
+
+### The runs
+
+Each measured process is `./tree --repeat K`: it loads the CSV once, then
+trains K trees, each in its own forked child, so that every tree is a fresh
+process's only tree, and prints each tree's training window as Unix times.
+K = ceil(TARGET / t) + 1 (t from a warm-up run): about 120 s of training per
+process (240 s on ampere); 3 processes per case, round-robin, 20 s of idle
+before each (Serial-Simple: one process of one tree, 40–90 min).
+
+**Warm-up of the GPU backends.** A GPU or Hybrid tree whose CPU threads were
+idle before it sets up slower (the CPU clocks are low: hopper schedutil,
+ampere ondemand): on ampere (current code, the warm-up check in
+`results/`) trees 3–12 of a process took 5.1–5.5 s instead of 4.3 s (hopper: 2.8 s instead of 2.5 s). A single
+run's tree follows the data load (every thread reads its part of the .f32
+file), so with
+`--repeat-warmup S` each child spins its threads for S s before its timer: 2 s
+is enough on ampere; hopper needs 5 s (with 2 s its trees were 3–10% slower)
+and the measured runs used 15 s.
+The warm-up is outside the training window, so it is never counted, and it
+does not inflate the window: in the warm-up checks (2026-11-16) the CPU
+packages + GPU used 1–4% *less* energy per tree after 15 s of warm-up than
+after none (hopper GPU: 1,165 against 1,217 J), because the tree is faster.
+What it must match is the time benchmark's single runs (the time check):
+with no warm-up, hopper's GPU trees took 13% longer and cost ~8% more.
+
+**Placement**, as in the time benchmark (`bench/cluster/job.sh`,
+`bench/run.py`): Serial-Simple and Serial-Opt on CPU 0; Multicore on every
+CPU; GPU and Hybrid on the GPU of the NUMA node with the most free memory,
+with every CPU of the node (that node's first) and first-touch memory.
+
+**Time check**: every case's time per tree against the time benchmark
+(`bench/results/cluster-ecbdl`, single runs).
+
+Run it (from the repository root, on the login node, with ./tree and
+./tree_cpu built by `bench/cluster/build.sh`):
+
+    bench/results/cluster-power/scripts/submit.sh -c ampere hopper            # the warm-up check (optional)
+    bench/results/cluster-power/scripts/submit.sh epyc1 dell4 ampere hopper   # one job per node: 4-8 h each
+    bench/.venv/bin/python bench/results/cluster-power/scripts/analyze.py bench/results/cluster-power
+
+### Earlier runs
+
+Jobs 84–86 (2026-11-05) and 217, 218, 223, 300 (2026-11-07/08) measured the
+code of that week with the meters' own readings over the tree windows (long
+windows of many trees, readings shifted by a step-measured delay). They are in
+the git history.

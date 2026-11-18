@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Power benchmark job: ./tree's five backends train one tree (ECBDL'14 15M,
-# depth <= 10, no pruning) while bench/power/pwrlog.py samples every power
-# source a user can read, every 0.1 s (bench/power/README.md). One job per
+# depth <= 10, no pruning) while bench/results/cluster-power/scripts/pwrlog.py samples every power
+# source a user can read, every 0.1 s (bench/results/cluster-power/BENCHMARK.md). One job per
 # node, with the whole node, from the repository root (submit.sh-style:
 # held, then released, since sbatch --export can leave a job held):
 #
-#   bench/power/submit.sh epyc1 dell4 ampere hopper
+#   bench/results/cluster-power/scripts/submit.sh epyc1 dell4 ampere hopper
 #
 # KIND (first argument): cpu = Serial-Simple (--simple), Serial-Opt (--serial)
 # and Multicore (--multicore); all = those three plus GPU (--gpu) and Hybrid
@@ -166,7 +166,7 @@ warmup_of() { case $1 in gpuonly|cuda) echo "--repeat-warmup ${2:-$WARMUP}" ;; e
 } > "$OUT/machine.txt" 2>&1
 
 # the sampler on the last CPU: never on CPU 0 with the one-thread runs
-taskset -c "$((NCPU - 1))" python3 bench/power/pwrlog.py 0.1 "$OUT/samples.csv" &
+taskset -c "$((NCPU - 1))" python3 bench/results/cluster-power/scripts/pwrlog.py 0.1 "$OUT/samples.csv" &
 SAMPLER=$!
 BUSY=()
 cleanup() {
