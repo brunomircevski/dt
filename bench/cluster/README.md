@@ -300,7 +300,6 @@ links to it twice: `datasets -> ~/datasets` and `bench/data -> ~/datasets`.
   higgs/                higgs.csv, higgs_openml_45570.pq
   susy/                 supersymmetry.csv, susy.zip, susy_order.u64, susy_delta.i8,
                         supersymmetry_20k.csv (the golden tests' sample, tests/check.sh)
-  susy_500k/            (its originals are susy's)
   covertype/            covertype.csv, covertype.zip
   mnist8m/              mnist8m.csv, mnist8m_test.csv
   ecbdl/                ecbdl.csv (training set), ecbdl_test.csv (the competition's test set),
