@@ -190,8 +190,7 @@ def axis_scale(ax, windows, gap):
     for i, (lo, hi) in enumerate(windows):
         ticks += [v for v in MaxNLocator(6 if i == 0 else 2).tick_values(lo, hi) if lo <= v <= hi]
     ax.set_xticks(ticks, [f"{v:g}" for v in ticks])
-    for (_, hi), (lo, _) in zip(windows, windows[1:]):  # the cut: a pale band and a break mark on the axis
-        ax.axvspan(hi, lo, color=GRID, alpha=0.45, linewidth=0, zorder=0)
+    for (_, hi), (lo, _) in zip(windows, windows[1:]):  # the cut: a break mark on the axis
         ax.text((hi + lo) / 2, 0, "//", transform=ax.get_xaxis_transform(), ha="center", va="center",
                 fontsize=9, color=MUTED, fontweight="bold", bbox={"facecolor": WHITE, "edgecolor": "none", "pad": 0.5})
     ax.set_xlim(windows[0][0], windows[-1][1])
@@ -201,6 +200,7 @@ def axis_scale(ax, windows, gap):
 def draw(ax, tools):
     lanes, height = lanes_of(tools)
     windows = windows_of(tools)
+    gaps = [(hi, lo) for (_, hi), (lo, _) in zip(windows, windows[1:])]  # the stretches the axis skips
     span = windows[0][1]  # the first window's width sets the smallest bar
     ref = next((t["mean"] for t in tools if t["impl"] == "tree_gpu_only"), None)
     min_width = span * 0.0025 / 1.1  # a section too short to see is drawn this wide
@@ -221,7 +221,15 @@ def draw(ax, tools):
         colour = CATEGORIES[s["name"]][0]
         label = s["name"]
         for start, end in s["segments"]:
-            ax.barh(y, max(end - start, min_width), left=start, height=BAR, color=colour, linewidth=0)
+            pieces = [(start, max(end, start + min_width))]
+            for gap_lo, gap_hi in gaps:  # a bar across a cut: two pieces, dots in the gap
+                b, e = pieces[-1]
+                if b < gap_lo and e > gap_hi:
+                    pieces[-1:] = [(b, gap_lo), (gap_hi, e)]
+                    ax.plot(np.interp([0.3, 0.5, 0.7], [0, 1], [gap_lo, gap_hi]), [y] * 3, "o",
+                            markersize=2.2, color=colour, markeredgewidth=0)
+            for b, e in pieces:
+                ax.barh(y, e - b, left=b, height=BAR, color=colour, linewidth=0)
         ax.annotate(duration(s["seconds"]), xy=(max(end, start + min_width), y), xytext=(4, 0),
                     textcoords="offset points", va="center", fontsize=7, color=MUTED)
         ticks.append(y)
