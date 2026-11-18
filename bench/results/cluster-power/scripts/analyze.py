@@ -10,7 +10,9 @@ Writes into the folder: runs.csv (every process), summary.csv (mean and
 standard deviation per case), meter.csv (the meter model of each node),
 warmup.csv (the warm-up check), summary.md (tables) and charts chart-*.png.
 POWER_TIME_BENCH (environment): the time benchmark's cluster-ecbdl folder for
-the time check (default bench/results/cluster-ecbdl).
+the time check (default bench/results/cluster-ecbdl; only for ECBDL'14 15M at
+depth <= 10). The dataset and depth limit in titles and tables come from the
+jobs' machine.txt (the first job's "data" and "protocol" lines).
 
 Per process (one ./tree --repeat K), over its K training windows (each one a
 fresh process's only tree; the gaps between them, fork, CUDA setup and the
@@ -118,6 +120,26 @@ GRID_D_SLOW = np.arange(-5.0, 70.1, 0.5)
 GRID_W = [0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
 SKIP_START = 60.0
 MODEL_INPUTS = ["x_cpu", "x_gpu", "x_busy"]  # s of the job before the first reading the fit uses
+
+
+# What the jobs trained (set by main() from the first job's machine.txt): the dataset and the depth
+# limit, for titles and tables. The time check needs the time benchmark's case (ECBDL'14 15M, depth 10).
+WHAT = "ECBDL'14 15M"
+DEPTH_TXT = "depth ≤ 10"
+DATA_NAMES = {"ecbdl": "ECBDL'14", "mnist8m": "MNIST8M", "higgs": "HIGGS", "susy": "SUSY",
+              "sorel": "SOREL-20M"}
+
+
+def read_case(machine):
+    """machine.txt -> (dataset label, depth label)."""
+    global WHAT, DEPTH_TXT
+    data = re.search(r"^data (\S+)(?:.*\(first (\d+) rows\))?", machine, re.M)
+    depth = re.search(r"^protocol -d (-?\d+)", machine, re.M)
+    if data:
+        name = Path(data.group(1)).parent.name
+        WHAT = DATA_NAMES.get(name, name) + (f" {int(data.group(2)) / 1e6:g}M" if data.group(2) else "")
+    if depth:
+        DEPTH_TXT = "no depth limit" if int(depth.group(1)) < 0 else f"depth ≤ {depth.group(1)}"
 
 
 def node_of(folder):
@@ -621,7 +643,7 @@ def write_tables(folder, jobs, rows, summary, warmup):
         w.writerows(meters)
     lines = []
     for algo, title in ALGOS.items():
-        lines += [f"### {title}, depth ≤ 10, no pruning", "",
+        lines += [f"### {title}, {WHAT}, {DEPTH_TXT}, no pruning", "",
                   "| Implementation | Node | runs × trees | t per tree | mean P | P above idle | peak P | "
                   "E per tree | E above idle | E without the unused GPUs | split of E |",
                   "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -744,7 +766,7 @@ TIME_TOLERANCE = 0.03
 def time_bench(node, impl, algo):
     """Mean training time of the case in the time benchmark, or None."""
     path = TIME_BENCH / f"{TIME_PREFIX[impl]}-{node}-ecbdl_15m" / "runs.csv"
-    if (node, impl) in TIME_SKIP or not path.exists():
+    if (WHAT, DEPTH_TXT) != ("ECBDL'14 15M", "depth ≤ 10") or (node, impl) in TIME_SKIP or not path.exists():
         return None
     protocol = "cart_depth10" if algo == "cart" else "c45_depth10_unpruned"
     t = [float(r["train_seconds"]) for r in read_csv_rows(path)
@@ -760,9 +782,10 @@ def read_csv_rows(path):
 def time_check(summary):
     """Markdown lines: each case's time per tree against its first tree and the
     time benchmark. Prints a warning for every difference above TIME_TOLERANCE."""
+    ref = (f"the time benchmark ({TIME_BENCH.name}, ecbdl_15m; dell's Multicore ran on dell1, not comparable)"
+           if (WHAT, DEPTH_TXT) == ("ECBDL'14 15M", "depth ≤ 10") else f"the time benchmark (none for {WHAT}, {DEPTH_TXT})")
     lines = ["### Time check", "",
-             f"Time per tree (./tree's train time) against the first tree of each process and the time "
-             f"benchmark ({TIME_BENCH.name}, ecbdl_15m; dell's Multicore ran on dell1, not comparable). "
+             f"Time per tree (./tree's train time) against the first tree of each process and {ref}. "
              f"Flagged (!) above {TIME_TOLERANCE:.0%}.", "",
              "| Implementation | Node | Algorithm | t per tree | first tree | time benchmark |",
              "|---|---|---|---|---|---|"]
@@ -869,7 +892,7 @@ def chart_power(folder, summary):
     handles = [Patch(color=COMPONENTS[c][1], label=COMPONENTS[c][0]) for c in COMPONENTS if c in used]
     handles += [Patch(facecolor="#999", alpha=0.38, label="lighter part: idle power of that component")]
     fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=8.5)
-    fig.suptitle("ECBDL'14 15M: mean power of the whole server (PSU, meter model) while training one tree, "
+    fig.suptitle(f"{WHAT}, {DEPTH_TXT}: mean power of the whole server (PSU, meter model) while training one tree, "
                  "split by sensor", fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0.08, 1, 0.95))
     fig.text(0.99, 0.01, "Simple = Serial-Simple, Opt = Serial-Opt, Multi = Multicore", ha="right", va="bottom",
@@ -909,7 +932,7 @@ def chart_energy(folder, summary):
                         plt.Line2D([], [], color=INK, lw=1.4, ls=(0, (2, 1.5)),
                                    label="dashed: GPU nodes without their unused GPUs (model's GPU coefficient × their NVML energy)")],
                loc="lower center", ncol=3, frameon=False, fontsize=8.5)
-    fig.suptitle("ECBDL'14 15M: whole-server energy (PSU, meter model) to train one tree "
+    fig.suptitle(f"{WHAT}, {DEPTH_TXT}: whole-server energy (PSU, meter model) to train one tree "
                  "(mean of the runs; whisker ± 1 sd)", fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0.06, 1, 0.95))
     fig.text(0.99, 0.01, "Simple = Serial-Simple, Opt = Serial-Opt, Multi = Multicore", ha="right", va="bottom",
@@ -978,7 +1001,7 @@ def chart_scatter(folder, summary):
                 plt.Line2D([], [], marker="o", ls="", color=INK, alpha=0.45, markersize=4,
                            label="small dot: energy above idle")]
     ax.legend(handles=handles, fontsize=7.5, frameon=False, loc="lower right")
-    ax.set_title("ECBDL'14 15M: time and energy per tree (grey lines: constant power)",
+    ax.set_title(f"{WHAT}, {DEPTH_TXT}: time and energy per tree (grey lines: constant power)",
                  fontsize=11, color=INK, loc="left")
     fig.tight_layout()
     save(fig, folder / "chart-time-energy.png", dpi=150)
@@ -1182,7 +1205,7 @@ def chart_cpu_gpu(folder, summary):
             ax_e.set_title(f"{ALGOS[algo]}. Means of runs × trees: {n}", fontsize=10.5, color=INK, loc="left",
                            fontweight="bold")
             if row == 0:
-                fig.suptitle(f"Energy, power and time to train one tree on ECBDL'14 15M (depth ≤ 10), {hw}\n"
+                fig.suptitle(f"Energy, power and time to train one tree on {WHAT} ({DEPTH_TXT}), {hw}\n"
                              f"Measured: {what}.{psu_note} Every tree a fresh process's only tree.",
                              fontsize=9.5, color=INK, x=0.01, ha="left")
         fig.tight_layout()
@@ -1412,6 +1435,8 @@ def main():
             continue
         if (sub / "samples.csv").exists() or (sub / "samples.csv.gz").exists():
             jobs[sub.name] = Job(sub)
+    if jobs:
+        read_case(next(iter(jobs.values())).machine)
     commits = {name: re.search(r"^commit (\S+)", job.machine, re.M) for name, job in jobs.items()}
     STALE[:] = [sum(B.out_of_date(m and m.group(1), jobs[name].host) for name, m in commits.items()), len(jobs)]
     rows = []

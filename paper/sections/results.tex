@@ -159,6 +159,17 @@ server's three other A100s draw about 140\,W. Without them, we estimate
 CPU threads work alongside the GPU, it needs 3\,\% (A100) to 10\,\% (H100)
 more energy.
 
+\textbf{Without a depth limit, \ImplHybrid{} saves time and some energy.}
+On MNIST8M grown to full depth (Fig.~\ref{fig:energy-deep}, H100 server, six
+rounds), \ImplHybrid{} trains a tree 1.51$\times$ (CART) and 1.58$\times$
+(C4.5) faster than \ImplGpu{}, because its CPU threads grow the many small
+subtrees. It also draws 1.46$\times$ and 1.42$\times$ the power
+(1\,016 against 696\,W for CART), so a tree costs only 3.5\,\% (CART,
+7.93\,kJ) and 9.8\,\% (C4.5, 9.11\,kJ) less energy. Above the idle power,
+\ImplHybrid{} needs 31--42\,\% more: its saving comes from keeping the idle
+server on for a shorter time. \ImplParallel{} on the same server needs
+3.1--3.5$\times$ the energy of either GPU implementation.
+
 Overall, the energy of a tree is governed by its training time: the
 fastest implementation is also the most economical, provided the server does
 not spend most of its power idling.

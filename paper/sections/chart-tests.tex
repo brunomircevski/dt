@@ -69,6 +69,18 @@ power. Time and energy are on logarithmic scales.}
 \end{figure}
 
 \begin{figure}
+\includegraphics[width=\textwidth]{test-energy-mnist8m.pdf}
+\caption{Time, power and energy to train one tree on MNIST8M without a depth
+limit (unpruned): \ImplParallel{}, \ImplGpu{} and \ImplHybrid{} on the same H100
+server, all 32 CPUs. Panels as in Fig.~\ref{fig:energy}, on linear scales: the
+lighter shade in the server power and the energy is the idle server's share;
+in the CPU+GPU power the hatched part is the CPU packages, the rest the GPU in
+use (none for \ImplParallel{}). Means of six rounds of 5--17 trees each
+(standard deviation of the energy at most 0.6\,\%).}
+\label{fig:energy-deep}
+\end{figure}
+
+\begin{figure}
 \includegraphics[width=\textwidth]{diagram-task-parallel.pdf}
 \caption{Task parallelism in \ImplParallel{} (schematic). (a)~A small tree; box
 width is proportional to the node's samples, colour shows the thread that grows

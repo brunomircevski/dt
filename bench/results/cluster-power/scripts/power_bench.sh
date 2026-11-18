@@ -48,7 +48,12 @@
 # (300), CAL (60 s per staircase level; 0: no staircase), PRE (20), WARMUP (15),
 # CHECK (1), CHECK_ONLY (1: the warm-up check alone, at every warm-up in
 # CHECK_WARMUPS, default "2 WARMUP"), ALGOS ("cart c45"), IMPLS (cpu: "simple serial parallel", all: all
-# five), BIN (the folder of ./tree and ./tree_cpu; default the repository root).
+# five), BIN (the folder of ./tree and ./tree_cpu; default the repository root),
+# DEPTH (10; -1: no depth limit), HANDOFF (--hybrid's --handoff-rows; default
+# ./tree's own rule; benchmarks take bench/tuning/handoff/handoff_rows.json's),
+# SHM (1: copy the .f32 dataset to /dev/shm first, removed at the end: ./tree
+# drops its input from the page cache, so every process would read it again
+# from NFS).
 set -uo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 KIND=$1
@@ -69,8 +74,19 @@ CHECK_ONLY=${CHECK_ONLY:-}
 CHECK_WARMUPS=${CHECK_WARMUPS:-2 $WARMUP}
 ALGOS=${ALGOS:-cart c45}
 BIN=${BIN:-.}
-PROTOCOL=(-d 10)
+DEPTH=${DEPTH:-10}
+PROTOCOL=(-d "$DEPTH")
+HANDOFF=${HANDOFF:-}
 mkdir -p "$OUT/out"
+SHM_DIR=
+if [ "${SHM:-}" = 1 ]; then  # X.f32, X.y.i32 and X.meta.json or meta.json, as ./tree reads them
+  SHM_DIR=/dev/shm/power-bench-${SLURM_JOB_ID:-$$}
+  stem=${DATA%.f32} meta=${DATA%.f32}.meta.json
+  [ -e "$meta" ] || meta=$(dirname "$DATA")/meta.json
+  mkdir -p "$SHM_DIR" && cp "$DATA" "$stem.y.i32" "$SHM_DIR/" && cp "$meta" "$SHM_DIR/$(basename "$stem").meta.json" ||
+    { echo "copy to $SHM_DIR failed" >&2; rm -rf "$SHM_DIR"; exit 1; }
+  DATA_SRC=$DATA DATA=$SHM_DIR/$(basename "$DATA")
+fi
 now() { date +%s.%N | cut -c1-17; }
 mark() { echo "$(now) $*" >> "$OUT/markers.txt"; }
 
@@ -133,7 +149,7 @@ command_of() { # impl -> the command line before the algorithm flags
     serial) echo "taskset -c 0 $BIN/tree_cpu --serial" ;;
     parallel) echo "taskset -c $ALL_CPUS $BIN/tree_cpu --multicore --threads $NCPU" ;;
     gpuonly) echo "env CUDA_VISIBLE_DEVICES=$GPU taskset -c $GPU_CPUS $BIN/tree --gpu --threads $NCPU" ;;
-    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU taskset -c $GPU_CPUS $BIN/tree --hybrid --threads $NCPU" ;;
+    cuda) echo "env CUDA_VISIBLE_DEVICES=$GPU taskset -c $GPU_CPUS $BIN/tree --hybrid --threads $NCPU${HANDOFF:+ --handoff-rows $HANDOFF}" ;;
   esac
 }
 warmup_of() { case $1 in gpuonly|cuda) echo "--repeat-warmup ${2:-$WARMUP}" ;; esac; }
@@ -141,7 +157,7 @@ warmup_of() { case $1 in gpuonly|cuda) echo "--repeat-warmup ${2:-$WARMUP}" ;; e
 {
   echo "job ${SLURM_JOB_ID:-none} on $(hostname), $(date -Is), kind $KIND"
   echo "commit ${TREE_GIT_DESCRIBE:-$(git describe --always --dirty 2>/dev/null)}"
-  echo "data $DATA${ROWS:+ (first $ROWS rows)}, reps $REPS $REPS_BY, target $TARGET s, idle $IDLE s, cal $CAL s, pre $PRE s, warm-up $WARMUP s, algos $ALGOS, impls $IMPLS"
+  echo "data ${DATA_SRC:-$DATA}${SHM_DIR:+ (copied to $DATA)}${ROWS:+ (first $ROWS rows)}, reps $REPS $REPS_BY, target $TARGET s, idle $IDLE s, cal $CAL s, pre $PRE s, warm-up $WARMUP s, algos $ALGOS, impls $IMPLS"
   [ -z "$GPU" ] || echo "used_gpu $GPU (NUMA node $GPU_NODE, cpus $GPU_CPUS, $NCPU threads, first-touch memory)"
   echo "protocol ${PROTOCOL[*]}"
   for impl in $IMPLS; do echo "command $impl $(command_of "$impl") $(warmup_of "$impl")"; done
@@ -174,6 +190,7 @@ cleanup() {
   kill "$SAMPLER" 2> /dev/null
   wait 2> /dev/null
   gzip -f "$OUT/samples.csv"
+  [ -z "$SHM_DIR" ] || rm -rf "$SHM_DIR"
 }
 trap cleanup EXIT
 trap 'exit 143' TERM INT

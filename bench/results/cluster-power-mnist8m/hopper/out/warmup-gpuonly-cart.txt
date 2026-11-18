@@ -1,0 +1,30 @@
+CART on /dev/shm/power-bench-415/train.f32 (backend gpu)
+  rows 8100000 train, 784 features, 10 classes
+  pruning off
+  repeat 1/2: train 11691.3 ms, unix 1795020412.797462 1795020424.489724
+  repeat 2/2: train 11679.8 ms, unix 1795020440.366697 1795020452.046885
+Tree:
+  nodes 301939, leaves 150970, depth 115
+  train accuracy 100.0000%
+Timings:
+  load                  1003.5 ms
+  gpu setup              547.7 ms
+  setup buffers           57.2 ms
+  setup allocate           8.1 ms
+  setup upload           470.4 ms
+  setup finish            11.9 ms
+  presort                  0.0 ms
+  build                11132.2 ms
+  prune                    0.0 ms
+  train total          11679.8 ms
+  evaluate               403.5 ms
+Timeline:
+  span staging buffers: 0.042 57.224 ms
+  span device memory: 57.225 65.352 ms
+  span upload: 65.353 535.789 ms
+  span x log x table: 535.790 536.228 ms
+  span x log x table copy: 536.228 547.689 ms
+  span presort (GPU): 69.083 536.687 ms
+  span build: 547.967 11680.130 ms
+Memory:
+  peak after training 26691496 KiB

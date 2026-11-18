@@ -728,7 +728,87 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
                handlelength=2.4, handleheight=1.2)
     save(fig, "energy")
 
+
+# bench/results/cluster-power-mnist8m: the same measurement on MNIST8M without a depth limit, the
+# three fast implementations on one server (hopper, the H100 PCIe server), CART and C4.5.
+POWER_DEEP = RES / "cluster-power-mnist8m"
+
+
+def energy_deep():
+    """Time, power and energy of one tree on MNIST8M without a depth limit, Multicore CPU, GPU-Based
+    and Hybrid on the same H100 server; one group of rows per algorithm, four aligned linear
+    panels as in energy(): time per tree; mean power of the whole server (the lighter part is the
+    idle server's power); mean power of the CPU packages + the GPU in use (the CPU part striped;
+    none on the Multicore run); energy per tree at the PSU (the lighter part is what
+    the idle server would have used in the same time)."""
+    from matplotlib.colors import to_rgba
+    rows = {}
+    for r in csv.DictReader(open(POWER_DEEP / "summary.csv")):
+        rows[(r["impl"], r["algo"])] = {k: (float(v) if re.fullmatch(r"[-+0-9.eE]+|nan", v or "") else v)
+                                        for k, v in r.items()}
+    for machine in sorted(POWER_DEEP.glob("*/machine.txt")):
+        commit = re.search(r"^commit (\S+)", machine.read_text(), re.M)
+        USED.append(B.out_of_date(commit and commit.group(1), machine.parent.name.rstrip("0123456789")))
+    impls = [("parallel", "cpu"), ("gpuonly", "gpuonly"), ("cuda", "cuda")]
+    cases = [(algo, impl, key) for algo in ("c45", "cart") for impl, key in impls if (impl, algo) in rows]
+    fig, axes = plt.subplots(1, 4, figsize=(FULL, 0.24 * len(cases) + 0.55), sharey=True,
+                             gridspec_kw={"wspace": 0.16})
+    ax_t, ax_p, ax_c, ax_e = axes
+    STRIPE = {"cpu": "#123f7a", "gpuonly": "#1a4d99", "cuda": "#8cc4ff"}
+    HATCH = "/////"
+    plt.rcParams["hatch.linewidth"] = 1.8
+    y = np.arange(len(cases))[::-1].astype(float)
+    hgt, fs = 0.62, 4.9
+    for yi, (algo, impl, k) in zip(y, cases):
+        r = rows[(impl, algo)]
+        c, lc = STYLE[k][1], to_rgba(STYLE[k][1], 0.35)
+        t, p, e, idle_w = r["train_s"], r["power_W"], r["psu_J"], r["idle_W"]
+        ax_t.barh(yi, t, height=hgt, color=c, lw=0)
+        ax_t.text(t + 0.6, yi, rf"{t:.1f}\,s", va="center", fontsize=fs)
+        ax_p.barh(yi, idle_w, height=hgt, color=lc, lw=0)
+        ax_p.barh(yi, p - idle_w, left=idle_w, height=hgt, color=c, lw=0)
+        ax_p.text(p + 15, yi, rf"{p:.0f}\,W", va="center", fontsize=fs)
+        cpu = r["P_cpu0"] + r["P_cpu1"]
+        gpu = r["P_gpu"] if impl != "parallel" else 0.0  # Multicore: no GPU in use (all four idle)
+        ax_c.barh(yi, cpu, height=hgt, fc=c, ec=STRIPE[k], lw=0, hatch=HATCH)
+        ax_c.barh(yi, gpu, left=cpu, height=hgt, color=c, lw=0)
+        ax_c.text(cpu + gpu + 12, yi, rf"{cpu + gpu:.0f}\,W", va="center", fontsize=fs)
+        e_idle = r["psu_idle_J"]
+        ax_e.barh(yi, e_idle / 1e3, height=hgt, color=lc, lw=0)
+        ax_e.barh(yi, (e - e_idle) / 1e3, left=e_idle / 1e3, height=hgt, color=c, lw=0)
+        ax_e.text(e / 1e3 + 0.4, yi, kj(e), va="center", fontsize=fs)
+    t_max = max(rows[(i, a)]["train_s"] for a, i, _ in cases)
+    p_max = max(rows[(i, a)]["power_W"] for a, i, _ in cases)
+    c_max = max(rows[(i, a)]["P_cpu0"] + rows[(i, a)]["P_cpu1"] + (rows[(i, a)]["P_gpu"] if i != "parallel" else 0)
+                for a, i, _ in cases)
+    e_max = max(rows[(i, a)]["psu_J"] for a, i, _ in cases) / 1e3
+    for ax, top, unit, title in ((ax_t, t_max, "s", "time per tree"), (ax_p, p_max, "W", "server power"),
+                                 (ax_c, c_max, "W", "CPU+GPU power"),
+                                 (ax_e, e_max, "kJ", "energy per tree")):
+        ax.set_xlim(0, top * 1.38)
+        ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(3, steps=[1, 2, 2.5, 5, 10]))
+        ax.xaxis.set_major_formatter(FuncFormatter(
+            lambda v, _, u=unit: rf"{v / 1e3:g}\,k{u}" if u == "W" and v >= 1e3 else rf"{v:g}\,{u}"))
+        ax.set_title(title, loc="left", pad=3, fontsize=7)
+        ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis="y", length=0)
+        ax.tick_params(axis="x", labelsize=5.2)
+    ax_t.set_yticks(y, [f"{ALGO[a]}, {STYLE[k][0]}" for a, _, k in cases], fontsize=6.2)
+    for i in range(1, len(cases)):
+        if cases[i][0] != cases[i - 1][0]:
+            for ax in axes:
+                ax.axhline(y[i] + 0.5, color=MUTED, lw=0.5)
+    h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="idle server"),
+         plt.Rectangle((0, 0), 1, 1, fc=STYLE["gpuonly"][1], ec=STRIPE["gpuonly"], lw=0, hatch=HATCH,
+                       label="CPU packages"),
+         plt.Rectangle((0, 0), 1, 1, color=STYLE["gpuonly"][1], label="GPU")]
+    fig.legend(handles=h, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.09), fontsize=6,
+               handlelength=2.4, handleheight=1.2)
+    save(fig, "energy-mnist8m")
+
+
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["ladder", "scaling", "profile", "depth", "bars", "energy"]
+    which = sys.argv[1:] or ["ladder", "scaling", "profile", "depth", "bars", "energy", "energy_deep"]
     for name in which:
         globals()[name]()

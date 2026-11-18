@@ -1,0 +1,20 @@
+C4.5 on /dev/shm/power-bench-415/train.f32 (backend multicore)
+  rows 8100000 train, 784 features, 10 classes
+  pruning off
+  repeat 1/5: train 34297.9 ms, unix 1795024546.038876 1795024580.338054
+  repeat 2/5: train 34103.0 ms, unix 1795024580.507875 1795024614.614768
+  repeat 3/5: train 34343.2 ms, unix 1795024614.817297 1795024649.163818
+  repeat 4/5: train 34327.2 ms, unix 1795024649.363360 1795024683.692121
+  repeat 5/5: train 34247.9 ms, unix 1795024683.863495 1795024718.114592
+Tree:
+  nodes 218325, leaves 109163, depth 147
+  train accuracy 99.6117%
+Timings:
+  load                   918.8 ms
+  presort               1967.5 ms
+  build                32271.0 ms
+  prune                    9.3 ms
+  train total          34247.9 ms
+  evaluate               388.2 ms
+Memory:
+  peak after training 76628748 KiB

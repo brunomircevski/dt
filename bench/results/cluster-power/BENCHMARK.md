@@ -7,6 +7,8 @@ time benchmark rerun, `~/dt-final`). Jobs 169 (epyc1), 170 (dell4), 173
 Method: [Method](#method). Every table, with more columns:
 [summary.md](summary.md); every process: [runs.csv](runs.csv); the meter
 models: [meter.csv](meter.csv).
+The same measurement without a depth limit, where `--hybrid` gains (MNIST8M,
+Multicore, GPU and Hybrid on hopper): [cluster-power-mnist8m](../cluster-power-mnist8m/BENCHMARK.md).
 
 **Energy** is the whole server's, at the PSU, over the training windows only
 (the CSV load, the gaps between trees and the evaluation are left out), from
