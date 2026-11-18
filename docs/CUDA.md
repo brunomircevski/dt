@@ -77,8 +77,7 @@ node, 9 ms on the RTX 2080 Ti node), the page-locked staging buffers and copy
 threads, then allocation, upload and GPU presort
 ([bench/README.md](../bench/README.md#how-time-is-measured)). Until
 2026-11-17 the pool, buffers and kernels were made during the load as well
-(`--gpu-startup full`, removed: the same total work, but untimed;
-`gpu-startup-timing.html`).
+(`--gpu-startup full`, removed: the same total work, but untimed; see [the paper's GPU start-up section](../paper/sections/experiment-design.tex)).
 
 ## One level
 

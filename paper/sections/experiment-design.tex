@@ -117,6 +117,20 @@ phases only to explain them. Each case is run 10 times (3 times where a
 run trains for over an hour) in shuffled order on an exclusively allocated node, and
 we report the mean.
 
+\subsection{GPU Start-up}
+Before the timer, every GPU tool creates only the CUDA context, which takes
+about 0.4--0.7\,s and is paid by all of them. Everything else in the GPU
+set-up (kernel loading, memory pool, page-locked staging buffers, copy
+threads) is timed for every tool. Our tool could instead prepare all of this
+on a background thread while the input file is read, outside the timer, as
+\texttt{--gpu-startup full}. That was an option we measured and then removed:
+the total GPU work is the same either way, and the difference is only where it
+falls. Preparing it during the read saves 120--200\,ms of timed work when the
+read is longer than the start-up (HIGGS and MNIST8M read from NFS), and nothing
+when the read is short (HIGGS from memory). Since the libraries cannot prepare
+their kernels or pools outside their own fit without running it, we report the
+timed set-up for every GPU tool.
+
 \plan{Also: peak RAM and VRAM. Accuracy: pruned trees (CART fixed $\alpha$,
 C4.5 CF 0.25), not timed, later. Fairness notes: hybrid CPU threads, input
 layout. Each implementation in its best measured setting: the hybrid's hand-off

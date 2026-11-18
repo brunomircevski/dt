@@ -113,7 +113,7 @@ warm-up). Until 2026-11-17 ./tree had a second mode (`--gpu-startup full`, then
 its default) that also loaded every kernel and set up its pool, staging
 buffers and copy threads during the read, untimed; it was removed for one
 behaviour that benchmarks and users share. What it gained was measured
-(`gpu-startup-timing.html`): the same total GPU work; 120-200 ms when the
+([paper, GPU start-up](../paper/sections/experiment-design.tex)): the same total GPU work; 120-200 ms when the
 read is longer than the start-up (HIGGS, MNIST8M from NFS), nothing with a
 short read.
 
