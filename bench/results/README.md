@@ -36,6 +36,7 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 | [`cluster-cpu-scaling`](cluster-cpu-scaling/BENCHMARK.md) | HIGGS and MNIST8M, 1–48 threads on epyc and dell; chart: speed-up over one thread | HIGGS, 48 threads: 19–24× one thread. MNIST8M: 35–37× (epyc), 34–36× (dell). |
 | [`cluster-profiling`](cluster-profiling/BENCHMARK.md) | where the growing time goes (`--profile`), chess 10M–2000M, HIGGS, airline and ECBDL'14 15M, epyc1, dell1 and hopper | Partition is 33–75% on epyc; the GPU's share grows from 6–8% at chess 10M to 75–77% at 2000M and 85–88% on ECBDL. C4.5 on big chess runs at two speeds (open). |
 | [`hybrid-vs-gpu-only`](hybrid-vs-gpu-only/BENCHMARK.md) | CUDA `--hybrid` against `--gpu`, depth 5–30 and no limit, HIGGS, MNIST8M and SOREL 4M, ampere and hopper, `--handoff-rows` swept per dataset and node | Equal to depth 15. Deeper the hybrid wins, much less than before as GPU only got faster: with no limit HIGGS 2.1–2.3× on ampere and 1.4–2.1× on hopper (4.3–4.9× before), MNIST8M 1.4–1.6×, SOREL 4M 1.08–1.19×. |
+| [`fp32-experiment`](fp32-experiment/README.md) | Split scoring in float instead of double, all datasets, epyc multicore and serial, RTX 2080 Ti `--gpu`/`--hybrid` | Keep double. CPU no faster (up to +60% slower on SUSY/HIGGS), GPU at most 8–30% faster; trees change, CPU and GPU disagree, SUSY full-depth CART degenerates (0.29 s → 115 s). |
 
 **Against other implementations** (HIGGS and MNIST8M; ./tree's bars from the test-set benchmarks):
 

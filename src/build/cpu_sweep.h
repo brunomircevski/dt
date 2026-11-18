@@ -51,6 +51,11 @@ inline double skipBelow(double bestGain, double margin, double rowsPerGain) {
 inline std::uint32_t skippableSteps(double bestGain, double gain, double margin, double rowsPerGain,
                              std::uint32_t limit) {
   const double steps = (bestGain + kTieEps - gain - 2.0 * margin) * rowsPerGain * (1.0 - 1e-9);
+  // steps < 0 when gain is within 2 * margin of bestGain + kTieEps: no skip.
+  // (Converting a negative value to unsigned is undefined behaviour.)
+  if (!(steps > 0.0)) {
+    return 0;
+  }
   return steps >= static_cast<double>(limit) ? limit : static_cast<std::uint32_t>(steps);
 }
 
