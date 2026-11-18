@@ -126,7 +126,7 @@ PROTOCOLS = {
             "sklearn": {"mode": "fit", "max_depth": 10},
             "rpart": {"mode": "fit", "maxdepth": 10},
             # the GPU libraries' one tree (cluster-gpu-vs-others' gpubench.py;
-            # run.py runs them only for the end-to-end benchmark)
+            # run.py runs them only when --impls names them)
             "cuml": {"depth": 10},
             "xgboost": {"depth": 10},
         },

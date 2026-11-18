@@ -24,8 +24,7 @@ bench/README.md, "How time is measured"):
      binary, cannot do that, so its measured process only trains (and saves
      the tree); its peak is the process's ru_maxrss, and a second, unmeasured
      YaDT process classifies the test rows with the saved tree;
-  3. tree size and training and test accuracy are recorded (--no-eval: none,
-     the process ends with its tree; the end-to-end benchmark).
+  3. tree size and training and test accuracy are recorded.
 The repetitions run in a shuffled order (a new order every repetition), so slow
 drift (heat, background load) spreads over all cases. A case whose first run
 trains longer than --long-seconds (an hour) runs --long-runs (3) times in all. Every process reports the
@@ -104,14 +103,6 @@ def gpu_name():
     return _GPU_NAME[gpu_index()]
 
 
-def input_files(dataset, impl):
-    """The files a tool reads for the training rows (--prefetch)."""
-    train = B.stem(dataset, "train")
-    if impl == "yadt":
-        return [B.folder(dataset) / "yadt.names", Path(f"{train}.yadt.csv")]
-    return [B.binary_meta(f"{train}.f32"), Path(f"{train}.f32"), Path(f"{train}.y.i32")]
-
-
 def measure(command, env, timeout, pin=(), gpu=False):
     """Run `command` to completion and measure it from the outside.
 
@@ -187,7 +178,7 @@ def measure(command, env, timeout, pin=(), gpu=False):
 # ./tree's backends: one binary's command line and output.
 TREE_IMPLS = ("tree", "tree_cuda", "tree_gpu_only", "tree_simple")
 # The GPU libraries, run by cluster-gpu-vs-others' gpubench.py in its venv
-# (GPU_PYTHON); only when --impls names them (the end-to-end benchmark).
+# (GPU_PYTHON); only when --impls names them (cluster-gpu-vs-others/one-tree).
 GPU_LIBRARIES = ("cuml", "xgboost")
 GPU_IMPLS = ("tree_cuda", "tree_gpu_only") + GPU_LIBRARIES
 GPUBENCH = B.RESULTS / "cluster-gpu-vs-others" / "scripts" / "gpubench.py"
@@ -268,7 +259,7 @@ def build_command(case, kind, args, scratch, rep=0):
     """-> (argv, extra env, parser of stdout -> result dict)."""
     dataset, protocol, impl, threads = case
     spec = B.PROTOCOLS[protocol]["impls"][impl]
-    evaluate = kind == "run" and not args.no_eval
+    evaluate = kind == "run"
     m = B.meta(dataset)
     data = B.DATA / dataset
 
@@ -286,10 +277,6 @@ def build_command(case, kind, args, scratch, rep=0):
         else:
             binary = B.TREE
             backend = ["--serial"] if threads == 1 else ["--multicore", "--threads", str(threads)]
-        if args.warm_up and impl.startswith("tree"):
-            # the warm variant: one untimed tree first in the same process
-            # (as gpubench.py WARM=1 for the libraries)
-            backend += ["--warm-up"]
         dump = scratch / "tree.dump"
         dump.unlink(missing_ok=True)  # never read a previous run's tree
         predict = evaluate and (args.test_accuracy or not args.train_accuracy_only)
@@ -297,7 +284,6 @@ def build_command(case, kind, args, scratch, rep=0):
                    if args.profile and kind == "run" else [])
         argv = [str(binary)] + backend + flags \
             + (["--dump", str(dump)] if predict or args.hash_trees else []) \
-            + (["--no-accuracy"] if args.no_eval else []) \
             + profile + B.tree_input(dataset)
 
         def parse(stdout):
@@ -315,10 +301,17 @@ def build_command(case, kind, args, scratch, rep=0):
                       **{f"{'read' if name == 'load' else name.replace(' ', '_')}_seconds":
                          float(ms) / 1000
                          for name, ms in re.findall(r"^  (load|gpu startup wait|gpu startup|gpu setup|"
+                                                    r"setup buffers|setup allocate|setup upload|setup finish|"
                                                     r"presort|build|prune)\s+([\d.]+) ms$",
                                                     stdout, re.M)},
-                      **({"warmup_seconds": float(warm.group(1)) / 1000}
-                         if (warm := re.search(r"^warm-up tree: ([\d.]+) ms", stdout, re.M)) else {}),
+                      # When each section ran (CUDA: "span" lines, seconds since
+                      # train total started; busy: the CPU subtree tasks' summed work).
+                      **({"timeline": [{"name": name, "start": float(a) / 1000, "end": float(b) / 1000,
+                                        **({"busy": float(busy) / 1000, "tasks": int(tasks)} if busy else {})}
+                                       for name, a, b, busy, tasks in spans]}
+                         if (spans := re.findall(r"^  span (.+?): ([\d.]+) ([\d.]+) ms"
+                                                 r"(?:, busy ([\d.]+) ms in (\d+) tasks)?$", stdout, re.M))
+                         else {}),
                       "nodes": int(nodes), "leaves": int(leaves), "depth": int(depth),
                       "n_train_loaded": int(rows), "n_features_loaded": int(features),
                       "peak_rss_train_bytes": peak * 1024}
@@ -371,8 +364,6 @@ def build_command(case, kind, args, scratch, rep=0):
             path.unlink(missing_ok=True)  # never read a previous run's output
         if evaluate:
             argv += ["-tb", str(saved), "-t", str(report)]
-        elif args.no_eval:  # the end-to-end runs: YaDT still saves its tree, as a user's would
-            argv += ["-tb", str(saved)]
         environment = {"LD_LIBRARY_PATH": str(B.YADT.parent)}
 
         def parse(stdout):
@@ -411,11 +402,12 @@ def build_command(case, kind, args, scratch, rep=0):
 
     if impl in GPU_LIBRARIES:
         # gpubench.py (cluster-gpu-vs-others): one process, the library's
-        # start-up, one timed fit; its row is its last line of output.
+        # start-up, one timed tree (upload through ./tree's own staged upload,
+        # every step timed); its row is its last line of output.
         argv = [str(GPU_PYTHON), str(GPUBENCH), impl, dataset, "cart", str(scratch / "gpubench.jsonl"),
                 str(scratch), "1", str(spec["depth"])]
-        # OMP_NUM_THREADS: the run's CPUs (base_env's 1 would leave XGBoost's
-        # QuantileDMatrix binning, mostly on the CPU, on one thread).
+        # OMP_NUM_THREADS: the run's CPUs (base_env's 1 would leave the
+        # libraries' host threads at one).
         # CUDA_MODULE_LOADING: LAZY (CUDA's default) unless GPULIB_MODULE_LOADING
         # says otherwise. cuML and XGBoost link their own CUDA runtime, so EAGER
         # loads *all* their kernels at their first call, inside fit (HIGGS on the
@@ -423,9 +415,7 @@ def build_command(case, kind, args, scratch, rep=0):
         # 2.88 s); ./tree too loads its kernels lazily, in its timed setup.
         environment = {"EVAL": str(int(evaluate)), "GPU_MEMORY": "0", "DATA_ROOT": str(B.DATA),
                        "CUDA_MODULE_LOADING": os.environ.get("GPULIB_MODULE_LOADING", "LAZY"),
-                       "OMP_NUM_THREADS": str(threads),
-                       # --warm-up: gpubench.py's warm variant, one untimed identical fit first
-                       "WARM": "1" if args.warm_up else "0"}
+                       "OMP_NUM_THREADS": str(threads)}
         return argv, environment, lambda stdout: json.loads(stdout.strip().splitlines()[-1])
 
     params = [f"{key}={fill(value, args.alpha)}" for key, value in spec.items()]
@@ -546,7 +536,7 @@ def machine_info(args):
         # (e.g. by /dev/shm or page cache) sends a pinned run's pages to the other.
         "numa_mem_free_kb": numa_mem_free_kb(),
         "gpu_index": gpu_index(),
-        "settings": {"alpha": args.alpha, "no_eval": args.no_eval, "prefetch": args.prefetch,
+        "settings": {"alpha": args.alpha,
                      "long_runs": args.long_runs, "long_seconds": args.long_seconds,
                      "java_heap": args.java_heap, "cpus": args.cpus, "membind": args.membind,
                      "drop_cache": args.drop_cache, "reps": args.reps,
@@ -698,13 +688,6 @@ def main():
     parser.add_argument("--long-runs", type=int, default=3,
                         help="runs of a case whose first run took longer than --long-seconds "
                              "(default 3; 0 = no limit)")
-    parser.add_argument("--no-eval", action="store_true",
-                        help="no evaluation: the adapters' eval=0, ./tree --no-accuracy, no "
-                             "prediction; the process ends with its tree (end-to-end benchmark)")
-    parser.add_argument("--prefetch", action="store_true",
-                        help="read the tool's input files into the page cache right before every "
-                             "process (pinned as the run, outside its wall time) and drop them "
-                             "after it (end-to-end benchmark); instead of --drop-cache")
     parser.add_argument("--spin", type=float, default=0,
                         help="seconds of every CPU busy (untimed) right before the first run, "
                              "after the dataset check: a node idle for a while runs its first "
@@ -714,8 +697,6 @@ def main():
     parser.add_argument("--java-heap", default=None, help="JVM -Xmx (default: half of RAM)")
     parser.add_argument("--run-id", help="results go to bench/results/<run-id> (default host-date)")
     parser.add_argument("--seed", type=int, default=0, help="seed of the shuffled order")
-    parser.add_argument("--no-baseline", action="store_true",
-                        help="skip the runtime-footprint runs on the _baseline dataset")
     parser.add_argument("--train-accuracy-only", action="store_true",
                         help="./tree: record only its own training accuracy, skip predicting "
                              "the training and test rows from its dumped tree (minutes on big trees)")
@@ -729,10 +710,6 @@ def main():
     parser.add_argument("--profile", action="store_true",
                         help="./tree: also write where its training time goes (--profile) to "
                              "<run dir>/profiles/<protocol>-<impl>-t<threads>-r<rep>.json")
-    parser.add_argument("--warm-up", action="store_true",
-                        help="./tree, cuML, XGBoost: train one untimed tree first, then the timed "
-                             "one in the same, now warm process (the warm variant of "
-                             "cluster-gpu-vs-others; gpubench.py WARM=1; rows get warm_up: true)")
     parser.add_argument("--handoff-rows",
                         help="./tree --hybrid (tree_cuda): its --handoff-rows, a number or "
                              "'default' (./tree's own); without it, the value measured best for "
@@ -744,12 +721,10 @@ def main():
     if not args.java_heap:
         total_kb = int(re.search(r"MemTotal:\s+(\d+)", open("/proc/meminfo").read()).group(1))
         args.java_heap = f"{max(1, total_kb // 2 // 1024 // 1024)}g"
-    if args.prefetch and args.drop_cache:
-        sys.exit("--prefetch and --drop-cache exclude each other (--prefetch drops after each run)")
 
     cases = plan_cases(args)
     impls_used = sorted({case[2] for case in cases})
-    processes = (len(cases) + len(impls_used) * (not args.no_baseline)) * args.reps
+    processes = (len(cases) + len(impls_used)) * args.reps
     print(f"{len(cases)} cases, {processes} processes:")
     for case in cases:
         print("  " + " | ".join(map(str, case)))
@@ -790,7 +765,7 @@ def main():
     failed = set()  # cases that timed out or failed: their other runs are skipped
     env = base_env()
     scratch = Path(tempfile.mkdtemp(prefix="bench-"))
-    total = len(cases) * args.reps + (0 if args.no_baseline else len(impls_used) * args.reps)
+    total = (len(cases) + len(impls_used)) * args.reps
     progress = {"done": 0, "started": time.perf_counter()}
     walls = defaultdict(list)  # case -> whole-process seconds, for the time left
     # case -> its first run's training time (whole process if it failed): the
@@ -831,22 +806,16 @@ def main():
         pin = ["taskset", "-c", ",".join(map(str, args.cpu_list[:threads]))] if args.cpu_list else []
         if args.membind is not None:
             pin = ["numactl", f"--membind={args.membind}"] + pin
-        if args.prefetch:  # the input in the page cache, read as the run will place it
-            drop_page_cache(B.DATA)
-            subprocess.run(pin + ["cat"] + [str(f) for f in input_files(dataset, impl)],
-                           stdout=subprocess.DEVNULL, check=True)
         mem_free = numa_mem_free_kb()
         before = vmstat()
         run_cpus = args.cpu_list[:threads] if args.cpu_list else range(os.cpu_count() or 1)
         throttle_before = throttle_count(run_cpus)
         load = (read_text("/proc/loadavg") or "").split()[:3]
-        clock = ClockSampler(run_cpus)
+        sampler = ClockSampler(run_cpus)
         run = measure(argv, {**env, **extra_env}, args.timeout, pin, gpu=impl in GPU_IMPLS)
-        clock = clock.result()
+        cpu_clock = sampler.result()
         after = vmstat()
         throttle_after = throttle_count(run_cpus)
-        if args.prefetch:
-            drop_page_cache(B.DATA)
         row = {"run_id": run_id, "dataset": dataset, "protocol": protocol, "impl": impl,
                "threads": threads, "kind": kind, "rep": rep,
                "time": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -855,8 +824,6 @@ def main():
                "cpus": ",".join(map(str, args.cpu_list[:threads])) if args.cpu_list else None,
                "membind": args.membind,
                **({"gpu": gpu_name(), "gpu_index": gpu_index()} if impl in GPU_IMPLS else {}),
-               **({"warm_up": True} if args.warm_up and (impl.startswith("tree") or impl in GPU_LIBRARIES)
-                  else {}),
                **{k: run[k] for k in ("wall_seconds", "peak_rss_bytes", "user_seconds",
                                       "system_seconds", "gpu_peak_bytes") if k in run}}
         if run["timed_out"]:
@@ -892,7 +859,7 @@ def main():
         row.update({f"vmstat_{k}": after[k] - before[k] for k in before if k in after})
         # why a run was slow: the CPU clock over the run, thermal throttling events,
         # the load just before it (with mem_free_* and vmstat_* above)
-        row.update(clock)
+        row.update(cpu_clock)
         if throttle_before is not None and throttle_after is not None:
             row["throttle_events"] = throttle_after - throttle_before
         if load:
@@ -957,11 +924,10 @@ def main():
             execute(case, "run", rep, [c for c, _ in schedule[index + 1:]
                                        if not (args.long_runs and c in first_train
                                                and first_train[c] > args.long_seconds)])
-        if not args.no_baseline:
-            print("runtime footprint of each tool (200-row _baseline dataset):")
-            for rep in range(args.reps):
-                for impl in [i for i in impls_used if i in BASELINE_PROTOCOL]:
-                    execute((B.BASELINE, BASELINE_PROTOCOL[impl], impl, 1), "baseline", rep, [])
+        print("runtime footprint of each tool (200-row _baseline dataset):")
+        for rep in range(args.reps):
+            for impl in [i for i in impls_used if i in BASELINE_PROTOCOL]:
+                execute((B.BASELINE, BASELINE_PROTOCOL[impl], impl, 1), "baseline", rep, [])
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
         if args.drop_cache:  # leave the node's memory as we found it

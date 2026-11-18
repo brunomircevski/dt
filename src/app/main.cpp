@@ -5,6 +5,7 @@
 #include "core/nvtx.h"
 #include "core/options.h"
 #include "core/thread_pool.h"
+#include "core/timeline.h"
 #include "core/timing.h"
 #include "core/trace.h"
 #include "core/tree.h"
@@ -128,12 +129,31 @@ void printResults(const Tree &tree, const LoadedData &data, const TrainTimings &
   }
   if (timings.gpuSetupSeconds > 0) {
     printMs("gpu setup", timings.gpuSetupSeconds);
+    // Its steps (their sum is gpu setup).
+    printMs("setup buffers", timings.gpuSetup.buffersSeconds);
+    printMs("setup allocate", timings.gpuSetup.allocateSeconds);
+    printMs("setup upload", timings.gpuSetup.uploadSeconds);
+    printMs("setup finish", timings.gpuSetup.finishSeconds);
   }
   printMs("presort", timings.presortSeconds);
   printMs("build", timings.buildSeconds);
   printMs("prune", timings.pruneSeconds);
   printMs("train total", timings.total());
   printMs("evaluate", results.evalSeconds);
+  // When each section of the training ran (ms since train total started;
+  // busy: the summed work of its tasks on several threads).
+  const std::vector<timeline::Span> spans = timeline::spans();
+  if (!spans.empty()) {
+    std::cout << "Timeline:\n";
+    for (const timeline::Span &span : spans) {
+      std::cout << "  span " << span.name << ": " << std::fixed << std::setprecision(3)
+                << span.start * 1000.0 << " " << span.end * 1000.0 << " ms";
+      if (span.tasks > 0) {
+        std::cout << ", busy " << span.busy * 1000.0 << " ms in " << span.tasks << " tasks";
+      }
+      std::cout << "\n";
+    }
+  }
   if (results.trainPeakKiB >= 0) {
     std::cout << "Memory:\n  peak after training " << results.trainPeakKiB << " KiB\n";
   }
@@ -168,6 +188,10 @@ void writeProfile(const Options &options, const Tree &tree, const LoadedData &da
                 {"train_seconds", number(timings.total())},
                 {"timings", "{\"gpu_startup\": " + number(timings.gpuStartupSeconds) +
                                 ", \"gpu_setup\": " + number(timings.gpuSetupSeconds) +
+                                ", \"setup_buffers\": " + number(timings.gpuSetup.buffersSeconds) +
+                                ", \"setup_allocate\": " + number(timings.gpuSetup.allocateSeconds) +
+                                ", \"setup_upload\": " + number(timings.gpuSetup.uploadSeconds) +
+                                ", \"setup_finish\": " + number(timings.gpuSetup.finishSeconds) +
                                 ", \"presort\": " + number(timings.presortSeconds) +
                                 ", \"build\": " + number(timings.buildSeconds) +
                                 ", \"prune\": " + number(timings.pruneSeconds) + "}"},

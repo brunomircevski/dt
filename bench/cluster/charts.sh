@@ -8,10 +8,7 @@
 # A result measured before the final protocol (bench/benchlib.py FINAL_SINCE) is
 # drawn faded and labelled "out of date", under a banner naming how many; the
 # marks and the banner go away by themselves once the rerun's results replace it
-# and this script runs again. Copy the GPU libraries' rows first (cuML,
-# XGBoost: ~/gpu-dt-bench/<results>/<dataset>/<node>/ into
-# bench/results/cluster-gpu-vs-others/<dataset>/<node>/). Light work: fine on a
-# login node (under nice).
+# and this script runs again. Light work: fine on a login node (under nice).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 PY=${PY:-bench/.venv/bin/python}
@@ -37,9 +34,7 @@ done
 [ ${#runs[@]} -gt 0 ] && $PY bench/rows_chart.py "${runs[@]}" --out "$R/cluster-chess/chart-rows.png"
 $PY bench/scaling_chart.py "$R/cluster-cpu-scaling"
 $PY bench/vs_chart.py cpu
-$PY bench/vs_chart.py gpu
-$PY bench/vs_chart.py gpu-warm
-$PY bench/e2e_chart.py
+$PY bench/gpu_steps_chart.py
 d=$R/cluster-profiling
 $PY bench/profile_share_chart.py "$d" --out "$d/chart.png" > /dev/null
 $PY bench/profile_share_chart.py "$d" --chess --out "$d/chart-chess.png" > /dev/null

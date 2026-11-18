@@ -54,10 +54,19 @@ std::unique_ptr<Grower> makeCpuGrower(const Dataset &train, const Options &optio
 // (simple_grower.cpp). The reference the others are compared against.
 std::unique_ptr<Grower> makeSimpleGrower(const Dataset &train);
 
-// Cuda backend; small nodes are finished by CPU tasks on `pool`. Allocation
-// and upload time goes to `setupSeconds`.
+// The GPU backends' timed setup in its steps; their sum is the setup time.
+struct GpuSetupTimings {
+  double buffersSeconds = 0.0;  // page-locked staging (and --hybrid's hand-off) buffers, copy threads
+  double allocateSeconds = 0.0; // streams, events, device memory
+  double uploadSeconds = 0.0;   // labels and values to the GPU, each feature presorted as it arrives
+  double finishSeconds = 0.0;   // the presort's end, kernel tables, host arena
+  double total() const { return buffersSeconds + allocateSeconds + uploadSeconds + finishSeconds; }
+};
+
+// Cuda backend; small nodes are finished by CPU tasks on `pool`. Its setup
+// (allocation, upload, presort) is timed in `setup`.
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &options,
-                                      ThreadPool &pool, double &setupSeconds);
+                                      ThreadPool &pool, GpuSetupTimings &setup);
 
 // The GPU's one-time start-up: the CUDA context (slow: 0.4-0.7 s). Call it
 // early on another thread, e.g. while the dataset loads, so training does not

@@ -44,13 +44,13 @@ power benchmark) on one build: one chain of jobs per node, each a `batch.sh`
 plan file (`bench/cluster/plans/final-<node>-<n>.txt`, its log next to it) run
 line by line, or `hybrid_vs_gpu_only.sh`, the most important first. `-m` sets
 the runs per case, `-k` the kinds of runs (`gpu`, `cpu`, `scaling`, `serial`,
-`simple`, `vs`, `gpulibs`, `profiling`, `hybrid`, `e2e`; default all), `-N`
+`simple`, `vs`, `gpulibs`, `profiling`, `hybrid`; default all), `-N`
 the nodes whose chains are submitted (default all seven). Every run is one
 fresh process that trains one tree, no warm-up (`bench/README.md`, "How time
 is measured"); 10 runs a case, 3 where one run takes over an hour. The
-libraries of `vs` share one `run.py` per dataset and the GPU libraries
-(`gpulibs`, `~/gpu-dt-bench`) run in rounds of one process per case, so their
-runs interleave. It runs from `~/dt-final`, a fresh clone with its own build
+libraries of `vs` share one `run.py` per dataset, and so do ./tree's GPU
+backends, cuML and XGBoost on hopper (`gpulibs`; the libraries in
+`~/gpu-dt-bench/venv`), so their runs interleave. It runs from `~/dt-final`, a fresh clone with its own build
 and tools, so `~/dt` cannot change it.
 
 ```bash
@@ -125,9 +125,7 @@ run records its test accuracy and the SHA-256 of its tree. The datasets the
 GPUs cannot hold (full ECBDL'14 and SOREL) run on the CPU nodes only.
 
 When a chain is done, copy its run folders into this repository's
-bench/results (on mordor3 they are written there already), copy the GPU
-libraries' rows (`~/gpu-dt-bench/<results>/<dataset>/<node>/` into
-`bench/results/cluster-gpu-vs-others/<dataset>/<node>/`) and redraw every chart:
+bench/results (on mordor3 they are written there already) and redraw every chart:
 
 ```bash
 bench/cluster/charts.sh             # --no-paper: without paper/figs
