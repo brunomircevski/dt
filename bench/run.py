@@ -236,14 +236,14 @@ def profile_name(case, rep):
 ACCURACY = {}
 
 
-HANDOFF_FILE = B.ROOT / "tuning" / "handoff" / "handoff_rows.json"
+HANDOFF_FILE = B.BENCH / "tuning" / "handoff" / "handoff_rows.json"
 
 
 def handoff_rows(requested, dataset, flags):
     """--hybrid's --handoff-rows for a run, None for ./tree's own default.
     `requested` (run.py --handoff-rows): a number, "default" (./tree's own), or
     None: the value measured best for this node, dataset and depth limit in
-    tuning/handoff/handoff_rows.json (written by tuning/handoff/handoff_sweep.sh): the
+    bench/tuning/handoff/handoff_rows.json (written by bench/tuning/handoff/handoff_sweep.sh): the
     entry of the shallowest measured depth limit at least as deep as this
     run's ("depth<N>" for -d N, "nodepth" for no limit; -d 5 takes depth10,
     -d 20 nodepth: the hand-off acts on the small nodes of the deep levels,
@@ -736,7 +736,7 @@ def main():
     parser.add_argument("--handoff-rows",
                         help="./tree --hybrid (tree_cuda): its --handoff-rows, a number or "
                              "'default' (./tree's own); without it, the value measured best for "
-                             "the node, dataset and depth limit in tuning/handoff/handoff_rows.json, else "
+                             "the node, dataset and depth limit in bench/tuning/handoff/handoff_rows.json, else "
                              "./tree's own; --gpu has none")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and exit")
     args = parser.parse_args()

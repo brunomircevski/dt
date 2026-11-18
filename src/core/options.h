@@ -71,7 +71,7 @@ struct GpuOptions {
   // A shallow tree reaches its depth limit almost everywhere, so the GPU runs
   // all D levels anyway: a hand-off saves no GPU level and only moves the
   // last levels' work to the slower CPU. At depth 10 (291a736f,
-  // tuning/handoff/results/depth10/) the fastest was 512-2048 on every
+  // bench/tuning/handoff/results/depth10/) the fastest was 512-2048 on every
   // dataset (ECBDL 4096, but 1024 within 0.6%), and 10 × features alone made
   // CART 4-11% slower on MNIST8M and SOREL 4M; with the 2^D cap (1024) the
   // CART runs are within 0.6% of the fastest, C4.5 (flat) within 1.6%. The cap

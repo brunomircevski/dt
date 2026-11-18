@@ -2,15 +2,15 @@
 # The best --hybrid --handoff-rows for each dataset on one GPU node, as one
 # SLURM job: a sweep of the value with the benchmarks' own protocols (CART and
 # C4.5 unpruned, depth <= DEPTH, or no limit with DEPTH=none), the value taken
-# by pick_handoff.py and stored in tuning/handoff/handoff_rows.json, from which
+# by pick_handoff.py and stored in bench/tuning/handoff/handoff_rows.json, from which
 # bench/run.py takes it for every --hybrid run on that node, dataset and depth
 # limit. Run it again only when a dataset, the hardware or the hybrid's code
 # changes. Submit it from the repository root (the build to measure), e.g.
 #
 #   TREE_GIT_DESCRIBE="$(git describe --always --abbrev=12)" sbatch -p hopper -w hopper --exclusive \
-#       -t 12:00:00 -o tuning/handoff/results/hopper.log tuning/handoff/handoff_sweep.sh hopper
+#       -t 12:00:00 -o bench/tuning/handoff/results/hopper.log bench/tuning/handoff/handoff_sweep.sh hopper
 #
-# Results: tuning/handoff/results/depth<DEPTH>/cuda-<node>-<dataset>-mr<N>/
+# Results: bench/tuning/handoff/results/depth<DEPTH>/cuda-<node>-<dataset>-mr<N>/
 # ("default" = ./tree's own, for reference) and <node>-<dataset>.json.
 # Environment: DATASETS, DEPTH (default 10; "none": no limit), VALUES,
 # SWEEP_RUNS (default 5). A value whose folder has a report.md is kept, so a
@@ -27,8 +27,8 @@ SWEEP_RUNS="${SWEEP_RUNS:-5}"
 if [ "$DEPTH" = none ]; then KEY=nodepth P=cart_full_nodepth,c45_unpruned
 else KEY="depth$DEPTH" P="cart_depth$DEPTH,c45_depth${DEPTH}_unpruned"; fi
 # job.sh writes to bench/results/$DIR (run.py --run-id): DIR climbs out of bench/,
-# as the sweep is tuning, not a benchmark, and its results live in tuning/handoff/.
-DIR="../../tuning/handoff/results/$KEY" RESULTS="tuning/handoff/results/$KEY"
+# as the sweep is tuning, not a benchmark, and its results live in bench/tuning/handoff/.
+DIR="../tuning/handoff/results/$KEY" RESULTS="bench/tuning/handoff/results/$KEY"
 # As batch.sh: an idle node runs its first seconds of work slow.
 for _ in $(seq "$(nproc)"); do timeout 30 sh -c 'while :; do :; done' & done
 wait
@@ -45,7 +45,7 @@ for dataset in $DATASETS; do
       "$SWEEP_RUNS" "$P" all 14400 > "$RESULTS/$name/run.log" 2>&1 < /dev/null ||
       { echo "  failed (exit $?): $RESULTS/$name/run.log"; failed+=("$name"); }
   done
-  best="$(bench/.venv/bin/python tuning/handoff/pick_handoff.py "$RESULTS" "$NODE" "$dataset" "$KEY" $VALUES)" ||
+  best="$(bench/.venv/bin/python bench/tuning/handoff/pick_handoff.py "$RESULTS" "$NODE" "$dataset" "$KEY" $VALUES)" ||
     { echo "  no sweep result for $dataset"; failed+=("$dataset"); continue; }
   echo "$(date '+%F %T')  $dataset ($KEY): --handoff-rows $best"
 done
