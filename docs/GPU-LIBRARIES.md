@@ -4,16 +4,16 @@ How `./tree --gpu` and `--hybrid` are compared with cuML and XGBoost, what is
 timed on each side and where the comparison is still not even. Results,
 settings and the scripts are in
 [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
-(one CART tree, depth ≤ 10, no pruning, hopper's H100; draft of 2026-11-18,
-3 runs a case, until the rerun).
+(one CART tree, depth ≤ 10, no pruning, hopper's H100; 2026-11-18, job 395,
+3 runs a case, ./tree at d123383a).
 
 ## The result in one sentence
 
 `./tree --gpu` builds an **exact** CART tree (every distinct value tested,
-byte-identical to the CPU backends) of depth ≤ 10 on one H100 **2.4–2.7×
-faster than cuML 26.10** and **2.4–3.3× faster than XGBoost 3.4.1** on HIGGS
+byte-identical to the CPU backends) of depth ≤ 10 on one H100 **2.4–2.8×
+faster than cuML 26.10** and **2.3–3.3× faster than XGBoost 3.4.1** on HIGGS
 and MNIST8M, from the same host data through the same upload code. Its tree
-construction alone is 3.2–4.6× faster. cuML and XGBoost split only at 128 and
+construction alone is 3.1–4.6× faster. cuML and XGBoost split only at 128 and
 256 histogram bins, and their test accuracy is within 0.05 points.
 
 ## Why the design is faster
@@ -43,15 +43,19 @@ The same for every tool (`scripts/gpubench.py` for the libraries, ./tree's
   thread while the input loads, printed as `gpu startup`).
   `CUDA_MODULE_LOADING=LAZY`, CUDA's default, so each tool loads the kernels
   it uses inside the timed part.
-- **Timed:** from the host arrays to the finished tree, in four steps, each
-  ending with `cudaDeviceSynchronize`:
+- **Timed:** from the host arrays to the finished tree, as a timeline: when
+  each section started and ended (BENCHMARK.md, "The sections").
 
-| Step | ./tree | cuML | XGBoost |
+| Category | ./tree | cuML | XGBoost |
 |---|---|---|---|
-| set-up | staging buffers, copy threads (`--hybrid`: also its 256 MB of hand-off buffers), device memory | staging buffers, copy threads | the same |
-| upload | labels and columns through the staging buffers; the presort of each feature runs on the GPU as soon as it arrives | labels and values through the same code (`bench/adapters/uploader.cpp`) | the same |
-| prepare | the x·log x tables and host arena (`setup finish`) | input checks: NaN/inf scan, classes, lazy kernel loading | `QuantileDMatrix(max_bin=256)`, then the raw device copy is freed |
-| build | all levels, the hand-offs, the CPU subtrees, the host tree | `_fit_forest`: row-sample quantiles, then the tree | `xgb.train`, one round |
+| set-up | staging buffers, copy threads; `--hybrid`'s 256 MB of hand-off buffers; device memory; the x·log x table and its copy | staging buffers, copy threads | the same |
+| upload | labels and columns through the staging buffers | the same code (`bench/adapters/uploader.cpp`) | the same |
+| prepare | the presort: its GPU kernels' span (CUDA events), during the upload | input checks: NaN/inf scan, classes, lazy kernel loading | `QuantileDMatrix(max_bin=256)`, then the raw device copy is freed |
+| build | all levels, the hand-offs, the host tree; `--hybrid`'s CPU subtrees as their own span | `_fit_forest`: row-sample quantiles, then the tree | `xgb.train`, one round |
+
+  ./tree records its sections always (`src/core/timeline.h`, a clock read per
+  section and three CUDA events) and prints them as `span` lines; every
+  library section ends with `cudaDeviceSynchronize`.
 
 - One fresh process per run, no warm-up, exactly one tree. The tools'
   runs are interleaved in a new shuffled order each repetition (one
@@ -121,11 +125,11 @@ cost or MinSplit), so the libraries run CART only.
 
 ## Experiments still missing
 
-1. **The rerun:** 10 runs a case on a committed build (the draft is 3 runs on
-   uncommitted code).
-2. **./tree's `setup finish`** (22–35 ms, about 16% of HIGGS `--gpu`): the
-   x·log x table and a pageable copy of it; the cause of its time is not
-   confirmed.
+1. **The rerun:** 10 runs a case (job 395 has 3).
+2. **The x·log x table's copy** (27–33 ms, 15% of HIGGS `--gpu`; the
+   timeline shows the table itself takes 1.6–1.8 ms): a 512 KB copy from
+   pageable memory. Copying it through the staging buffers or computing it on
+   the GPU should remove most of it.
 3. **Per-kernel profile of tree construction** for all three tools (`nsys`),
    to compare the libraries' histogram kernels with ./tree's sweep and
    partition.

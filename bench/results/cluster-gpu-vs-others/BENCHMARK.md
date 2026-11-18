@@ -1,10 +1,10 @@
 # GPU vs others: ./tree against cuML and XGBoost on HIGGS and MNIST8M (CART)
 
-One CART tree per run, depth ≤ 10, no pruning, on every training row and feature, on hopper's H100 PCIe 80 GB (GPU 2) with every CPU of the node. ./tree `--gpu` and `--hybrid`, cuML and XGBoost run in one `bench/run.py` per dataset, their runs interleaved in a new shuffled order each repetition. Every run is a fresh process that builds exactly one tree with no warm-up. Every tool uploads its data through the same code, and the time of each step is recorded.
+One CART tree per run, depth ≤ 10, no pruning, on every training row and feature, on hopper's H100 PCIe 80 GB (GPU 2) with every CPU of the node. ./tree `--gpu` and `--hybrid`, cuML and XGBoost run in one `bench/run.py` per dataset, their runs interleaved in a new shuffled order each repetition. Every run is a fresh process that builds exactly one tree with no warm-up. Every tool uploads its data through the same code. Every run records a timeline: when each section of its timed training started and ended.
 
-**Draft data (2026-11-18, job 393, 3 runs a case, built from uncommitted code `d669b05ad862-dirty`):** the protocol below. The chart marks these runs as out of date until the rerun of `final.sh -k gpulibs` (10 runs). The earlier protocol (each library uploading in its own way, a warm variant, forests of 10, the A100 node) is in git history up to 8ba60fae.
+**Data (2026-11-18, job 395, 3 runs a case, ./tree at d123383a):** the protocol below. A 10-run rerun is `final.sh -k gpulibs`. The earlier protocol (each library uploading in its own way, a warm variant, forests of 10, the A100 node) is in git history up to 8ba60fae.
 
-![One CART tree on the H100: time of each step, ./tree, cuML and XGBoost, HIGGS and MNIST8M](chart.png)
+![One CART tree on the H100: when each section runs, ./tree, cuML and XGBoost, HIGGS and MNIST8M](chart.png)
 
 ```bash
 bench/cluster/final.sh -k gpulibs   # queues the runs on hopper (needs ~/gpu-dt-bench/venv and bench/.tools/libuploader.so)
@@ -13,34 +13,63 @@ bench/cluster/charts.sh             # among them gpu_steps_chart.py: chart.png, 
 
 ## Results
 
-Mean of 3 runs on the H100, in seconds. Each step in time order; in ./tree, `upload` also contains its presort, which runs on the GPU during the upload.
+Mean of 3 runs on the H100. Each section from its start to its end, in milliseconds since the timer started; sections that overlap ran at the same time. `summary.csv` has every section's start, end and length.
 
-| | ./tree --gpu | ./tree --hybrid | cuML 26.10 | XGBoost 3.4.1 |
+| HIGGS | ./tree --gpu | ./tree --hybrid | cuML 26.10 | XGBoost 3.4.1 |
 |---|--:|--:|--:|--:|
-| **HIGGS** total | **0.220** | 0.311 | 0.589 (2.7×) | 0.519 (2.4×) |
-| set-up | 0.076 | 0.167 | 0.059 | 0.061 |
-| upload | 0.043 (+ presort) | 0.041 (+ presort) | 0.062 | 0.044 |
-| prepare / tables | 0.035 | 0.035 | 0.165 | 0.147 |
-| build | 0.066 | 0.068 | 0.302 | 0.266 |
-| test accuracy, nodes | 70.52%, 2,029 | 70.52%, 2,029 | 70.48%, 2,039 | 70.53%, 2,031 |
-| VRAM | 3.3 GiB | 3.3 GiB | 1.9 GiB | 2.7 GiB |
-| **MNIST8M** total | **2.258** | 2.370 | 5.383 (2.4×) | 7.443 (3.3×) |
-| set-up | 0.089 | 0.197 | 0.051 | 0.045 |
-| upload | 0.722 (+ presort) | 0.719 (+ presort) | 0.545 | 0.558 |
-| prepare / tables | 0.029 | 0.029 | 0.204 | 2.338 |
-| build | 1.419 | 1.425 | 4.572 | 4.498 |
-| test accuracy, nodes | 84.51%, 2,047 | 84.51%, 2,047 | 84.55%, 2,047 | 84.51%, 2,047 |
-| VRAM | 49 GiB | 49 GiB | 25 GiB | 67 GiB |
+| staging buffers, copy threads | 0–61 | 0–58 | 0–58 | 0–61 |
+| hand-off buffers | | 58–156 | | |
+| device memory | 61–74 | 156–170 | | |
+| upload | 74–120 | 170–214 | 58–123 | 61–106 |
+| presort (GPU kernels) | 83–121 | 179–215 | | |
+| x·log x table, its copy | 120–122, 122–154 | 214–216, 216–249 | | |
+| input checks / quantile binning | | | 123–300 | 106–248 |
+| build the tree | 154–220 | 250–316 | 300–602 | 248–512 |
+| CPU subtrees | | 300–315 (23 ms of work, 52 tasks) | | |
+| **total** | **219** | 315 | 602 (2.8×) | 512 (2.3×) |
+| test accuracy, nodes, VRAM | 70.52%, 2,029, 3.3 GiB | 70.52%, 2,029, 3.3 GiB | 70.48%, 2,039, 1.9 GiB | 70.53%, 2,031, 2.7 GiB |
+
+| MNIST8M | ./tree --gpu | ./tree --hybrid | cuML 26.10 | XGBoost 3.4.1 |
+|---|--:|--:|--:|--:|
+| staging buffers, copy threads | 0–61 | 0–62 | 0–52 | 0–50 |
+| hand-off buffers | | 62–170 | | |
+| device memory | 61–82 | 170–196 | | |
+| upload | 82–794 | 196–906 | 52–610 | 50–594 |
+| presort (GPU kernels) | 89–795 | 203–907 | | |
+| x·log x table, its copy | 794–796, 796–823 | 906–908, 908–935 | | |
+| input checks / quantile binning | | | 610–840 | 594–2,939 |
+| build the tree | 824–2,245 | 936–2,358 | 840–5,405 | 2,939–7,389 |
+| CPU subtrees | | 1,927–2,303 (641 ms of work, 136 tasks) | | |
+| **total** | **2,244** | 2,357 | 5,414 (2.4×) | 7,392 (3.3×) |
+| test accuracy, nodes, VRAM | 84.51%, 2,047, 49 GiB | 84.51%, 2,047, 49 GiB | 84.55%, 2,047, 25 GiB | 84.51%, 2,047, 67 GiB |
 
 (×: slower than ./tree --gpu.)
 
-- **The build is where ./tree wins:** 4.6× cuML and 4.0× XGBoost on HIGGS, 3.2× both on MNIST8M. The upload is the same code for every tool (about 47 GB/s on MNIST8M; HIGGS's 1.2 GB is too short a copy to reach full speed), so it does not decide the result.
-- **./tree's upload with its presort takes longer on MNIST8M** (0.72 s against the libraries' 0.55 s for the same 25.4 GB): the presort of 784 features runs on the GPU during the copies and slows them. Without the overlap the presort would come after the upload, so the overlap still saves time.
-- **--hybrid's set-up is 0.1 s longer** than --gpu's: it also allocates its 256 MB of page-locked hand-off buffers. Its build is the same as --gpu's on these two datasets.
-- **cuML's prepare (0.17–0.20 s)** is its input checks (NaN/inf scan, the classes) and the lazy loading of the kernels it uses. Its binning is inside `build`: `nsys` shows that cuML computes its 128 quantiles from a row sample, which takes about 0.2 ms of GPU time on both datasets, so its `build` is the tree.
-- **XGBoost's prepare is its quantile binning** (`QuantileDMatrix`): 0.15 s on HIGGS, 2.3 s on MNIST8M (784 features). Its raw device copy is then freed: on MNIST8M it does not fit next to the multi-output tree's histograms.
+- **The build is where ./tree wins:** 65 ms against cuML's 302 ms (4.6×) and XGBoost's 264 ms (4.0×) on HIGGS; 1.42 s against 4.56 s (3.2×) and 4.45 s (3.1×) on MNIST8M. The upload is the same code for every tool (about 47 GB/s for the libraries on MNIST8M; HIGGS's 1.2 GB is too short a copy to reach full speed).
+- **The presort hides inside the upload:** its first kernel starts 7–9 ms after the upload starts (the first feature has to arrive), and its last one ends within 1 ms of the upload's end. On MNIST8M ./tree's upload takes 0.71 s against the libraries' 0.55 s for the same 25.4 GB: the presort kernels running at the same time slow the copies. Without the overlap the 0.7 s of presort would come after the upload.
+- **The x·log x table's copy costs 27–33 ms** (15% of HIGGS `--gpu`), computing it 1.6–1.8 ms: a 512 KB `cudaMemcpyAsync` from pageable memory, which the host waits for. A copy through the staging buffers, or computing the table on the GPU, would remove most of it (not done yet).
+- **--hybrid against --gpu:** its 256 MB of page-locked hand-off buffers take 98–109 ms, the whole difference between the two. Its CPU subtrees run during the last levels (HIGGS: 15 ms, 23 ms of CPU work in 52 tasks; MNIST8M: 376 ms, 641 ms of work in 136 tasks) and end with the build, which takes as long as `--gpu`'s: at depth 10 they gain nothing on these datasets.
+- **cuML's input checks (176–230 ms)** are its NaN/inf scan, the classes and the lazy loading of the kernels it uses. Its binning is inside its build: `nsys` shows that cuML computes its 128 quantiles from a row sample in about 0.2 ms of GPU time, and 98% of its build's GPU time is `buildHistogramsKernel`. Not split: a 0.2 ms section says nothing.
+- **XGBoost's quantile binning** (`QuantileDMatrix`, then freeing the raw device copy, 0.5–8 ms, drawn as part of it): 141 ms on HIGGS, 2.34 s on MNIST8M (784 features).
 - **The same tree:** XGBoost's tree on MNIST8M is ./tree's tree (2,047 nodes, the same test accuracy). On HIGGS the libraries' trees differ in a few nodes because of their bins (128 and 256 quantiles; ./tree tests every distinct value). Test accuracy is within 0.05 points.
 - **VRAM:** ./tree keeps presorted 8-byte entries for every value (49 GiB on MNIST8M). cuML keeps its bins and needs half as much. XGBoost needs the most (67 GiB) for its multi-output histograms (10 classes × 784 features × 256 bins per node), even with its histogram cache limited to 128 nodes.
+
+## The sections
+
+| Section | ./tree (its `span` lines, `src/core/timeline.h`) | cuML, XGBoost (`scripts/gpubench.py`) |
+|---|---|---|
+| staging buffers, copy threads | `Staging::prepare` | `uploader.cpp`'s buffers and copy threads |
+| hand-off buffers | `--hybrid`: `prepareHandOff` (2 × 128 MB page-locked) | |
+| device memory | streams, events, the memory pool, `allocateDevice` | (inside the libraries' later sections) |
+| upload | labels and columns through the staging buffers, to the last copy's end | the same, through `uploader.cpp` |
+| presort (GPU kernels) | CUDA events: the first presort kernel's start to the last one's end, on the host's clock (an event synchronized before the upload) | |
+| x·log x table, its copy | `xlog2xTable()`, then its copy to the GPU | |
+| input checks | | cuML `_prepare_fit_inputs` |
+| quantile binning | | XGBoost `QuantileDMatrix(max_bin=256)`, then the raw copy freed |
+| build the tree | `grow()`: all levels, the hand-offs, waiting for the CPU tasks, the host tree | cuML `_fit_forest` and the rest of `fit`; XGBoost `xgb.train`, one round |
+| CPU subtrees | `--hybrid`: the first CPU task's start to the last one's end, with the tasks' summed work | |
+
+Sections of ./tree under 2 ms (the wait for the presort's end, the host arena, the grow's set-up, assembling the tree) are not recorded on their own; they are in the gaps or in the build. Every library section ends with `cudaDeviceSynchronize`, so its GPU work is inside it. ./tree's host sections wait for their own GPU work where the code does (the upload ends with the last copy).
 
 ## What is compared
 
@@ -57,15 +86,7 @@ Mean of 3 runs on the H100, in seconds. Each step in time order; in ./tree, `upl
 The same for every tool:
 
 - **Not timed:** reading the files into host RAM as float32, column-major (./tree's loader holds its data column-major; the libraries get `np.asfortranarray`), and the labels (XGBoost's float32 or one-hot labels are made here); importing the library; the CUDA context alone (`cudaFree(0)`; ./tree makes it on a thread while the input loads). `CUDA_MODULE_LOADING=LAZY`, CUDA's default: each tool loads the kernels it uses inside the timed part.
-- **Timed:** from the host arrays to the finished tree. Every step boundary waits for the GPU (`cudaDeviceSynchronize`), so asynchronous work is counted in the step that started it.
-
-| Step | ./tree (`train total`, printed in parts) | cuML, XGBoost (`scripts/gpubench.py`) |
-|---|---|---|
-| set-up | `setup buffers` (page-locked staging buffers, copy threads; `--hybrid` also its hand-off buffers) + `setup allocate` (device memory) | `buffers`: the same staging buffers and copy threads (`bench/adapters/uploader.cpp`, a C++ copy of ./tree's `uploadStaged`) |
-| upload | `setup upload`: labels and columns through the staging buffers, each feature presorted on the GPU as soon as it arrives (two lanes on the chart) | `upload`: labels and values through `uploader.cpp` into a column-major device array |
-| prepare | `setup finish`: the x·log x tables and host arena (drawn as set-up) | cuML: its input checks (`_prepare_fit_inputs`); XGBoost: `QuantileDMatrix(max_bin=256)`, then the raw device copy is freed |
-| build | `build` (all levels, the hand-offs, the CPU subtrees, the host tree) | cuML: `_fit_forest` (its row-sample quantiles, then the tree); XGBoost: `xgb.train`, one round |
-
+- **Timed:** from the host arrays to the finished tree, in the sections above. ./tree's `train total` and the libraries' `train_seconds` are the totals; run.py also keeps the step sums (./tree's `setup_buffers/allocate/upload/finish_seconds`, `build_seconds`; gpubench's `buffers/upload/prepare/build_seconds`) next to each row's `timeline`.
 - **The upload:** 4 page-locked 32 MB buffers on the GPU's NUMA node, up to 32 copy threads pinned to that node's CPUs, each 32 MB chunk copied in parallel into a free buffer, then an asynchronous copy to the GPU. cuML and XGBoost call the same algorithm through `ctypes` (`bench/.tools/libuploader.so`, built by `bench/cluster/build.sh`), so neither library is slowed by its own pageable copy and ./tree gets no advantage from its upload.
 - **Not timed, after the tree:** prediction, accuracy, the tree walk (nodes, depth, root split).
 - **Runs:** one `bench/run.py` per dataset with `--impls tree_gpu_only,tree_cuda,cuml,xgboost`; each repetition runs every tool once in a new shuffled order. Every process runs on all CPUs of the node, the GPU's NUMA node first; the job owns the node (`--exclusive`).
@@ -90,8 +111,8 @@ cuML needs its own venv (`GPU_PYTHON`, default `~/gpu-dt-bench/venv/bin/python`;
 
 | File | Content |
 |---|---|
-| `chart.png` | HIGGS and MNIST8M: each tool's time in its steps, with test accuracy, nodes, VRAM and spread (`bench/gpu_steps_chart.py`) |
-| `summary.csv` | one row per dataset and tool: mean, standard deviation, runs, min, max, each step's mean, VRAM, test accuracy, nodes, commit |
+| `chart.png` | HIGGS and MNIST8M: each tool's sections on a timeline, one lane each, with total, test accuracy, nodes, VRAM and spread (`bench/gpu_steps_chart.py`) |
+| `summary.csv` | one row per dataset, tool and section: mean start, end and length (CPU subtrees: work and tasks), and the tool's total (mean, standard deviation, min, max), VRAM, test accuracy, nodes, commit |
 | `one-tree/vs-hopper-<dataset>/` | the run folders: `results.jsonl` (every run of every tool, each step's time), `plan.json`, `machine.json`, `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py` |
 | `scripts/gpubench.py` | one cuML or XGBoost run (called by `bench/run.py`) |
 | `scripts/requirements-freeze.txt` | the venv's pinned versions |

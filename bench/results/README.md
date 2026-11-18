@@ -42,7 +42,7 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 | Directory | What | Main result |
 |---|---|---|
 | [`cluster-cpu-vs-others`](cluster-cpu-vs-others/BENCHMARK.md) | ./tree `--simple`, `--serial`, `--multicore` on epyc against scikit-learn (CART) and Weka J48 (C4.5), one thread | HIGGS: `--multicore` 660× scikit-learn and 2,400× J48, `--serial` 27× and 112×; the same trees (J48's C4.5 on HIGGS 923 against 935 nodes). |
-| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--gpu` and `--hybrid` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree on hopper's H100, every tool uploading through the same code, each step timed | One CART tree (draft, 3 runs): ./tree `--gpu` 2.4–2.7× faster than cuML and 2.4–3.3× than XGBoost; its tree construction 3.2–4.6× faster. |
+| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--gpu` and `--hybrid` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree on hopper's H100, every tool uploading through the same code, a timeline of each run's sections | One CART tree (3 runs): ./tree `--gpu` 2.4–2.8× faster than cuML and 2.3–3.3× than XGBoost; its tree construction 3.1–4.6× faster. |
 
 **Energy** (not timed; the whole server at the PSU, from a meter model fitted per node):
 

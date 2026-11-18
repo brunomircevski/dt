@@ -49,17 +49,19 @@ SECTIONS = {
     "x log x table copy": ("set-up", "x·log x table copy"),
     "input checks": ("prepare", "input checks"),
     "quantile binning": ("prepare", "quantile binning"),
-    "free raw copy": ("prepare", "free the raw copy"),
     "build": ("build", "build the tree"),
     "cpu subtrees": ("cpu", "CPU subtrees"),
     "build tree": ("build", "build the tree"),
-    "fit's end": ("build", "fit's end"),
 }
+# sections too short to tell anything on their own (< 1% of the run), drawn as
+# part of the one they follow
+MERGE = {"free raw copy": "quantile binning", "fit's end": "build tree"}
 TITLES = {"higgs": "HIGGS (10.5M rows × 28 features, 2 classes)",
           "mnist8m": "MNIST8M (8.1M rows × 784 features, 10 classes)"}
 LANE = 1.0       # one lane per section
 BAR = 0.42       # the bar's thickness in a lane
 GAP = 0.9        # space between tools
+HEAD = 1.5       # the tool's lane (its total, then its facts below it) to its first section
 
 
 def load(node, dataset):
@@ -75,7 +77,15 @@ def load(node, dataset):
         spans = defaultdict(list)  # name -> [(start, end, busy, tasks)] over the runs
         order = []
         for r in mine:
+            timeline = {}
             for s in r["timeline"]:
+                name = MERGE.get(s["name"], s["name"])
+                if name in timeline:
+                    timeline[name]["start"] = min(timeline[name]["start"], s["start"])
+                    timeline[name]["end"] = max(timeline[name]["end"], s["end"])
+                else:
+                    timeline[name] = dict(s, name=name)
+            for s in timeline.values():
                 if s["name"] not in spans:
                     order.append(s["name"])
                 spans[s["name"]].append((s["start"], s["end"], s.get("busy", 0.0), s.get("tasks", 0)))
@@ -109,7 +119,7 @@ def lanes_of(tools):
     y, out = 0.0, []
     for t in tools:
         out.append((y, t, None))
-        y += LANE
+        y += HEAD
         for s in t["sections"]:
             out.append((y, t, s))
             y += LANE
@@ -131,6 +141,7 @@ def draw(ax, tools):
                 note += f" ({t['mean'] / ref:.1f}× ./tree --gpu)"
             ax.text(t["mean"] + right * 0.01, y, note, va="center", fontsize=8.5, color=INK,
                     fontweight="bold")
+            ax.text(t["mean"] + right * 0.01, y + 0.62, facts(t), va="center", fontsize=7, color=MUTED)
             ticks.append(y)
             names.append(t["label"])
             continue
@@ -140,7 +151,7 @@ def draw(ax, tools):
         ax.barh(y, width, left=s["start"], height=BAR, color=colour, linewidth=0)
         text = duration(s["seconds"])
         if s["tasks"]:
-            text += f", {s['busy']:.2f} s of work in {s['tasks']:.0f} tasks"
+            text += f"; {duration(s['busy'])} of CPU work in {s['tasks']:.0f} tasks"
         ax.text(s["start"] + width + right * 0.008, y, text, va="center", fontsize=7, color=MUTED)
         ticks.append(y)
         names.append(label)
@@ -150,19 +161,19 @@ def draw(ax, tools):
         tick.set_color(MUTED if s else INK)
         tick.set_fontweight("normal" if s else "bold")
     ax.set_ylim(height - GAP + 0.2, -0.8)
-    ax.set_xlim(0, right * 1.32)
-    # each tool's facts under its total
-    for y, t, s in lanes:
-        if s is None:
-            facts = []
-            if t["test"] is not None:
-                facts.append(f"test {t['test'] * 100:.2f}%")
-            if t["nodes"]:
-                facts.append(f"{t['nodes']:,} nodes")
-            if t["vram"]:
-                facts.append(f"{t['vram'] / 2**30:.1f} GiB VRAM")
-            facts.append(f"{t['n']} runs, ±{t['sd'] * 1000:.0f} ms")
-            ax.text(right * 1.31, y, " · ".join(facts), va="center", ha="right", fontsize=7, color=MUTED)
+    ax.set_xlim(0, right * 1.3)
+
+
+def facts(t):
+    out = []
+    if t["test"] is not None:
+        out.append(f"test {t['test'] * 100:.2f}%")
+    if t["nodes"]:
+        out.append(f"{t['nodes']:,} nodes")
+    if t["vram"]:
+        out.append(f"{t['vram'] / 2**30:.1f} GiB VRAM")
+    out.append(f"{t['n']} runs, ±{t['sd'] * 1000:.0f} ms")
+    return " · ".join(out)
 
 
 def style(ax, title):
@@ -214,9 +225,9 @@ def main():
         style(ax, TITLES.get(dataset, dataset))
     gpu = grid[0][1][0]["gpu"]
     fig.suptitle(f"One CART tree, depth ≤ 10, on one {gpu} ({args.node}): when each section runs",
-                 x=0.01, ha="left", fontsize=13, color=INK, fontweight="bold")
+                 x=0.01, y=1 - 0.12 / fig.get_figheight(), ha="left", fontsize=13, color=INK, fontweight="bold")
     fig.legend(handles=[plt.Rectangle((0, 0), 1, 1, color=c[0]) for c in CATEGORIES.values()],
-               labels=[c[1] for c in CATEGORIES.values()], loc="upper left", bbox_to_anchor=(0.01, 0.975),
+               labels=[c[1] for c in CATEGORIES.values()], loc="upper left", bbox_to_anchor=(0.01, 1 - 0.38 / fig.get_figheight()),
                ncol=3, frameon=False, fontsize=8.5, labelcolor=INK)
     note = ("Every run a fresh process, no warm-up; one lane per section, from its start to its end (mean of the "
             "runs), so sections that run at the same time overlap; the grey bar is the whole timed training. "
@@ -227,7 +238,7 @@ def main():
             "row sample (< 1 ms of GPU time, nsys). ./tree is exact (every distinct value); cuML splits on 128 "
             "quantile bins, XGBoost on 256 (squared error with λ = 0 on 0/1 or one-hot labels = Gini).")
     fig.text(0.01, 0.005, textwrap.fill(note, 190), fontsize=7.5, color=MUTED, va="bottom")
-    top = 1 - 1.15 / fig.get_figheight()
+    top = 1 - 0.95 / fig.get_figheight()
     fig.tight_layout(rect=(0, 0.75 / fig.get_figheight(), 1, top))
     fig.savefig(RESULTS / "chart.png", dpi=160)
     write_summary(grid, RESULTS / "summary.csv")

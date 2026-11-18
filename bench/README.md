@@ -25,7 +25,7 @@ It measures training time and peak memory, and records tree size and training an
 | `testset_chart.py`, `rows_chart.py`, `runs_chart.py`, `machines_chart.py` | The test-set benchmarks' charts: bars per backend and node, time and memory against rows, every run, several machines, charts in a grid. |
 | `scaling_chart.py` | The thread-scaling chart of `cluster-cpu-scaling`: speed-up over one thread against threads, epyc and dell, HIGGS and MNIST8M, CART and C4.5, plus each run's `scaling.csv` (time, speed-up, efficiency, peak RSS). |
 | `vs_chart.py` | The chart of `cluster-cpu-vs-others` (./tree against scikit-learn, rpart, J48 and YaDT). |
-| `gpu_steps_chart.py` | The chart of `cluster-gpu-vs-others` (./tree against cuML and XGBoost): each tool's time in its steps. |
+| `gpu_steps_chart.py` | The chart of `cluster-gpu-vs-others` (./tree against cuML and XGBoost): when each section of each tool's training runs, one lane per section. |
 | `profile_chart.py`, `profile_share_chart.py` | Where the training time goes, from `run.py --profile`. |
 | `merge_runs.py` | Appends extra runs of a case to its run folder. |
 
@@ -121,8 +121,10 @@ short read.
 to the GPU through `adapters/uploader.cpp`, a copy of ./tree's own staged
 upload (page-locked buffers, copy threads), inside their timed fit, as ./tree
 does inside its own: the comparison measures the tree algorithms, not how
-fast each library copies from pageable memory. Every GPU tool's time is
-split into steps (set-up, upload, prepare, build; `gpu_steps_chart.py`).
+fast each library copies from pageable memory. Every GPU run records a
+timeline, when each section of its training started and ended (./tree's
+`span` lines, `src/core/timeline.h`; gpubench.py's `timeline`), kept in its
+row and drawn by `gpu_steps_chart.py`.
 
 **What is timed: the training time**, all the work that depends on the data,
 from the data in host memory as the tool's input arrays to the finished tree.
