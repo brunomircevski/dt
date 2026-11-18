@@ -4,17 +4,19 @@ How `./tree --gpu` and `--hybrid` are compared with cuML and XGBoost, what is
 timed on each side and where the comparison is still not even. Results,
 settings and the scripts are in
 [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
-(one CART tree, depth ≤ 10, no pruning, hopper's H100; 2026-11-18, job 395,
-3 runs a case, ./tree at d123383a).
+(one CART tree per fresh process, depth ≤ 10, no pruning, hopper's H100;
+2026-11-18, job 397, 10 runs a case, ./tree at 7c39d6a3).
 
 ## The result in one sentence
 
-`./tree --gpu` builds an **exact** CART tree (every distinct value tested,
-byte-identical to the CPU backends) of depth ≤ 10 on one H100 **2.4–2.8×
-faster than cuML 26.10** and **2.3–3.3× faster than XGBoost 3.4.1** on HIGGS
-and MNIST8M, from the same host data through the same upload code. Its tree
-construction alone is 3.1–4.6× faster. cuML and XGBoost split only at 128 and
-256 histogram bins, and their test accuracy is within 0.05 points.
+In a fresh process, `./tree --gpu` trains an **exact** CART tree (every
+distinct value tested, byte-identical to the CPU backends) of depth ≤ 10 on
+one H100 **2.4–2.5× faster than cuML 26.10** and **2.4–3.3× faster than
+XGBoost 3.4.1** on HIGGS and MNIST8M, from the same host data through the same
+upload code. cuML and XGBoost split only at 128 and 256 histogram bins: their
+trees are comparable, not identical, and their test accuracy is within 0.05
+points. The totals are the comparison; each tool's phases have its own
+boundaries and only explain where its time goes.
 
 ## Why the design is faster
 
@@ -69,8 +71,9 @@ The same for every tool (`scripts/gpubench.py` for the libraries, ./tree's
 **Matched:** the same rows, features and depth limit, no sampling, no pruning;
 the same GPU (hopper's H100, GPU 2) on an exclusive node; the same host data
 in the same layout (column-major float32); the same upload code (4
-page-locked 32 MB buffers on the GPU's NUMA node, up to 32 pinned copy
-threads, asynchronous copies); the same untimed start-up (import and bare
+page-locked 32 MB buffers on the GPU's NUMA node, up to 32 copy threads
+pinned to its CPUs, asynchronous copies; each library row records
+`uploader_cpus`, and gpubench.py stops if they are unpinned); the same untimed start-up (import and bare
 context) and the same lazy kernel loading; every tool pays its own
 preprocessing (presort against binning) and allocations inside the timer.
 
@@ -125,14 +128,13 @@ cost or MinSplit), so the libraries run CART only.
 
 ## Experiments still missing
 
-1. **The rerun:** 10 runs a case (job 395 has 3).
-2. **The x·log x table's copy** (27–33 ms, 15% of HIGGS `--gpu`; the
+1. **The x·log x table's copy** (26–33 ms, 14% of HIGGS `--gpu`; the
    timeline shows the table itself takes 1.6–1.8 ms): a 512 KB copy from
    pageable memory. Copying it through the staging buffers or computing it on
    the GPU should remove most of it.
-3. **Per-kernel profile of tree construction** for all three tools (`nsys`),
+2. **Per-kernel profile of tree construction** for all three tools (`nsys`),
    to compare the libraries' histogram kernels with ./tree's sweep and
    partition.
-4. **Clean ablation** on one commit: a `--handoff-rows` sweep and a
+3. **Clean ablation** on one commit: a `--handoff-rows` sweep and a
    `--threads` sweep; the bitmap, fused next-level histograms, tile bound
    and asynchronous hand-off ring would need compile-time switches.

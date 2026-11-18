@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 RESULTS = Path(__file__).resolve().parent / "results" / "cluster-gpu-vs-others"
 TOOLS = [("tree_gpu_only", "./tree --gpu"), ("tree_cuda", "./tree --hybrid"),
          ("cuml", "cuML"), ("xgboost", "XGBoost")]
+SPLITS = {"tree_gpu_only": "exact", "tree_cuda": "exact", "cuml": "128 bins", "xgboost": "256 bins"}
 INK, MUTED, GRID, WHITE = "#0b0b0b", "#52514e", "#e4e3df", "#ffffff"
 # The same sections for every tool; each run's detailed timeline (results.jsonl,
 # summary.csv) is merged into them. category -> (colour, legend); the reference
@@ -101,7 +102,8 @@ def load(node, dataset, merged=True):
         times = [r["train_seconds"] for r in mine]
         vram = [r["gpu_peak_bytes"] for r in mine if r.get("gpu_peak_bytes")]
         last = mine[-1]
-        tools.append({"impl": impl, "label": label + ("" if impl.startswith("tree") else f" {last.get('version', '')}"),
+        tools.append({"impl": impl, "label": label + ("" if impl.startswith("tree") else f" {last.get('version', '')}")
+                      + f" · {SPLITS[impl]}",
                       "n": len(mine), "mean": st.mean(times), "sd": st.stdev(times) if len(times) > 1 else 0.0,
                       "min": min(times), "max": max(times), "sections": sections,
                       "vram": st.mean(vram) if vram else None, "test": last.get("test_accuracy"),
@@ -236,20 +238,22 @@ def main():
         draw(ax, tools)
         style(ax, TITLES.get(dataset, dataset))
     gpu = grid[0][1][0]["gpu"]
-    fig.suptitle(f"One CART tree, depth ≤ 10, on one {gpu} ({args.node}): when each section runs",
+    fig.suptitle(f"One CART tree per fresh process, depth ≤ 10, on one {gpu} ({args.node}): each tool's phases",
                  x=0.01, y=1 - 0.12 / fig.get_figheight(), ha="left", fontsize=13, color=INK, fontweight="bold")
     fig.legend(handles=[plt.Rectangle((0, 0), 1, 1, color=c[0]) for c in CATEGORIES.values()],
                labels=[c[1] for c in CATEGORIES.values()], loc="upper left", bbox_to_anchor=(0.01, 1 - 0.36 / fig.get_figheight()),
                ncol=1, frameon=False, fontsize=8, handlelength=1.6, labelspacing=0.3, labelcolor=INK)
-    note = ("Every run a fresh process, no warm-up. Each bar runs from its start to its end (mean of the runs); "
-            "bars that overlap ran at the same time (./tree's presort runs on the GPU while the data uploads, "
-            "measured with CUDA events); the build ends at the tool's total. The same bars for every tool: "
-            "summary.csv has each tool's recorded sections. Not timed: reading the data into host RAM "
-            "(column-major float32 for every tool), importing the library, the CUDA context. cuML and XGBoost "
-            "upload through ./tree's own staged upload (bench/adapters/uploader.cpp). cuML's 128 bins are "
-            "computed inside its build from a row sample (< 1 ms of GPU time, nsys). ./tree is exact (every "
-            "distinct value); cuML splits on 128 quantile bins, XGBoost on 256 (squared error with λ = 0 on 0/1 "
-            "or one-hot labels = Gini).")
+    note = ("Every run a fresh process that trains one tree, no warm-up; the totals are the comparison. "
+            "The bars are each tool's own phases, with its own boundaries, from their start to their end (mean of "
+            "the runs); they explain a total, they are not equal components: ./tree allocates its device memory "
+            "in set-up, the libraries inside their later phases; cuML computes its bins inside its build (from a "
+            "row sample, < 1 ms of GPU time, nsys). Bars that overlap ran at the same time (./tree presorts each "
+            "attribute on the GPU while the next ones upload, measured with CUDA events). Not timed: reading the "
+            "data into host RAM (column-major float32 for every tool), importing the library, the CUDA context. "
+            "Every tool uploads through ./tree's staged upload, pinned to the GPU's NUMA node "
+            "(bench/adapters/uploader.cpp). Exact: every distinct value is a candidate split; bins: only quantile "
+            "bin edges (XGBoost: squared error with λ = 0 on 0/1 or one-hot labels = Gini). The trees are "
+            "comparable, not identical.")
     fig.text(0.01, 0.005, textwrap.fill(note, 190), fontsize=7.5, color=MUTED, va="bottom")
     top = 1 - 1.2 / fig.get_figheight()
     fig.tight_layout(rect=(0, 0.75 / fig.get_figheight(), 1, top))
