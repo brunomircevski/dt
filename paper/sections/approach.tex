@@ -130,7 +130,10 @@ evaluated at all. With two classes, a tile whose upper bound is below the best
 gain found elsewhere is skipped. Deep levels consist mostly of tiny nodes.
 Tiles of nodes with at most 256 samples are therefore processed by a single
 warp (32 threads) instead of a block of 256 threads. Data is uploaded through
-page-locked staging buffers on the NUMA node closest to the GPU.
+page-locked staging buffers on the NUMA node closest to the GPU, one attribute
+after another. Each attribute is presorted as soon as its values have arrived,
+while the next ones are still being copied, so the presort is almost entirely
+hidden behind the upload.
 
 \subsection{\ImplHybrid}
 \label{sec:impl-hybrid}

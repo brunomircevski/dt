@@ -24,7 +24,8 @@ It measures training time and peak memory, and records tree size and training an
 | `chart.py` | One figure per dataset: training time and peak RSS per tool, single- and multi-thread in separate panels. |
 | `testset_chart.py`, `rows_chart.py`, `runs_chart.py`, `machines_chart.py` | The test-set benchmarks' charts: bars per backend and node, time and memory against rows, every run, several machines, charts in a grid. |
 | `scaling_chart.py` | The thread-scaling chart of `cluster-cpu-scaling`: speed-up over one thread against threads, epyc and dell, HIGGS and MNIST8M, CART and C4.5, plus each run's `scaling.csv` (time, speed-up, efficiency, peak RSS). |
-| `vs_chart.py` | The charts of `cluster-cpu-vs-others` (./tree against scikit-learn and J48) and `cluster-gpu-vs-others` (against cuML and XGBoost). |
+| `vs_chart.py` | The chart of `cluster-cpu-vs-others` (./tree against scikit-learn, rpart, J48 and YaDT). |
+| `gpu_steps_chart.py` | The chart of `cluster-gpu-vs-others` (./tree against cuML and XGBoost): when each section of each tool's training runs, one lane per section. |
 | `profile_chart.py`, `profile_share_chart.py` | Where the training time goes, from `run.py --profile`. |
 | `merge_runs.py` | Appends extra runs of a case to its run folder. |
 
@@ -48,14 +49,13 @@ Finished benchmarks, one directory per backend, machine and dataset: see [result
 - Pinning: `--cpus` sets the order of logical CPUs to pin to.
 - Repetitions and limits: `--reps` (runs per case, default 1), `--timeout`.
 - Long cases: a case whose first run takes over `--long-seconds` (3600) runs `--long-runs` (3) times in all.
-- End to end: `--no-eval` (no evaluation, ./tree `--no-accuracy`), `--prefetch` (the input into the page cache right before each process, dropped after it).
-- GPU libraries: `--impls cuml,xgboost` runs `results/cluster-gpu-vs-others/scripts/gpubench.py` in `GPU_PYTHON` (default `~/gpu-dt-bench/venv/bin/python`); never by default.
+- GPU libraries: `--impls cuml,xgboost` runs `results/cluster-gpu-vs-others/scripts/gpubench.py` in `GPU_PYTHON` (default `~/gpu-dt-bench/venv/bin/python`), which uploads through `.tools/libuploader.so` (built by `cluster/build.sh`); never by default.
 - Thermal rest: `--cooldown` sets seconds of rest between processes.
 - JVM: `--java-heap` sets its maximum heap.
-- `--no-baseline` leaves out the runtime-footprint runs.
+
 - Output: `--run-id` names the directory in `bench/results/` (default host-date); `--dry-run` prints the plan and exits; `--seed` seeds the shuffled order of the cases.
 - NUMA and cache: `--membind NODES` runs every process under `numactl --membind`; `--drop-cache` drops the datasets from the page cache before each process.
-- `./tree` only: `--train-accuracy-only`, `--test-accuracy` (skip or limit predicting the dumped tree), `--hash-trees` (SHA-256 of every dumped tree), `--profile` (write `--profile` JSON per run), `--handoff-rows` (a number, or `default` for ./tree's own; without it the value measured best for the node, dataset and depth limit in [`handoff_rows.json`](handoff_rows.json), see below).
+- `./tree` only: `--train-accuracy-only`, `--test-accuracy` (skip or limit predicting the dumped tree), `--hash-trees` (SHA-256 of every dumped tree), `--profile` (write `--profile` JSON per run), `--handoff-rows` (a number, or `default` for ./tree's own; without it the value measured best for the node, dataset and depth limit in [`handoff_rows.json`](tuning/handoff/handoff_rows.json), see below).
 
 ## Protocols (what is compared)
 
@@ -82,7 +82,7 @@ Each protocol is one well-defined piece of work, done with equivalent settings i
 
 ## The hybrid's hand-off size
 
-`./tree --hybrid` hands nodes below `--handoff-rows` rows to the CPU threads. Each implementation runs in its best measured setting, so every `--hybrid` benchmark run takes the value measured fastest for its GPU node, dataset and depth limit, stored in [`handoff_rows.json`](handoff_rows.json) (`{node: {dataset: {"depth10" | "nodepth": rows}}}`; `run.py` takes the shallowest measured limit at least as deep as the run's: `-d 5` and `-d 10` take `depth10`, `-d 15` to `-d 30` and no limit `nodepth`, as the hand-off acts on the small nodes of the deep levels; with no such entry, ./tree's default). The values come from [`cluster/handoff_sweep.sh`](cluster/handoff_sweep.sh) (a sweep of 256–32,768 and ./tree's default, CART and C4.5, the fastest mean over both, timed without the GPU setup, which does not depend on the value; results in [`results/handoff-sweep/`](results/handoff-sweep/)) and are reused, not swept again for each benchmark: rerun the sweep only when a dataset, a GPU node or the hybrid's code changes. Chess has no entry: its depth-10 tree has no node small enough to hand off. ./tree's own default (10 × features, at most 2^depth limit, between 512 and 16,384) is reported next to the tuned value.
+`./tree --hybrid` hands nodes below `--handoff-rows` rows to the CPU threads. Each implementation runs in its best measured setting, so every `--hybrid` benchmark run takes the value measured fastest for its GPU node, dataset and depth limit, stored in [`handoff_rows.json`](tuning/handoff/handoff_rows.json) (`{node: {dataset: {"depth10" | "nodepth": rows}}}`; `run.py` takes the shallowest measured limit at least as deep as the run's: `-d 5` and `-d 10` take `depth10`, `-d 15` to `-d 30` and no limit `nodepth`, as the hand-off acts on the small nodes of the deep levels; with no such entry, ./tree's default). The values come from [`tuning/handoff/handoff_sweep.sh`](tuning/handoff/handoff_sweep.sh) (a sweep of 256–32,768 and ./tree's default, CART and C4.5, the fastest mean over both, timed without the GPU setup, which does not depend on the value; results in [`tuning/handoff/results/`](tuning/handoff/results/)) and are reused, not swept again for each benchmark: rerun the sweep only when a dataset, a GPU node or the hybrid's code changes. Chess has no entry: its depth-10 tree has no node small enough to hand off. ./tree's own default (10 × features, at most 2^depth limit, between 512 and 16,384) is reported next to the tuned value.
 
 ## How time is measured
 
@@ -113,22 +113,18 @@ warm-up). Until 2026-11-17 ./tree had a second mode (`--gpu-startup full`, then
 its default) that also loaded every kernel and set up its pool, staging
 buffers and copy threads during the read, untimed; it was removed for one
 behaviour that benchmarks and users share. What it gained was measured
-(`gpu-startup-timing.html`): the same total GPU work; 120-200 ms when the
+([paper, GPU start-up](../paper/sections/experiment-design.tex)): the same total GPU work; 120-200 ms when the
 read is longer than the start-up (HIGGS, MNIST8M from NFS), nothing with a
 short read.
 
-**The warm variant (a supplement for the GPU comparison only).** The protocol
-above, cold, is the one every chart uses. Beside it, cluster-gpu-vs-others
-also reports a warm variant for one CART tree on HIGGS and MNIST8M: the same
-timer, but on the second identical fit of a process, after one untimed fit on
-the same data (./tree `--warm-up`, `bench/run.py --warm-up`; gpubench.py
-`WARM=1`). The same definition holds for every tool, so the variant is fair
-too. Why it is there: a GPU tool's first fit pays one-time costs that a
-long-lived process (a service, a notebook, a forest) pays only once. The
-largest is cuML's: its first copy of a NumPy input to the GPU took 11.2 s for
-MNIST8M's 25 GB on the H100, the next one 2.1 s, so a cold cuML fit took
-about 20 s and a warm one 8 s. Warm numbers appear only on their own chart
-(`chart-warm.png`), labelled warm, each with its cold time beside it.
+**The GPU tools' upload is the same code.** cuML and XGBoost send their data
+to the GPU through `adapters/uploader.cpp`, a copy of ./tree's own staged
+upload (page-locked buffers, copy threads), inside their timed fit, as ./tree
+does inside its own: the comparison measures the tree algorithms, not how
+fast each library copies from pageable memory. Every GPU run records a
+timeline, when each section of its training started and ended (./tree's
+`span` lines, `src/core/timeline.h`; gpubench.py's `timeline`), kept in its
+row and drawn by `gpu_steps_chart.py`.
 
 **What is timed: the training time**, all the work that depends on the data,
 from the data in host memory as the tool's input arrays to the finished tree.
@@ -142,14 +138,12 @@ Each tool measures it with its own monotonic clock:
 | rpart | R, `library(rpart)` | `rpart()` |
 | Weka J48 | JVM, class loading | `buildClassifier` (HotSpot's JIT compilation during it stays in: a user who trains one tree pays it too) |
 | YaDT (1 and 48 threads) | process start | its `total time` minus its `load time` (parsing the CSV), i.e. its indexing, plus the sum of its per-tree `time` fields (build) |
-| cuML | interpreter, imports (RMM), the CUDA context; RMM left at cuML's default, not configured or pre-grown | `fit` from host float32 arrays: kernel loading, copy, binning, build, and every allocation it makes |
-| XGBoost | interpreter, imports, the CUDA context; the float32 (MNIST8M: one-hot) labels, the adapter's data preparation | `QuantileDMatrix` from host arrays plus `train` (both recorded), kernel loading included |
+| cuML | interpreter, imports (RMM), the CUDA context; the column-major float32 host array; RMM left at cuML's default, not configured or pre-grown | the staging buffers, the upload (./tree's code), then `fit` on the device array: input checks, binning, build, kernel loading and every allocation it makes (steps recorded) |
+| XGBoost | interpreter, imports, the CUDA context; the column-major float32 host array and the float32 (MNIST8M: one-hot) labels, the adapter's data preparation | the staging buffers, the upload (./tree's code), `QuantileDMatrix` on the device array plus `train` (steps recorded), kernel loading included |
 
 **Not timed:** reading the file into memory; start-up (the GPU's is recorded as
 `gpu_startup_seconds`, the rest is only in the whole process's
-`wall_seconds`, broken down by the end-to-end benchmark,
-[results/cluster-end-to-end](results/cluster-end-to-end/BENCHMARK.md));
-prediction and evaluation; process exit.
+`wall_seconds`); prediction and evaluation; process exit.
 
 **Trees:** unpruned, depth ≤ 10 (protocols `cart_depth10` and
 `c45_depth10_unpruned`) for every timing number. Accuracy on pruned trees
@@ -164,8 +158,8 @@ it is not part of these benchmarks yet.
 - **Means only** in text and tables; charts may show the spread (min–max).
 - **Shuffled order:** `run.py` runs every case once per repetition, in a new
   order each time, so slow drift spreads over all cases. The libraries of
-  `cluster-cpu-vs-others` share one `run.py`; the GPU libraries run in rounds
-  of one process per case, shuffled (their `job.sh`).
+  `cluster-cpu-vs-others` share one `run.py`, as do ./tree's GPU backends, cuML
+  and XGBoost in `cluster-gpu-vs-others`.
 - **Fixed placement:** every run of a case uses the same CPUs (`taskset`), the
   same memory policy and the same GPU (`--exclusive` nodes; the GPU on the NUMA
   node `bench/cluster/job.sh` picks).
@@ -184,10 +178,10 @@ process reports nodes, leaves, depth, and training and test accuracy (each tool
 predicts with its own code; ./tree's dumped tree is evaluated by
 `benchlib.predict_tree`, checked against ./tree's own training accuracy). They
 must be the same in every repetition; `report.py` marks a case where they are
-not. `run.py --no-eval` skips all of it (the end-to-end runs).
+not.
 
 **`./tree --repeat` is not used for timing.** It serves only the power
-benchmark (`bench/power`, whose `--repeat-warmup` is part of its energy method)
+benchmark (`bench/results/cluster-power`, whose `--repeat-warmup` is part of its energy method)
 and A/B tests of code changes (`bench/cluster/ab.sh`).
 
 **Machine hygiene (record it; `run.py` writes `machine.json`):**

@@ -49,6 +49,7 @@
 #include "build/gpu_kernels.cuh"
 #include "build/grower.h"
 #include "core/nvtx.h"
+#include "core/timeline.h"
 #include "core/timing.h"
 #include "core/trace.h"
 
@@ -98,7 +99,7 @@ struct LevelNode {
 class GpuGrower final : public Grower {
 public:
   GpuGrower(const Dataset &train, const Options &options, ThreadPool &pool,
-            double &setupSeconds)
+            GpuSetupTimings &setupTimings)
       : train_(train), options_(options), pool_(pool),
         rows_(train.rowCount), features_(train.featureCount()),
         classCount_(static_cast<int>(train.classCount())),
@@ -111,15 +112,14 @@ public:
     if (features_ > 65535) {
       throw std::runtime_error("The Cuda backend supports at most 65535 features.");
     }
-    ScopedTimer timer(setupSeconds);
-    setup();
+    setup(setupTimings);
   }
 
   ~GpuGrower() override {
     if (toucher_.joinable()) {
       toucher_.join();
     }
-    for (cudaEvent_t event : {gathered_, copied_}) {
+    for (cudaEvent_t event : {gathered_, copied_, timeOrigin_, presortBegin_, presortEnd_}) {
       if (event) {
         cudaEventDestroy(event);
       }
@@ -161,6 +161,7 @@ public:
     tree.classNames = train_.classNames;
     ScopedTimer timer(timings.buildSeconds);
     std::optional<trace::Phase> setupPhase(std::in_place, "grow setup");
+    timeline::Section buildSection("build"); // to the finished tree (CPU subtrees: their own span)
     NodeStore store(train_.classCount(), 2 * stride_);
     // Leaves of rows: the CPU tasks write theirs into `leafOfRow`, the GPU
     // levels into leafOfRow_ (all ones elsewhere), merged at the end.
@@ -204,6 +205,10 @@ public:
         }
       }
       pool_.waitIdle();
+    }
+    if (cpuTasks_ > 0) { // --hybrid: from the first CPU subtree's start to the last one's end
+      timeline::add("cpu subtrees", cpuFirst_.load(), cpuLast_.load(),
+                    cpuBusy_.load() / 1e9, cpuTasks_.load());
     }
     if (profile_.enabled()) {
       profile_.report();
@@ -328,17 +333,35 @@ public:
 private:
   // Everything that does not depend on the tree: the device, the device
   // memory, the upload of the data with the presort, the host arena.
-  void setup() {
-    // The page-locked staging buffers and the copy threads, sized by
-    // --threads, and --hybrid's hand-off buffers (timed, as the GPU
-    // libraries' own; gpuPrepare() makes only the context).
-    staging().prepare(threadCount(options_));
-    if (options_.backend == Backend::Hybrid) {
-      staging().prepareHandOff();
+  void setup(GpuSetupTimings &timings) {
+    {
+      // The page-locked staging buffers and the copy threads, sized by
+      // --threads, and --hybrid's hand-off buffers (timed, as the GPU
+      // libraries' own; gpuPrepare() makes only the context).
+      ScopedTimer timer(timings.buffersSeconds);
+      {
+        timeline::Section section("staging buffers");
+        staging().prepare(threadCount(options_));
+      }
+      if (options_.backend == Backend::Hybrid) {
+        timeline::Section section("hand-off buffers");
+        staging().prepareHandOff();
+      }
     }
-    initDevice();
-    const bool keepValues = allocateDevice();
-    uploadAndPresort(keepValues);
+    bool keepValues = false;
+    {
+      ScopedTimer timer(timings.allocateSeconds);
+      timeline::Section section("device memory");
+      initDevice();
+      keepValues = allocateDevice();
+    }
+    {
+      // Ends when the last value is on the GPU; presort kernels may still run.
+      ScopedTimer timer(timings.uploadSeconds);
+      timeline::Section section("upload");
+      uploadAndPresort(keepValues);
+    }
+    ScopedTimer timer(timings.finishSeconds);
     prepareHost();
   }
 
@@ -355,6 +378,9 @@ private:
     }
     CUDA_CHECK(cudaEventCreateWithFlags(&gathered_, cudaEventDisableTiming));
     CUDA_CHECK(cudaEventCreateWithFlags(&copied_, cudaEventDisableTiming));
+    for (cudaEvent_t *event : {&timeOrigin_, &presortBegin_, &presortEnd_}) {
+      CUDA_CHECK(cudaEventCreate(event)); // with timing: the presort's span (timeline)
+    }
     int device = 0;
     CUDA_CHECK(cudaGetDevice(&device));
     // The level arrays grow in stream order (DeviceArray::reserve): keep what
@@ -446,6 +472,10 @@ private:
     // of the raw values (C4.5 pruning) is made per feature, before the
     // presort can overwrite them.
     {
+      // The GPU clock's origin on the timeline: stream_ is idle here.
+      CUDA_CHECK(cudaEventRecord(timeOrigin_, stream_));
+      CUDA_CHECK(cudaEventSynchronize(timeOrigin_));
+      timeOrigin_seconds_ = timeline::now();
       trace::Phase phase("upload+presort");
       uploadStaged(labels_.get(), train_.labels.data(), rows_ * sizeof(std::uint16_t));
       stride_ = rows_;
@@ -469,7 +499,13 @@ private:
                                                       cudaMemcpyDeviceToDevice, stream_));
                          });
                        }
+                       if (next == 0) { // the presort's first kernel starts here
+                         CUDA_CHECK(cudaEventRecord(presortBegin_, stream_));
+                       }
                        presortFeature(next++, distinct);
+                       if (next == features_) { // ... and its last one ends here
+                         CUDA_CHECK(cudaEventRecord(presortEnd_, stream_));
+                       }
                      }
                    });
     }
@@ -480,8 +516,11 @@ private:
   void prepareHost() {
     const std::size_t total = features_ * rows_;
     // c * log2(c) tables.
+    std::optional<timeline::Section> section(std::in_place, "x log x table");
     const std::vector<double> logs = xlog2xTable();
+    section.emplace("x log x table copy"); // from pageable memory: the host waits for it
     upload(logTable_, logs);
+    section.reset();
     params_.codec = codec_;
     params_.classCount = classCount_;
     params_.logs = LogTable{logTable_.get()};
@@ -502,8 +541,15 @@ private:
     {
       trace::Phase phase("presort finish");
       presortFinish(options_.algorithm == Algorithm::C45 ? &overlapDistinct_ : nullptr);
+      CUDA_CHECK(cudaStreamSynchronize(stream_));
     }
-    CUDA_CHECK(cudaStreamSynchronize(stream_));
+    // The presort's span on the GPU, on the timeline's clock.
+    float beginMs = 0.0f;
+    float endMs = 0.0f;
+    CUDA_CHECK(cudaEventElapsedTime(&beginMs, timeOrigin_, presortBegin_));
+    CUDA_CHECK(cudaEventElapsedTime(&endMs, timeOrigin_, presortEnd_));
+    timeline::add("presort (GPU)", timeOrigin_seconds_ + beginMs / 1000.0,
+                  timeOrigin_seconds_ + endMs / 1000.0);
     // Only now: touching the arena during presortFinish() made the download
     // of C4.5's distinct values (4 GB on SOREL 4M) 3x slower, both on the
     // GPU's socket (setup 3.4 s instead of 2.2 s on an A100 server; the build
@@ -1756,6 +1802,18 @@ private:
     });
   }
 
+  // A CPU subtree task ran from `start` to `end` (timeline seconds).
+  void noteCpuTask(double start, double end) {
+    double first = cpuFirst_.load();
+    while (start < first && !cpuFirst_.compare_exchange_weak(first, start)) {
+    }
+    double last = cpuLast_.load();
+    while (end > last && !cpuLast_.compare_exchange_weak(last, end)) {
+    }
+    cpuBusy_ += static_cast<std::uint64_t>((end - start) * 1e9);
+    ++cpuTasks_;
+  }
+
   // The CPU tasks of one hand-off (a stream callback: no CUDA calls).
   struct PendingTasks {
     GpuGrower *grower;
@@ -1770,7 +1828,9 @@ private:
       grower->pool_.submit(
           [grower, columns = tasks->columns, subtree = std::move(subtree)]() mutable {
             NvtxRange range("cpu subtree");
+            const double start = timeline::now();
             grower->cpuBuilder_->grow(columns, std::move(subtree));
+            grower->noteCpuTask(start, timeline::now());
           });
     }
   }
@@ -1807,6 +1867,14 @@ private:
 
   cudaStream_t stream_ = nullptr;
   cudaStream_t copyStreams_[2] = {}; // hand-off copies to the host (handOff())
+  cudaEvent_t timeOrigin_ = nullptr;   // the timeline's clock on the GPU (uploadAndPresort())
+  cudaEvent_t presortBegin_ = nullptr; // the presort's first kernel ...
+  cudaEvent_t presortEnd_ = nullptr;   // ... and its last one
+  double timeOrigin_seconds_ = 0.0;
+  std::atomic<double> cpuFirst_{1e300}; // the CPU subtree tasks: first start, last end,
+  std::atomic<double> cpuLast_{0.0};    // nanoseconds of work, count (timeline)
+  std::atomic<std::uint64_t> cpuBusy_{0};
+  std::atomic<std::uint64_t> cpuTasks_{0};
   cudaEvent_t gathered_ = nullptr;    // the last hand-off piece is gathered
   cudaEvent_t copied_ = nullptr;      // copyStreams_[1] is done with a hand-off
 
@@ -1876,8 +1944,8 @@ double gpuPrepare() {
 }
 
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &options,
-                                      ThreadPool &pool, double &setupSeconds) {
-  return std::make_unique<GpuGrower>(train, options, pool, setupSeconds);
+                                      ThreadPool &pool, GpuSetupTimings &setup) {
+  return std::make_unique<GpuGrower>(train, options, pool, setup);
 }
 
 } // namespace dt

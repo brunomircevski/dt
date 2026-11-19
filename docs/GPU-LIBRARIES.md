@@ -1,21 +1,28 @@
 # ./tree against GPU tree libraries
 
-How `./tree --hybrid` is compared with cuML and XGBoost, what is timed on each
-side and where the comparison is not even. Results, settings and the scripts
-are in
+How `./tree --gpu` and `--hybrid` are compared with cuML and XGBoost, what is
+timed on each side and where the comparison is still not even. Results,
+settings and the scripts are in
 [bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
-(depth ≤ 10, no pruning; libraries 2026-10-27, ./tree on ec77727).
+(one CART tree per fresh process, depth ≤ 10, no pruning, hopper's H100;
+2026-11-18, job 397, 10 runs a case, ./tree at 7c39d6a3; HIGGS at depth ≤ 30:
+job 410, ./tree at 608b387f).
 
 ## The result in one sentence
 
-`./tree` builds an **exact** CART or C4.5 tree (every distinct value tested,
-byte-identical to the CPU backends) of depth ≤ 10 on one GPU **1.1–4.3×
-faster than cuML** (11–14× on chess 1000M) and **8–31× faster than XGBoost**
-(136–168× on chess), which split only at 128 / 256 histogram bins, with the
-same CART test accuracy within 0.1 point on HIGGS, SUSY and ECBDL (airline:
-1.0–1.3 points above cuML, 0.07 below XGBoost). Per tree inside a default
-10-tree forest cuML is faster than ./tree's single tree on HIGGS, SUSY and
-ECBDL; a forest tree sees a bootstrap sample and a share of the features.
+In a fresh process, `./tree --gpu` trains an **exact** CART tree (every
+distinct value tested, byte-identical to the CPU backends) of depth ≤ 10 on
+one H100 **2.4–2.5× faster than cuML 26.10** and **2.4–3.3× faster than
+XGBoost 3.4.1** on HIGGS and MNIST8M, from the same host data through the same
+upload code. cuML and XGBoost split only at 128 and 256 histogram bins: their
+trees are comparable, not identical, and their test accuracy is within 0.05
+points. The totals are the comparison; each tool's phases have its own
+boundaries and only explain where its time goes.
+
+On a deep tree the gap widens: HIGGS at depth ≤ 30 (2.2M nodes) takes
+`./tree --hybrid` 0.84 s and `--gpu` 0.96 s, cuML 4.5 s (4.7× `--gpu`) and
+XGBoost 23.8 s (24.8×). There the libraries' trees are 8–21% larger and test
+0.58 points lower.
 
 ## Why the design is faster
 
@@ -26,131 +33,113 @@ column ([CUDA.md](CUDA.md)). A level costs about three streaming passes over
 with no row-index gathers, no binning and no per-node histograms: the cost
 grows with rows, not with nodes × bins.
 
-Histogram libraries, as far as their published design goes, bin first and
-then build per-node class × bin × feature histograms through row-index lists:
-gathered reads, atomics, and a per-node cost that does not shrink with the
-node. **This is an inference from their documentation;** an `nsys` profile of
-cuML should confirm it before it is stated as fact.
+Histogram libraries bin first and then build per-node class × bin × feature
+histograms. XGBoost's binning is a separate, measured step
+(`QuantileDMatrix`: 0.15 s on HIGGS, 2.3 s on MNIST8M). cuML computes its
+128 quantiles from a row sample inside its fit (about 0.2 ms of GPU time,
+`nsys`), so its time is almost all tree construction. A per-kernel comparison
+of the libraries' tree construction with ./tree's has not been made.
 
 ## What is timed
 
-Both sides: float32 training data in host RAM → finished tree. Not timed on
-either side: reading the file, prediction, accuracy.
+The same for every tool (`scripts/gpubench.py` for the libraries, ./tree's
+`train total`):
 
-**./tree:** its `train total`, a fresh process per run, `--hybrid --cart|--c45
--d 10` (unpruned) with the default threads. `train total = gpu setup + presort
-+ build + prune` (printed by `src/app/main.cpp`):
+- **Not timed:** reading the data into host RAM as column-major float32 (and
+  the labels; XGBoost's float32 or one-hot labels are made here), importing
+  the library, and the bare CUDA context (`cudaFree(0)`; ./tree makes it on a
+  thread while the input loads, printed as `gpu startup`).
+  `CUDA_MODULE_LOADING=LAZY`, CUDA's default, so each tool loads the kernels
+  it uses inside the timed part.
+- **Timed:** from the host arrays to the finished tree, as a timeline: when
+  each section started and ended (BENCHMARK.md, "The sections").
 
-| Phase | Contents |
-|---|---|
-| gpu setup | streams, device allocations, upload of columns and labels through the staging buffers |
-| presort | `(value, row \| class)` entries, CUB radix sort per feature (C4.5: distinct values); overlapped with the upload |
-| build | all GPU levels, hand-offs, the CPU threads finishing small subtrees, assembling the host tree |
-| prune | C4.5 only: collapse of useless splits and training-value thresholds (part of C4.5 even without `--prune`) |
+| Category | ./tree | cuML | XGBoost |
+|---|---|---|---|
+| set-up | staging buffers, copy threads; `--hybrid`'s 256 MB of hand-off buffers; device memory; the x·log x table and its copy | staging buffers, copy threads | the same |
+| upload | labels and columns through the staging buffers | the same code (`bench/adapters/uploader.cpp`) | the same |
+| prepare | the presort: its GPU kernels' span (CUDA events), during the upload | input checks: NaN/inf scan, classes, lazy kernel loading | `QuantileDMatrix(max_bin=256)`, then the raw device copy is freed |
+| build | all levels, the hand-offs, the host tree; `--hybrid`'s CPU subtrees as their own span | `_fit_forest`: row-sample quantiles, then the tree | `xgb.train`, one round |
 
-Not in it: reading the input and only the bare CUDA context, made on a background
-thread while the input loads (`src/app/main.cpp`) and printed as `gpu
-startup`; `train total` starts only after it has finished. Kernel loading
-(lazy, CUDA's default), the memory pool and the pinned staging buffers (4 ×
-32 MB for uploads, 2 × 128 MB for the hand-offs) and the copy threads are then
-made in the timed `gpu setup`, exactly as the libraries make theirs in their
-fit. Until 2026-11-17 ./tree's default (`--gpu-startup full`, since removed)
-made all of them before training, overlapping the load, untimed: a
-comparison with it would not have been fair.
+  ./tree records its sections always (`src/core/timeline.h`, a clock read per
+  section and three CUDA events) and prints them as `span` lines; every
+  library section ends with `cudaDeviceSynchronize`.
 
-**cuML / XGBoost** (`gpubench.py`, since 2026-11-16): one fresh Python process
-per run, no warm-up fit. It loads row-major float32 NumPy arrays, then does the
-start-up (import the library, which for cuML imports RMM; then the CUDA context
-alone, `cudaFree(0)`, with `CUDA_MODULE_LOADING=LAZY`, CUDA's default: both
-libraries link their own CUDA runtime, so EAGER would load *all* their kernels
-at their first call, inside `fit` (HIGGS, A100, 2026-11-17, 6 runs each: cuML
-2.19 s EAGER vs 1.71 s LAZY, XGBoost 3.11 vs 2.88 s); the kernels a fit uses
-load inside it, timed, while ./tree loads its own with the context; RMM stays at cuML's
-default memory resource, nothing reconfigured or pre-grown), then exactly one
-timed fit (`time.perf_counter`). Ten runs are ten processes, in rounds of one
-process per case in a shuffled order (`job.sh`); reported as means:
-
-* cuML `fit(X, y)`: input conversion, host→device copy, quantile binning,
-  growing.
-* XGBoost: `QuantileDMatrix(X, y)` (copy and quantile sketch) and
-  `xgb.train(..., num_boost_round=1)`.
-* `predict` and model export are not timed.
-
-VRAM: peak `nvidia-smi` memory in use above idle, for the libraries over the
-whole process (start-up included).
+- One fresh process per run, no warm-up, exactly one tree. The tools'
+  runs are interleaved in a new shuffled order each repetition (one
+  `bench/run.py` per dataset).
+- VRAM: peak `nvidia-smi` memory above idle, sampled from outside for every
+  tool and the whole process.
+- Prediction, accuracy and the tree walk run after the timer.
 
 ## Fairness
 
-**Matched:** same rows, features and depth limit, no sampling, no pruning,
-same GPUs on exclusive nodes, both start from host RAM, both pay their upload
-and preprocessing (presort against binning).
+**Matched:** the same rows, features and depth limit, no sampling, no pruning;
+the same GPU (hopper's H100, GPU 2) on an exclusive node; the same host data
+in the same layout (column-major float32); the same upload code (4
+page-locked 32 MB buffers on the GPU's NUMA node, up to 32 copy threads
+pinned to its CPUs, asynchronous copies; each library row records
+`uploader_cpus`, and gpubench.py stops if they are unpinned); the same untimed start-up (import and bare
+context) and the same lazy kernel loading; every tool pays its own
+preprocessing (presort against binning) and allocations inside the timer.
 
-**In ./tree's favour:**
+**Still in ./tree's favour:**
 
-1. **CPU threads** (the biggest): ./tree's `--hybrid` finishes small subtrees
-   on every CPU of the node (32 on hopper, 48 on ampere; `--cpus` in the runs'
-   `machine.json`) while the GPU goes on; `--gpu` uses the CPU only to drive
-   the GPU; cuML uses about one host thread. XGBoost gets all cores but uses them mainly in the sketch.
-2. **Input layout:** ./tree's host data is column-major after loading; the
-   libraries get row-major NumPy and any transpose is inside their timed fit.
-   Not measured.
-3. **Upload path:** ./tree uploads through pinned staging buffers (~55 GB/s
-   on the H100 node); cuML copies from pageable memory (typically
-   10–25 GB/s). A real engineering win, but it should be shown apart.
-4. The pinned buffers and the CUDA context are made during the untimed load
-   (small); the libraries' context and imports are untimed too, but not
-   overlapped with anything.
+1. **CPU threads:** `--hybrid` finishes small subtrees on every CPU of the
+   node (32 on hopper) while the GPU goes on. `--gpu`, the bar the ratios are
+   taken against, uses the CPUs only to drive the GPU and for the upload, as
+   the libraries do with `uploader.cpp`. cuML's tree uses about one host
+   thread; XGBoost's binning runs on the GPU.
+2. **Overlap of upload and presort:** ./tree presorts each feature while the
+   next ones upload. The libraries cannot start before their whole input is on
+   the GPU. This is part of ./tree's design and is drawn as two lanes on the
+   chart.
 
-**Neither has a warm-up:** since 2026-11-16 every library fit is a process's
-first and only fit, as ./tree's tree is: memory pools grow inside the timed
-fit for both (./tree in `gpu setup`, cuML's allocations in `fit`), and any JIT or
-first-call cost is timed. Until then the libraries' timed fits followed an
-untimed warm-up fit in the same process (cuML on every row, XGBoost on 50,000
-rows), which favoured them.
+**In the libraries' favour:**
 
-**The warm variant, apart** (since 2026-11-17): every GPU tool, ./tree too,
-also gets one CART tree timed as a process's second identical fit, after an
-untimed one (./tree `--warm-up`, gpubench.py `WARM=1`), on its own chart
-(cluster-gpu-vs-others/chart-warm.png) beside the cold time. It shows the
-one-time costs of a first fit: cuML's first copy of the NumPy input is the
-largest (MNIST8M on the H100: 11.2 s, a second copy 2.1 s).
+1. **Bins:** 128 (cuML) and 256 (XGBoost) candidate splits per feature against
+   every distinct value. Their trees differ from the exact tree in a few nodes
+   on HIGGS (2,039 and 2,031 against 2,029) and are the same size on MNIST8M.
+2. **VRAM:** cuML needs half of ./tree's memory (25 against 49 GiB on
+   MNIST8M). XGBoost needs more (67 GiB).
+
+**What changed on 2026-11-18:** until then each library uploaded its input its
+own way inside its fit (cuML from pageable row-major NumPy, which on MNIST8M
+made its first fit 18 s), ./tree had the only staged upload, and the bench
+also ran a warm variant (a process's second fit), forests of 10 and the A100
+node. Those results are in git history up to 8ba60fae.
 
 **C4.5 has no GPU competitor.** No public GPU C4.5 exists, and an entropy
 (information-gain) tree is a different algorithm (no gain ratio, MDL threshold
-cost or MinSplit), so the libraries run CART only. cuML's entropy tree is not
-used anywhere as a C4.5 stand-in (removed 2026-11-16).
+cost or MinSplit), so the libraries run CART only.
 
 ## Caveats to state
 
 * **One exact sweep, no mixed precision:** the grower scores every cut the
   boundary-point rule and the two-class tile bound leave in double precision
-  (the H100 and A100 run FP64 at half the FP32 rate). The lead over cuML comes
-  from the data layout, the partition, the two-class tile bound and the
-  CPU/GPU split. Consumer GPUs (FP64 about 64× slower) are not a target.
-* **./tree is a CPU + GPU hybrid:** nodes below `--handoff-rows` (10 ×
-  features, at most 2^depth limit, within [512, 16384]) go to the CPU. Report the GPU / CPU share and a thread sweep.
-* **Memory cost of exactness:** ./tree uses more VRAM than the libraries on
-  HIGGS, SUSY and ECBDL (73.3 GiB against 36–48 GiB on ECBDL) and less on
-  chess (25.4 against 42–44 GiB).
-* **Depth:** the GPU's lead shrinks as trees deepen (HIGGS CART against
-  epyc: 4× at depth 10, 1.1× unlimited), and depth 10 underfits, C4.5 most
+  (the H100 runs FP64 at half the FP32 rate). Consumer GPUs (FP64 about 64×
+  slower) are not a target.
+* **./tree --hybrid is a CPU + GPU hybrid:** nodes below `--handoff-rows`
+  (10 × features, at most 2^depth limit, within [512, 16384]) go to the CPU.
+  At depth 10 on these datasets its build is the same as `--gpu`'s and its
+  set-up 0.1 s longer; at depth 30 on HIGGS its build is 0.22 s shorter, 1.14×
+  faster in all.
+* **Memory cost of exactness:** ./tree keeps presorted 8-byte entries for every
+  value: more VRAM than cuML on both datasets, less than XGBoost on MNIST8M.
+* **Depth:** against the GPU libraries the lead grows with depth (HIGGS:
+  2.4–2.5× at depth 10, 4.7× and 24.8× at depth 30), because their build
+  works per node. Against ./tree's own CPU backend it shrinks (HIGGS CART
+  against epyc: 4× at depth 10, 1.1× unlimited), and depth 10 underfits
   ([PERFORMANCE.md](PERFORMANCE.md#october-2026-what-the-benchmarks-showed-mordor3-cluster)).
   State the depth with every figure.
-* **Single tree:** cuML is designed for forests; the target here is one
-  exact tree.
+* **Single tree:** cuML is designed for forests, XGBoost for boosting; the
+  target here is one exact tree.
 
 ## Experiments still missing
 
-1. **Clean ablation** on one commit and machine: a `--handoff-rows` sweep, a `--threads`
-   sweep (1 / 4 / 8 / all); the bitmap, fused next-level histograms, tile bound
-   and asynchronous hand-off ring would need compile-time switches. Only the
-   2026-10-28 changes were measured on one commit
-   ([PERFORMANCE.md](PERFORMANCE.md#october-2026-four-cuda-changes-measured-on-one-commit-mordor3-cluster)).
-2. **Per-kernel and per-level profile:** `--profile` (every kernel and copy,
-   one row per GPU level) and `nsys` (`make NVTX=1`); achieved bandwidth of
-   `partitionKernel` and `tileExactKernel` against peak.
-3. **Fairness variants:** the libraries with data already on the GPU (CuPy,
-   column-major) and with `np.asfortranarray` input; ./tree's build time
-   without `gpu setup` next to them.
-4. Optionally: scaling in rows (chess_1m to chess_500m) for ./tree against cuML,
-   and an `nsys` profile of cuML.
+1. **Per-kernel profile of tree construction** for all three tools (`nsys`),
+   to compare the libraries' histogram kernels with ./tree's sweep and
+   partition.
+2. **Clean ablation** on one commit: a `--handoff-rows` sweep and a
+   `--threads` sweep; the bitmap, fused next-level histograms, tile bound
+   and asynchronous hand-off ring would need compile-time switches.

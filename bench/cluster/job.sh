@@ -9,9 +9,8 @@
 # threads: run.py's --threads (default all); "scaling" = 1, 2, 4, then every
 # 4 up to the node's CPU count (scaling.sh). timeout: seconds per ./tree process
 # (default 3600). RUN_EXTRA (environment): more run.py arguments, e.g.
-# --profile (profile.sh). E2E=1 (environment): the end-to-end runs (see
-# below). WARM_UP=1 (environment): run.py --warm-up, ./tree's warm variant
-# (one untimed tree first in the same process; cluster-gpu-vs-others/warm). ACCURACY (environment, submit.sh -e): run.py's
+# --profile (profile.sh). HANDOFF (environment): run.py's --handoff-rows (a
+# number or "default"). ACCURACY (environment, submit.sh -e): run.py's
 # --test-accuracy instead of the default --train-accuracy-only. NUMA_NODE (environment, submit.sh -n): the GPU
 # is the first one attached to that NUMA node instead of GPU 0. CUDA runs
 # always get one (below) and use every CPU of the node, that node's first,
@@ -139,21 +138,16 @@ fi
 echo "code: $TREE_GIT_DESCRIBE (from submit.sh: hopper has no git)"
 echo "runs per case: $RUNS"
 
-# The page cache: the datasets leave it before every process (--drop-cache),
-# except end to end (E2E=1, cluster-end-to-end): the input is read into it
-# right before every process and dropped after it (--prefetch), no
-# evaluation, no footprint runs. --spin: every CPU busy for SPIN s (default 10)
+# The page cache: the datasets leave it before every process (--drop-cache).
+# --spin: every CPU busy for SPIN s (default 10)
 # right before the first run, after run.py's single-threaded dataset check
 # (minutes on the big sets), which leaves the other CPUs idle.
 CACHE=(--drop-cache)
-[ -z "${E2E:-}" ] || CACHE=(--prefetch --no-eval --no-baseline)
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
   --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} "${CACHE[@]}" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \
-  --spin "${SPIN:-10}" --long-runs "${LONG_RUNS:-3}" ${RUN_EXTRA:-} ${WARM_UP:+--warm-up}
+  --spin "${SPIN:-10}" --long-runs "${LONG_RUNS:-3}" ${HANDOFF:+--handoff-rows "$HANDOFF"} ${RUN_EXTRA:-}
 
-if [ -z "${E2E:-}" ]; then
-  step "3/3 tables and CSV files"
-  "$PY" bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"
-fi
+step "3/3 tables and CSV files"
+"$PY" bench/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"
 echo "done $(date '+%F %T')"

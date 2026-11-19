@@ -162,7 +162,7 @@ kept.
   sorting the records inside a node. The abstract claims it beats both a
   purely GPU implementation and a sequential CPU one, so the method may itself
   combine the CPU and the GPU (see the novelty section above). It also
-  measures energy, which matches our power benchmark (`bench/power`).
+  measures energy, which matches our power benchmark (`bench/results/cluster-power`).
 * **Usefulness**: ★★★★★ (because of the novelty risk; the method itself is old
   and small-scale)
 * **Use in paper**: Related work (GPU). Read before writing the "first

@@ -6,8 +6,10 @@
 (Tables~\ref{tab:time-cart} and~\ref{tab:time-c45}); speed-ups between them.}
 
 % CPU cells of this work: ./tree f53347a9 on epyc (bench/results/cluster-<data>/
-% {simple,serial,cpu}-epyc-<data>/summary.csv). Libraries: 2026-11-09/10
-% (cluster-cpu-vs-others, cluster-gpu-vs-others). \tbd: not measured on the
+% {simple,serial,cpu}-epyc-<data>/summary.csv). CPU libraries: 2026-11-09/10
+% (cluster-cpu-vs-others). GPU libraries: \tbd until the rerun of
+% cluster-gpu-vs-others/one-tree (one tree per fresh process, equal staged upload
+% pinned to the GPU's NUMA node; job 397, 2026-11-18, 10 runs, 7c39d6a3). \tbd: not measured on the
 % final build; GPU and hybrid cells of this work changed after f53347a9
 % (2c688938 hand-off default, 60e3dbe4 memory pool out of train total).
 \begin{table}
@@ -35,8 +37,8 @@ SOREL-20M & 12\,501 & 619 & 15.3 & -- & -- \\
 \multicolumn{6}{@{}l}{\textbf{Existing implementations}} \\
 Dataset & scikit-learn & rpart &  & cuML & XGBoost \\
 \midrule
-HIGGS & 217 & \tbd &  & 0.450 & 2.62 \\
-MNIST8M & 1\,005 & \tbd &  & 7.96 & 26.7 \\
+HIGGS & 217 & \tbd &  & 0.548 & 0.508 \\
+MNIST8M & 1\,005 & \tbd &  & 5.37 & 7.33 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -78,8 +80,11 @@ MNIST8M & 18\,998 & \tbd & \tbd &  &  \\
 time, memory, test accuracy, same trees.}
 
 \subsection{Comparison with GPU Libraries}
-\plan{Against cuML and XGBoost: one tree, and per tree of a 10-tree forest;
-accuracy of exact versus binned trees; VRAM.}
+\plan{Against cuML and XGBoost on the H100: training time of comparable
+depth-limited CART trees (exact against 128 and 256 bins), one tree per fresh
+process, the same staged upload for every tool; total times compared, each
+tool's phases (set-up, upload, presort or binning, build) only to explain
+them; accuracy of exact versus binned trees; VRAM.}
 
 \subsection{Performance Across Hardware}
 \plan{All ./tree backends on the four nodes, per dataset: serial, one and two
@@ -95,31 +100,106 @@ with the number of samples (subsamples of one dataset).}
 transfer; GPU share of the hybrid; achieved bandwidth against peak.}
 
 \subsection{Energy Consumption}
-\plan{Whole-server energy per tree on ECBDL'14 15M: PSU meter modelled from
-RAPL and NVML, idle subtracted. A fast run at high power can use the least
-energy.}
+\label{sec:energy}
+A faster implementation is not necessarily a more economical one: the
+parallel implementations draw two to three times the power of a
+single-threaded run. We therefore measure the energy needed to train one tree on the 15-million-sample
+subsample of ECBDL'14, which every implementation can train, with the same
+settings as in Section~\ref{sec:design}. We report the energy of the whole
+server, measured at its power supply, because this is the energy that training
+actually costs: it includes the memory, fans, idle GPUs and power supply losses
+along with the CPUs and the GPU in use. As in the time measurements, only the
+training of each tree is counted, not reading the input file.
 
-% CPU rows: bench/power/results/summary.md at f53347a9 (epyc1). GPU and
-% hybrid rows: \tbd until the rerun (they changed after f53347a9).
+The servers' power meters are too slow to resolve a single tree. They update
+only every 1\,s (hopper) to 59\,s (ampere), whereas the fastest
+implementations train a tree in 2.5--5\,s. We therefore sample the
+CPUs' and memory's on-chip power sensors (RAPL), the power of every GPU (NVML)
+and the number of busy cores every 0.1\,s. For each server we fit a linear
+model that predicts its meter readings from these signals, taking the
+meter's delay and averaging window into account. The energy of a tree is the
+model's power integrated over the tree's training time. The model reproduces the
+meter readings with a root-mean-square error of 12--23\,W. Fitting it without
+any reading taken during a given implementation's runs changes that
+implementation's energy by at most 1.1\,\%.
+Each implementation runs as three processes that train trees for two to four
+minutes each, every tree in a freshly started process; the two
+single-threaded implementations train one tree per process. The resulting
+training times agree with Tables~\ref{tab:time-cart} and~\ref{tab:time-c45}
+within 3\,\%.
+
+Table~\ref{tab:energy} lists the results on the servers of the time tables,
+and Fig.~\ref{fig:energy} adds the dell server and the A100 for C4.5. We quote
+C4.5 below; a CART tree needs 1--11\,\% less energy, and every conclusion
+holds for both algorithms.
+
+\textbf{Energy follows training time.} The mean power of the whole server
+varies only from 266 to 899\,W across all implementations and servers, whereas
+the energy per tree spans three orders of magnitude. Each optimization step
+therefore saves about as much energy as time. On epyc, \ImplSerialOpt{} is
+17$\times$ faster than \ImplSerialBase{} at almost the same power and uses
+17$\times$ less energy. \ImplParallel{} draws 2.2$\times$ the power of
+\ImplSerialOpt{}, but it finishes 31$\times$ sooner and so needs 14$\times$
+less energy (2.83\,kJ).
+
+\textbf{The H100 server needs the least energy.} \ImplGpu{} on the H100
+trains a tree with 1.86\,kJ, 34\,\% less than \ImplParallel{} on epyc: it draws
+24\,\% more power but finishes 1.9$\times$ sooner. The difference grows when
+the idle consumption is excluded: above it, a tree costs 0.84\,kJ on the H100
+server and 2.18\,kJ on epyc, 2.6$\times$ as much.
+
+\textbf{Idle power can cancel the benefit of a GPU.} The A100 server trains a
+tree in 9\,\% less time than \ImplParallel{} on epyc, yet it uses 5\,\% more
+energy (2.97\,kJ), because it draws 474\,W while idle, about 70\,\% of its
+power during training. Part of this is hardware the run does not use: the
+server's three other A100s draw about 140\,W. Without them, we estimate
+2.2\,kJ per tree, less than on epyc.
+
+\ImplHybrid{} is about as fast as \ImplGpu{} on this dataset, and because its
+CPU threads work alongside the GPU, it needs 3\,\% (A100) to 10\,\% (H100)
+more energy.
+
+\textbf{Without a depth limit, \ImplHybrid{} saves time and some energy.}
+On MNIST8M grown to full depth (Fig.~\ref{fig:energy-deep}, H100 server, six
+rounds), \ImplHybrid{} trains a tree 1.51$\times$ (CART) and 1.58$\times$
+(C4.5) faster than \ImplGpu{}, because its CPU threads grow the many small
+subtrees. It also draws 1.46$\times$ and 1.42$\times$ the power
+(1\,016 against 696\,W for CART), so a tree costs only 3.5\,\% (CART,
+7.93\,kJ) and 9.8\,\% (C4.5, 9.11\,kJ) less energy. Above the idle power,
+\ImplHybrid{} needs 31--42\,\% more: its saving comes from keeping the idle
+server on for a shorter time. \ImplParallel{} on the same server needs
+3.1--3.5$\times$ the energy of either GPU implementation.
+
+Overall, the energy of a tree is governed by its training time: the
+fastest implementation is also the most economical, provided the server does
+not spend most of its power idling.
+
+\plan{Numbers from the power jobs of build f53347a9; update the GPU and
+\ImplHybrid{} numbers after the power rerun on the final build.}
+
+% bench/results/cluster-power/summary.md, build f53347a9: whole-server energy at the
+% power supply (meter model), training windows only. GPU and hybrid rows: to be
+% updated after the power rerun (their code changed after f53347a9).
 \begin{table}
-\caption{Energy of one tree on ECBDL'14 15M (depth $\le$ 10, no pruning):
-mean training time $t$, mean power $P$ of the whole server above idle (at
-the power supply), and energy $E = P \cdot t$. Runs $\times$ trees per run:
-\ImplSerialBase{} $1 \times 1$, \ImplSerialOpt{} $3 \times 1$, the others 3
-processes of repeated trees. \tbd{}: not yet measured on the final build.}
+\caption{Energy of one tree on the ECBDL'14 15M subsample (depth $\le$ 10, no
+pruning): mean training time $t$, mean power $P$ of the whole server while
+training (measured at its power supply, idle power included), and the energy
+$E = P \cdot t$. CPU implementations on epyc, GPU implementations on the H100.}
 \label{tab:energy}
 \centering
-\begin{tabular}{@{}llrrrrrr@{}}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}llrrr@{\hspace{1.8em}}rrr@{}}
 \toprule
- & & \multicolumn{3}{c}{CART} & \multicolumn{3}{c}{C4.5} \\
-\cmidrule(lr){3-5}\cmidrule(l){6-8}
-Implementation & Node & $t$ (s) & $P$ (W) & $E$ (kJ) & $t$ (s) & $P$ (W) & $E$ (kJ) \\
+ & & \multicolumn{3}{c@{\hspace{1.8em}}}{CART} & \multicolumn{3}{c}{C4.5} \\
+\cmidrule(r{1.8em}){3-5}\cmidrule{6-8}
+ & & $t$ & $P$ & $E$ & $t$ & $P$ & $E$ \\
+Implementation & Server & (s) & (W) & (kJ) & (s) & (W) & (kJ) \\
 \midrule
-\ImplSerialBase & epyc1  & 2\,328 & 130 & 302  & 2\,603 & 130 & 338  \\
-\ImplSerialOpt  & epyc1  & 147    & 135 & 19.8 & 149    & 135 & 20.1 \\
-\ImplParallel   & epyc1  & 4.54   & 457 & 2.08 & 4.77   & 458 & 2.18 \\
-\ImplGpu        & hopper & \tbd   & \tbd & \tbd & \tbd  & \tbd & \tbd \\
-\ImplHybrid     & hopper & \tbd   & \tbd & \tbd & \tbd  & \tbd & \tbd \\
+\ImplSerialBase & epyc   & 2\,328 & 266 & 620  & 2\,603 & 266 & 693  \\
+\ImplSerialOpt  & epyc   & 147    & 271 & 39.9 & 149    & 271 & 40.4 \\
+\ImplParallel   & epyc   & 4.54   & 594 & 2.70 & 4.77   & 595 & 2.83 \\
+\ImplGpu        & hopper & 2.46   & 737 & 1.81 & 2.51   & 738 & 1.86 \\
+\ImplHybrid     & hopper & 2.46   & 825 & 2.03 & 2.47   & 832 & 2.05 \\
 \bottomrule
 \end{tabular}
 \end{table}

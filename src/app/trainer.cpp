@@ -4,6 +4,7 @@
 #include "algo/cart_pruning.h"
 #include "algo/split_rules.h"
 #include "build/grower.h"
+#include "core/timeline.h"
 #include "core/timing.h"
 #include "core/trace.h"
 
@@ -21,6 +22,7 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
   if (train.classCount() == 0 || train.rowCount == 0) {
     throw std::runtime_error("Cannot train on an empty dataset.");
   }
+  timeline::begin(); // train total starts here
   ThreadPool *buildPool = options.backend == Backend::Serial || options.backend == Backend::Simple
                                ? nullptr
                                : pool;
@@ -47,7 +49,8 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
     }
     trace::Phase phase("gpu setup");
     trace::Doing doing(trace::Work::GpuHost);
-    grower = makeGpuGrower(train, options, *pool, timings.gpuSetupSeconds);
+    grower = makeGpuGrower(train, options, *pool, timings.gpuSetup);
+    timings.gpuSetupSeconds = timings.gpuSetup.total();
   } else if (options.backend == Backend::Simple) {
     grower = makeSimpleGrower(train);
   } else {

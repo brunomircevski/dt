@@ -1,5 +1,6 @@
 #pragma once
 
+#include "build/grower.h"
 #include "core/dataset.h"
 #include "core/options.h"
 #include "core/thread_pool.h"
@@ -8,7 +9,8 @@
 namespace dt {
 
 struct TrainTimings {
-  double gpuSetupSeconds = 0.0; // Cuda: allocation, upload
+  double gpuSetupSeconds = 0.0; // Cuda: allocation, upload (gpuSetup.total())
+  GpuSetupTimings gpuSetup;     // Cuda: gpuSetupSeconds in its steps
   double presortSeconds = 0.0;  // sorting every feature once
   double buildSeconds = 0.0;    // growing the tree
   double pruneSeconds = 0.0;    // pruning

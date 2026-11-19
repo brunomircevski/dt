@@ -32,6 +32,9 @@ mkdir -p bench/.tools
 [ -x bench/.tools/rusage ] ||
   cc -O2 -static -Wall -o bench/.tools/rusage bench/adapters/rusage.c 2>/dev/null ||
   cc -O2 -Wall -o bench/.tools/rusage bench/adapters/rusage.c
+# ./tree's upload as a library, for the GPU libraries' runs (cluster-gpu-vs-others' gpubench.py)
+g++ -O2 -Wall -shared -fPIC bench/adapters/uploader.cpp -I/usr/local/cuda/include \
+  -L/usr/local/cuda/lib64 -lcudart -o bench/.tools/libuploader.so
 /usr/local/cuda/bin/cuobjdump --list-elf tree | sed 's/^/kernels: /'
 # the commit these binaries are built from (run.py records it in machine.json;
 # final.sh refuses to submit when src/ or the Makefile changed since)

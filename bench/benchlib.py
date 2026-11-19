@@ -126,7 +126,7 @@ PROTOCOLS = {
             "sklearn": {"mode": "fit", "max_depth": 10},
             "rpart": {"mode": "fit", "maxdepth": 10},
             # the GPU libraries' one tree (cluster-gpu-vs-others' gpubench.py;
-            # run.py runs them only for the end-to-end benchmark)
+            # run.py runs them only when --impls names them)
             "cuml": {"depth": 10},
             "xgboost": {"depth": 10},
         },
@@ -174,12 +174,14 @@ PROTOCOLS = {
     },
 }
 
-# Growing only, to other depths, ./tree only (hybrid-vs-gpu-only: 5 to 30, with
-# depth 10 above and cart_full_nodepth / c45_unpruned for no limit).
+# Growing only, to other depths (hybrid-vs-gpu-only: 5 to 30, with depth 10
+# above and cart_full_nodepth / c45_unpruned for no limit; the GPU libraries'
+# one tree at depth 30 in cluster-gpu-vs-others).
 for _depth in (5, 15, 20, 25, 30):
     PROTOCOLS[f"cart_depth{_depth}"] = {
         "title": f"CART, grown to depth {_depth}, no pruning",
-        "impls": {"tree": ["--cart", "-d", str(_depth)]},
+        "impls": {"tree": ["--cart", "-d", str(_depth)],
+                  "cuml": {"depth": _depth}, "xgboost": {"depth": _depth}},
     }
     PROTOCOLS[f"c45_depth{_depth}_unpruned"] = {
         "title": f"C4.5, grown to depth {_depth}, unpruned (only C4.5's collapse of useless splits)",
@@ -539,7 +541,7 @@ def hardware_line(machine, gpu_used):
 # only ./tree); every other run: the final harness (03c4e2d2). A run on
 # dell1 is out of date too: the paper's dell is a 512 GB node (dell2-4, 8 of 16
 # memory channels); dell1 has 1 TB and every channel, 1.8x the bandwidth.
-FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "17d8b2f3", "gpulibs": "0cff6d1b"}
+FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "17d8b2f3", "gpulibs": "7c39d6a3"}
 GPU_LIBRARIES = ("cuml", "xgboost")
 FIXED_GPU = {"hopper": "2", "ampere": "0"}  # each GPU node's GPU (job.sh); another one is out of date
 GPU_HOSTS = ("hopper", "ampere")

@@ -71,7 +71,7 @@ struct GpuOptions {
   // A shallow tree reaches its depth limit almost everywhere, so the GPU runs
   // all D levels anyway: a hand-off saves no GPU level and only moves the
   // last levels' work to the slower CPU. At depth 10 (291a736f,
-  // bench/results/handoff-sweep/depth10/) the fastest was 512-2048 on every
+  // bench/tuning/handoff/results/depth10/) the fastest was 512-2048 on every
   // dataset (ECBDL 4096, but 1024 within 0.6%), and 10 × features alone made
   // CART 4-11% slower on MNIST8M and SOREL 4M; with the 2^D cap (1024) the
   // CART runs are within 0.6% of the fastest, C4.5 (flat) within 1.6%. The cap
@@ -111,7 +111,7 @@ struct Options {
   // another, and print each one's training window as Unix times (0 = one
   // tree, no windows printed). With N > 1 every tree is trained in a forked
   // child process, so each one starts as a fresh process's only tree would
-  // (bench/power); the last one is the one evaluated and dumped.
+  // (bench/results/cluster-power); the last one is the one evaluated and dumped.
   std::size_t repeat = 0;
   // --repeat-warmup: seconds that each --repeat tree's child keeps its threads
   // busy before its timer starts, as a single run's CSV load does before its

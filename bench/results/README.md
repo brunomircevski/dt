@@ -8,7 +8,7 @@ Inside a benchmark, one directory per run: `<backend>-<node>-<dataset>/`.
 - **node:** `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402) run CUDA only; `epyc` (epyc1, or epyc2 with the same hardware, 2× EPYC 9255) and `dell` (a 512 GB node, dell2, dell3 or dell4, 2× Xeon Gold 6542Y; dell1, 1 TB with every memory channel, is no longer used and its runs are out of date) run on the CPU only.
 - **dataset:** the `bench/datasets.toml` entry, e.g. `higgs`, `ecbdl_15m`, `chess_1b`.
 
-A run directory holds `results.jsonl` (one row per run of a case), `plan.json` (the cases and the dataset's rows, features and split), `machine.json` (hardware, commit, date), `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py`. Two benchmarks differ: `cluster-cpu-vs-others` names its runs `vs-epyc-<dataset>-<tool>-<algorithm>`, and `cluster-gpu-vs-others` keeps one directory per dataset and node (cuML and XGBoost) with the scripts it ran in `scripts/`; it runs outside this repository (`~/gpu-dt-bench`). Both take ./tree's bars from the test-set benchmarks.
+A run directory holds `results.jsonl` (one row per run of a case), `plan.json` (the cases and the dataset's rows, features and split), `machine.json` (hardware, commit, date), `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/report.py`. Two benchmarks differ: `cluster-cpu-vs-others` names its runs `vs-epyc-<dataset>-<tool>-<algorithm>` and takes ./tree's bars from the test-set benchmarks. `cluster-gpu-vs-others` runs ./tree, cuML and XGBoost together in `one-tree/vs-hopper-<dataset>[-depth30]` (the libraries' runner in `scripts/`).
 
 The runs are SLURM jobs: `bench/cluster/final.sh` queues all of them (one chain of jobs per node), `bench/cluster/submit.sh` single ones; each runs `bench/run.py --run-id cluster-<what>/<run>`, which writes into `bench/results/<run-id>/`. Setup, data and every submit command are in [bench/cluster/README.md](../cluster/README.md).
 
@@ -37,12 +37,19 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 | [`cluster-profiling`](cluster-profiling/BENCHMARK.md) | where the growing time goes (`--profile`), chess 10M–2000M, HIGGS, airline and ECBDL'14 15M, epyc1, dell1 and hopper | Partition is 33–75% on epyc; the GPU's share grows from 6–8% at chess 10M to 75–77% at 2000M and 85–88% on ECBDL. C4.5 on big chess runs at two speeds (open). |
 | [`hybrid-vs-gpu-only`](hybrid-vs-gpu-only/BENCHMARK.md) | CUDA `--hybrid` against `--gpu`, depth 5–30 and no limit, HIGGS, MNIST8M and SOREL 4M, ampere and hopper, `--handoff-rows` swept per dataset and node | Equal to depth 15. Deeper the hybrid wins, much less than before as GPU only got faster: with no limit HIGGS 2.1–2.3× on ampere and 1.4–2.1× on hopper (4.3–4.9× before), MNIST8M 1.4–1.6×, SOREL 4M 1.08–1.19×. |
 
-**Against other implementations** (HIGGS and MNIST8M; ./tree's bars from the test-set benchmarks):
+**Against other implementations** (HIGGS and MNIST8M):
 
 | Directory | What | Main result |
 |---|---|---|
 | [`cluster-cpu-vs-others`](cluster-cpu-vs-others/BENCHMARK.md) | ./tree `--simple`, `--serial`, `--multicore` on epyc against scikit-learn (CART) and Weka J48 (C4.5), one thread | HIGGS: `--multicore` 660× scikit-learn and 2,400× J48, `--serial` 27× and 112×; the same trees (J48's C4.5 on HIGGS 923 against 935 nodes). |
-| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--hybrid` and `--gpu` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree and a default forest of 10, H100 and A100 | One CART tree: ./tree 2.9–3.9× faster than cuML and 9–20× than XGBoost; cuML's default forest is faster per tree. |
+| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--gpu` and `--hybrid` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree on hopper's H100, every tool uploading through the same code, a timeline of each run's phases; one tree per fresh process | One CART tree (10 runs): ./tree `--gpu` (exact) 2.4–2.5× faster than cuML (128 bins) and 2.4–3.3× than XGBoost (256 bins), on comparable trees; HIGGS at depth ≤ 30: 4.7× and 24.8×, `--hybrid` 1.14× faster than `--gpu`. |
+
+**Energy** (not timed; the whole server at the PSU, from a meter model fitted per node):
+
+| Directory | What | Main result |
+|---|---|---|
+| [`cluster-power`](cluster-power/BENCHMARK.md) | energy per tree of ./tree's five backends on epyc1, dell4, ampere and hopper, ECBDL'14 15M, depth ≤ 10, CART and C4.5 | Per CART tree the H100 uses the least: 1.81 kJ on the GPU, 33% less than Multicore on epyc1 (2.70 kJ). |
+| [`cluster-power-mnist8m`](cluster-power-mnist8m/BENCHMARK.md) | the same measurement where `--hybrid` gains: MNIST8M without a depth limit, `--multicore`, `--gpu` and `--hybrid` on hopper, CART and C4.5, 6 rounds | `--hybrid` 1.5–1.6× faster than `--gpu` at 1.4–1.5× the power: 3.5% (CART, 7.93 kJ) and 9.8% (C4.5, 9.11 kJ) less energy per tree; `--multicore` 3.1–3.5× more. |
 
 ## A new node or machine
 
