@@ -70,10 +70,13 @@ over time of each case's first process: [chart-traces.png](chart-traces.png).
 | Node | meter refresh | readings | delay D, window W | model (W) | rms of a reading |
 |---|---|---|---|---|---|
 | epyc1 | 6.3 s | 960 | 1.3 s, 2.5 s | 39 + 1.36·CPU − 0.10·busy | 13 W |
-| hopper | 1.0 s | 15,780 | 0.5 s, 1 s | 57 + 1.03·CPU + 0.99·GPUs − 0.14·busy | 12 W |
+| hopper | 1.0 s | 15,780 | 0.5 s, 1 s | 209 + 1.03·CPU + 0.99·GPU − 0.12·busy | 12 W |
 
-CPU = RAPL packages + DRAM, GPUs = all of the node's GPUs (NVML), busy = busy
-CPUs. The model's idle power matches the meter's within about 1 W.
+CPU = RAPL packages + DRAM, GPU = the GPU the GPU backends use (NVML), busy =
+busy CPUs. hopper's three other GPUs idle at ~50 W each and fall into the
+constant. Until 2026-11-19 the input was the sum of all four GPUs
+(57 + 1.03·CPU + 0.99·GPUs − 0.14·busy); refitting with only the GPU in use
+changed no energy per tree by more than 0.07% (MNIST8M job too). The model's idle power matches the meter's within about 1 W.
 The model fitted on either half of a job gives the same energy per tree
 within 0.2% (Multicore on epyc1: 1.6%).
 
@@ -172,15 +175,15 @@ energy of a GPU tree).
 `pwrlog.py` reads every sensor every 0.1 s for the whole job. For each node,
 `analyze.py` then fits the meter itself:
 
-    reading(t) = mean over [t − D − W, t − D] of  a + b·CPU + c·GPUs + d·busy
+    reading(t) = mean over [t − D − W, t − D] of  a + b·CPU + c·GPU + d·busy
 
-where CPU = RAPL packages + DRAM (W), GPUs = the NVML power of every GPU
-(W), busy = the number of busy CPUs (`/proc/stat`), D is the meter's delay
+where CPU = RAPL packages + DRAM (W), GPU = the NVML power of the GPU in use
+(W; the node's other GPUs, idle and nearly constant, fall into a), busy = the number of busy CPUs (`/proc/stat`), D is the meter's delay
 and W its averaging window. a, b, c, d come from least squares over **every
 reading of the job** (idle, a staircase of CPU load, every run, the gaps); D
 and W from a grid search (D from 0 to 12 s in 0.1 s steps; W from 0.1 to
 10 s). The PSU energy of a tree is then the integral of
-a + b·CPU + c·GPUs + d·busy over its training window, at 0.1 s resolution,
+a + b·CPU + c·GPU + d·busy over its training window, at 0.1 s resolution,
 whatever the meter's refresh.
 "Unused GPUs" = the NVML energy of the node's other GPUs (all four for a
 CPU backend); "rest of the server" = PSU − CPU packages − DRAM − every GPU.

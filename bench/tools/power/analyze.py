@@ -26,8 +26,9 @@ warm-up, are left out), summed and divided by K:
   - PSU (whole server): the meters refresh every 1 s (hopper) or 4-10 s
     (epyc), too slowly for 2-5 s trees. So each node's meter is modelled from the fast sensors:
         meter reading at t = mean over [t - D - W, t - D] of
-                             a + b * (CPU packages + DRAM) + c * (all GPUs) + d * (busy CPUs)
-    with a, b, c, d fitted by least squares over every reading of the job (idle,
+                             a + b * (CPU packages + DRAM) + c * (the GPU in use) + d * (busy CPUs)
+    The node's other GPUs, idle but powered, are not an input: their nearly
+    constant power falls into a, like fans and disks. a, b, c, d are fitted by least squares over every reading of the job (idle,
     the all-CPU staircase, every run) and the delay D and averaging window W
     by a grid search. The PSU energy of a window is the integral of
     the model over it. Checks (summary.md, chart-meter.png):
@@ -230,7 +231,8 @@ class Job:
     def read_counters(self):
         """{name: Cumulative}: cpu<s> (RAPL package of socket s), dram (both
         sockets' DRAM), gpu<i> (NVML energy of GPU i), and the model's inputs
-        x_cpu (packages + DRAM) and x_gpu (every GPU)."""
+        x_cpu (packages + DRAM) and x_gpu (the GPU in use; the idle
+        others fall into the model's constant)."""
         ranges = dict(re.findall(r"^rapl_max (\S+) \S+ (\d+)", self.machine, re.M))
         out, dram = {}, []
         for col, v in self.samples.items():
@@ -252,9 +254,9 @@ class Job:
             out["dram"] = Cumulative(self.t, np.sum(dram, axis=0))
         cpu = [out[k].j for k in out if k.startswith("cpu")] + ([out["dram"].j] if dram else [])
         out["x_cpu"] = Cumulative(self.t, np.sum(cpu, axis=0))
-        gpus = [k for k in out if re.fullmatch(r"gpu\d+", k)]
-        if gpus:  # on one time base: the sample times, the counters interpolated
-            out["x_gpu"] = Cumulative(self.t, np.sum([np.interp(self.t, out[k].t, out[k].j) for k in gpus], axis=0))
+        used = "gpu%d" % self.used_gpu if self.used_gpu is not None else None
+        if used in out:  # on the sample times, the counter interpolated
+            out["x_gpu"] = Cumulative(self.t, np.interp(self.t, out[used].t, out[used].j))
         if "cpu_busy" in self.samples:
             # busy CPUs (/proc/stat, the fraction since the previous sample) x the CPU count: CPU-seconds
             n = int(re.search(r"^cpus available (\d+)", self.machine, re.M).group(1))
@@ -672,10 +674,10 @@ def meter_rows(jobs):
 
 
 def model_text(m, tag=""):
-    """The model of a meter_rows() row as text: "59 W + 1.13·CPU + 0.98·GPUs − 0.4 W·busy CPUs"."""
+    """The model of a meter_rows() row as text: "59 W + 1.13·CPU + 0.98·GPU − 0.4 W·busy CPUs"."""
     t = f"{m['a_W' + tag]:.0f} W + {m['b_cpu' + tag]:.2f}·CPU"
     if not math.isnan(m["c_gpu" + tag]):
-        t += f" + {m['c_gpu' + tag]:.2f}·GPUs"
+        t += f" + {m['c_gpu' + tag]:.2f}·GPU"
     if not math.isnan(m["d_busy" + tag]):
         d = m["d_busy" + tag]
         t += f" {'+' if d >= 0 else '−'} {abs(d):.2f} W·busy CPUs"
@@ -685,8 +687,8 @@ def model_text(m, tag=""):
 def meter_table(jobs):
     lines = ["### The meter model", "",
              "Each node's meter, fitted over every reading of its job: reading(t) = mean over "
-             "[t − D − W, t − D] of a + b × CPU + c × GPUs + d × busy CPUs, where CPU = RAPL packages + DRAM "
-             "(W), GPUs = every GPU's NVML power (W) and busy CPUs = how many CPUs are busy (/proc/stat). "
+             "[t − D − W, t − D] of a + b × CPU + c × GPU + d × busy CPUs, where CPU = RAPL packages + DRAM "
+             "(W), GPU = the NVML power of the GPU in use (W; the idle others fall into a) and busy CPUs = how many CPUs are busy (/proc/stat). "
              "Halves: the same fit on the first and on the second half of the job's readings.", "",
              "| Node | meter | refresh | readings | D | W | model | first half | second half | rms | "
              "idle: model / meter |",
@@ -1282,7 +1284,7 @@ def chart_meter(folder, jobs):
         ax.grid(color=GRID, lw=0.5)
         style(ax)
         ax.legend(fontsize=6.5, frameon=False, loc="lower right")
-    fig.suptitle("The PSU meter modelled from the fast sensors (RAPL CPU packages + DRAM, NVML GPUs, every 0.1 s)",
+    fig.suptitle("The PSU meter modelled from the fast sensors (RAPL CPU packages + DRAM, NVML GPU in use, every 0.1 s)",
                  fontsize=11, color=INK, x=0.01, ha="left")
     fig.tight_layout(rect=(0, 0, 1, 0.96))
     save(fig, folder / "chart-meter.png", dpi=140)
