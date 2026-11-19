@@ -61,6 +61,19 @@ def summary(run, protocol, impl=None, threads=None):
     return None
 
 
+FAILED = "failed"  # a bar whose tool ran and failed on every run (not a missing run)
+
+
+def failed(run, protocol, impl, threads):
+    """FAILED if the folder's summary.csv has this case and none of its runs is ok, else None."""
+    f = run / "summary.csv"
+    if not f.exists():
+        return None
+    rows = [r for r in csv.DictReader(open(f)) if r["impl"] == impl and int(r["threads"]) == threads
+            and r["protocol"] == protocol]
+    return FAILED if rows and all(r["status"] != "ok" for r in rows) else None
+
+
 def seconds(v):
     if v >= 100:
         return f"{v:,.0f} s"
@@ -86,12 +99,13 @@ def label(b):
 def panel(ax, bars, title):
     """bars: [(name, colour, numbers or None)], top to bottom."""
     y = list(range(len(bars)))[::-1]
-    present = [b for _, _, b in bars if b]
+    present = [b for _, _, b in bars if isinstance(b, dict)]
     lo = min((b["min"] for b in present), default=0.1) / 3
     hi = max((b["max"] for b in present), default=10) * 300  # room for the labels
     for yy, (name, color, b) in zip(y, bars):
-        if not b:
-            ax.text(lo * 1.15, yy, "no run yet", va="center", fontsize=8, color=MUTED, style="italic")
+        if not isinstance(b, dict):
+            ax.text(lo * 1.15, yy, "failed: cannot fit this dataset (BENCHMARK.md)" if b == FAILED
+                    else "no run yet", va="center", fontsize=8, color=MUTED, style="italic")
             continue
         ax.barh(yy, b["mean"], left=lo, height=0.68, color=faded(color) if b.get("stale") else color, zorder=2)
         ax.plot([b["min"], b["max"]], [yy, yy], color=INK, linewidth=1, zorder=3)
@@ -131,13 +145,14 @@ def cpu_bars(res, dataset, algo):
              first(summary(v, protocol, "tree", 1), summary(d / f"serial-epyc-{dataset}", protocol))),
             ("./tree --multicore, 48 threads", CPU_COLORS["cpu"],
              first(summary(v, protocol, "tree", 48), summary(d / f"cpu-epyc-{dataset}", protocol)))] + \
-        [(label, CPU_COLORS[key], summary(v, protocol, impl, threads)) for label, key, impl, threads in others]
+        [(label, CPU_COLORS[key], summary(v, protocol, impl, threads) or failed(v, protocol, impl, threads))
+         for label, key, impl, threads in others]
 
 
 def few_runs(grid, algos=ALGOS):
     """The bars with fewer runs than the most, named: with 3 runs, a run takes over an hour."""
     bars = [(d, a, name, b) for d, row in zip(DATASETS, grid) for a, bs in zip(algos, row)
-            for name, _, b in bs if b]
+            for name, _, b in bs if isinstance(b, dict)]
     most = max((b["n"] for *_, b in bars), default=0)
     few = list(dict.fromkeys(  # one entry per tool and case, not per node
         f"{name.split(' — ')[0].split(',')[0]} {ALGOS[a][0].split(' ')[0]} on {TITLES[d].split(':')[0]}"
@@ -150,7 +165,7 @@ def few_runs(grid, algos=ALGOS):
 
 
 def provenance(grid):
-    bars = [b for row in grid for bs in row for _, _, b in bs if b]
+    bars = [b for row in grid for bs in row for _, _, b in bs if isinstance(b, dict)]
     commits = sorted({b["commit"] for b in bars if b.get("commit")})
     hosts = sorted({b["host"] for b in bars if b.get("host")})
     dates = sorted({b["date"] for b in bars if b.get("date")})
@@ -162,7 +177,7 @@ def provenance(grid):
 
 def stale(grid):
     """The number of out-of-date bars."""
-    return sum(1 for row in grid for bs in row for *_, b in bs if b and b.get("stale"))
+    return sum(1 for row in grid for bs in row for *_, b in bs if isinstance(b, dict) and b.get("stale"))
 
 
 def draw(res, out):
@@ -195,7 +210,7 @@ def draw(res, out):
     top = 1 - (0.005 + ((head.count("\n") + 1) * 11.5 * 1.3 + 14) / 72 / fig.get_figheight())
     fig.tight_layout(rect=(0, bottom, 1, top), h_pad=3.5, w_pad=2)
     fig.savefig(out, dpi=140, facecolor="white",
-                **out_of_date_banner(fig, stale(grid), sum(1 for row in grid for bs in row for *_, b in bs if b)))
+                **out_of_date_banner(fig, stale(grid), sum(1 for row in grid for bs in row for *_, b in bs if isinstance(b, dict))))
     print(out)
     return grid, algos
 

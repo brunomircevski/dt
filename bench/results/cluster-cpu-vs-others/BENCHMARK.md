@@ -4,7 +4,7 @@ One tree per run, grown to depth ≤ 10 without pruning on every training row an
 
 **From the next rerun (final.sh since 2026-11-17): ./tree runs in the same `run.py` as the libraries** (`vs-epyc-<data>`: `--simple`, `--serial` and `--multicore` with scikit-learn, rpart, YaDT and J48, one new shuffled order per repetition), so a slow stretch of the node hits every tool alike. The chart draws ./tree's bars from that run; until it exists, from the separate `cluster-<data>` runs (placeholders).
 
-**Data:** ./tree rerun on 2026-11-15/16 (f53347a9, `src/` = d2957ff2; `--serial` and `--multicore` 5 runs, `--simple` 10 from 2026-11-11, not rerun as its code has not changed); scikit-learn and J48 from 2026-11-09 (10 runs, J48 on MNIST8M 3: a run takes over 5 hours), not rerun: their code and ./tree's trees have not changed. Every label gives its number of runs.
+**Data:** the libraries on HIGGS from 2026-11-17 (8fe0c73d, epyc2) and on MNIST8M from 2026-11-18 (job 383, 065b5bd2, epyc1; libraries only, no ./tree: ./tree's interleaved run waits for the full rerun), 10 runs a case, J48 on MNIST8M 3 (a run takes 4.7 hours). ./tree from the separate `cluster-<data>` runs: HIGGS 2026-11-17 (8fe0c73d), MNIST8M `--serial` and `--multicore` 2026-11-17 (82745fb5), MNIST8M `--simple` 2026-11-11 (out of date, faded). Every label gives its number of runs.
 
 ![./tree against scikit-learn and Weka J48, HIGGS and MNIST8M, CART and C4.5](chart.png)
 
@@ -33,20 +33,22 @@ bench/.venv/bin/python bench/vs_chart.py cpu     # chart.png
 - **Nodes:** every job owns its node (`--exclusive`). The one-thread runs are pinned to the node's first CPU, memory first-touch, as ./tree's `--serial` and `--simple`. The libraries run on epyc2, the same hardware as epyc1 (within 2%; `machine.json` records the host).
 - **Time:** the training time, which does not include reading the data. Every run is a fresh process that fits one tree, with no warm-up fit (the warm-up code was removed on 2026-11-16; the runs before gave Python and Java an untimed warm-up fit on 50,000 rows): a run's time is the time of running the tool once. JIT compilation inside J48's build is timed. YaDT's time is its `total time` minus its `load time` (parsing the CSV); its indexing of the data, its counterpart of ./tree's presort, is timed.
 - **Memory:** the peak resident memory (RSS) right after training: loading and training.
+- **rpart cannot fit MNIST8M:** 8.1M rows × 784 features are 6.3 billion values, over 2^31 − 1. The adapter's single `readBin` overflowed R's integers first (job 383); reading in chunks (75faf449) gets past that, but `rpart()` itself then segfaults in its C code (dell2, 2026-11-18). The chart marks the bar "failed"; the adapter now stops with that reason. The chunked reader gives the same trees on covertype and HIGGS at the same speed and lowers rpart's peak on HIGGS from 10.2 to 8.8 GB (the HIGGS bar is from the old reader until the rerun).
 - **Same trees:** `run.py --hash-trees` records the SHA-256 of every ./tree tree; each label shows the tree's nodes and test accuracy, so a tool that grew a different tree shows it.
 
 ## Results
 
-Means of the runs (runs in brackets); peak RAM after training.
+Means of the runs (runs in brackets); peak RSS after training. scikit-learn and rpart (CART), J48 and YaDT (C4.5).
 
-| Dataset | Algorithm | ./tree --simple | --serial | --multicore 48 | scikit-learn / J48 | Nodes, test accuracy |
+| Dataset | Algorithm | ./tree --simple | --serial | --multicore 48 | Libraries | Nodes, test accuracy |
 |---|---|--:|--:|--:|--:|---|
-| HIGGS | CART | 237 s (10) | 7.90 s (5) | 0.327 s (5) | 217 s (10), 1.6 GiB | 2,029 nodes, 70.52% (scikit-learn the same) |
-| HIGGS | C4.5 | 259 s (10) | 7.41 s (5) | 0.342 s (5) | 833 s (10), 12.3 GiB | ./tree 935 nodes, 63.73%; J48 923 nodes, 63.75% |
-| MNIST8M | CART | 1,896 s (10) | 115 s (5) | 3.10 s (5) | 1,005 s (10), 24.1 GiB | 2,047 nodes, 84.51% (scikit-learn the same) |
-| MNIST8M | C4.5 | 1,980 s (10) | 113 s (5) | 3.27 s (5) | 18,998 s (3), 81.6 GiB | 1,453 nodes, 74.65% (J48 the same) |
+| HIGGS | CART | 237 s (10) | 7.89 s (10) | 0.348 s (10) | scikit-learn 216 s (10), 1.6 GiB; rpart 151 s (10), 9.5 GiB | 2,029 nodes, 70.52% (scikit-learn the same; rpart 1,181 nodes, 70.52%) |
+| HIGGS | C4.5 | 259 s (10) | 7.42 s (10) | 0.366 s (10) | J48 771 s (10), 12.5 GiB; YaDT 96.8 s (10), 48 threads 19.2 s | ./tree 935 nodes, 63.73%; J48 923, 63.75%; YaDT 1,045, 70.09% |
+| MNIST8M | CART | 1,896 s (10, out of date) | 115 s (10) | 3.26 s (10) | scikit-learn 1,004 s (10), 24.1 GiB; rpart cannot fit it | 2,047 nodes, 84.51% (scikit-learn the same) |
+| MNIST8M | C4.5 | 1,980 s (10, out of date) | 114 s (10) | 3.39 s (10) | J48 16,818 s (3), 81.6 GiB; YaDT 266 s (10), 48 threads 9.91 s | 1,453 nodes, 74.65% (J48 and YaDT the same) |
 
-- **Against scikit-learn (CART, the same tree):** `--serial` is 27× faster on HIGGS and 8.7× on MNIST8M on one thread; `--multicore` 660× and 320×. `--simple`, the textbook algorithm, is 1.1× scikit-learn's time on HIGGS and 1.9× on MNIST8M.
-- **Against J48 (C4.5):** `--serial` is 112× faster on HIGGS and 168× on MNIST8M; `--multicore` 2,400× and 5,800×. J48 grows the same tree on MNIST8M and a slightly different one on HIGGS (923 against 935 nodes, 63.75% against 63.73% test accuracy; the cause was not investigated).
-- **Memory:** ./tree `--serial` needs 3.5 GiB on HIGGS and 71 GiB on MNIST8M (presorted columns), `--multicore` 5.7 and 74 GiB; scikit-learn 1.6 and 24 GiB; J48 12.3 and 82 GiB.
-- **Against the runs before:** ./tree's `--serial` and `--multicore` are 24–51% faster (f1fe270e → f53347a9); the ratios to the libraries grew by as much.
+- **Against scikit-learn (CART, the same tree):** `--serial` is 27× faster on HIGGS and 8.7× on MNIST8M on one thread; `--multicore` 620× and 310×. `--simple`, the textbook algorithm, is 1.1× scikit-learn's time on HIGGS and 1.9× on MNIST8M.
+- **Against rpart (CART, HIGGS):** `--serial` 19× faster, `--multicore` 430×; its tree has 1,181 nodes against 2,029 at the same test accuracy (not investigated).
+- **Against J48 (C4.5):** `--serial` is 104× faster on HIGGS and 148× on MNIST8M; `--multicore` 2,100× and 5,000×. J48 grows the same tree on MNIST8M and a slightly different one on HIGGS (923 against 935 nodes, 63.75% against 63.73% test accuracy; the cause was not investigated).
+- **Against YaDT:** on MNIST8M YaDT grows ./tree's tree; `--serial` is 2.3× faster than YaDT on one thread and `--multicore` 2.9× faster than YaDT on 48. On HIGGS YaDT grows a different tree (above): 13× and 52×.
+- **Memory:** ./tree `--serial` needs 3.5 GiB on HIGGS and 71 GiB on MNIST8M (presorted columns), `--multicore` 5.6 and 74 GiB; scikit-learn 1.6 and 24 GiB; J48 12.5 and 82 GiB; YaDT 3.2 and 12.7 GiB (48 threads 4.9 and 19.7 GiB).
