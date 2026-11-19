@@ -89,13 +89,13 @@ MNIST8M & 18\,998 & \tbd & \tbd &  &  \\
 \label{sec:energy}
 Table~\ref{tab:energy} lists the results, and Fig.~\ref{fig:energy} shows them for C4.5. We quote C4.5 below; a CART tree needs 1--11\,\% less energy, and every conclusion holds for both algorithms.
 
-\textbf{Energy follows training time.} On ECBDL'14, the mean power of the whole server varies only from 266 to 899\,W across all implementations and both servers, whereas the energy per tree spans three orders of magnitude. Each optimization step therefore saves about as much energy as time. On epyc, \ImplSerialOpt{} is 17$\times$ faster than \ImplSerialBase{} at almost the same power and uses 17$\times$ less energy. \ImplParallel{} draws 2.2$\times$ the power of \ImplSerialOpt{}, but it finishes 31$\times$ sooner and so needs 14$\times$ less energy (2.83\,kJ).
+\textbf{Energy follows training time.} On ECBDL'14, the mean power of the whole server varies only from 266 to 897\,W across all implementations and both servers, whereas the energy per tree spans three orders of magnitude. Each optimization step therefore saves about as much energy as time. On epyc, \ImplSerialOpt{} is 17$\times$ faster than \ImplSerialBase{} at almost the same power and uses 17$\times$ less energy. \ImplParallel{} draws 2.2$\times$ the power of \ImplSerialOpt{}, but it finishes 31$\times$ sooner and so needs 14$\times$ less energy (2.84\,kJ).
 
 \textbf{The H100 server needs the least energy.} \ImplGpu{} on the H100 trains a tree with 1.86\,kJ, 34\,\% less than \ImplParallel{} on epyc: it draws 24\,\% more power but finishes 1.9$\times$ sooner. The difference grows when the idle consumption is excluded: above it, a tree costs 0.84\,kJ on the H100 server and 2.18\,kJ on epyc, 2.6$\times$ as much.
 
 \ImplHybrid{} is about as fast as \ImplGpu{} on this dataset, and because its CPU threads work alongside the GPU, it needs 10\,\% more energy.
 
-\textbf{Without a depth limit, \ImplHybrid{} saves time and some energy.} On MNIST8M grown to full depth (Fig.~\ref{fig:energy-deep}, H100 server), \ImplHybrid{} trains a tree 1.51$\times$ (CART) and 1.58$\times$ (C4.5) faster than \ImplGpu{}, because its CPU threads grow the many small subtrees. It also draws 1.46$\times$ and 1.42$\times$ the power (1\,016 against 696\,W for CART), so a tree costs only 3.5\,\% (CART, 7.93\,kJ) and 9.8\,\% (C4.5, 9.11\,kJ) less energy. Above the idle power, \ImplHybrid{} needs 31--42\,\% more: its saving comes from keeping the idle server on for a shorter time. \ImplParallel{} on the same server needs 3.1--3.5$\times$ the energy of either GPU implementation.
+\textbf{Without a depth limit, \ImplHybrid{} saves time and some energy.} On MNIST8M grown to full depth (Fig.~\ref{fig:energy-deep}, H100 server), \ImplHybrid{} trains a tree 1.51$\times$ (CART) and 1.58$\times$ (C4.5) faster than \ImplGpu{}, because its CPU threads grow the many small subtrees. It also draws 1.46$\times$ and 1.42$\times$ the power (1\,015 against 694\,W for CART), so a tree costs only 3.3\,\% (CART, 7.92\,kJ) and 9.6\,\% (C4.5, 9.11\,kJ) less energy. Above the idle power, \ImplHybrid{} needs 31--42\,\% more: its saving comes from keeping the idle server on for a shorter time. \ImplParallel{} on the same server needs 3.1--3.4$\times$ the energy of either GPU implementation.
 
 Overall, the energy of a tree is governed by its training time. Only between implementations of about the same speed, such as \ImplGpu{} and \ImplHybrid{} on ECBDL'14, does the extra power decide.
 
@@ -116,11 +116,11 @@ Overall, the energy of a tree is governed by its training time. Only between imp
  & & $t$ & $P$ & $E$ & $t$ & $P$ & $E$ \\
 Implementation & Server & (s) & (W) & (kJ) & (s) & (W) & (kJ) \\
 \midrule
-\ImplSerialBase & epyc   & 2\,328 & 266 & 620  & 2\,603 & 266 & 693  \\
+\ImplSerialBase & epyc   & 2\,328 & 266 & 619  & 2\,603 & 266 & 692  \\
 \ImplSerialOpt  & epyc   & 147    & 271 & 39.9 & 149    & 271 & 40.4 \\
-\ImplParallel   & epyc   & 4.54   & 594 & 2.70 & 4.77   & 595 & 2.83 \\
-\ImplGpu        & hopper & 2.46   & 737 & 1.81 & 2.51   & 738 & 1.86 \\
-\ImplHybrid     & hopper & 2.46   & 825 & 2.03 & 2.47   & 832 & 2.05 \\
+\ImplParallel   & epyc   & 4.54   & 594 & 2.70 & 4.77   & 595 & 2.84 \\
+\ImplGpu        & hopper & 2.46   & 738 & 1.81 & 2.51   & 739 & 1.86 \\
+\ImplHybrid     & hopper & 2.46   & 826 & 2.03 & 2.47   & 832 & 2.05 \\
 \bottomrule
 \end{tabular}
 \end{table}

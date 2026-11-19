@@ -33,7 +33,8 @@ GPU backends, 300 s idle before and after, the 60 s calibration staircase,
 **Method** as in [cluster-power](../cluster-power/BENCHMARK.md#method): the
 whole server's energy at the PSU over the training windows only, each tree a
 fresh process's only tree, from hopper's meter (1 s refresh) modelled from
-RAPL, NVML and the busy-CPU count sampled every 0.1 s. Choices for this run:
+RAPL and NVML sampled every 0.1 s (since 2026-11-19 the simpler model
+a + G_idle + b·CPU + GPU: 53 + 155 + 1.03·CPU + GPU here, rms 19 W). Choices for this run:
 
 - **Six rounds**, round-robin over the six cases, each a process of 5–17
   trees (36–102 trees a case). Six rounds were enough: the energy per tree
@@ -47,7 +48,7 @@ RAPL, NVML and the busy-CPU count sampled every 0.1 s. Choices for this run:
   NFS out of it.
 - **Long trees, so the meter itself checks the model:** the trees take
   7.8–34 s, many meter refreshes each. The meter's own readings over the same
-  windows give an energy within 1.6% of the model's for every case.
+  windows give an energy within 1.3% of the model's for every case.
 
 ## Results
 
@@ -55,29 +56,29 @@ RAPL, NVML and the busy-CPU count sampled every 0.1 s. Choices for this run:
 
 | Backend | CART: t | P | E | above idle | C4.5: t | P | E | above idle |
 |---|---|---|---|---|---|---|---|---|
-| Multicore | 28.5 s | 917 W | 26.2 kJ ± 0.2% | 14.3 kJ | 34.4 s | 914 W | 31.4 kJ ± 0.2% | 17.1 kJ |
-| GPU | 11.8 s | 696 W | 8.22 kJ ± 0.4% | 3.30 kJ | 14.6 s | 691 W | 10.1 kJ ± 0.6% | 4.01 kJ |
-| Hybrid | 7.80 s | 1,016 W | **7.93 kJ** ± 0.3% | 4.68 kJ | 9.28 s | 982 W | **9.11 kJ** ± 0.2% | 5.25 kJ |
+| Multicore | 28.5 s | 915 W | 26.1 kJ ± 0.2% | 14.3 kJ | 34.4 s | 911 W | 31.3 kJ ± 0.2% | 17.1 kJ |
+| GPU | 11.8 s | 694 W | 8.20 kJ ± 0.4% | 3.29 kJ | 14.6 s | 689 W | 10.1 kJ ± 0.5% | 4.00 kJ |
+| Hybrid | 7.80 s | 1,015 W | **7.92 kJ** ± 0.3% | 4.68 kJ | 9.28 s | 981 W | **9.11 kJ** ± 0.1% | 5.25 kJ |
 
 t: time per tree; P: mean power of the whole server while training; E: energy
 per tree (± standard deviation over the six rounds); above idle: E minus what
-the idle server (417 W) would have used in the same time. More columns
+the idle server (415 W) would have used in the same time. More columns
 (peaks, the split into CPU sockets, memory, GPU, unused GPUs and the rest, the
 model checks): [summary.md](summary.md); every process: [runs.csv](runs.csv).
 
 - **Hybrid is the fastest and needs the least energy, by a little**: 1.51×
   (CART) and 1.58× (C4.5) faster than GPU, but it draws 1.46× and 1.42× the
-  power (1,016 against 696 W), so a tree costs only 3.5% (CART) and 9.8% (C4.5)
-  less energy (7.93 against 8.22 kJ, 9.11 against 10.1 kJ).
+  power (1,015 against 694 W), so a tree costs only 3.3% (CART) and 9.6% (C4.5)
+  less energy (7.92 against 8.20 kJ, 9.11 against 10.1 kJ).
 - **Where the power goes:** GPU only keeps the CPUs at 208 W (the packages'
   idle is 124 W) and the H100 at 226–230 W; the hybrid's 32 CPU threads grow the
   small subtrees, so the CPUs draw 430–463 W, with the H100 at 249–256 W.
-- **Above idle the hybrid costs more:** 4.68 against 3.30 kJ (CART, +42%),
-  5.25 against 4.01 kJ (C4.5, +31%). Its energy advantage comes only from
-  keeping the 417 W idle server on for a shorter time. Without the three
+- **Above idle the hybrid costs more:** 4.68 against 3.29 kJ (CART, +42%),
+  5.25 against 4.00 kJ (C4.5, +31%). Its energy advantage comes only from
+  keeping the 415 W idle server on for a shorter time. Without the three
   unused H100s (about 150 W) the two are even: CART +5%, C4.5 −2%.
-- **Multicore needs 3.1–3.5× the energy of either GPU backend** (26.2 and
-  31.4 kJ): 2.4× slower than GPU only at a power (915 W) close to the hybrid's.
+- **Multicore needs 3.1–3.4× the energy of either GPU backend** (26.1 and
+  31.3 kJ): 2.4× slower than GPU only at a power (913 W) close to the hybrid's.
 
 ## Files
 

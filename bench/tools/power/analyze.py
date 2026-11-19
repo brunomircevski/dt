@@ -26,11 +26,13 @@ warm-up, are left out), summed and divided by K:
   - PSU (whole server): the meters refresh every 1 s (hopper) or 4-10 s
     (epyc), too slowly for 2-5 s trees. So each node's meter is modelled from the fast sensors:
         meter reading at t = mean over [t - D - W, t - D] of
-                             a + b * (CPU packages + DRAM) + c * (the GPU in use) + d * (busy CPUs)
-    The node's other GPUs, idle but powered, are not an input: their nearly
-    constant power falls into a, like fans and disks. a, b, c, d are fitted by least squares over every reading of the job (idle,
-    the all-CPU staircase, every run) and the delay D and averaging window W
-    by a grid search. The PSU energy of a window is the integral of
+                             a + G_idle + b * (CPU packages + DRAM) + (the GPU in use)
+    The GPU in use counts at its NVML power (x 1). G_idle is the mean NVML
+    power of the node's other GPUs over the whole job (idle but powered,
+    nearly constant: ~154 W for hopper's three; 0 on epyc), measured, not
+    fitted, so a is the server without them. a and b are fitted by least
+    squares over every reading of the job (idle, the all-CPU staircase, every
+    run) and the delay D and averaging window W by a grid search. The PSU energy of a window is the integral of
     the model over it. Checks (summary.md, chart-meter.png):
     the fit's residual, the coefficients fitted on each half of the job, the
     mean residual of the readings that fall inside each case's training
@@ -46,11 +48,10 @@ Checks of the meter model, per case (summary.md "PSU energy: the model against
 the meter"): the model fitted on each half of the job; fitted without any
 reading of the case's own processes (leave the case out: what the model
 predicts for a load it has not seen, and the mean residual of those held-out
-readings); fitted without the busy-CPUs term.
+readings).
 
-"E without the unused GPUs": the energy minus c x the unused GPUs' NVML
-energy (c: the model's GPU coefficient, what a GPU watt costs at the PSU),
-the server as if it held only the GPU in use (CPU backends: no GPU). A
+"E without the unused GPUs": the energy minus the unused GPUs' NVML energy
+(a GPU watt counts once at the PSU in the model), the server as if it held only the GPU in use (CPU backends: no GPU). A
 counterfactual for comparing servers, not a measurement.
 
 Idle power of each source: the job's idle windows (before and after the
@@ -118,8 +119,7 @@ MAX_METER_PERIOD = 20.0
 # the meter model's grid: delay D and averaging window W (s)
 GRID_D = np.round(np.arange(0.0, 12.01, 0.1), 2)
 GRID_W = [0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
-SKIP_START = 60.0
-MODEL_INPUTS = ["x_cpu", "x_gpu", "x_busy"]  # s of the job before the first reading the fit uses
+SKIP_START = 60.0  # s of the job before the first reading the fit uses
 
 
 # What the jobs trained (set by main() from the first job's machine.txt): the dataset and the depth
@@ -218,6 +218,10 @@ class Job:
                              and np.any(~np.isnan(self.samples[c]))), None)
         self.has_psu = self.psu_col is not None
         self.idle_windows = self.find_idle()
+        # G_idle: the mean NVML power of the GPUs no run uses, over the whole job
+        others = [g for g in self.gpus if g != self.used_gpu]
+        self.g_idle = sum(self.counters["gpu%d" % g].between(self.t[0], self.t[-1])
+                          for g in others) / (self.t[-1] - self.t[0])
         if self.has_psu:
             self.psu_period = self.measure_period()
             if self.psu_period > MAX_METER_PERIOD:
@@ -231,8 +235,7 @@ class Job:
     def read_counters(self):
         """{name: Cumulative}: cpu<s> (RAPL package of socket s), dram (both
         sockets' DRAM), gpu<i> (NVML energy of GPU i), and the model's inputs
-        x_cpu (packages + DRAM) and x_gpu (the GPU in use; the idle
-        others fall into the model's constant)."""
+        x_cpu (packages + DRAM) and x_gpu (the GPU in use)."""
         ranges = dict(re.findall(r"^rapl_max (\S+) \S+ (\d+)", self.machine, re.M))
         out, dram = {}, []
         for col, v in self.samples.items():
@@ -257,11 +260,6 @@ class Job:
         used = "gpu%d" % self.used_gpu if self.used_gpu is not None else None
         if used in out:  # on the sample times, the counter interpolated
             out["x_gpu"] = Cumulative(self.t, np.interp(self.t, out[used].t, out[used].j))
-        if "cpu_busy" in self.samples:
-            # busy CPUs (/proc/stat, the fraction since the previous sample) x the CPU count: CPU-seconds
-            n = int(re.search(r"^cpus available (\d+)", self.machine, re.M).group(1))
-            b = self.samples["cpu_busy"] * n
-            out["x_busy"] = Cumulative(self.t, np.concatenate([[0.0], np.cumsum(b[1:] * np.diff(self.t))]))
         return out
 
     def find_idle(self):
@@ -308,14 +306,17 @@ class Job:
         return ct[1:], cv[1:]
 
     def design(self, times, D, W):
-        """The model's inputs for readings at `times`: [1, cpu, gpu] mean power
-        over [t - D - W, t - D]."""
+        """For readings at `times`: the fitted inputs [1, CPU] and the fixed
+        part G_idle + GPU in use, mean power over [t - D - W, t - D]."""
         hi, lo = times - D, times - D - W
-        cols = [np.ones(len(times))]
-        for k in MODEL_INPUTS:
-            if k in self.counters:
-                cols.append(self.counters[k].between(lo, hi) / W)
-        return np.column_stack(cols)
+        X = np.column_stack([np.ones(len(times)), self.counters["x_cpu"].between(lo, hi) / W])
+        fixed = self.g_idle + (self.counters["x_gpu"].between(lo, hi) / W if "x_gpu" in self.counters else 0.0)
+        return X, fixed
+
+    def predict(self, times, coef=None):
+        """The model as the meter would read it at `times`."""
+        X, fixed = self.design(times, self.D, self.W)
+        return X @ (self.coef if coef is None else coef) + fixed
 
     def fit_meter(self):
         rt, rv = self.readings
@@ -324,34 +325,23 @@ class Job:
         best = None
         for W in GRID_W:
             for D in GRID_D:
-                X = self.design(rt, D, W)
-                coef, *_ = np.linalg.lstsq(X, rv, rcond=None)
-                rms = float(np.sqrt(np.mean((rv - X @ coef) ** 2)))
+                X, fixed = self.design(rt, D, W)
+                coef, *_ = np.linalg.lstsq(X, rv - fixed, rcond=None)
+                rms = float(np.sqrt(np.mean((rv - fixed - X @ coef) ** 2)))
                 if best is None or rms < best[0]:
                     best = (rms, W, D, coef)
         self.fit_rms, self.W, self.D, self.coef = best
-        X = self.design(rt, self.D, self.W)
-        self.fit_t, self.fit_y, self.fit_pred = rt, rv, X @ self.coef
+        self.fit_t, self.fit_y, self.fit_pred = rt, rv, self.predict(rt)
         half = len(rt) // 2
-        self.coef_halves = [np.linalg.lstsq(X[s], rv[s], rcond=None)[0] for s in (slice(0, half), slice(half, None))]
+        self.coef_halves = [self.fit_coef(np.arange(len(rt)) < half), self.fit_coef(np.arange(len(rt)) >= half)]
         # the meter's delay to the middle of its averaging window: what the
         # direct estimate shifts its readings by
         self.lag = self.D + self.W / 2
 
-    def inputs(self):
-        return [k for k in MODEL_INPUTS if k in self.counters]
-
-    def fit_coef(self, keep=None, drop=()):
-        """The model's coefficients fitted at the job's D and W on the readings
-        in `keep` (a mask over fit_t; default all), without the inputs in
-        `drop` (their coefficient 0)."""
-        names = ["a"] + self.inputs()
-        cols = [i for i, n in enumerate(names) if n not in drop]
-        keep = np.ones(len(self.fit_y), bool) if keep is None else keep
-        X = self.design(self.fit_t[keep], self.D, self.W)
-        coef = np.zeros(len(names))
-        coef[cols] = np.linalg.lstsq(X[:, cols], self.fit_y[keep], rcond=None)[0]
-        return coef
+    def fit_coef(self, keep):
+        """[a, b] fitted at the job's D and W on the readings in `keep` (a mask over fit_t)."""
+        X, fixed = self.design(self.fit_t[keep], self.D, self.W)
+        return np.linalg.lstsq(X, self.fit_y[keep] - fixed, rcond=None)[0]
 
     def readings_during(self, spans):
         """Mask over fit_t: the readings whose averaging window overlaps one of the spans."""
@@ -361,17 +351,12 @@ class Job:
             mask |= (hi >= a) & (lo <= b)
         return mask
 
-    def coef_by_name(self, coef=None):
-        """{"a": W, "x_cpu": ..., "x_gpu": ..., "x_busy": ...}"""
-        c = self.coef if coef is None else coef
-        return dict(zip(["a"] + self.inputs(), c))
-
     def model_energy(self, a, b, coef=None):
         """PSU joules over [a, b] from the model."""
         c = self.coef if coef is None else coef
-        e = c[0] * (b - a)
-        for ci, k in zip(c[1:], self.inputs()):
-            e += ci * self.counters[k].between(a, b)
+        e = (c[0] + self.g_idle) * (b - a) + c[1] * self.counters["x_cpu"].between(a, b)
+        if "x_gpu" in self.counters:
+            e += self.counters["x_gpu"].between(a, b)
         return float(e)
 
     def model_energy_in(self, windows, coef=None):
@@ -422,10 +407,10 @@ class Job:
 
     def model_series(self, a, b):
         """(times, model W) per sample between a and b."""
-        t, _ = self.power_series("x_cpu", a, b)
-        p = np.full(len(t), self.coef[0])
-        for ci, k in zip(self.coef[1:], self.inputs()):
-            p = p + ci * self.power_series(k, a, b)[1]
+        t, cpu = self.power_series("x_cpu", a, b)
+        p = self.coef[0] + self.g_idle + self.coef[1] * cpu
+        if "x_gpu" in self.counters:
+            p = p + self.power_series("x_gpu", a, b)[1]
         return t, p
 
     def peak(self, source, a, b):
@@ -505,10 +490,7 @@ def analyse(job):
 def model_checks(job, rows):
     """Per row: the energy with the model fitted without the case's readings
     (every process of the same backend and algorithm: warm-ups and checks too),
-    the held-out readings' residuals in that process, the energy with the model
-    fitted without the busy-CPUs term, and the energy without the unused GPUs."""
-    nobusy = job.fit_coef(drop=("x_busy",))
-    c_gpu = job.coef_by_name().get("x_gpu", 0.0)
+    the held-out readings' residuals in that process, and the energy without the unused GPUs."""
     procs = job.processes()
     for impl, algo in {(r["impl"], r["algo"]) for r in rows}:
         held = job.readings_during([(s, e) for _, at, s, e, _ in procs
@@ -519,13 +501,12 @@ def model_checks(job, rows):
                 continue
             k = r["repeat"]
             mine = held & job.readings_during([r["_window"][2:4]])
-            res = job.fit_y[mine] - job.design(job.fit_t[mine], job.D, job.W) @ coef
+            res = job.fit_y[mine] - job.predict(job.fit_t[mine], coef)
             r.update({"model_loco_J": job.model_energy_in(r["_spans"], coef) / k,
-                      "model_nobusy_J": job.model_energy_in(r["_spans"], nobusy) / k,
                       "loco_n": int(mine.sum()), "loco_sum": float(res.sum()),
                       "loco_sq": float((res ** 2).sum())})
     for r in rows:
-        r["energy_wo_unused_gpus_J"] = r["energy_J"] - c_gpu * r.get("E_gpus_other", 0.0)
+        r["energy_wo_unused_gpus_J"] = r["energy_J"] - r.get("E_gpus_other", 0.0)
 
 
 def mean_sd(values):
@@ -545,7 +526,7 @@ def summarise(rows):
              "repeat": rs[0]["repeat"], "nodes": sorted({r["nodes"] for r in rs})}
         for key in ("train_s", "load_s", "energy_J", "above_idle_J", "power_W", "idle_W", "steady_train_s",
                     "first_tree_s", "span_s", "peak_cpu_W", "peak_gpu_W", "peak_psu_W", "psu_J", "psu_idle_J",
-                    "meter_J", "model_half1_J", "model_half2_J", "model_loco_J", "model_nobusy_J",
+                    "meter_J", "model_half1_J", "model_half2_J", "model_loco_J",
                     "energy_wo_unused_gpus_J"):
             s[key], s[key + "_sd"] = mean_sd([r.get(key) for r in rs])
         n = sum(r["res_in_n"] for r in rs)
@@ -663,10 +644,9 @@ def meter_rows(jobs):
         row = {"node": job.node, "host": job.host, "job": job.job_id, "meter": job.psu_col,
                "period_s": job.psu_period, "readings": len(job.fit_y),
                "D_s": job.D, "W_s": job.W}
-        for tag, coef in (("", None), ("_half1", job.coef_halves[0]), ("_half2", job.coef_halves[1])):
-            c = job.coef_by_name(coef)
-            row.update({f"a_W{tag}": c["a"], f"b_cpu{tag}": c.get("x_cpu", nan), f"c_gpu{tag}": c.get("x_gpu", nan),
-                        f"d_busy{tag}": c.get("x_busy", nan)})
+        row["G_idle_W"] = job.g_idle if len(job.gpus) > 1 else nan
+        for tag, coef in (("", job.coef), ("_half1", job.coef_halves[0]), ("_half2", job.coef_halves[1])):
+            row.update({f"a_W{tag}": coef[0], f"b_cpu{tag}": coef[1]})
         row.update({"rms_W": job.fit_rms, "idle_model_W": job.idle["psu"],
                     "idle_meter_W": job.mean_power("meter", job.idle_windows)})
         out.append(row)
@@ -674,21 +654,18 @@ def meter_rows(jobs):
 
 
 def model_text(m, tag=""):
-    """The model of a meter_rows() row as text: "59 W + 1.13·CPU + 0.98·GPU − 0.4 W·busy CPUs"."""
-    t = f"{m['a_W' + tag]:.0f} W + {m['b_cpu' + tag]:.2f}·CPU"
-    if not math.isnan(m["c_gpu" + tag]):
-        t += f" + {m['c_gpu' + tag]:.2f}·GPU"
-    if not math.isnan(m["d_busy" + tag]):
-        d = m["d_busy" + tag]
-        t += f" {'+' if d >= 0 else '−'} {abs(d):.2f} W·busy CPUs"
-    return t
+    """The model of a meter_rows() row as text: "56 W + 154 W + 1.01·CPU + GPU" (epyc: "41 W + 1.34·CPU")."""
+    if math.isnan(m["G_idle_W"]):
+        return f"{m['a_W' + tag]:.0f} W + {m['b_cpu' + tag]:.2f}·CPU"
+    return f"{m['a_W' + tag]:.0f} W + {m['G_idle_W']:.0f} W + {m['b_cpu' + tag]:.2f}·CPU + GPU"
 
 
 def meter_table(jobs):
     lines = ["### The meter model", "",
              "Each node's meter, fitted over every reading of its job: reading(t) = mean over "
-             "[t − D − W, t − D] of a + b × CPU + c × GPU + d × busy CPUs, where CPU = RAPL packages + DRAM "
-             "(W), GPU = the NVML power of the GPU in use (W; the idle others fall into a) and busy CPUs = how many CPUs are busy (/proc/stat). "
+             "[t − D − W, t − D] of a + G_idle + b × CPU + GPU, where CPU = RAPL packages + DRAM "
+             "(W), GPU = the NVML power of the GPU in use (W, counted once) and G_idle = the mean NVML power of "
+             "the node's other GPUs over the job (measured, not fitted; none on epyc). "
              "Halves: the same fit on the first and on the second half of the job's readings.", "",
              "| Node | meter | refresh | readings | D | W | model | first half | second half | rms | "
              "idle: model / meter |",
@@ -707,14 +684,14 @@ def method_check(summary):
              "E per tree from the model (used everywhere above) against: the model with each half's "
              "coefficients; the model fitted without any reading of this case's processes (held out: "
              "a load the model has not seen) and those held-out readings' mean residual ± its standard "
-             "error; the model without the busy-CPUs term; the meter's own readings over the same windows (held, shifted by D + W/2), "
+             "error; the meter's own readings over the same windows (held, shifted by D + W/2), "
              "which is exact only for windows "
              "much longer than the meter's refresh; and the mean residual (reading − model) of the "
              "readings whose averaging window lies inside the training windows, ± its standard error, "
              "relative to the mean power.", "",
              "| Implementation | Node | Algorithm | E per tree (model) | halves | held out | held-out readings: "
-             "mean residual | no busy term | meter | readings inside | mean residual inside |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+             "mean residual | meter | readings inside | mean residual inside |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for s in summary:
         if math.isnan(s["psu_J"]):
             continue
@@ -726,9 +703,8 @@ def method_check(summary):
         loco = "–" if math.isnan(s["model_loco_J"]) else pct(s["model_loco_J"], e)
         loco_res = "–" if not s["loco_n"] else (f"{s['loco_n']}: {s['loco_res_W']:+.1f} ± "
                                                 f"{s['loco_res_se_W']:.1f} W")
-        nobusy = "–" if math.isnan(s["model_nobusy_J"]) else pct(s["model_nobusy_J"], e)
         lines.append(f"| {IMPLS[s['impl']]} | {s['node']} | {ALGOS[s['algo']].split(' (')[0]} | {fmt_j(e)} | "
-                     f"{halves} | {loco} | {loco_res} | {nobusy} | {meter} | {s['res_in_n']} | {res} |")
+                     f"{halves} | {loco} | {loco_res} | {meter} | {s['res_in_n']} | {res} |")
     return lines + [""]
 
 
@@ -909,7 +885,7 @@ def chart_energy(folder, summary):
     fig.legend(handles=[Patch(facecolor="#888", alpha=0.45, label="wide bar: total energy while training"),
                         Patch(facecolor="#888", label="narrow bar: above idle, what the run adds to the idle server"),
                         plt.Line2D([], [], color=INK, lw=1.4, ls=(0, (2, 1.5)),
-                                   label="dashed: GPU nodes without their unused GPUs (model's GPU coefficient × their NVML energy)")],
+                                   label="dashed: GPU nodes without their unused GPUs (minus their NVML energy)")],
                loc="lower center", ncol=3, frameon=False, fontsize=8.5)
     fig.suptitle(f"{WHAT}, {DEPTH_TXT}: whole-server energy (PSU, meter model) to train one tree "
                  "(mean of the runs; whisker ± 1 sd)", fontsize=11, color=INK, x=0.01, ha="left")
@@ -1266,7 +1242,7 @@ def chart_meter(folder, jobs):
         t, p = job.model_series(a - job.D - job.W, b)
         ax.plot(t - a, p, color=MUTED, lw=0.6, label="model, every 0.1 s")
         tt = np.linspace(a, b, int((b - a) * 10))
-        ax.plot(tt - a, job.design(tt, job.D, job.W) @ job.coef, color=PSU_COLOR, lw=1.3,
+        ax.plot(tt - a, job.predict(tt), color=PSU_COLOR, lw=1.3,
                 label=f"model as the meter reads it (D {job.D:.1f} s, W {job.W:g} s)")
         m = (job.fit_t >= a) & (job.fit_t <= b)
         ax.scatter(job.fit_t[m] - a, job.fit_y[m], s=12, color="#d14f8e", zorder=3,
@@ -1422,7 +1398,7 @@ def main():
     for name, job in jobs.items():
         if job.has_psu:
             print(f"{name}: meter {job.psu_col} every {job.psu_period:.1f} s, D {job.D:.1f} s W {job.W:g} s, "
-                  f"coef {np.round(job.coef, 3)}, rms {job.fit_rms:.1f} W; idle "
+                  f"a, b {np.round(job.coef, 3)}, G_idle {job.g_idle:.1f} W, rms {job.fit_rms:.1f} W; idle "
                   + ", ".join(f"{k} {v:.0f} W" for k, v in job.idle.items()))
         rows += analyse(job)
     for m in meter_rows(jobs):

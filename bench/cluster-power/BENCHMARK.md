@@ -28,13 +28,13 @@ Energy per tree (± one standard deviation over the processes):
 
 | Backend | Node | CART: t | E | above idle | C4.5: t | E | above idle |
 |---|---|---|---|---|---|---|---|
-| Serial-Simple | epyc1 | 2,328 s | 620 kJ | 302 kJ | 2,603 s | 693 kJ | 338 kJ |
-| Serial-Simple | hopper | 2,560 s | 1.39 MJ | 348 kJ | 2,792 s | 1.51 MJ | 379 kJ |
-| Serial-Opt | epyc1 | 147 s | 39.9 kJ ± 0.4% | 19.8 kJ | 149 s | 40.4 kJ ± 0.5% | 20.1 kJ |
-| Serial-Opt | hopper | 251 s | 136 kJ ± 0.3% | 34.5 kJ | 260 s | 141 kJ ± 0.9% | 35.6 kJ |
-| Multicore | epyc1 | 4.54 s | 2.70 kJ ± 0.3% | 2.08 kJ | 4.77 s | 2.83 kJ ± 0.4% | 2.18 kJ |
-| Multicore | hopper | 9.40 s | 8.46 kJ ± 2.6% | 4.64 kJ | 10.7 s | 9.42 kJ ± 2.7% | 5.09 kJ |
-| GPU | hopper (H100) | 2.46 s | **1.81 kJ** ± 0.3% | 815 J | 2.51 s | **1.86 kJ** ± 0.8% | 836 J |
+| Serial-Simple | epyc1 | 2,328 s | 619 kJ | 299 kJ | 2,603 s | 692 kJ | 335 kJ |
+| Serial-Simple | hopper | 2,560 s | 1.38 MJ | 344 kJ | 2,792 s | 1.51 MJ | 374 kJ |
+| Serial-Opt | epyc1 | 147 s | 39.9 kJ ± 0.4% | 19.6 kJ | 149 s | 40.4 kJ ± 0.5% | 19.9 kJ |
+| Serial-Opt | hopper | 251 s | 136 kJ ± 0.3% | 34.1 kJ | 260 s | 141 kJ ± 0.9% | 35.2 kJ |
+| Multicore | epyc1 | 4.54 s | 2.70 kJ ± 0.3% | 2.08 kJ | 4.77 s | 2.84 kJ ± 0.4% | 2.18 kJ |
+| Multicore | hopper | 9.40 s | 8.43 kJ ± 2.6% | 4.61 kJ | 10.7 s | 9.39 kJ ± 2.7% | 5.05 kJ |
+| GPU | hopper (H100) | 2.46 s | **1.81 kJ** ± 0.3% | 816 J | 2.51 s | **1.86 kJ** ± 0.8% | 839 J |
 | Hybrid | hopper (H100) | 2.46 s | 2.03 kJ ± 0.6% | 1.03 kJ | 2.47 s | 2.05 kJ ± 0.9% | 1.05 kJ |
 
 Runs × trees: Serial-Simple 1 × 1, Serial-Opt 3 × 1, the others 3 processes of
@@ -69,22 +69,23 @@ over time of each case's first process: [chart-traces.png](chart-traces.png).
 
 | Node | meter refresh | readings | delay D, window W | model (W) | rms of a reading |
 |---|---|---|---|---|---|
-| epyc1 | 6.3 s | 960 | 1.3 s, 2.5 s | 39 + 1.36·CPU − 0.10·busy | 13 W |
-| hopper | 1.0 s | 15,780 | 0.5 s, 1 s | 209 + 1.03·CPU + 0.99·GPU − 0.12·busy | 12 W |
+| epyc1 | 6.3 s | 960 | 1.3 s, 2.5 s | 41 + 1.34·CPU | 13 W |
+| hopper | 1.0 s | 15,780 | 0.5 s, 1 s | 56 + 154 + 1.01·CPU + GPU | 12 W |
 
-CPU = RAPL packages + DRAM, GPU = the GPU the GPU backends use (NVML), busy =
-busy CPUs. hopper's three other GPUs idle at ~50 W each and fall into the
-constant. Until 2026-11-19 the input was the sum of all four GPUs
-(57 + 1.03·CPU + 0.99·GPUs − 0.14·busy); refitting with only the GPU in use
-changed no energy per tree by more than 0.07% (MNIST8M job too). The model's idle power matches the meter's within about 1 W.
-The model fitted on either half of a job gives the same energy per tree
-within 0.2% (Multicore on epyc1: 1.6%).
+CPU = RAPL packages + DRAM (epyc1: packages only), GPU = the GPU the GPU
+backends use (NVML), counted as measured (× 1); 154 W = G_idle, the mean
+NVML power of hopper's three unused GPUs over the job (measured, not fitted),
+so that the constant (56 W) is the server without them. The model's idle
+power matches the meter's within about 1 W. The model fitted on either half
+of a job gives the same energy per tree within 0.35% (Multicore on epyc1:
+1.2%). The MNIST8M job's fit: 53 + 155 + 1.03·CPU + GPU, rms 19 W.
 
 **Model against the meter** ([chart-methods.png](chart-methods.png)): on
 windows much longer than the meter's refresh (the Serial runs, Multicore on
-hopper) the meter's own energy agrees with the model within 1.5%,
-and the readings inside the training windows have a mean residual within
-±0.9% of the power on every case, the 2.5 s H100 trees included. The meter's
+hopper, every MNIST8M case) the meter's own energy agrees with the model
+within 1.3% (within 0.9% here), and the readings inside the training windows
+have a mean residual within ±0.9% of the power on every case, the 2.5 s H100
+trees included. The meter's
 own reading of a short window is what the model replaces: on the November 8
 hopper job it was 3–5% low on the 3 s GPU trees.
 
@@ -125,7 +126,8 @@ The measured runs used 15 s (bold).
   The Hybrid rows here, like the time benchmark's, are f53347a9's.
 - Serial-Simple: one process per case (39–47 min each).
 - epyc1 has no DRAM sensor (AMD): its memory is in "rest of the server".
-  hopper's three unused H100s (~51 W each) are their own component,
+  hopper's three unused H100s (~51 W each, 154 W together: G_idle in the
+  model) are their own component,
   "unused GPUs", not part of the rest.
 
 ## Why not ampere and dell
@@ -175,16 +177,18 @@ energy of a GPU tree).
 `pwrlog.py` reads every sensor every 0.1 s for the whole job. For each node,
 `analyze.py` then fits the meter itself:
 
-    reading(t) = mean over [t − D − W, t − D] of  a + b·CPU + c·GPU + d·busy
+    reading(t) = mean over [t − D − W, t − D] of  a + G_idle + b·CPU + GPU
 
 where CPU = RAPL packages + DRAM (W), GPU = the NVML power of the GPU in use
-(W; the node's other GPUs, idle and nearly constant, fall into a), busy = the number of busy CPUs (`/proc/stat`), D is the meter's delay
-and W its averaging window. a, b, c, d come from least squares over **every
-reading of the job** (idle, a staircase of CPU load, every run, the gaps); D
-and W from a grid search (D from 0 to 12 s in 0.1 s steps; W from 0.1 to
-10 s). The PSU energy of a tree is then the integral of
-a + b·CPU + c·GPU + d·busy over its training window, at 0.1 s resolution,
-whatever the meter's refresh.
+(W, as measured), G_idle = the mean NVML power of the node's other GPUs over
+the whole job (hopper's three idle H100s, ~154 W; none on epyc1; measured,
+not fitted, so a is the server without them), D is the meter's delay and W
+its averaging window. a and b come from least squares over **every reading
+of the job** (idle, a staircase of CPU load, every run, the gaps); D and W
+from a grid search (D from 0 to 12 s in 0.1 s steps; W from 0.1 to 10 s).
+The PSU energy of a tree is then the integral of a + G_idle + b·CPU + GPU
+over its training window, at 0.1 s resolution, whatever the meter's refresh.
+Why this form, and the other models tried: [The simpler model](#the-simpler-model-2026-11-19).
 "Unused GPUs" = the NVML energy of the node's other GPUs (all four for a
 CPU backend); "rest of the server" = PSU − CPU packages − DRAM − every GPU.
 
@@ -197,8 +201,7 @@ short GPU trees).
 (CPU backends none), and the other cards idle at ~50 W each, so ~150 W of
 every GPU tree's power (~20% of its energy) and ~200 W of a CPU backend's
 are cards it does not use. `summary.md` and `chart-energy.png` (dashed)
-also give the energy minus c × the unused GPUs' NVML energy (c: the
-model's GPU coefficient): the same server with only the GPU in use. It is
+also give the energy minus the unused GPUs' NVML energy: the same server with only the GPU in use. It is
 a counterfactual (a smaller server has other fans and PSUs), for comparing
 a GPU server with a CPU server; the whole-server number stays the measured
 one.
@@ -222,13 +225,39 @@ epyc1); and, on hopper, GPU and Hybrid runs with their CPU warm-ups.
 4. **Leave the case out**: the model fitted without any reading of the
    case's own processes (its warm-ups and checks too), so it predicts a
    load it has never seen; and the held-out readings' mean residual. On the
-   2026-11-16 jobs the energy per tree moved by ≤ 0.7%, so no case's number
+   2026-11-16 jobs the energy per tree moved by ≤ 0.5%, so no case's number
    depends on its own readings.
-5. **No busy term**: the same fit without the busy-CPUs term: ≤ 0.3%.
 
-Why busy CPUs: on epyc1 (AMD) the PSU rises more with one busy core than
-RAPL accounts for. Without the term the model was 1.5–2.3% low on the
-single-thread runs (re-analysis of the 2026-11-07 epyc job); with it, ≤ 0.8%.
+### The simpler model (2026-11-19)
+
+Until 2026-11-19 the model was a + b·CPU + c·GPU + d·busy (busy = the number
+of busy CPUs, `/proc/stat`), with hopper's three unused GPUs inside a:
+epyc1 39 + 1.36·CPU − 0.10·busy, hopper 209 + 1.03·CPU + 0.99·GPU − 0.12·busy.
+The busy term had been added for the 2026-11-07 epyc job, where the model
+without it was 1.5–2.3% low on single-thread runs; on the 2026-11-16 jobs
+it no longer mattered. Candidates, each fitted (with its own D and W) on the
+three jobs (epyc1 169, hopper 174, MNIST8M hopper 415); the ranges are over
+all 22 cases:
+
+| model | rms epyc1 / hopper / MNIST8M | E vs the old model | meter vs model | mean residual inside | leave the case out |
+|---|---|---|---|---|---|
+| old: a + b·CPU + c·GPU + d·busy | 13.2 / 12.3 / 18.7 W | – | ≤ 1.6% | ≤ 0.9% | ≤ 0.7% |
+| no busy: a + b·CPU + c·GPU | 13.2 / 12.3 / 18.9 W | −0.35 … +0.09% | ≤ 1.4% | ≤ 1.0% | ≤ 0.5% |
+| **no busy, c = 1: a + G_idle + b·CPU + GPU** | 13.2 / 12.3 / 18.9 W | −0.32 … +0.18% | ≤ 1.3% | ≤ 0.9% | ≤ 0.5% |
+| no busy, c = 1, every GPU's NVML power as measured | 13.2 / 12.3 / 18.8 W | −0.36 … +0.26% | ≤ 1.3% | ≤ 0.9% | ≤ 0.5% |
+| no busy, one c for all four GPUs | 13.2 / 12.3 / 18.8 W | −0.35 … +0.09% | ≤ 1.4% | ≤ 1.0% | ≤ 0.5% |
+| b = c = 1: a + CPU + every GPU | 36.0 / 12.4 / 19.5 W | −13.4 … +1.3% | ≤ 14% | ≤ 13% | ≤ 1.2% |
+
+The chosen model (bold) drops the busy term, counts the GPU in use at its
+NVML power (fitted, c was 0.99 on both hopper jobs) and makes the unused
+GPUs an explicit measured constant: G_idle, their mean NVML power over the job
+(154.3 W in job 174, 154.7 W in job 415; 154.1 W in the idle windows alone, so
+nearly constant). As a constant it only splits a, so its fit is the same as
+a + b·CPU + GPU. Its rms is within 0.2 W of the old model's, every other
+check is as good or better, and no energy per tree moved by more than 0.32%. b cannot be fixed to 1: epyc1 has no
+DRAM sensor, so b (1.34) carries its memory and more, and without it the
+model is 13% off; on hopper alone b = 1 fits (rms 12.4 W) but moves the MNIST8M
+energies by up to 1.1%. (The comparison was a one-off script, not kept.)
 
 ### The runs
 

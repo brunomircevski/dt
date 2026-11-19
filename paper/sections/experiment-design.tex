@@ -97,8 +97,8 @@ Energy is measured in a separate benchmark on the epyc and hopper servers. We re
 Even then, the meter cannot separate the training of a tree from the short gaps between trees, so we estimate the power of the whole server from faster readings. Every 0.1\,s, we read the power of the CPUs (RAPL) and the GPU (NVML), which shows exactly when each tree is being trained. For each server, we fit a linear equation to the meter's readings, using several hours of measurements on that server:
 \[
 \begin{array}{r@{\;}l}
-P_{\mathrm{epyc}} & \approx 39\,\mathrm{W} + 1.36\,P_{\mathrm{CPU}} - 0.10\,\mathrm{W} \cdot n_{\mathrm{busy}},\\[2pt]
-P_{\mathrm{hopper}} & \approx 209\,\mathrm{W} + 1.03\,P_{\mathrm{CPU}} + 0.99\,P_{\mathrm{GPU}} - 0.12\,\mathrm{W} \cdot n_{\mathrm{busy}},
+P_{\mathrm{epyc}} & \approx 41\,\mathrm{W} + 1.34\,P_{\mathrm{CPU}},\\[2pt]
+P_{\mathrm{hopper}} & \approx 56\,\mathrm{W} + 154\,\mathrm{W} + 1.01\,P_{\mathrm{CPU}} + P_{\mathrm{GPU}},
 \end{array}
 \]
-where $P_{\mathrm{CPU}}$ is the power of the CPUs (on hopper, with their memory), $P_{\mathrm{GPU}}$ the power of the GPU used for training, with the server's three other GPUs idle and included in the constant, and $n_{\mathrm{busy}}$ the number of busy cores. The energy of a tree is this power added up over its training only. On long runs, where the meter alone is accurate, the estimate agrees with it within 1.5\,\%.
+where $P_{\mathrm{CPU}}$ is the power of the CPUs (on hopper, with their memory), $P_{\mathrm{GPU}}$ the power of the GPU used for training, and 154\,W the measured idle power of hopper's three unused GPUs. The energy of a tree is this power added up over its training only. On long runs, where the meter alone is accurate, the estimate agrees with it within 1.3\,\%.
