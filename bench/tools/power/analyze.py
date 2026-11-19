@@ -3,7 +3,7 @@
 
   bench/tools/.venv/bin/python bench/tools/power/analyze.py bench/cluster-power
 
-The folder holds one job folder per node (epyc1/, dell4/, ampere/, hopper/),
+The folder holds one job folder per node (epyc1/, hopper/),
 each with markers.txt, machine.txt, samples.csv.gz (pwrlog.py, every 0.1 s)
 and out/<run>.txt (./tree's output, with the --repeat K training windows).
 Writes into the folder: runs.csv (every process), summary.csv (mean and
@@ -23,9 +23,8 @@ warm-up, are left out), summed and divided by K:
     nodes; AMD has no DRAM counter).
   - GPU: the NVML energy counter of the GPU in use (GPU and Hybrid only),
     linear between reads.
-  - PSU (whole server): the meters refresh every 1 s (hopper), 2 s (dell),
-    4-10 s (epyc) or take a point reading once a minute (ampere), too slowly
-    for 2-5 s trees. So each node's meter is modelled from the fast sensors:
+  - PSU (whole server): the meters refresh every 1 s (hopper) or 4-10 s
+    (epyc), too slowly for 2-5 s trees. So each node's meter is modelled from the fast sensors:
         meter reading at t = mean over [t - D - W, t - D] of
                              a + b * (CPU packages + DRAM) + c * (all GPUs) + d * (busy CPUs)
     with a, b, c, d fitted by least squares over every reading of the job (idle,
@@ -35,10 +34,10 @@ warm-up, are left out), summed and divided by K:
     the fit's residual, the coefficients fitted on each half of the job, the
     mean residual of the readings that fall inside each case's training
     windows (a bias there would show), and the meter's own energy over the
-    same windows (readings held and shifted by D + W/2; ampere: the mean of
-    its point readings in the windows), which needs long windows to be exact.
+    same windows (readings held and shifted by D + W/2), which needs long
+    windows to be exact.
   - unused GPUs: the NVML energy of the node's other GPUs (all of them for a
-    CPU backend), idle but powered: ~150 W on hopper and ampere.
+    CPU backend), idle but powered: ~150 W on hopper.
   - rest: PSU - CPU packages - DRAM - every GPU: fans, disks, network, the
     board, PSU losses, and on AMD the memory.
 
@@ -91,13 +90,13 @@ IMPLS = {"simple": "Serial-Simple", "serial": "Serial-Opt", "parallel": "Multico
          "gpuonly": "GPU", "cuda": "Hybrid"}
 IMPL_ORDER = list(IMPLS)
 ALGOS = {"cart": "CART (gini)", "c45": "C4.5 (gain ratio)"}
-NODE_ORDER = ["epyc", "dell", "ampere", "hopper"]
-NODE_HW = {"epyc": "epyc1: 2× EPYC 9255", "dell": "dell4: 2× Xeon Gold 6542Y",
-           "ampere": "ampere: A100 80 GB + 2× EPYC 7402",
+# The power benchmark's servers (bench/cluster-power/BENCHMARK.md: why not ampere and dell).
+NODE_ORDER = ["epyc", "hopper"]
+NODE_HW = {"epyc": "epyc1: 2× EPYC 9255",
            "hopper": "hopper: H100 PCIe + 2× Xeon Gold 6444Y"}
 IMPL_COLORS = {"simple": "#d14f8e", "serial": "#2a78d6", "parallel": "#eb6834",
                "cuda": "#1baf7a", "gpuonly": "#eda100"}
-NODE_COLORS = {"epyc": "#8e5bd0", "dell": "#2a78d6", "ampere": "#1baf7a", "hopper": "#eb6834"}
+NODE_COLORS = {"epyc": "#8e5bd0", "hopper": "#eb6834"}
 MARKERS = {"simple": "s", "serial": "D", "parallel": "o", "gpuonly": "^", "cuda": "v"}
 # Power components, bottom to top of a stacked bar; the PSU is split into
 # them ("rest" = PSU - the others).
@@ -111,12 +110,12 @@ PSU_COLOR = "#5b6770"
 # The implementations that use a GPU: only they count the GPU in use.
 GPU_IMPLS = {"cuda", "gpuonly"}
 IDLE_SKIP = 5.0
-# s: a meter refreshing less often than this is "slow" (ampere's BMC, point
-# readings every 59 s): its readings are spread over the refresh times.
-SLOW_METER = 20.0
+# s: the slowest meter refresh the model handles (epyc ~6 s, hopper 1 s). The
+# once-a-minute point readings of ampere's BMC needed their own path (removed;
+# in the git history before the commit that dropped ampere and dell).
+MAX_METER_PERIOD = 20.0
 # the meter model's grid: delay D and averaging window W (s)
-GRID_D_FAST = np.round(np.arange(0.0, 12.01, 0.1), 2)
-GRID_D_SLOW = np.arange(-5.0, 70.1, 0.5)
+GRID_D = np.round(np.arange(0.0, 12.01, 0.1), 2)
 GRID_W = [0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]
 SKIP_START = 60.0
 MODEL_INPUTS = ["x_cpu", "x_gpu", "x_busy"]  # s of the job before the first reading the fit uses
@@ -143,7 +142,7 @@ def read_case(machine):
 
 
 def node_of(folder):
-    """epyc1 -> epyc, dell4 -> dell, hopper -> hopper."""
+    """epyc1 -> epyc, hopper -> hopper, check-hopper -> check-hopper."""
     return re.sub(r"\d+$", "", folder.name)
 
 
@@ -200,7 +199,7 @@ class Job:
         self.samples = read_csv(folder / "samples.csv")
         self.t = self.samples["t"]
         # When each sample's NVML counters were read: pwrlog.py stamps t before
-        # its reads, and an NVML call can block for ~2 s (ampere, when a GPU
+        # its reads, and an NVML call can block for ~2 s (seen when a GPU
         # tree ends); t_end is the time after the reads. Powercap is read right
         # after t.
         self.t_read = self.samples.get("t_end", self.t)
@@ -220,7 +219,9 @@ class Job:
         self.idle_windows = self.find_idle()
         if self.has_psu:
             self.psu_period = self.measure_period()
-            self.slow = self.psu_period > SLOW_METER
+            if self.psu_period > MAX_METER_PERIOD:
+                sys.exit(f"{folder}: the meter refreshes every {self.psu_period:.0f} s, slower than "
+                         f"{MAX_METER_PERIOD:.0f} s: not supported (ampere's slow-meter path was removed)")
             self.readings = self.find_readings()
             self.fit_meter()
         self.idle = {k: self.mean_power(k, self.idle_windows) for k in self.sources()}
@@ -298,26 +299,11 @@ class Job:
         return float(np.median(np.diff(changes))) if len(changes) > 2 else 0.0
 
     def find_readings(self):
-        """The meter's readings [(time, watts)]: where a fast meter's value
-        changes; a slow meter's refreshes. ampere's BMC takes a point reading
-        about every 59 s and /run/power/psu_W shows it within a second; a
-        refresh that repeats the previous value leaves no change in the file,
-        so the refreshes between two changes are spread evenly at the period."""
+        """The meter's readings [(time, watts)]: where its value changes."""
         t, v = self.psu_values()
         ch = np.concatenate([[True], v[1:] != v[:-1]])
         ct, cv = t[ch], v[ch]
-        if not self.slow:
-            return ct[1:], cv[1:]
-        gaps = np.diff(ct[1:])
-        med = float(np.median(gaps))
-        period = float(np.median(gaps[gaps < 1.5 * med]))
-        rt, rv = [], []
-        for (t0, x), t1 in zip(zip(ct[1:], cv[1:]), list(ct[2:]) + [t[-1] + period]):
-            n = max(1, round((t1 - t0) / period))
-            rt += [t0 + j * (t1 - t0) / n for j in range(n)]
-            rv += [x] * n
-        self.psu_period = period
-        return np.array(rt), np.array(rv)
+        return ct[1:], cv[1:]
 
     def design(self, times, D, W):
         """The model's inputs for readings at `times`: [1, cpu, gpu] mean power
@@ -335,7 +321,7 @@ class Job:
         rt, rv = rt[keep], rv[keep]
         best = None
         for W in GRID_W:
-            for D in (GRID_D_SLOW if self.slow else GRID_D_FAST):
+            for D in GRID_D:
                 X = self.design(rt, D, W)
                 coef, *_ = np.linalg.lstsq(X, rv, rcond=None)
                 rms = float(np.sqrt(np.mean((rv - X @ coef) ** 2)))
@@ -390,15 +376,8 @@ class Job:
         return sum(self.model_energy(a, b, coef) for a, b in windows)
 
     def meter_energy(self, windows):
-        """The meter's own joules over the windows, without the model: a fast
-        meter's readings held until the next one, shifted back by D + W/2; a
-        slow meter's point readings: the mean of those in the (shifted)
-        windows x their total length. None when no reading falls in them."""
-        length = sum(b - a for a, b in windows)
-        if self.slow:
-            rt, rv = self.readings
-            vals = [v for a, b in windows for v in rv[(rt >= a + self.lag) & (rt < b + self.lag)]]
-            return statistics.mean(vals) * length if vals else None
+        """The meter's own joules over the windows, without the model: its
+        readings held until the next one, shifted back by D + W/2."""
         t, v = self.psu_values()
         cum = np.concatenate([[0.0], np.cumsum(v[:-1] * np.diff(t))])
         return float(sum(np.interp(b + self.lag, t, cum) - np.interp(a + self.lag, t, cum) for a, b in windows))
@@ -680,7 +659,7 @@ def meter_rows(jobs):
         if not job.has_psu:
             continue
         row = {"node": job.node, "host": job.host, "job": job.job_id, "meter": job.psu_col,
-               "period_s": job.psu_period, "slow": job.slow, "readings": len(job.fit_y),
+               "period_s": job.psu_period, "readings": len(job.fit_y),
                "D_s": job.D, "W_s": job.W}
         for tag, coef in (("", None), ("_half1", job.coef_halves[0]), ("_half2", job.coef_halves[1])):
             c = job.coef_by_name(coef)
@@ -713,7 +692,7 @@ def meter_table(jobs):
              "idle: model / meter |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]
     for m in meter_rows(jobs):
-        lines.append(f"| {m['host']} | {m['meter']} | {m['period_s']:.1f} s{' (point)' if m['slow'] else ''} | "
+        lines.append(f"| {m['host']} | {m['meter']} | {m['period_s']:.1f} s | "
                      f"{m['readings']} | {m['D_s']:.1f} s | {m['W_s']:g} s | {model_text(m)} | "
                      f"{model_text(m, '_half1')} | {model_text(m, '_half2')} | {m['rms_W']:.1f} W | "
                      f"{m['idle_model_W']:.0f} / {m['idle_meter_W']:.0f} W |")
@@ -726,8 +705,8 @@ def method_check(summary):
              "E per tree from the model (used everywhere above) against: the model with each half's "
              "coefficients; the model fitted without any reading of this case's processes (held out: "
              "a load the model has not seen) and those held-out readings' mean residual ± its standard "
-             "error; the model without the busy-CPUs term; the meter's own readings over the same windows (held, shifted by D + W/2; "
-             "ampere: the mean of its point readings in the windows), which is exact only for windows "
+             "error; the model without the busy-CPUs term; the meter's own readings over the same windows (held, shifted by D + W/2), "
+             "which is exact only for windows "
              "much longer than the meter's refresh; and the mean residual (reading − model) of the "
              "readings whose averaging window lies inside the training windows, ± its standard error, "
              "relative to the mean power.", "",
@@ -753,13 +732,11 @@ def method_check(summary):
 
 # The time benchmark of the same cases: <TIME_BENCH>/<prefix>-<node>-ecbdl_15m.
 # Which node ran the time benchmark (bench/tools/cluster/final.sh): epyc's Multicore
-# and Serial-Simple on epyc1, Serial-Opt on epyc2 (the same hardware); dell's
-# Serial-Opt and Serial-Simple on dell2, which has dell4's half memory
-# channels, its Multicore on dell1 (all channels: not comparable).
+# and Serial-Simple on epyc1, Serial-Opt on epyc2 (the same hardware).
 TIME_BENCH = Path(os.environ.get("POWER_TIME_BENCH",
                                  Path(__file__).resolve().parents[2] / "cluster-ecbdl"))
 TIME_PREFIX = {"simple": "simple", "serial": "serial", "parallel": "cpu", "gpuonly": "gpuonly", "cuda": "cuda"}
-TIME_SKIP = {("dell", "parallel")}
+TIME_SKIP = set()  # (node, impl) cases whose time benchmark ran on other hardware
 TIME_TOLERANCE = 0.03
 
 
@@ -782,7 +759,7 @@ def read_csv_rows(path):
 def time_check(summary):
     """Markdown lines: each case's time per tree against its first tree and the
     time benchmark. Prints a warning for every difference above TIME_TOLERANCE."""
-    ref = (f"the time benchmark ({TIME_BENCH.name}, ecbdl_15m; dell's Multicore ran on dell1, not comparable)"
+    ref = (f"the time benchmark ({TIME_BENCH.name}, ecbdl_15m)"
            if (WHAT, DEPTH_TXT) == ("ECBDL'14 15M", "depth ≤ 10") else f"the time benchmark (none for {WHAT}, {DEPTH_TXT})")
     lines = ["### Time check", "",
              f"Time per tree (./tree's train time) against the first tree of each process and {ref}. "
@@ -1253,8 +1230,8 @@ def chart_meter(folder, jobs):
         for p in ["other", "idle", "staircase"] + IMPL_ORDER:
             m = ph == p
             if m.any():
-                ax.scatter(job.fit_pred[m], job.fit_y[m], s=4 if not job.slow else 10, color=PHASE_COLORS[p],
-                           alpha=0.5 if not job.slow else 0.8, lw=0,
+                ax.scatter(job.fit_pred[m], job.fit_y[m], s=4, color=PHASE_COLORS[p],
+                           alpha=0.5, lw=0,
                            label={"other": "warm-up, gaps", "idle": "idle", "staircase": "CPU staircase"}.get(p, IMPLS.get(p, p)))
         lo = min(job.fit_pred.min(), job.fit_y.min()) - 20
         hi = max(job.fit_pred.max(), job.fit_y.max()) + 20
@@ -1263,7 +1240,7 @@ def chart_meter(folder, jobs):
         ax.set_ylim(lo, hi)
         ax.set_aspect("equal")
         ax.set_title(f"{job.host}: {len(job.fit_y)} readings, refresh {job.psu_period:.1f} s"
-                     f"{' (point)' if job.slow else ''}\n{model_text(METERS[job.node])}\n"
+                     f"\n{model_text(METERS[job.node])}\n"
                      f"D {job.D:.1f} s, W {job.W:g} s; rms {job.fit_rms:.1f} W", fontsize=8, loc="left", color=INK)
         ax.set_xlabel("model, as the meter would read it (W)", fontsize=8, color=INK)
         if col == 0:
@@ -1282,7 +1259,7 @@ def chart_meter(folder, jobs):
         run, attrs, s, e, _ = pick
         tree = read_tree_output(job.folder / "out" / f"{run}.txt")
         w0 = tree["windows"][min(2, len(tree["windows"]) - 1)][0] - 3
-        span = 300 if job.slow else 60
+        span = 60
         a, b = w0, min(w0 + span, e)
         t, p = job.model_series(a - job.D - job.W, b)
         ax.plot(t - a, p, color=MUTED, lw=0.6, label="model, every 0.1 s")
@@ -1290,7 +1267,7 @@ def chart_meter(folder, jobs):
         ax.plot(tt - a, job.design(tt, job.D, job.W) @ job.coef, color=PSU_COLOR, lw=1.3,
                 label=f"model as the meter reads it (D {job.D:.1f} s, W {job.W:g} s)")
         m = (job.fit_t >= a) & (job.fit_t <= b)
-        ax.scatter(job.fit_t[m] - a, job.fit_y[m], s=12 if not job.slow else 30, color="#d14f8e", zorder=3,
+        ax.scatter(job.fit_t[m] - a, job.fit_y[m], s=12, color="#d14f8e", zorder=3,
                    label="meter readings")
         for w in tree["windows"]:
             if w[1] > a and w[0] < b:

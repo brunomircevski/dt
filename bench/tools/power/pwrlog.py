@@ -7,19 +7,17 @@ killed (SIGTERM or SIGINT), and write CSV.
 Columns:
   t          Unix time of the sample
   cpu_busy   fraction of all CPUs busy since the previous sample (/proc/stat)
-  sys_W      ACPI power meter (hwmon "power_meter", the Dell nodes): the whole
-             server's PSU input power as the iDRAC reports it, a 2 s average,
-             refreshed every ~2 s (dell) or 4-6 s (epyc)
-  psu_W      /run/power/psu_W (ampere, hopper: an admin service writes the BMC's
-             DCMI reading there every second; on ampere the BMC refreshes the
-             value only about once a minute)
+  sys_W      ACPI power meter (hwmon "power_meter", epyc's iDRAC): the whole
+             server's PSU input power, a ~2.5 s average, refreshed every 4-10 s
+  psu_W      /run/power/psu_W (hopper: an admin service writes the BMC's DCMI
+             reading there every second)
   rapl_*_uJ  RAPL energy counters, where they are readable (since 2026-11-06 on
-             ampere and hopper; they wrap at max_energy_range_uj, which
+             hopper; they wrap at max_energy_range_uj, which
              power_bench.sh writes to machine.txt)
   gpu<i>_W   NVML board power of GPU i
   gpu<i>_mJ  NVML total-energy counter of GPU i (millijoules since driver load)
   t_end      Unix time after the last read of the sample. NVML calls can block
-             for ~2 s (on ampere, each time a GPU tree ends), so a counter may be
+             for ~2 s (seen each time a GPU tree ends), so a counter may be
              read up to 2 s after `t`: analyze.py times the counters with t_end
 """
 import ctypes

@@ -5,15 +5,14 @@
 # node, with the whole node, from the repository root (submit.sh-style:
 # held, then released, since sbatch --export can leave a job held):
 #
-#   bench/tools/power/submit.sh epyc1 dell4 ampere hopper
+#   bench/tools/power/submit.sh epyc1 hopper
 #
 # KIND (first argument): cpu = Serial-Simple (--simple), Serial-Opt (--serial)
 # and Multicore (--multicore); all = those three plus GPU (--gpu) and Hybrid
 # (--hybrid). OUT (second argument): the job's folder.
 #
 # The problem it solves: the whole-server (PSU) meters refresh every 1 s
-# (hopper), 2 s (dell), 4-10 s (epyc) or once a minute (ampere, a point
-# reading), while a tree takes 2.4 s on a GPU. So the job records, next to the
+# (hopper) or 4-10 s (epyc), while a tree takes 2.4 s on a GPU. So the job records, next to the
 # meter, the fast sensors (RAPL package and DRAM per socket, every GPU's NVML
 # energy counter; all read every 0.1 s), and gives the meter a wide range of
 # loads to calibrate against: analyze.py fits the meter as a delayed moving
@@ -34,7 +33,7 @@
 # fresh process's only tree) and prints its training window as Unix times; the
 # GPU backends add --repeat-warmup WARMUP: the child keeps its CPU threads busy
 # for WARMUP s before its timer, as a single run's data load does (without it, a
-# GPU tree after idle CPUs set up 10-40% slower on hopper and ampere).
+# GPU tree after idle CPUs set up 10-40% slower on hopper).
 #
 # Placement as in the time benchmark (bench/tools/cluster/job.sh and bench/tools/run.py):
 # Serial-Simple and Serial-Opt on CPU 0 (taskset; the load then has one
@@ -106,16 +105,14 @@ done
 NCPU=$(nproc)
 ALL_CPUS="0-$((NCPU - 1))"
 # The GPU: as bench/tools/cluster/job.sh, a GPU with the most memory, on the NUMA node
-# with the most free memory of those (ampere: an A100 80 GB on node 0, never one
-# of its A100 40 GB on node 1); its node's CPUs first, then the rest. A GPU
+# with the most free memory of those; its node's CPUs first, then the rest. A GPU
 # under 80 GB stops the job (GPU_MIN_MIB, default 80000).
 # Each GPU node's fixed GPU (the paper's placement; free memory alone is a tie
-# on hopper and picked GPU 0 or 2 by chance): hopper GPU 2 on NUMA node 1,
-# ampere GPU 0 (an A100 80 GB) on node 0. Another GPU stops the job unless
+# on hopper and picked GPU 0 or 2 by chance): hopper GPU 2 on NUMA node 1.
+# Another GPU stops the job unless
 # GPU_ANY=1 (tuning only).
 case "$(hostname -s)" in
   hopper) GPU_EXPECTED=2 GPU_NUMA=1 ;;
-  ampere) GPU_EXPECTED=0 GPU_NUMA=0 ;;
   *) GPU_EXPECTED= GPU_NUMA= ;;
 esac
 export CUDA_DEVICE_ORDER=PCI_BUS_ID  # CUDA's device numbers = nvidia-smi's

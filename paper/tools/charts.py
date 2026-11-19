@@ -594,11 +594,11 @@ def bars():
 # energy at the PSU (each node's meter modelled from the fast sensors, bench/cluster-power/BENCHMARK.md);
 # components: CPU packages (RAPL), DRAM (RAPL, Intel nodes), the GPU in use (NVML), the rest.
 POWER = ROOT / "bench" / "cluster-power"
-P_NODES = [("epyc1", "epyc"), ("dell4", "dell"), ("ampere", "ampere"), ("hopper", "hopper")]
+P_NODES = [("epyc1", "epyc"), ("hopper", "hopper")]  # the power benchmark's servers
 P_IMPLS = [("simple", "simple"), ("serial", "serial"), ("parallel", "cpu"), ("gpuonly", "gpuonly"),
            ("cuda", "cuda")]  # (power_bench name, STYLE key)
-P_MARK = {"epyc": "o", "dell": "s", "ampere": "^", "hopper": "D"}
-P_GPU = {"ampere": "A100", "hopper": "H100"}
+P_MARK = {"epyc": "o", "hopper": "D"}
+P_GPU = {"hopper": "H100"}
 
 
 def power_rows():
@@ -650,7 +650,7 @@ def joule_axis(ax, axis="y"):
     a.set_minor_formatter(NullFormatter())
 
 
-def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper")):
+def energy(algo="c45", cpu_nodes=("epyc",), gpu_nodes=("hopper",)):
     """Time, power and total energy of one tree, one row per implementation x node (CPU
     implementations on the CPU nodes, GPU ones on the GPU nodes), four aligned panels: time
     per tree (log); mean power of the whole server (linear; the lighter part is the idle
