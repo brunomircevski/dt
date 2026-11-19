@@ -73,7 +73,7 @@ std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &optio
 // wait for it. Everything after the context (the kernels, loaded lazily at
 // their first launch, the memory pool, the page-locked staging buffers and
 // the copy threads) is made in the timed setup (GpuGrower::setup), as cuML
-// and XGBoost make theirs inside their fit (bench/README.md "How time is
+// and XGBoost make theirs inside their fit (bench/tools/README.md "How time is
 // measured"). Returns its duration in seconds (0 in the CPU-only build).
 double gpuPrepare();
 

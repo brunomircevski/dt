@@ -1,243 +1,57 @@
-# Benchmark harness: ./tree vs reference CART and C4.5 implementations
+# Benchmark results
 
-This directory holds the benchmarks for a paper. Results are in [results/](results/README.md), the runs on the mordor3 cluster in [cluster/](cluster/README.md). It compares `./tree` on the CPU with:
-- **CART:** scikit-learn and R rpart.
-- **C4.5:** Weka J48 and YaDT.
+Every benchmark here ran on the faculty's mordor3 cluster. Each is one directory, `cluster-<what>/`, whose `BENCHMARK.md` gives the method, the results, the commands that ran it and the ones that drew its charts (`chart*.png`). What the probes around them found (noise, placement, depth) is in [docs/PERFORMANCE.md](../docs/PERFORMANCE.md). Older benchmarks (desktop and laptop, other implementations on full SUSY, pruned trees) are in the git history, last at 254d4e8 and 96705a7.
 
-It measures training time and peak memory, and records tree size and training and test accuracy so you can check that the tools built comparable trees.
+Inside a benchmark, one directory per run: `<backend>-<node>-<dataset>/`.
 
-**Two rules hold for every benchmark here:**
-- **No cross-validation.** Every case grows exactly one tree.
-- **No forced tree size.** Each tool gets the same settings, including one fixed α for all CART tools, and reports whatever tree it builds. No tool's parameters are tuned to reproduce another tool's node or leaf count.
+- **backend:** `cuda` (`--hybrid`, the CPU takes the small nodes), `gpuonly` (`--gpu`), `cpu` (`--multicore`, 48 threads on both sockets), `serial` (`--serial`, one thread), `simple` (`--simple`, the one-thread reference backend).
+- **node:** `hopper` (H100 PCIe, 2× Xeon Gold 6444Y) and `ampere` (A100 80 GB PCIe, 2× EPYC 7402) run CUDA only; `epyc` (epyc1, or epyc2 with the same hardware, 2× EPYC 9255) and `dell` (a 512 GB node, dell2, dell3 or dell4, 2× Xeon Gold 6542Y; dell1, 1 TB with every memory channel, is no longer used and its runs are out of date) run on the CPU only.
+- **dataset:** the `bench/tools/datasets.toml` entry, e.g. `higgs`, `ecbdl_15m`, `chess_1b`.
 
-## Files
+A run directory holds `results.jsonl` (one row per run of a case), `plan.json` (the cases and the dataset's rows, features and split), `machine.json` (hardware, commit, date), `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/tools/report.py`. Two benchmarks differ: `cluster-cpu-vs-others` names its runs `vs-epyc-<dataset>-<tool>-<algorithm>` and takes ./tree's bars from the test-set benchmarks. `cluster-gpu-vs-others` runs ./tree, cuML and XGBoost together in `one-tree/vs-hopper-<dataset>[-depth30]` (the libraries' runner is `bench/tools/cluster/gpubench.py`).
 
-| File | Purpose |
-|---|---|
-| `setup.sh` | Builds `tree_cpu`, creates `.venv`, and downloads Weka and YaDT into `.tools/`. It also compiles the J48 adapter and the `rusage` launcher. |
-| `datasets.toml` | Dataset registry: source CSV, split, subsampling. Add new datasets here. |
-| `prepare.py` | Writes `data/<name>/`: the split as float32 binary (`train.f32`, `train.y.i32`, `meta.json`: read by the adapters and by `./tree`), a CSV with the same values (for users of `./tree`), and CSV plus `.names` for YaDT. Every CSV row is checked to read back as the binary values. Also writes the tiny `_baseline` dataset. A `prefix_of` set (another set's first rows, e.g. `sorel_4m`) gets only `meta.json`: `./tree` reads the parent's `train.f32` with `--rows N`, the adapters the first N rows of the parent's binary files. A `split = "none"` set (the synthetic chess sets) has no test set. |
-| `benchlib.py` | The protocols (the exact settings for every tool), the implementations, the data layout and the data check. |
-| `adapters/` | One program per library (`sklearn_fit.py`, `rpart_fit.R`, `J48Fit.java`). Each loads the binary data, times only the fit, then measures accuracy and prints one JSON line. `./tree` and YaDT are run directly. `rusage.c` is the launcher every measured process runs under. |
-| `run.py` | Checks the data, then runs every case in fresh processes. It measures time inside each tool and memory from outside, and writes `results/<run-id>/`. |
-| `report.py` | Turns results into Markdown tables (single- and multi-thread separate), a per-case CSV and a per-process CSV. It can merge runs from several machines. |
-| `chart.py` | One figure per dataset: training time and peak RSS per tool, single- and multi-thread in separate panels. |
-| `testset_chart.py`, `rows_chart.py`, `runs_chart.py`, `machines_chart.py` | The test-set benchmarks' charts: bars per backend and node, time and memory against rows, every run, several machines, charts in a grid. |
-| `scaling_chart.py` | The thread-scaling chart of `cluster-cpu-scaling`: speed-up over one thread against threads, epyc and dell, HIGGS and MNIST8M, CART and C4.5, plus each run's `scaling.csv` (time, speed-up, efficiency, peak RSS). |
-| `vs_chart.py` | The chart of `cluster-cpu-vs-others` (./tree against scikit-learn, rpart, J48 and YaDT). |
-| `gpu_steps_chart.py` | The chart of `cluster-gpu-vs-others` (./tree against cuML and XGBoost): when each section of each tool's training runs, one lane per section. |
-| `profile_chart.py`, `profile_share_chart.py` | Where the training time goes, from `run.py --profile`. |
-| `merge_runs.py` | Appends extra runs of a case to its run folder. |
+The runs are SLURM jobs: `bench/tools/cluster/final.sh` queues all of them (one chain of jobs per node), `bench/tools/cluster/submit.sh` single ones; each runs `bench/tools/run.py --run-id cluster-<what>/<run>`, which writes into `bench/<run-id>/`. Setup, data and every submit command are in [bench/tools/cluster/README.md](tools/cluster/README.md).
 
-## Usage
+## The benchmarks
 
-```bash
-bench/setup.sh                                   # once per machine; needs python3, R, JDK 11+, taskset, unzip, curl
-bench/.venv/bin/python bench/prepare.py          # every dataset in datasets.toml whose source exists
-bench/.venv/bin/python bench/run.py --dry-run    # print the plan
-bench/.venv/bin/python bench/run.py diabetes covertype_10k --cpus 0,2,4,6,8,10 --threads 1,2,4,6
-bench/.venv/bin/python bench/report.py --md report.md --csv summary.csv --runs-csv runs.csv
-bench/.venv/bin/python bench/chart.py bench/results/<run-id>
-```
+**Final rerun (2026-11-15/16):** every ./tree result below is from one build of main, f53347a9 (`src/` = d2957ff2), run by `bench/tools/cluster/final.sh -m 5` in a clone `~/dt-final` on mordor3: 5 runs per case, CUDA on one GPU and every CPU of the node, `--multicore` on both sockets. Not rerun, because their code has not changed: `--simple` (10 runs per case from 2026-11-10/12, 3 on full ECBDL'14, 1 on full SOREL-20M from 2026-11-02), scikit-learn, J48, cuML and XGBoost (2026-11-09/10). Every chart shows the runs behind each result. The runs before (f1fe270e, 10 runs per case) are in git at 1e655067; the jobs and their order per node are in [bench/tools/cluster/README.md](tools/cluster/README.md#the-final-rerun).
 
-Finished benchmarks, one directory per backend, machine and dataset: see [results/README.md](results/README.md).
+Times are ./tree's training time (presort, build; not reading the data). Trees are grown to depth ≤ 10 without pruning, CART and C4.5. Depth 10 underfits and holds C4.5 back most ([depth sweep](../docs/PERFORMANCE.md#october-2026-what-the-benchmarks-showed-mordor3-cluster)).
 
-`run.py` options:
-- Selection: `--protocols`, `--impls`.
-- CART pruning: `--alpha` sets the fixed α of `cart_alpha` (default `CART_ALPHA` = 1e-5 in `benchlib.py`); `./tree` gets it as `--prune α`.
-- Threads: `--threads 1,2,4,all` sets the thread counts tried for the multi-threaded tools.
-- Pinning: `--cpus` sets the order of logical CPUs to pin to.
-- Repetitions and limits: `--reps` (runs per case, default 1), `--timeout`.
-- Long cases: a case whose first run takes over `--long-seconds` (3600) runs `--long-runs` (3) times in all.
-- GPU libraries: `--impls cuml,xgboost` runs `results/cluster-gpu-vs-others/scripts/gpubench.py` in `GPU_PYTHON` (default `~/gpu-dt-bench/venv/bin/python`), which uploads through `.tools/libuploader.so` (built by `cluster/build.sh`); never by default.
-- Thermal rest: `--cooldown` sets seconds of rest between processes.
-- JVM: `--java-heap` sets its maximum heap.
+**Trained on the training set, scored on the test set:** ./tree alone, every backend: CUDA `--hybrid` and `--gpu` on hopper and ampere, and on epyc and dell `--multicore` (48 threads), `--serial` and `--simple`.
 
-- Output: `--run-id` names the directory in `bench/results/` (default host-date); `--dry-run` prints the plan and exits; `--seed` seeds the shuffled order of the cases.
-- NUMA and cache: `--membind NODES` runs every process under `numactl --membind`; `--drop-cache` drops the datasets from the page cache before each process.
-- `./tree` only: `--train-accuracy-only`, `--test-accuracy` (skip or limit predicting the dumped tree), `--hash-trees` (SHA-256 of every dumped tree), `--profile` (write `--profile` JSON per run), `--handoff-rows` (a number, or `default` for ./tree's own; without it the value measured best for the node, dataset and depth limit in [`handoff_rows.json`](tuning/handoff/handoff_rows.json), see below).
-
-## Protocols (what is compared)
-
-Each protocol is one well-defined piece of work, done with equivalent settings in every tool. The exact flags are in `benchlib.py`.
-
-| Protocol | ./tree | scikit-learn | rpart | J48 | YaDT |
-|---|---|---|---|---|---|
-| `cart_full`: grown to pure leaves, depth ≤ 30 | `--cart -d 30` | `max_depth=30` | `cp=0, minsplit=2, minbucket=1, maxdepth=30` | | |
-| `cart_depth12` | `-d 12` | `max_depth=12` | `maxdepth=12` | | |
-| `cart_alpha`: one tree, pruned at a fixed α | `--cart -d 30 --prune α` | `ccp_alpha=α` | `xval=0`, `prune(cp = α·n / root risk)` | | |
-| `cart_alpha_nodepth`: `cart_alpha` without the depth cap, for ./tree-only benchmarks | `--cart --prune α` | | | | |
-| `c45`: error-based pruning, CF 0.25, subtree raising | `--c45 --prune 0.25` | | | `-C 0.25 -M 2` | `-ebpg -c 0.25 -m 2` |
-| `c45_unpruned` | `--c45` | | | `-U -M 2` | `-np -m 2` |
-| `cart_depth10`, `c45_depth10_unpruned`: depth ≤ 10, no pruning, every current benchmark | `-d 10` | `max_depth=10` | | `-U -M 2`, its depth limit | |
-
-**Settings that keep the comparison fair:**
-- **Same depth cap.** Every CART tool stops at depth 30, because rpart cannot grow deeper.
-- **No extra rpart work.** rpart's competitor and surrogate splits are off (`maxcompete=0, maxsurrogate=0`), since no other tool computes them.
-- **One fixed α for all CART tools in `cart_alpha`.** Every tool gets the same number: `CART_ALPHA`, or `run.py --alpha`.
-  - Nothing chooses or tunes it per tool or per dataset.
-  - There is no cross-validation, and no tool is matched to another's tree size.
-  - scikit-learn's `ccp_alpha` measures Gini impurity, while `./tree` and rpart count misclassified rows. So the same α prunes scikit-learn's tree to a somewhat different size. Report the size each tool builds; don't adjust for it.
-- **C4.5 needs no α.** Error-based pruning is a single pass over the tree, so every C4.5 protocol grows exactly one tree.
-
-## The hybrid's hand-off size
-
-`./tree --hybrid` hands nodes below `--handoff-rows` rows to the CPU threads. Each implementation runs in its best measured setting, so every `--hybrid` benchmark run takes the value measured fastest for its GPU node, dataset and depth limit, stored in [`handoff_rows.json`](tuning/handoff/handoff_rows.json) (`{node: {dataset: {"depth10" | "nodepth": rows}}}`; `run.py` takes the shallowest measured limit at least as deep as the run's: `-d 5` and `-d 10` take `depth10`, `-d 15` to `-d 30` and no limit `nodepth`, as the hand-off acts on the small nodes of the deep levels; with no such entry, ./tree's default). The values come from [`tuning/handoff/handoff_sweep.sh`](tuning/handoff/handoff_sweep.sh) (a sweep of 256–32,768 and ./tree's default, CART and C4.5, the fastest mean over both, timed without the GPU setup, which does not depend on the value; results in [`tuning/handoff/results/`](tuning/handoff/results/)) and are reused, not swept again for each benchmark: rerun the sweep only when a dataset, a GPU node or the hybrid's code changes. Chess has no entry: its depth-10 tree has no node small enough to hand off. ./tree's own default (10 × features, at most 2^depth limit, between 512 and 16,384) is reported next to the tuned value.
-
-## How time is measured
-
-**One run = one fresh process** that starts, loads the data, does the tool's
-start-up (if it has any), trains **exactly one** tree, reports its numbers and
-exits. No tool fits anything before the timed fit, and no process trains
-several timed trees: ten runs are ten executions of the same command. This is
-the rule of every timing benchmark since 2026-11-16
-([BENCHMARK-CHANGES.MD](../BENCHMARK-CHANGES.MD), section 1).
-
-**Start-up versus warm-up.**
-
-| | Start-up: allowed, before the timer, reported apart | Warm-up: not allowed |
+| Directory | Training / test rows | Main result (f53347a9, 2026-11-15/16) |
 |---|---|---|
-| What | preparation that does not depend on the data | running real training code before the timed fit |
-| Examples | process launch, interpreter / JVM / R start, imports, the bare CUDA context (`cudaFree(0)`) | a fit on a few rows, an untimed full-size fit, growing a memory pool to the data's size, running the split kernels once |
-| Why | every real program pays it once, before its first tree, whatever the data | it leaves the JIT compiled, the pools grown and the caches filled: the timed fit would be a process's second fit, not running the tool once |
+| [`cluster-susy`](cluster-susy/BENCHMARK.md) | 4.5M / UCI's 500,000 | Both GPUs 62–85 ms, 2.0–2.6× epyc's `--multicore` (162–172 ms). `--serial` 2.5–4.0 s, `--simple` 70–80 s. Test acc CART 79.0%, C4.5 78.7%. |
+| [`cluster-higgs`](cluster-higgs/BENCHMARK.md) | 10.5M / UCI's 500,000 | H100 0.13–0.15 s, 2.2–2.5× epyc (0.33–0.34 s). `--serial` 7.4–12.7 s, `--simple` 237–259 s. Test acc CART 70.5%, C4.5 63.7%. |
+| [`cluster-mnist8m`](cluster-mnist8m/BENCHMARK.md) | 8.1M (784 features, 10 classes) / MNIST's 10,000 | H100 2.0–2.1 s, A100 and epyc 3.1–3.3 s. `--serial` 113–205 s, `--simple` 1,896–2,166 s. Test acc CART 84.5%, C4.5 74.7%. |
+| [`cluster-ecbdl`](cluster-ecbdl/BENCHMARK.md) | 32.0M (CPU nodes) and the first 15M (every node) / the competition's 2.9M | 15M: H100 2.4–2.6 s, 1.8–1.9× epyc, VRAM 73.5 GB. Full: epyc 9.2–9.7 s, dell 16.4–19.1 s; `--serial` 317–548 s, `--simple` 5,970–7,319 s. Test acc 98.3% is the majority class's. |
+| [`cluster-sorel`](cluster-sorel/BENCHMARK.md) | 12.7M (2381 features; CPU nodes) and the first 4M (every node) / 4.2M | Full: epyc 15.3–15.5 s, dell 26.6–29.5 s; `--serial` 599–975 s, `--simple` 12,501–13,355 s. 4M: H100 2.7–3.1 s, 1.6–1.8× epyc. Test acc CART 92.7%, C4.5 78.1%. |
+| [`cluster-chess`](cluster-chess/BENCHMARK.md) | a 3×3 checkerboard (2 features) at 1M, 10M, 100M and 1000M rows (no test set) | The same 17-node tree everywhere. epyc fastest at 1M, the A100 at 10M, the H100 from 100M on: 0.61–0.62 s at 1000M, 2.6–3.1× epyc (1.58–1.93 s). `--serial` 39–58 s and `--simple` 922–1,075 s at 1000M. |
 
-**One rule for every GPU tool (since 2026-11-17):** before the timer only the
-CUDA context; everything after it is timed for ./tree, cuML and XGBoost alike:
-loading the GPU kernels (CUDA's default, lazy: each at its first launch),
-memory pools, page-locked staging buffers, copy threads, the copy, the build.
-./tree makes only the CUDA context while the data loads (`gpuPrepare`) and
-everything else in its timed GPU setup, in every run, benchmark or not. Why:
-the libraries link their own CUDA runtime, so nothing outside their `fit` can
-load their kernels or set up their pools without running their code (a
-warm-up). Until 2026-11-17 ./tree had a second mode (`--gpu-startup full`, then
-its default) that also loaded every kernel and set up its pool, staging
-buffers and copy threads during the read, untimed; it was removed for one
-behaviour that benchmarks and users share. What it gained was measured
-([paper, GPU start-up](../paper/sections/experiment-design.tex)): the same total GPU work; 120-200 ms when the
-read is longer than the start-up (HIGGS, MNIST8M from NFS), nothing with a
-short read.
+**./tree on its own:**
 
-**The GPU tools' upload is the same code.** cuML and XGBoost send their data
-to the GPU through `adapters/uploader.cpp`, a copy of ./tree's own staged
-upload (page-locked buffers, copy threads), inside their timed fit, as ./tree
-does inside its own: the comparison measures the tree algorithms, not how
-fast each library copies from pageable memory. Every GPU run records a
-timeline, when each section of its training started and ended (./tree's
-`span` lines, `src/core/timeline.h`; gpubench.py's `timeline`), kept in its
-row and drawn by `gpu_steps_chart.py`.
-
-**What is timed: the training time**, all the work that depends on the data,
-from the data in host memory as the tool's input arrays to the finished tree.
-Each tool measures it with its own monotonic clock:
-
-| Tool | Start-up (not timed) | Timed |
+| Directory | What | Main result (f53347a9, 2026-11-15/16) |
 |---|---|---|
-| ./tree `--serial`, `--multicore`, `--simple` | none | `train total`: presort and build |
-| ./tree `--gpu`, `--hybrid` | the CUDA context, printed as `gpu startup`; it runs while the data loads, and `train total` starts only after it has finished (`gpu startup wait`: the part still running when the load ended) | `train total`: GPU setup (kernel loading, memory pool, page-locked staging buffers, copy threads, allocations) and upload, presort, build |
-| scikit-learn | interpreter, imports | `DecisionTreeClassifier.fit` |
-| rpart | R, `library(rpart)` | `rpart()` |
-| Weka J48 | JVM, class loading | `buildClassifier` (HotSpot's JIT compilation during it stays in: a user who trains one tree pays it too) |
-| YaDT (1 and 48 threads) | process start | its `total time` minus its `load time` (parsing the CSV), i.e. its indexing, plus the sum of its per-tree `time` fields (build) |
-| cuML | interpreter, imports (RMM), the CUDA context; the column-major float32 host array; RMM left at cuML's default, not configured or pre-grown | the staging buffers, the upload (./tree's code), then `fit` on the device array: input checks, binning, build, kernel loading and every allocation it makes (steps recorded) |
-| XGBoost | interpreter, imports, the CUDA context; the column-major float32 host array and the float32 (MNIST8M: one-hot) labels, the adapter's data preparation | the staging buffers, the upload (./tree's code), `QuantileDMatrix` on the device array plus `train` (steps recorded), kernel loading included |
+| [`cluster-cpu-scaling`](cluster-cpu-scaling/BENCHMARK.md) | HIGGS and MNIST8M, 1–48 threads on epyc and dell; chart: speed-up over one thread | HIGGS, 48 threads: 19–24× one thread. MNIST8M: 35–37× (epyc), 34–36× (dell). |
+| [`cluster-profiling`](cluster-profiling/BENCHMARK.md) | where the growing time goes (`--profile`), chess 10M–2000M, HIGGS, airline and ECBDL'14 15M, epyc1, dell1 and hopper | Partition is 33–75% on epyc; the GPU's share grows from 6–8% at chess 10M to 75–77% at 2000M and 85–88% on ECBDL. C4.5 on big chess runs at two speeds (open). |
+| [`hybrid-vs-gpu-only`](hybrid-vs-gpu-only/BENCHMARK.md) | CUDA `--hybrid` against `--gpu`, depth 5–30 and no limit, HIGGS, MNIST8M and SOREL 4M, ampere and hopper, `--handoff-rows` swept per dataset and node | Equal to depth 15. Deeper the hybrid wins, much less than before as GPU only got faster: with no limit HIGGS 2.1–2.3× on ampere and 1.4–2.1× on hopper (4.3–4.9× before), MNIST8M 1.4–1.6×, SOREL 4M 1.08–1.19×. |
 
-**Not timed:** reading the file into memory; start-up (the GPU's is recorded as
-`gpu_startup_seconds`, the rest is only in the whole process's
-`wall_seconds`); prediction and evaluation; process exit.
+**Against other implementations** (HIGGS and MNIST8M):
 
-**Trees:** unpruned, depth ≤ 10 (protocols `cart_depth10` and
-`c45_depth10_unpruned`) for every timing number. Accuracy on pruned trees
-(CART at a fixed alpha, C4.5 at CF 0.25) will be compared separately, untimed;
-it is not part of these benchmarks yet.
+| Directory | What | Main result |
+|---|---|---|
+| [`cluster-cpu-vs-others`](cluster-cpu-vs-others/BENCHMARK.md) | ./tree `--simple`, `--serial`, `--multicore` on epyc against scikit-learn (CART) and Weka J48 (C4.5), one thread | HIGGS: `--multicore` 660× scikit-learn and 2,400× J48, `--serial` 27× and 112×; the same trees (J48's C4.5 on HIGGS 923 against 935 nodes). |
+| [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--gpu` and `--hybrid` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree on hopper's H100, every tool uploading through the same code, a timeline of each run's phases; one tree per fresh process | One CART tree (10 runs): ./tree `--gpu` (exact) 2.4–2.5× faster than cuML (128 bins) and 2.4–3.3× than XGBoost (256 bins), on comparable trees; HIGGS at depth ≤ 30: 4.7× and 24.8×, `--hybrid` 1.14× faster than `--gpu`. |
 
-**Runs, order, placement:**
-- **10 runs per case**, 3 where one run takes over an hour (`--simple` on full
-  ECBDL'14 and SOREL-20M; `run.py` stops any case at `--long-runs` 3 whose
-  first run took over `--long-seconds` 3600, e.g. J48 on MNIST8M). Every
-  3-run case is named on its chart.
-- **Means only** in text and tables; charts may show the spread (min–max).
-- **Shuffled order:** `run.py` runs every case once per repetition, in a new
-  order each time, so slow drift spreads over all cases. The libraries of
-  `cluster-cpu-vs-others` share one `run.py`, as do ./tree's GPU backends, cuML
-  and XGBoost in `cluster-gpu-vs-others`.
-- **Fixed placement:** every run of a case uses the same CPUs (`taskset`), the
-  same memory policy and the same GPU (`--exclusive` nodes; the GPU on the NUMA
-  node `bench/cluster/job.sh` picks).
-- **The page cache:** `--drop-cache` drops the datasets before every process
-  (reading is not timed; this keeps cached files from filling one NUMA node).
-- **Every row records** the commit, the node, the CPU list, the GPU,
-  `wall_seconds` and, for GPU tools, `gpu_startup_seconds`.
+**Energy** (not timed; the whole server at the PSU, from a meter model fitted per node):
 
-**Preparation counts as training.** Each tool's own data preparation is
-included: ./tree's presort, YaDT's indexing, XGBoost's `QuantileDMatrix`, and
-the sorting or binning the other libraries do inside their fit call. It is part
-of the algorithm, and leaving it out would favour some tools over others.
+| Directory | What | Main result |
+|---|---|---|
+| [`cluster-power`](cluster-power/BENCHMARK.md) | energy per tree of ./tree's five backends on epyc1, dell4, ampere and hopper, ECBDL'14 15M, depth ≤ 10, CART and C4.5 | Per CART tree the H100 uses the least: 1.81 kJ on the GPU, 33% less than Multicore on epyc1 (2.70 kJ). |
+| [`cluster-power-mnist8m`](cluster-power-mnist8m/BENCHMARK.md) | the same measurement where `--hybrid` gains: MNIST8M without a depth limit, `--multicore`, `--gpu` and `--hybrid` on hopper, CART and C4.5, 6 rounds | `--hybrid` 1.5–1.6× faster than `--gpu` at 1.4–1.5× the power: 3.5% (CART, 7.93 kJ) and 9.8% (C4.5, 9.11 kJ) less energy per tree; `--multicore` 3.1–3.5× more. |
 
-**Tree size and accuracy come from every run.** After its timer stops, each
-process reports nodes, leaves, depth, and training and test accuracy (each tool
-predicts with its own code; ./tree's dumped tree is evaluated by
-`benchlib.predict_tree`, checked against ./tree's own training accuracy). They
-must be the same in every repetition; `report.py` marks a case where they are
-not.
+## A new node or machine
 
-**`./tree --repeat` is not used for timing.** It serves only the power
-benchmark (`bench/results/cluster-power`, whose `--repeat-warmup` is part of its energy method)
-and A/B tests of code changes (`bench/cluster/ab.sh`).
-
-**Machine hygiene (record it; `run.py` writes `machine.json`):**
-- **Idle machine.** Set the `performance` governor, and either fix turbo or record whether it is on. Laptops throttle, so use `--cooldown` and look at the min–max spread.
-- **Pin with `--cpus`.** On hybrid Intel CPUs, list P-cores first (`/sys/devices/cpu_core/cpus`); otherwise a single-thread run may land on an E-core. For thread-scaling curves, list one logical CPU per physical core before the SMT siblings (`lscpu --extended`).
-- **No hidden threads.** `OMP/OPENBLAS/MKL_NUM_THREADS=1` is set for every process.
-- **Generic build.** Build `./tree` with the repository's flags (`-O3`, no `-march=native`), because the other tools are generic builds too.
-
-## How memory is measured (and why from outside)
-
-**Memory is measured by the operating system, outside the process**, and no tool's code is changed. In-process counters (Python `tracemalloc`, JVM heap statistics, R `gc()`, malloc hooks) can't be compared across languages:
-- each counter sees only its own allocator: `tracemalloc` misses the C/C++ memory of scikit-learn's tree builder, and JVM heap statistics miss memory outside the heap;
-- YaDT is a closed binary, so it can't be instrumented at all.
-
-`run.py` records, per process:
-
-| Metric | Source | Includes | Excludes |
-|---|---|---|---|
-| **`peak_rss_train_bytes` (main metric)** | the kernel's high-water mark of resident memory (`VmHWM`), read by the tool right after training. YaDT, a closed binary, can't: its measured process only trains and saves the tree (a second, unmeasured process classifies the test rows), so its number is `ru_maxrss`. Exact, no sampling. | everything up to the end of training: runtime, libraries, input data, the loader's temporary memory, training structures | evaluation (test set, predictions) |
-| **`peak_rss_bytes`** | `ru_maxrss` from `wait4()` in the `rusage` launcher (GNU time's `%M`): the whole process | everything, evaluation included | |
-| **runtime footprint** | `peak_rss_bytes` of the same tool on the tiny `_baseline` dataset (200 rows) | interpreter, JVM or R, libraries | |
-
-**Report three numbers** for each case:
-- peak RSS;
-- peak RSS minus the runtime footprint, which is memory for the data plus training;
-- the input size (n × F × 4 bytes) for scale.
-
-**Why the launcher:** Linux starts a new process's `ru_maxrss` at the peak RSS of the process it was forked from, and `exec` keeps it. Started straight from `run.py` (a Python process that has just checked hundreds of MiB of data), every tool would report at least `run.py`'s own peak: ./tree on 200 rows showed 316 MiB instead of 7 MiB. So every measured process runs under `.tools/rusage` (`adapters/rusage.c`), a tiny static program that forks the tool and reports its `wait4()` usage; `taskset` pins the launcher, and the tool inherits the pinning.
-
-**How the measurement is kept clean:**
-- **Measured in the timed process, before evaluation.** Time and peak memory come from the same run; the peak is read right after training, so loading the test set and predicting never count.
-- **Binary input for the adapters and ./tree.** scikit-learn, rpart and J48 read the float32 binary files directly into their own data structures, so no CSV parser's temporary objects inflate the peak. ./tree is given the same files (`train.f32`; it picks the format by the extension): it reads them through a 4 MiB buffer per thread (no memory mapping of the file), so it never holds more than a few MiB of the file, and its load is 3–5× faster than parsing the CSV of the same values (the trees are identical). Runs before this change (2026-11-16) loaded `train.csv`; loading is not timed, so their training times stand.
-- **CSV for YaDT.** It only reads CSV, so its peak includes the parser.
-- **Single process per run.** Every tool runs as one process, so `ru_maxrss` covers all of its work. A tool that spawned worker processes would need cgroup v2 `memory.peak` instead. That counts the whole process tree, but also charges it with page cache from file reads.
-
-**Caveats to state in the paper:**
-- **JVM.** Its peak RSS depends on its heap sizing: the JVM grows the heap rather than collect early, so J48's number is an upper bound. Use the same `--java-heap` on every machine and report it. To find J48's minimum heap, lower `-Xmx` until it fails (an optional extra experiment).
-- **Not the same as allocation profiles.** Peak RSS isn't an allocation profile. To explain where `./tree`'s memory goes, use heaptrack or valgrind massif on `./tree` alone; they are too slow and too language-specific for the cross-tool comparison.
-
-**Cross-checking by hand:**
-
-```bash
-bench/.tools/rusage /dev/stdout ./tree_cpu --serial --c45 bench/data/susy_50k/train.f32   # first number: peak RSS in KiB
-/usr/bin/time -v ./tree_cpu --serial --c45 bench/data/susy_50k/train.f32                  # "Maximum resident set size"
-```
-
-GNU time is the `time` package (forked from a small process, so it is exact too). Its "Maximum resident set size" must match `peak_rss_bytes`.
-
-## Same data for every run
-
-- `prepare.py` writes one split per dataset, in every tool's format, and checks every CSV row against the binary files.
-- At the start of every run, `run.py` repeats that check and records the SHA-256 of every data file in `plan.json`.
-- Every process reports the rows and features it loaded (and YaDT the rows it classified); a mismatch with the dataset makes the run an error.
-
-## Datasets
-
-Edit `datasets.toml`; [cluster/README.md](cluster/README.md#data) describes each set.
-
-Only numeric features are supported so far. To add one, put the CSV in `datasets/<name>/` (each dataset's folder holds its originals next to its prepared files; on mordor3 `datasets/` and `bench/data` both link to `~/datasets`), add an entry, and run `prepare.py <name>`. Use small variants (`train_rows`) to check correctness and the full datasets for timing and scaling. Keep cases that time out in the report as timeouts rather than dropping them.
+- **Another mordor3 node:** add a line to the job table in `bench/tools/cluster/submit.sh` (run name, partition, node, implementation, threads) and name the run after it, e.g. `cpu-<node>-<dataset>`. [bench/tools/cluster/README.md](tools/cluster/README.md) has the settings each node needs.
+- **Elsewhere:** run `bench/tools/setup.sh` once, prepare the data (`bench/tools/.venv/bin/python bench/tools/prepare.py <dataset>`), then `bench/tools/run.py <dataset> --protocols <…> --impls tree|tree_cuda --threads all --cpus <list> --reps 3 --run-id <name>`. The first CPU of `--cpus` runs the one-thread cases and should be a fast core; `tree_cuda` runs `./tree --hybrid` and `tree_gpu_only` `./tree --gpu` (built by `make tree`) and also records the peak GPU memory.

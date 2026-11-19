@@ -13,7 +13,7 @@ namespace dt {
 
 // --repeat N: train N trees on the data loaded once and print each one's
 // training window as Unix times, so that an outside power sampler can
-// integrate the energy of training only (bench/results/cluster-power). A window runs from
+// integrate the energy of training only (bench/cluster-power). A window runs from
 // the start of trainTree() to the end of training, before the grower frees
 // its memory.
 

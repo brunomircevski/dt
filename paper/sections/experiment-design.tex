@@ -66,7 +66,7 @@ from the GPU, which use buffers and threads on the GPU's NUMA node
 (Section~\ref{sec:impl-gpu}). Our code is compiled with g++ 13.3 (\texttt{-O3})
 and CUDA 12.9 on Ubuntu 24.04.
 \plan{dell: 512\,GB in 8 of its 16 memory channels, 211\,GB/s STREAM triad
-with 48 threads (bench/results/dell-nodes); the 1\,TB dell1 (379\,GB/s) is not
+with 48 threads (bench/dell-nodes); the 1\,TB dell1 (379\,GB/s) is not
 used.}
 
 \begin{table}
@@ -137,4 +137,4 @@ layout. Each implementation in its best measured setting: the hybrid's hand-off
 size is the fastest of a sweep (256--32768) per GPU node and dataset at the
 reported depth, stored in bench/handoff\_rows.json and reused; report ./tree's
 untuned default ($\min(10F, 2^D)$ within [512, 16384]) next to it.
-Source: bench/results/handoff-sweep/.}
+Source: bench/handoff-tuning/.}

@@ -65,13 +65,13 @@ struct GpuOptions {
   // A node's CPU subtree costs about rows × features, a GPU level little more
   // for a few wide nodes than for one, so wide data hands off later. Without a
   // depth limit (f53347a9, A100 + 48 threads and H100 + 32 threads,
-  // bench/results/hybrid-vs-gpu-only/) the fastest value was 256-512 on HIGGS
+  // bench/hybrid-vs-gpu-only/) the fastest value was 256-512 on HIGGS
   // (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M (2381), and
   // 10 × features is within 3.4% of the fastest on all three.
   // A shallow tree reaches its depth limit almost everywhere, so the GPU runs
   // all D levels anyway: a hand-off saves no GPU level and only moves the
   // last levels' work to the slower CPU. At depth 10 (291a736f,
-  // bench/tuning/handoff/results/depth10/) the fastest was 512-2048 on every
+  // bench/handoff-tuning/depth10/) the fastest was 512-2048 on every
   // dataset (ECBDL 4096, but 1024 within 0.6%), and 10 × features alone made
   // CART 4-11% slower on MNIST8M and SOREL 4M; with the 2^D cap (1024) the
   // CART runs are within 0.6% of the fastest, C4.5 (flat) within 1.6%. The cap
@@ -111,7 +111,7 @@ struct Options {
   // another, and print each one's training window as Unix times (0 = one
   // tree, no windows printed). With N > 1 every tree is trained in a forked
   // child process, so each one starts as a fresh process's only tree would
-  // (bench/results/cluster-power); the last one is the one evaluated and dumped.
+  // (bench/cluster-power); the last one is the one evaluated and dumped.
   std::size_t repeat = 0;
   // --repeat-warmup: seconds that each --repeat tree's child keeps its threads
   // busy before its timer starts, as a single run's CSV load does before its
@@ -122,7 +122,7 @@ struct Options {
   // --warm-up: train one untimed tree on the loaded data first, then the
   // timed one in the same process: a warm process (kernels loaded, memory
   // pools and staging buffers made, caches warm), as a library's second fit
-  // (bench/results/cluster-gpu-vs-others, the warm variant).
+  // (bench/cluster-gpu-vs-others, the warm variant).
   bool warmUp = false;
 
   std::string dumpPath;   // write the tree as text to a file

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Candidate chart styles for the paper, as vector PDFs sized for LNCS
 (text width 122 mm = 4.80 in; fonts rendered by LaTeX, 7-8 pt, so they match
-the text). Every chart is built from the benchmark results in bench/results/.
+the text). Every chart is built from the benchmark results in bench/.
 
-  bench/.venv/bin/python paper/tools/charts.py          # writes paper/figs/test-*.pdf
+  bench/tools/.venv/bin/python paper/tools/charts.py          # writes paper/figs/test-*.pdf
 
 Styles:
   ladder    speed-up staircase: each dataset's time through the four steps of
@@ -19,7 +19,7 @@ Styles:
   profile   100 % stacked bars: where the training time goes, per backend
   bars      grouped bars, log scale: the five implementations on every dataset
   energy    time, mean power and total energy of one C4.5 tree on ECBDL'14 15M,
-            epyc and hopper, from bench/results/cluster-power/summary.csv
+            epyc and hopper, from bench/cluster-power/summary.csv
 """
 
 import csv
@@ -40,9 +40,9 @@ from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.ticker import FixedLocator, FuncFormatter, NullFormatter, NullLocator  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
-RES = ROOT / "bench" / "results"
+RES = ROOT / "bench"
 OUT = ROOT / "paper" / "figs"
-sys.path.insert(0, str(ROOT / "bench"))
+sys.path.insert(0, str(ROOT / "bench" / "tools"))
 import benchlib as B  # noqa: E402
 
 # Whether each result a figure reads is out of date (benchlib.out_of_date: measured before the
@@ -67,7 +67,7 @@ plt.rcParams.update({
 })
 
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
-# Implementation colours (reference palette slots, as in bench/chart.py), and a
+# Implementation colours (reference palette slots, as in bench/tools/chart.py), and a
 # marker each so the charts survive grayscale printing.
 STYLE = {
     "simple":  ("Serial Simple", "#d6455a", "v"),
@@ -143,7 +143,7 @@ def cpu_other(dataset, impl, algo):
 
 def gpu_other(dataset, impl, algo, host="hopper"):
     """cuML / XGBoost: one tree, cold, the same staged upload as ./tree
-    (bench/gpu_steps_chart.py). CART only: no GPU library grows C4.5 trees."""
+    (bench/tools/gpu_steps_chart.py). CART only: no GPU library grows C4.5 trees."""
     f = RES / "cluster-gpu-vs-others" / "one-tree" / f"vs-{host}-{dataset}" / "results.jsonl"
     if algo != "cart" or not f.exists():
         return None
@@ -590,10 +590,10 @@ def bars():
 
 
 # ---------------------------------------------------------------- power (energy per tree)
-# bench/results/cluster-power/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
-# energy at the PSU (each node's meter modelled from the fast sensors, bench/results/cluster-power/BENCHMARK.md);
+# bench/cluster-power/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
+# energy at the PSU (each node's meter modelled from the fast sensors, bench/cluster-power/BENCHMARK.md);
 # components: CPU packages (RAPL), DRAM (RAPL, Intel nodes), the GPU in use (NVML), the rest.
-POWER = ROOT / "bench" / "results" / "cluster-power"
+POWER = ROOT / "bench" / "cluster-power"
 P_NODES = [("epyc1", "epyc"), ("dell4", "dell"), ("ampere", "ampere"), ("hopper", "hopper")]
 P_IMPLS = [("simple", "simple"), ("serial", "serial"), ("parallel", "cpu"), ("gpuonly", "gpuonly"),
            ("cuda", "cuda")]  # (power_bench name, STYLE key)
@@ -729,7 +729,7 @@ def energy(algo="c45", cpu_nodes=("epyc", "dell"), gpu_nodes=("ampere", "hopper"
     save(fig, "energy")
 
 
-# bench/results/cluster-power-mnist8m: the same measurement on MNIST8M without a depth limit, the
+# bench/cluster-power-mnist8m: the same measurement on MNIST8M without a depth limit, the
 # three fast implementations on one server (hopper, the H100 PCIe server), CART and C4.5.
 POWER_DEEP = RES / "cluster-power-mnist8m"
 

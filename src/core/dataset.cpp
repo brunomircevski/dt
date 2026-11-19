@@ -519,7 +519,7 @@ void scatterRows(const float *rows, std::size_t count, std::size_t featureCount,
   }
 }
 
-// A dataset as bench/prepare.py writes it: `path` (X.f32) holds the features,
+// A dataset as bench/tools/prepare.py writes it: `path` (X.f32) holds the features,
 // row-major little-endian float32; X.y.i32 the class index of each row,
 // little-endian int32; X.meta.json, or else meta.json in the same folder, the
 // names (several datasets may share a folder, each with its own X.meta.json).

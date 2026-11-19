@@ -1,6 +1,6 @@
 # Performance
 
-What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/results/](../bench/results/README.md).
+What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/](../bench/README.md).
 
 ## November 2026: the GPU setup's fixed cost (mordor3 cluster)
 
@@ -33,7 +33,7 @@ For the benchmarks: the H100's setup on wide datasets carries this spread; run s
 
 ## November 2026: open: C4.5 on big chess runs at two speeds (mordor3 cluster)
 
-Found in the 5-run rerun of 2026-11-15/16 at f53347a9 (`src/` = d2957ff2), `--multicore` with 48 threads ([cluster-profiling](../bench/results/cluster-profiling/BENCHMARK.md#c45-on-big-chess-two-speeds)). C4.5 on chess 500M–2000M takes one of two times from run to run, on epyc1 and dell1 alike: epyc's build on chess 1000M 1.13–1.15 s or 1.40–1.47 s, on chess 2000M 2.42 s or 3.0 s (20–40% min to max). CART on the same data spreads at most 6%; the runs at ec77727 spread 5–8% on this case.
+Found in the 5-run rerun of 2026-11-15/16 at f53347a9 (`src/` = d2957ff2), `--multicore` with 48 threads ([cluster-profiling](../bench/cluster-profiling/BENCHMARK.md#c45-on-big-chess-two-speeds)). C4.5 on chess 500M–2000M takes one of two times from run to run, on epyc1 and dell1 alike: epyc's build on chess 1000M 1.13–1.15 s or 1.40–1.47 s, on chess 2000M 2.42 s or 3.0 s (20–40% min to max). CART on the same data spreads at most 6%; the runs at ec77727 spread 5–8% on this case.
 
 - **The same work:** every run grows the same tree, with the same sweep and partition time in `--profile`. The presort is steady.
 - **Where the time goes:** the slow runs have more "other" and idle thread time (chess 2000M: 31.6 against 7.7 thread-seconds of other, 15.6 against 7.9 idle); on dell they also spend more system time (121 against 83 s), on epyc system time does not follow the slow runs.
@@ -42,7 +42,7 @@ Found in the 5-run rerun of 2026-11-15/16 at f53347a9 (`src/` = d2957ff2), `--mu
 ## November 2026: four suggestions merged (mordor3 cluster)
 
 The items of SUGGESTIONS.MD (written from main at a7990141), each on its own
-branch, measured against a7990141 with `bench/cluster/ab.sh` on whole nodes,
+branch, measured against a7990141 with `bench/tools/cluster/ab.sh` on whole nodes,
 old and new binaries interleaved, 3 rounds x 3 trees (medians of 9 runs). Cases: `-d 10` unpruned ("d10") and full
 depth (CART `--prune 1e-5`, C4.5 `--prune 0.25`) on HIGGS, SUSY,
 chess_100m, covertype, MNIST8M, ECBDL'14 15M and SOREL-20M 4M; on the CPU
@@ -536,7 +536,7 @@ thread counts, and equal at 48:
 SUSY, 1.14× on HIGGS, 1.10–1.17× on airline, 1.30–1.34× on ECBDL 15M and
 1.38–1.46× on MNIST8M, with the same single-thread speed; never mix them. From 2026-11-17 the final
 runs use dell2–4 only (512 GB, as in the paper; STREAM triad 210–212 GB/s on
-each, dell1 379 GB/s: bench/results/dell-nodes/). epyc1
+each, dell1 379 GB/s: bench/dell-nodes/). epyc1
 and epyc2 are within 2%. dell's single thread is 1.47× slower than epyc's on
 HIGGS and 1.6× on chess 10M, but equal on chess 1000M: core speed on small data,
 memory on big data.
@@ -650,7 +650,7 @@ GPU loop waited for it. Now each hand-off piece is downloaded into one of two
 page-locked 128 MB buffers (one per copy stream), and a host function copies
 it into the arena on the staging threads while the other stream downloads the
 next piece ([CUDA.md](CUDA.md)). Same trees. Medians against e0a9106
-(A/B logs: `bench/results/cluster-handoff-staging/` at 6f6cecb):
+(A/B logs: `bench/cluster-handoff-staging/` at 6f6cecb):
 
 | Train total (s) | H100 before | H100 after | A100 before | A100 after |
 |---|--:|--:|--:|--:|
@@ -747,7 +747,7 @@ mordor3 nodes; before = 66bd66c.
   1262). (`--spare-slots N`, which traded speed for memory, was removed in
   November 2026.)
 * The cluster benchmarks were rerun on cd18717 (2026-10-17,
-  [bench/results/](../bench/results/README.md)): the same trees everywhere,
+  [bench/](../bench/README.md)): the same trees everywhere,
   times within a few percent of the previous runs. Full ECBDL'14 on the CPU
   servers needs 237 GiB instead of 375 GiB; its GPU sample grew from 6M to 15M
   rows, which fill 73.5 GiB of the 80 GB GPUs as 6M did before. A same-job

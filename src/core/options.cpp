@@ -98,7 +98,7 @@ void printUsage(const char *program) {
       << "  --seed N                 random seed for the holdout split (default 1)\n"
       << "  A path ending in .f32 is a binary dataset (X.f32: row-major float32,\n"
       << "  X.y.i32: int32 class index per row, meta.json: the names, as\n"
-      << "  bench/prepare.py writes them); any other path is a CSV.\n"
+      << "  bench/tools/prepare.py writes them); any other path is a CSV.\n"
       << "\n"
       << "Run:\n"
       << "  --threads N              CPU threads for loading, evaluation and (multicore,\n"

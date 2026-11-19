@@ -1,0 +1,160 @@
+# Datasets for the CPU benchmark. prepare.py turns each entry into
+# bench/tools/data/<name>/ (train/test split in every tool's input format). Since
+# 2026-11-16 each dataset's originals sit next to its prepared files in
+# datasets/<name>/ (on mordor3 datasets/ and bench/tools/data are both ~/datasets);
+# the variant (covertype_10k) reads its full set's originals.
+#
+# Keys:
+#   source         CSV file, relative to the repository root (header row required)
+#   label          label column name, or "last" (default)
+#   drop           columns that are not features (e.g. ["Id"])
+#   test_source    CSV file of the test rows (same columns as source): then
+#                  source's rows are the training set and split is not used
+#   split          "random": shuffle with `seed`, then take the test rows
+#                  "none":   no test set, every row trains (the synthetic chess sets)
+#                  "tail":   the last rows are the test set (the published split
+#                            of SUSY and HIGGS: their rows are already random;
+#                            ./tree --test-last 500000 on the CSV is the same)
+#   test_fraction  share of rows in the test set (default 0.2), or
+#   test_rows      an exact number of test rows (wins over test_fraction)
+#   train_rows     use only the first N training rows (0 = all; default 0)
+#   max_test_rows  cap the test set (0 = no cap; default 0)
+#   seed           shuffle seed for split = "random" (default 1)
+#   yadt           write YaDT's files (default true; false for huge datasets
+#                  that YaDT never runs on)
+#   folder         the folder of its files when it shares one with other sets
+#                  (default: its name): then every file is named by the set,
+#                  <name>.meta.json, <name>.f32, <name>.y.i32, <name>.csv, and it
+#                  has training rows only (split "none", no YaDT files)
+#   prefix_of      another entry's name: this set is that set's first
+#                  train_rows training rows, with its test set. It has only
+#                  <parent>/<name>.meta.json, no folder and no copy of the rows: ./tree reads the parent's
+#                  train.f32 with --rows, the other tools the first rows of the
+#                  parent's binary files (benchlib.stem, tree_input). Only
+#                  prefix_of and train_rows; the parent has no YaDT files.
+#
+# Only numeric features are supported for now. A small variant of a dataset is
+# another entry with the same source and train_rows set (a copy of its rows);
+# a big one's is a prefix_of entry.
+
+[diabetes]
+source = "tests/data/diabetes.csv"
+split = "random"
+
+[covertype_10k]
+source = "datasets/covertype/covertype.csv"
+drop = ["Id"]
+split = "random"
+train_rows = 10_000
+max_test_rows = 2_500
+
+[covertype]
+source = "datasets/covertype/covertype.csv"
+drop = ["Id"]
+split = "random"
+
+[susy_50k]
+source = "datasets/susy/supersymmetry.csv"
+drop = ["Id"]
+split = "tail"
+test_rows = 500_000
+train_rows = 50_000
+max_test_rows = 12_500
+
+[susy]
+source = "datasets/susy/supersymmetry.csv"
+drop = ["Id"]
+split = "tail"
+test_rows = 500_000
+
+[higgs]
+source = "datasets/higgs/higgs.csv"
+drop = ["Id"]
+split = "tail"
+test_rows = 500_000
+
+# ECBDL'14 (protein contact maps, GECCO 2014 big data competition): 32M rows,
+# 631 features (92 nominal ones as integer codes), label 0/1 (~2% contacts).
+# Made from the ARFF by bench/tools/cluster/make_datasets.py; cluster-only. No YaDT
+# files: they would copy the 60 GB training CSV. ecbdl is the competition's
+# split (since 2026-10-23): every training row, train.csv a link to ecbdl.csv
+# (its own feature names and labels 0/1), and its labelled test set,
+# datasets/ecbdl/ecbdl_test.csv (2.9M rows, made by bench/tools/cluster/ecbdl_test.py).
+# Until then it held out 100,000 random training rows as the test set (and
+# trained on the other 31,892,921). ecbdl_15m is the first 15M training rows
+# with the same test set (until 2026-10-23: 15M random training rows, 100,000
+# others its test set): about the most that fits on an 80 GB GPU, which needs
+# 8 bytes per value (one copy of the presorted columns) plus one spare column.
+[ecbdl]
+source = "datasets/ecbdl/ecbdl.csv"
+test_source = "datasets/ecbdl/ecbdl_test.csv"
+yadt = false
+
+[ecbdl_15m]
+prefix_of = "ecbdl"
+train_rows = 15_000_000
+
+# A 3x3 checkerboard (x and y uniform on a grid of 32,768 values in [0, 3],
+# 3k/32767 to six decimals; the class alternates between
+# the nine unit squares: 5 squares B, 4 A), from C4.5-format files made by
+# bench/tools/cluster/make_datasets.py; cluster-only. The CSVs are in train.csv's
+# format, so prepare.py links train.csv to them. Synthetic: no test set (since
+# 2026-11-13; until then each had a test file, its accuracy 100% or close).
+# The sizes nest: 1m, 10m, 50m, 100m and 500m are 2b's first rows (checked byte
+# for byte on 2026-11-13), so they are prefix_of entries of 2b, with no files
+# of their own. 2b is generated (2026-10-22): 100m's rows, then 1.9G new ones.
+# 1b is 100m ten times over (100M distinct rows, each 10 times).
+[chess_2b]
+source = "datasets/chess/chess_2b.csv"
+folder = "chess"
+split = "none"
+yadt = false
+
+[chess_1b]
+source = "datasets/chess/chess_1b.csv"
+folder = "chess"
+split = "none"
+yadt = false
+
+[chess_1m]
+prefix_of = "chess_2b"
+train_rows = 1_000_000
+
+[chess_10m]
+prefix_of = "chess_2b"
+train_rows = 10_000_000
+
+[chess_50m]
+prefix_of = "chess_2b"
+train_rows = 50_000_000
+
+[chess_100m]
+prefix_of = "chess_2b"
+train_rows = 100_000_000
+
+[chess_500m]
+prefix_of = "chess_2b"
+train_rows = 500_000_000
+
+# MNIST8M (infinite MNIST: 8.1M distorted digits, 784 pixel features 0-255,
+# 10 classes) and SOREL-20M (malware detection, EMBER v2 features: 2381, label
+# 0/1), each with its own test file; cluster-only, added 2026-10-27, CSVs with
+# a header f0..fN,label (train.csv links to the training CSV). No YaDT files
+# for SOREL; MNIST8M has them since 2026-11-16 (YaDT in cluster-cpu-vs-others).
+# SOREL's training CSV is 136 GB (about 12.7M rows, 120 GB as float32): too big
+# for an 80 GB GPU, and preparing it needs a 1 TB node (dell1, or ampere).
+# sorel_4m (added 2026-11-02) is its first 4M training rows with the same test
+# set, for the GPUs: 9.5G values, about as many as ecbdl_15m (73.3 GiB of VRAM
+# on both GPUs at 8 bytes per value plus one spare column).
+[mnist8m]
+source = "datasets/mnist8m/mnist8m.csv"
+test_source = "datasets/mnist8m/mnist8m_test.csv"
+
+[sorel]
+source = "datasets/sorel/sorel_full.csv"
+test_source = "datasets/sorel/sorel_test.csv"
+yadt = false
+
+[sorel_4m]
+prefix_of = "sorel"
+train_rows = 4_000_000

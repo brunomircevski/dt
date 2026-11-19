@@ -38,15 +38,15 @@ __pycache__
 /tree
 /tree_cpu
 /datasets
-/bench/.venv/
-/bench/.tools/
-/bench/data
+/bench/tools/.venv/
+/bench/tools/.tools/
+/bench/tools/data
 /bench/profiles/
-/bench/cluster/*.log
-/bench/cluster/plans/
+/bench/tools/cluster/*.log
+/bench/tools/cluster/plans/
 *.nsys-rep
 /tree_cpu_main
 
 # Reference PDFs (kept locally, listed in refs/REFERENCES.md)
 /refs/*.pdf
-bench/tuning/handoff/handoff_rows.lock
+bench/handoff-tuning/handoff_rows.lock

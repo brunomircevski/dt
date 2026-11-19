@@ -1,0 +1,63 @@
+# ECBDL'14 (631 features): training set and test set
+
+./tree only, trained on the training rows and scored on the test rows
+([bench/tools/cluster/README.md](../tools/cluster/README.md#test-set-benchmarks)).
+
+- **Training rows:** `ecbdl`: all 31,992,921 training rows, on the CPU nodes only (the GPUs would need about 160 GB); `ecbdl_15m`: the first 15,000,000 (`./tree --rows`), on every node.
+- **Test rows:** the competition's labelled test set, 2,897,917 rows.
+- **Protocols:** depth ≤ 10, CART (gini) and C4.5 (gain ratio), both without pruning.
+- **Runs:** CUDA `--hybrid` and `--gpu` (GPU only) on hopper (H100) and ampere (A100 80 GB), with every CPU of the node; on epyc (2× EPYC 9255) and dell (2× Xeon Gold 6542Y): `--multicore` on both sockets (48 threads), `--serial` and `--simple` (one thread). Each run a fresh process with no warm-up; 10 runs a case in the final runs, 5 in the 2026-11-15 runs, `--simple` 10 on `ecbdl_15m` and 3 on `ecbdl` (about 2 hours a run).
+- **Builds:** the final runs (2026-11-17, ./tree 82745fb5, the same tree code as 8fe0c73d): `--multicore` on epyc1 (both sets) and `--serial` on `ecbdl_15m` (epyc2, dell2). **Out of date** (⚠ in the tables, faded on the charts, until the rerun): the CUDA runs and dell's `--multicore` (2026-11-15, f53347a9, 5 runs, with ./tree's GPU setup untimed; dell1 is down), `--serial` on the full set (f53347a9) and `--simple` (2026-11-10/12, f1fe270e on epyc, ce907ddf on dell). The 2026-11-15 CPU runs the final ones replace are in git at bae12944^; the runs before them (f1fe270e) at 1e655067.
+- **Measured:** ./tree's training time (presort, build; not reading the CSV), peak RAM while training, peak VRAM; the tree's test and training accuracy, nodes, depth and SHA-256.
+- **Chart:** `chart-ecbdl.png` (full) and `chart-ecbdl_15m.png`, `bench/tools/testset_chart.py` (log scale).
+
+## Results
+
+Every run of a case grew the same tree (the same `tree_sha256`). The tables give the mean of ./tree's training time (`bench/tools/testset_chart.py --table`); "runs" is the number of runs of the case, also on the chart.
+
+![ECBDL'14, all training rows](chart-ecbdl.png)
+
+![ECBDL'14, first 15M training rows](chart-ecbdl_15m.png)
+
+- **Accuracy is not informative:** only about 1.7% of the test rows are contacts, so the majority class alone scores 98.32%. The trees match or barely miss that score. A class-weighted or AUC measure would be needed to compare them.
+- **15M sample:** epyc's `--multicore` takes 4.47 s (CART) and 4.73 s (C4.5). Out of date: the H100 took 2.42–2.59 s (hybrid and GPU only alike) and the A100 4.22–4.35 s, both without their GPU setup; dell 7.70 and 8.80 s. GPU only needs 36 GB of RAM, against 107 GB for hybrid and 111 GB for `--multicore`.
+- **Full set (CPU only):** epyc takes 9.21 s (CART) and 9.73 s (C4.5) with 238 GB of RAM: 2.06× the 15M sample's time for 2.13× the rows. dell (out of date) took 16.4 s and 19.1 s.
+- **Serial and simple:** on the 15M sample `--serial` takes 148 s (CART) and 149 s (C4.5) on epyc, 32–33× `--multicore`, and 252 s and 261 s on dell. Out of date: the full set's `--serial` (317–320 s on epyc, 532–548 s on dell) and `--simple` (5,970–7,319 s on the full set, with a third of the RAM, 76 GB).
+- **Against the 2026-11-15 runs (f53347a9, 5 runs a case):** within 2%: `--multicore` on epyc 4.41 → 4.47 s and 9.17 → 9.21 s (CART), `--serial` 147 → 148 s on epyc and 256 → 252 s on dell.
+- **The 15M tree's hash changed, not the tree:** `ecbdl_15m` is now `ecbdl`'s first 15M rows read with `./tree --rows` instead of a copied CSV (f2a4f921). The new runs hash fe35c128 (CART) and 5ca577a6 (C4.5), `--simple` (run on the copy) f45a02bf and be533fee, with the same rows, nodes, depth and accuracies; the full set's hashes are the same as before.
+
+### ecbdl
+
+| Protocol | test acc | train acc | nodes | depth |
+|---|---|---|---|---|
+| CART, no pruning | 98.30% | 97.86% | 1,917 | 10 |
+| C4.5, no pruning | 98.32% | 97.86% | 785 | 10 |
+
+| Run | runs | CART | C4.5 | RAM GB (peak) | VRAM GB (peak) |
+|---|---|---|---|---|---|
+| epyc, --simple, one thread ⚠ out of date (f1fe270e) | 3 | 5,970 s | 7,035 s | 75.8 | – |
+| dell, --simple, one thread ⚠ out of date (ce907ddf) | 3 | 6,436 s | 7,319 s | 75.8 | – |
+| epyc, --serial, one thread ⚠ out of date (f53347a9) | 5 | 317 s | 320 s | 226.2 | – |
+| dell, --serial, one thread ⚠ out of date (f53347a9) | 5 | 532 s | 548 s | 226.2 | – |
+| epyc, parallel, both sockets | 10 | 9.21 s | 9.73 s | 237.6 | – |
+| dell, parallel, both sockets ⚠ out of date (f53347a9) | 5 | 16.4 s | 19.1 s | 237.6 | – |
+
+### ecbdl_15m
+
+| Protocol | test acc | train acc | nodes | depth |
+|---|---|---|---|---|
+| CART, no pruning | 98.31% | 97.92% | 1,863 | 10 |
+| C4.5, no pruning | 98.32% | 97.92% | 725 | 10 |
+
+| Run | runs | CART | C4.5 | RAM GB (peak) | VRAM GB (peak) |
+|---|---|---|---|---|---|
+| epyc, --simple, one thread ⚠ out of date (f1fe270e) | 10 | 2,316 s | 2,628 s | 35.6 | – |
+| dell, --simple, one thread ⚠ out of date (ce907ddf) | 10 | 2,541 s | 2,820 s | 35.6 | – |
+| epyc, --serial, one thread | 10 | 148 s | 149 s | 106.1 | – |
+| dell, --serial, one thread | 10 | 252 s | 261 s | 106.1 | – |
+| epyc, parallel, both sockets | 10 | 4.47 s | 4.73 s | 111.4 | – |
+| dell, parallel, both sockets ⚠ out of date (f53347a9) | 5 | 7.7 s | 8.8 s | 111.4 | – |
+| hopper, CUDA hybrid ⚠ out of date (f53347a9) | 5 | 2.42 s | 2.43 s | 106.5 | 73.5 |
+| ampere, CUDA hybrid ⚠ out of date (f53347a9) | 5 | 4.22 s | 4.26 s | 106.5 | 73.5 |
+| hopper, CUDA, GPU only ⚠ out of date (f53347a9) | 5 | 2.47 s | 2.59 s | 36.0 | 73.5 |
+| ampere, CUDA, GPU only ⚠ out of date (f53347a9) | 5 | 4.23 s | 4.35 s | 36.0 | 73.5 |

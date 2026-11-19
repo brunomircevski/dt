@@ -3,7 +3,7 @@
 How `./tree --gpu` and `--hybrid` are compared with cuML and XGBoost, what is
 timed on each side and where the comparison is still not even. Results,
 settings and the scripts are in
-[bench/results/cluster-gpu-vs-others](../bench/results/cluster-gpu-vs-others/BENCHMARK.md)
+[bench/cluster-gpu-vs-others](../bench/cluster-gpu-vs-others/BENCHMARK.md)
 (one CART tree per fresh process, depth ≤ 10, no pruning, hopper's H100;
 2026-11-18, job 397, 10 runs a case, ./tree at 7c39d6a3; HIGGS at depth ≤ 30:
 job 410, ./tree at 608b387f).
@@ -42,7 +42,7 @@ of the libraries' tree construction with ./tree's has not been made.
 
 ## What is timed
 
-The same for every tool (`scripts/gpubench.py` for the libraries, ./tree's
+The same for every tool (`bench/tools/cluster/gpubench.py` for the libraries, ./tree's
 `train total`):
 
 - **Not timed:** reading the data into host RAM as column-major float32 (and
@@ -57,7 +57,7 @@ The same for every tool (`scripts/gpubench.py` for the libraries, ./tree's
 | Category | ./tree | cuML | XGBoost |
 |---|---|---|---|
 | set-up | staging buffers, copy threads; `--hybrid`'s 256 MB of hand-off buffers; device memory; the x·log x table and its copy | staging buffers, copy threads | the same |
-| upload | labels and columns through the staging buffers | the same code (`bench/adapters/uploader.cpp`) | the same |
+| upload | labels and columns through the staging buffers | the same code (`bench/tools/adapters/uploader.cpp`) | the same |
 | prepare | the presort: its GPU kernels' span (CUDA events), during the upload | input checks: NaN/inf scan, classes, lazy kernel loading | `QuantileDMatrix(max_bin=256)`, then the raw device copy is freed |
 | build | all levels, the hand-offs, the host tree; `--hybrid`'s CPU subtrees as their own span | `_fit_forest`: row-sample quantiles, then the tree | `xgb.train`, one round |
 
@@ -67,7 +67,7 @@ The same for every tool (`scripts/gpubench.py` for the libraries, ./tree's
 
 - One fresh process per run, no warm-up, exactly one tree. The tools'
   runs are interleaved in a new shuffled order each repetition (one
-  `bench/run.py` per dataset).
+  `bench/tools/run.py` per dataset).
 - VRAM: peak `nvidia-smi` memory above idle, sampled from outside for every
   tool and the whole process.
 - Prediction, accuracy and the tree walk run after the timer.

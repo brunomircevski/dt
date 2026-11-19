@@ -168,7 +168,7 @@ for dataset in "${datasets[@]}"; do
   done
 done
 
-# A CSV as bench/prepare.py writes it with Arrow: the header quotes the names
+# A CSV as bench/tools/prepare.py writes it with Arrow: the header quotes the names
 # ("f0", which ./tree keeps), meta.json has no csv_features / csv_classes. 12
 # classes: their ids follow the text order (c10 before c2), also when --rows
 # leaves only some of them (9 rows: c2 to c10).

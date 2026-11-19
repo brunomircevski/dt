@@ -20,7 +20,7 @@ interchangeable backends, the paper's five implementations, that produce the
   and `--serial`, and why the tree is the same.
 * [docs/GPU-LIBRARIES.md](docs/GPU-LIBRARIES.md) — how `--gpu` and `--hybrid`
   are compared with cuML and XGBoost: what is timed, fairness, caveats.
-* [bench/README.md](bench/README.md) — CPU benchmark against scikit-learn,
+* [bench/tools/README.md](bench/tools/README.md) — CPU benchmark against scikit-learn,
   rpart, Weka J48 and YaDT (time and memory).
 * [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — timings of the serial,
   multicore and GPU backends before and after the latest optimizations.
@@ -48,7 +48,7 @@ make CUDA_ARCH="-gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,cod
 ./tree --c45 --prune 0.25 datasets/covertype.csv     # C4.5 as in Quinlan's c4.5: -m 2, CF 0.25
 ./tree --c45 --test-last 500000 datasets/higgs.csv   # official split: the last 500k rows are the test set
 ./tree --c45 --test test.csv train.csv               # test set in its own CSV (same header)
-./tree --c45 --test bench/data/higgs/test.f32 bench/data/higgs/train.f32  # binary input
+./tree --c45 --test bench/tools/data/higgs/test.f32 bench/tools/data/higgs/train.f32  # binary input
 ./tree --c45 --hybrid --holdout 0.2 datasets/higgs.csv  # GPU + CPU; a random 20% of the rows as the test set
 ./tree --help
 ```
@@ -60,7 +60,7 @@ The CSV needs a header; the last column is the class, a first column called
 `Id` is ignored, every other column must be numeric.
 
 A path ending in `.f32` is read as a binary dataset instead, the format
-`bench/prepare.py` writes (and the Python baselines read): `X.f32` holds the
+`bench/tools/prepare.py` writes (and the Python baselines read): `X.f32` holds the
 features as row-major little-endian float32, `X.y.i32` the class index of
 each row as little-endian int32, and `meta.json` in the same folder the
 names (`csv_features` and `csv_classes` when the dataset's CSV uses names
@@ -117,10 +117,10 @@ A flag that the chosen backend would ignore (`--handoff-rows` without
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--rows N` | all | Use only the first N rows of the dataset file (an error if it has fewer). Only those rows are read, so a dataset's first N rows need no file of their own (the benchmark's `sorel_4m`, `ecbdl_15m`, `chess_500m`). `--test-last` and `--holdout` then split these N rows. |
-| `--repeat N` | 0 | Train N trees in a row on the data loaded once, printing each one's training time and Unix start and end (`repeat i/N: train X ms, unix START END`; the window ends when training ends, before the memory is freed). With N > 1 every tree is trained in a forked child process, so each one runs as a single run's tree would; the last tree is evaluated. Not with `--profile`. For energy measurements ([bench/results/cluster-power](bench/results/cluster-power/BENCHMARK.md)). |
+| `--repeat N` | 0 | Train N trees in a row on the data loaded once, printing each one's training time and Unix start and end (`repeat i/N: train X ms, unix START END`; the window ends when training ends, before the memory is freed). With N > 1 every tree is trained in a forked child process, so each one runs as a single run's tree would; the last tree is evaluated. Not with `--profile`. For energy measurements ([bench/cluster-power](bench/cluster-power/BENCHMARK.md)). |
 | `--repeat-warmup S` | 0 | With `--repeat`: each tree's child keeps its threads busy for S seconds before its timer starts, as a single run's CSV load does, so an idle socket's power state does not slow the tree (the energy benchmark uses 2 to 15 s). |
 | `--dump FILE` | off | Write the tree as text. |
-| `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--gpu`, `--hybrid`). Its cost was within −1.5% to +2.0% of the run time; `bench/profile_chart.py` draws it. |
+| `--profile FILE` | off | Write where the training time goes as JSON: the training thread's phases, every thread's time per kind of work (sweep, partition, waiting, ...) with a 5 ms timeline, and every GPU kernel and copy (`--gpu`, `--hybrid`). Its cost was within −1.5% to +2.0% of the run time; `bench/tools/profile_chart.py` draws it. |
 
 **CART post-pruning** (splits always use the Gini index, as in Breiman et al.)
 
@@ -199,7 +199,7 @@ make test                     # every backend must grow the verified trees in te
 TREE_BIN=./tree_cpu tests/check.sh
 python3 tools/compare_reference.py cart datasets/diabetes.csv           # vs scikit-learn
 python3 tools/compare_reference.py c45 datasets/diabetes.csv --c45 PATH # vs original c4.5
-bench/setup.sh && bench/.venv/bin/python bench/run.py --dry-run          # CPU benchmark (bench/README.md)
+bench/tools/setup.sh && bench/tools/.venv/bin/python bench/tools/run.py --dry-run          # CPU benchmark (bench/tools/README.md)
 ```
 
 `tests/golden/` holds the trees of the version that was checked node by node

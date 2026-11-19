@@ -70,12 +70,12 @@ loads (`gpuPrepare`), printed as `gpu startup` and not part of `train total`.
 Everything else is in the timed `gpu setup` (printed in four parts: `setup
 buffers`, `setup allocate`, `setup upload`, `setup finish`), as cuML and
 XGBoost pay theirs inside the timer (they upload through a copy of this upload,
-`bench/adapters/uploader.cpp`): the kernels (loaded lazily, at their first launch), the device's
+`bench/tools/adapters/uploader.cpp`): the kernels (loaded lazily, at their first launch), the device's
 stream-ordered memory pool (the first `cudaMallocAsync` of a process blocks
 the host while it is set up: 27 ms on the H100 node, about 15 ms on the A100
 node, 9 ms on the RTX 2080 Ti node), the page-locked staging buffers and copy
 threads, then allocation, upload and GPU presort
-([bench/README.md](../bench/README.md#how-time-is-measured)). Until
+([bench/tools/README.md](../bench/tools/README.md#how-time-is-measured)). Until
 2026-11-17 the pool, buffers and kernels were made during the load as well
 (`--gpu-startup full`, removed: the same total work, but untimed; see [the paper's GPU start-up section](../paper/sections/experiment-design.tex)).
 
@@ -263,13 +263,13 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
   busier. A node's CPU subtree costs about rows × features, while a GPU level
   costs little more for a few wide nodes than for one, so the best value grows
   with the features. On f53347a9 (A100 + 48 threads, H100 + 32, no depth
-  limit; bench/results/hybrid-vs-gpu-only/BENCHMARK.md) the fastest was
+  limit; bench/hybrid-vs-gpu-only/BENCHMARK.md) the fastest was
   256-512 on HIGGS (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M
   (2381); 10 × features is within 3.4% of that on all three, where the earlier
   rows-based default (rows / 8192 or / 4096, 1024-4096) was 6-12% slower.
   With a shallow depth limit the tree reaches the limit almost everywhere, so
   the GPU runs all D levels anyway and a hand-off only moves the last levels'
-  work to the slower CPU. At depth 10 (291a736f, bench/tuning/handoff/results/)
+  work to the slower CPU. At depth 10 (291a736f, bench/handoff-tuning/)
   the fastest was 512-2048 on every dataset (ECBDL 4096, with 1024 within
   0.6%), and 10 × features alone made CART 4-11% slower on MNIST8M and SOREL
   4M; the 2^D cap (1024 at depth 10) brings CART within 0.6% of the fastest
@@ -292,7 +292,7 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
   before 325039f; the gpuonly-* runs of the cluster-* benchmarks).
 * `./tree --hybrid --profile FILE ...` records per-level rows, every kernel and
   copy, and the setup phases (context, allocation, upload);
-  `bench/profile_chart.py` draws it.
+  `bench/tools/profile_chart.py` draws it.
 
 ### What did not help
 

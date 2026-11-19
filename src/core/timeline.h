@@ -8,7 +8,7 @@
 
 // The timeline of one training: when each of its sections started and ended,
 // in seconds since begin() (trainTree's start), printed as "span" lines
-// (bench/gpu_steps_chart.py draws them). Always on: a section costs two clock
+// (bench/tools/gpu_steps_chart.py draws them). Always on: a section costs two clock
 // reads and a lock, and a training has about a dozen.
 namespace dt::timeline {
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write CSVs as the binary dataset ./tree also reads (as bench/prepare.py
+"""Write CSVs as the binary dataset ./tree also reads (as bench/tools/prepare.py
 writes them; standard library only, for tests/check.sh):
 
   tests/csv_to_f32.py OUT train.csv [test.csv]

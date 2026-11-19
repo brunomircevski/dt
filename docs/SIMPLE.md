@@ -17,7 +17,7 @@ This page lists every difference, why it is faster and why the tree is still
 the same. The effects are expected from the complexity alone: **none of the
 items was measured on its own**; an ablation is needed before citing numbers
 per item. The measured totals are in
-[bench/results/cluster-cpu-vs-others](../bench/results/cluster-cpu-vs-others/BENCHMARK.md).
+[bench/cluster-cpu-vs-others](../bench/cluster-cpu-vs-others/BENCHMARK.md).
 
 Notation: `N` training rows, `F` features, `K` classes, `n` rows of a node.
 
