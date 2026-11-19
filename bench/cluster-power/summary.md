@@ -1,4 +1,4 @@
-### CART (gini), depth ≤ 10, no pruning
+### CART (gini), ECBDL'14 15M, depth ≤ 10, no pruning
 
 | Implementation | Node | runs × trees | t per tree | mean P | P above idle | peak P | E per tree | E above idle | E without the unused GPUs | split of E |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -19,7 +19,7 @@
 | GPU | hopper | 3 × 51 | 2.46 s ± 0.2% | 737 W | 331 W | 940 W | 1.81 kJ ± 0.3% | 815 J | 1.44 kJ (-20.7%) | CPU socket 0 262 J, CPU socket 1 275 J, Memory 125 J, GPU in use 628 J, Unused GPUs 381 J, Rest of the server 141 J |
 | Hybrid | hopper | 3 × 51 | 2.46 s ± 0.3% | 825 W | 420 W | 1317 W | 2.03 kJ ± 0.6% | 1.03 kJ | 1.65 kJ (-18.5%) | CPU socket 0 355 J, CPU socket 1 350 J, Memory 173 J, GPU in use 627 J, Unused GPUs 381 J, Rest of the server 145 J |
 
-### C4.5 (gain ratio), depth ≤ 10, no pruning
+### C4.5 (gain ratio), ECBDL'14 15M, depth ≤ 10, no pruning
 
 | Implementation | Node | runs × trees | t per tree | mean P | P above idle | peak P | E per tree | E above idle | E without the unused GPUs | split of E |
 |---|---|---|---|---|---|---|---|---|---|---|
