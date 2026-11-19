@@ -36,7 +36,9 @@ significant digits), the binary files hold them as they are.
 import functools
 import json
 import os
+import platform
 import subprocess
+import time
 from pathlib import Path
 
 import numpy as np
@@ -355,18 +357,48 @@ def verify_dataset(dataset):
     """Prove that every tool reads the same data: SHA-256 of every file of the
     prepared dataset (of a prefix_of set: the bytes of its parent's files that
     the tools read), and every CSV row checked against the binary files.
-    Returns {file name: sha256}."""
-    import hashlib
+    Returns {file name: sha256}. A full check is remembered next to the data
+    (.verified-<dataset>.json) with each file's size, mtime and inode: while none
+    of them changed, the next run.py takes its hashes instead of checking again
+    (full SOREL: 27 min a check; a benchmark split into parts runs it once)."""
     m = meta(dataset)
+    files = _dataset_files(dataset, m)
+    signature = [[str(p), *(lambda s: (s.st_size, s.st_mtime_ns, s.st_ino))(p.stat())]
+                 for p in [meta_path(dataset), *files] if p.exists()]
+    memo = folder(dataset) / f".verified-{dataset}.json"
+    try:
+        known = json.loads(memo.read_text())
+        if known["signature"] == signature:
+            return known["hashes"]
+    except (OSError, ValueError, KeyError):
+        pass
+    hashes = _verify_dataset(dataset, m)
+    tmp = memo.with_name(f"{memo.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(json.dumps({"signature": signature, "hashes": hashes, "host": platform.node(),
+                                   "verified": time.strftime("%Y-%m-%dT%H:%M:%S%z")}))
+        os.replace(tmp, memo)
+    except OSError:
+        pass
+    return hashes
+
+
+def _dataset_files(dataset, m):
+    files = [meta_path(dataset), folder(dataset) / "yadt.names"]
+    for part in ("train", "test") if m["n_test"] else ("train",):
+        files += [Path(f"{stem(dataset, part)}{ext}") for ext in (".f32", ".y.i32", ".csv", ".yadt.csv")]
+    return files
+
+
+def _verify_dataset(dataset, m):
+    import hashlib
     F = len(m["features"])
     train = stem(dataset, "train")
     limits = {}  # file -> bytes read; the whole file if absent
     if "prefix_of" in m:
         limits = {Path(f"{train}.csv"): csv_prefix_bytes(f"{train}.csv", m["n_train"]),
                   Path(f"{train}.f32"): 4 * F * m["n_train"], Path(f"{train}.y.i32"): 4 * m["n_train"]}
-    files = [meta_path(dataset), folder(dataset) / "yadt.names"]
-    for part in ("train", "test") if m["n_test"] else ("train",):
-        files += [Path(f"{stem(dataset, part)}{ext}") for ext in (".f32", ".y.i32", ".csv", ".yadt.csv")]
+    files = _dataset_files(dataset, m)
     hashes = {}
     for path in files:
         if not path.exists():
@@ -546,8 +578,11 @@ GPU_LIBRARIES = ("cuml", "xgboost")
 FIXED_GPU = {"hopper": "2", "ampere": "0"}  # each GPU node's GPU (job.sh); another one is out of date
 GPU_HOSTS = ("hopper", "ampere")
 RETIRED_HOSTS = ("dell1",)
+# --simple's code (simple_grower.cpp, split_rules) has not changed since 2026-11-02:
+# its runs from then on (some recorded without a commit) are current, except on dell1.
+SIMPLE_SINCE = "2026-11-02"
 OUT_OF_DATE_NOTE = (f"faded, ⚠ out of date: measured before the final protocol (./tree's GPU runs before {FINAL_SINCE['gpu']}, cuML/XGBoost before {FINAL_SINCE['gpulibs']}, "
-                    f"CPU runs before {FINAL_SINCE['cpu']}) or on dell1 (1 TB; the final dell is a 512 GB node); "
+                    f"CPU runs before {FINAL_SINCE['cpu']}, --simple's code unchanged since {SIMPLE_SINCE}) or on dell1 (1 TB; the final dell is a 512 GB node); "
                     "a placeholder until the rerun")
 
 
@@ -570,6 +605,8 @@ def out_of_date(commit, host, impl=None, gpu_index=None):
         return True
     if node in FIXED_GPU and gpu_index not in (None, "") and str(gpu_index) != FIXED_GPU[node]:
         return True
+    if impl == "tree_simple":  # its code is unchanged since SIMPLE_SINCE: older runs stand
+        return False
     kind = "cpu" if node not in GPU_HOSTS else "gpulibs" if impl in GPU_LIBRARIES else "gpu"
     return not commit or not _built_on(commit, FINAL_SINCE[kind])
 

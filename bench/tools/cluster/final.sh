@@ -16,10 +16,10 @@
 # Every run is one fresh process that trains one tree, no warm-up
 # (BENCHMARK-CHANGES.MD, section 1).
 # -m RUNS: runs per case (default 10).
-# -l LONG: runs of a case where one process trains for over an hour (default 3):
-#   --simple on full ECBDL'14 and SOREL-20M, and in every run.py any case whose
-#   first run trained for over an hour (run.py --long-runs; e.g. J48 and maybe
-#   rpart on MNIST8M). More runs later: -m 20 -l 5.
+# -l LONG: runs of a case where one process trains for over an hour, or over 30 min
+#   on one thread (--serial, --simple) (default 3): --simple on full ECBDL'14 and
+#   SOREL-20M, and in every run.py any case whose first run trained that long
+#   (run.py --long-runs, --long-seconds; e.g. J48 on MNIST8M). More runs later: -m 20 -l 5.
 # -F: run everything again. Without it a run whose folder already holds it,
 #   complete and current (bench/tools/cluster/have_results.py), is kept: not run, not
 #   moved (plans/kept.txt lists them).
@@ -33,7 +33,7 @@
 #   scaling    the same at 1 (--serial), 2, 4, 8, ..., 48 threads, HIGGS and MNIST8M (cluster-cpu-scaling)
 #   serial     --serial, one thread
 #   simple     --simple, one thread
-#   vs         ./tree (--simple, --serial, --multicore), scikit-learn, rpart, YaDT (1 and 48
+#   vs         ./tree (--serial, --multicore), scikit-learn, rpart (not MNIST8M), YaDT (1 and 48
 #              threads), Weka J48 on epyc2 (cluster-cpu-vs-others):
 #              one run.py per dataset with every tool, so their runs interleave
 #   gpulibs    ./tree --gpu and --hybrid, cuML and XGBoost on hopper (cluster-gpu-vs-others/
@@ -168,7 +168,7 @@ plan() {
   # with the libraries, and copied into cluster-<data> (have_results.py split,
   # charts.sh): measured once
   if [ "$node" = epyc ] && want vs && [[ " $VS_DATA " == *" $dataset "* ]] &&
-     [[ "$backend" == cpu || "$backend" == serial || "$backend" == simple ]]; then
+     [[ "$backend" == cpu || "$backend" == serial ]]; then
     return
   fi
   case "$backend" in
@@ -178,8 +178,10 @@ plan() {
     serial) impls=tree threads=1 ;;
     simple) impls=tree_simple threads=1 timeout=36000 ;;
   esac
+  # one thread (--serial, --simple): a case whose first run trains for over 30 min runs -l times
+  local env="$EXTRA"; [ "$threads" != 1 ] || env+=",LONG_SECONDS=1800"
   line "$1" "$(dir_of "$dataset")" "$backend-$node-$dataset" "$dataset" "$impls" "$(runs "$backend" "$dataset")" \
-    "$P" "$threads" "$timeout" "$EXTRA"
+    "$P" "$threads" "$timeout" "$env"
 }
 # scaling <plan> <node> <dataset>: 1 (--serial), 2, 4, then every 4 threads to 48
 scaling() {
@@ -188,7 +190,7 @@ scaling() {
 }
 # vs <plan> <dataset> <tools>: ./tree and every library in one run.py, so their
 # runs interleave (each repetition a new shuffled order) and a slow stretch of
-# the node hits every tool alike: ./tree --simple and --serial on one thread and
+# the node hits every tool alike: ./tree --serial on one thread and
 # --multicore on every CPU (48); scikit-learn and rpart (CART), Weka J48 and
 # YaDT (C4.5) on one thread, YaDT also on every CPU. vs_chart.py draws ./tree's
 # bars from this run too.
@@ -267,7 +269,11 @@ if want simple; then
   done
 fi
 if want vs; then
-  for d in $VS_DATA; do vs epyc2-1 "$d" tree,tree_simple,sklearn,rpart,yadt,j48; done
+  # --simple is not in it: its own runs (cluster-<data>/simple-epyc-<data>) stand, its
+  # code unchanged since 2026-11-02. rpart cannot fit MNIST8M (int index past 2^31 values).
+  for d in $VS_DATA; do
+    case "$d" in mnist8m) vs epyc2-1 "$d" tree,sklearn,yadt,j48 ;; *) vs epyc2-1 "$d" tree,sklearn,rpart,yadt,j48 ;; esac
+  done
 fi
 
 # hybrid_vs_gpu_only.sh's folders, for the clash check

@@ -5,8 +5,8 @@ and copy runs that one job measured for two benchmarks.
   have_results.py run <dir>/<name> <impls> <protocols> <threads> <runs> <long> [<env>]
       exit 0 if bench/<dir>/<name> already holds this plan line's runs, complete
       and current: the same run.py command (impls, protocols, threads, flags), every case
-      with <runs> ok runs (<long> if its first run trained for over an hour, run.py
-      --long-runs), no failed run, and nothing out of date (benchlib.out_of_date).
+      with <runs> ok runs (<long> if its first run trained for over LONG_SECONDS of
+      <env>, default an hour; run.py --long-runs, --long-seconds), no failed run, and nothing out of date (benchlib.out_of_date).
   have_results.py split <vs folder> [<results root>]
       copy ./tree's runs of cluster-cpu-vs-others/vs-epyc-<data> (./tree interleaved with
       the libraries) into cluster-<data>/{simple,serial,cpu}-epyc-<data>, the folders the
@@ -49,8 +49,9 @@ def expected_flags(env):
     return sorted(f for f in flags if f in FLAGS)
 
 
-def complete(cases, rows, runs, long_runs):
-    """Every planned case has its runs, all ok."""
+def complete(cases, rows, runs, long_runs, long_seconds=3600):
+    """Every planned case has its runs, all ok (<long_runs> where its first run trained
+    for over <long_seconds>)."""
     by_case = defaultdict(list)
     for r in rows:
         if r.get("kind") == "run":
@@ -60,7 +61,7 @@ def complete(cases, rows, runs, long_runs):
         if not got or any(r["status"] != "ok" for r in got):
             return False
         first = got[0].get("train_seconds") or got[0].get("wall_seconds") or 0
-        if len(got) < (long_runs if first > 3600 else runs):
+        if len(got) < (long_runs if first > long_seconds else runs):
             return False
     return True
 
@@ -78,7 +79,9 @@ def have_run(target, impls, protocols, threads, runs, long_runs, env=""):
             or args["flags"] != expected_flags(env)):
         return False
     rows = rows_of(folder)
-    return complete(plan["cases"], rows, runs, long_runs) and not B.rows_out_of_date(rows, machine)
+    values = dict(kv.split("=", 1) for kv in env.split(",") if "=" in kv) if env else {}
+    long_seconds = float(values.get("LONG_SECONDS", 3600))
+    return complete(plan["cases"], rows, runs, long_runs, long_seconds) and not B.rows_out_of_date(rows, machine)
 
 
 def split(vs, root=RESULTS):
