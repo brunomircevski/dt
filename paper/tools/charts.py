@@ -391,7 +391,7 @@ def scaling():
 
 # ---------------------------------------------------------------- 7. depth
 def depth():
-    """Hybrid against GPU only by depth limit (A100, hybrid-vs-gpu-only): grouped bars, linear."""
+    """Hybrid against GPU only by depth limit (H100, hybrid-vs-gpu-only, 10 runs a case): grouped bars, linear."""
     root = RES / "hybrid-vs-gpu-only"
     depths = ["5", "10", "15", "20", "25", "30", "none"]
     proto = {"cart": [f"cart_depth{d}" for d in depths[:-1]] + ["cart_full_nodepth"],
@@ -403,7 +403,7 @@ def depth():
     x = np.arange(len(depths))
     w = 0.38
     for row, (ds, name) in enumerate(sets):
-        hy, go = summary(root / f"cuda-ampere-{ds}"), summary(root / f"gpuonly-ampere-{ds}")
+        hy, go = summary(root / f"cuda-hopper-{ds}"), summary(root / f"gpuonly-hopper-{ds}")
         top = max(go[p]["time_mean"] for a in proto for p in proto[a])
         for col, algo in enumerate(["cart", "c45"]):
             ax = axes[row, col]

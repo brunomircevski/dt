@@ -3,15 +3,17 @@
 
   bench/tools/.venv/bin/python bench/tools/power/analyze.py bench/cluster-power
 
-The folder holds one job folder per node (epyc1/, hopper/),
-each with markers.txt, machine.txt, samples.csv.gz (pwrlog.py, every 0.1 s)
+The folder holds a job folder per node (epyc1/, hopper/) and any more jobs of
+the same node (epyc1-2/, hopper-2/: a top-up of some cases; each job's
+processes are measured with that job's own meter model, then the runs of a
+case are pooled), each with markers.txt, machine.txt, samples.csv.gz (pwrlog.py, every 0.1 s)
 and out/<run>.txt (./tree's output, with the --repeat K training windows).
 Writes into the folder: runs.csv (every process), summary.csv (mean and
 standard deviation per case), meter.csv (the meter model of each node),
 warmup.csv (the warm-up check), summary.md (tables) and charts chart-*.png.
 POWER_TIME_BENCH (environment): the time benchmark's cluster-ecbdl folder for
-the time check (default bench/cluster-ecbdl; only for ECBDL'14 15M at
-depth <= 10). The dataset and depth limit in titles and tables come from the
+the time check of ECBDL'14 15M at depth <= 10 (default bench/cluster-ecbdl);
+MNIST8M without a depth limit is checked against bench/hybrid-vs-gpu-only. The dataset and depth limit in titles and tables come from the
 jobs' machine.txt (the first job's "data" and "protocol" lines).
 
 Per process (one ./tree --repeat K), over its K training windows (each one a
@@ -123,7 +125,7 @@ SKIP_START = 60.0  # s of the job before the first reading the fit uses
 
 
 # What the jobs trained (set by main() from the first job's machine.txt): the dataset and the depth
-# limit, for titles and tables. The time check needs the time benchmark's case (ECBDL'14 15M, depth 10).
+# limit, for titles and tables, and to pick the time check's time benchmark (TIME_BENCHES).
 WHAT = "ECBDL'14 15M"
 DEPTH_TXT = "depth ≤ 10"
 DATA_NAMES = {"ecbdl": "ECBDL'14", "mnist8m": "MNIST8M", "higgs": "HIGGS", "susy": "SUSY",
@@ -143,8 +145,10 @@ def read_case(machine):
 
 
 def node_of(folder):
-    """epyc1 -> epyc, hopper -> hopper, check-hopper -> check-hopper."""
-    return re.sub(r"\d+$", "", folder.name)
+    """epyc1 -> epyc, hopper -> hopper, hopper-2 -> hopper (the node's next job),
+    check-hopper -> check-hopper."""
+    name = folder.name if folder.name.startswith("check-") else folder.name.split("-")[0]
+    return re.sub(r"\d+$", "", name)
 
 
 def read_csv(path):
@@ -461,7 +465,7 @@ def analyse(job):
         res = job.residuals_in(spans) if job.has_psu else np.array([])
         steady = windows[1:] if k >= 3 else windows
         rows.append({
-            "node": job.node, "host": job.host, "impl": attrs["impl"], "algo": attrs["algo"],
+            "node": job.node, "host": job.host, "job": job.job_id, "impl": attrs["impl"], "algo": attrs["algo"],
             "rep": int(run.split("-")[0][3:]), "repeat": k,
             "train_s": statistics.mean(w[2] for w in windows), "first_tree_s": windows[0][2],
             "steady_train_s": statistics.mean(w[2] for w in steady),
@@ -480,7 +484,7 @@ def analyse(job):
             else float("nan"),
             **{f"E_{c}": v for c, v in comp_e.items()},
             **{f"Eidle_{c}": v for c, v in comp_idle.items()},
-            "_window": (a, b, start, end), "_spans": spans,
+            "_window": (a, b, start, end), "_spans": spans, "_job": job.folder.name,
         })
     if job.has_psu:
         model_checks(job, rows)
@@ -667,11 +671,11 @@ def meter_table(jobs):
              "(W), GPU = the NVML power of the GPU in use (W, counted once) and G_idle = the mean NVML power of "
              "the node's other GPUs over the job (measured, not fitted; none on epyc). "
              "Halves: the same fit on the first and on the second half of the job's readings.", "",
-             "| Node | meter | refresh | readings | D | W | model | first half | second half | rms | "
+             "| Node | job | meter | refresh | readings | D | W | model | first half | second half | rms | "
              "idle: model / meter |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for m in meter_rows(jobs):
-        lines.append(f"| {m['host']} | {m['meter']} | {m['period_s']:.1f} s | "
+        lines.append(f"| {m['host']} | {m['job']} | {m['meter']} | {m['period_s']:.1f} s | "
                      f"{m['readings']} | {m['D_s']:.1f} s | {m['W_s']:g} s | {model_text(m)} | "
                      f"{model_text(m, '_half1')} | {model_text(m, '_half2')} | {m['rms_W']:.1f} W | "
                      f"{m['idle_model_W']:.0f} / {m['idle_meter_W']:.0f} W |")
@@ -708,11 +712,17 @@ def method_check(summary):
     return lines + [""]
 
 
-# The time benchmark of the same cases: <TIME_BENCH>/<prefix>-<node>-ecbdl_15m.
-# Which node ran the time benchmark (bench/tools/cluster/final.sh): epyc's Multicore
-# and Serial-Simple on epyc1, Serial-Opt on epyc2 (the same hardware).
-TIME_BENCH = Path(os.environ.get("POWER_TIME_BENCH",
-                                 Path(__file__).resolve().parents[2] / "cluster-ecbdl"))
+# The time benchmark of the same cases: <folder>/<prefix>-<node>-<suffix>/runs.csv, per
+# (dataset, depth limit) of the jobs. Which node ran it (bench/tools/cluster/final.sh): epyc's
+# Multicore and Serial-Simple on epyc1, Serial-Opt on epyc2 (the same hardware). MNIST8M without a
+# depth limit: hybrid-vs-gpu-only's GPU and Hybrid runs on hopper (same --handoff-rows, 8192).
+BENCH_ROOT = Path(__file__).resolve().parents[2]
+TIME_BENCHES = {
+    ("ECBDL'14 15M", "depth ≤ 10"): (Path(os.environ.get("POWER_TIME_BENCH", BENCH_ROOT / "cluster-ecbdl")),
+                                     "ecbdl_15m", {"cart": "cart_depth10", "c45": "c45_depth10_unpruned"}),
+    ("MNIST8M", "no depth limit"): (BENCH_ROOT / "hybrid-vs-gpu-only", "mnist8m",
+                                    {"cart": "cart_full_nodepth", "c45": "c45_unpruned"}),
+}
 TIME_PREFIX = {"simple": "simple", "serial": "serial", "parallel": "cpu", "gpuonly": "gpuonly", "cuda": "cuda"}
 TIME_SKIP = set()  # (node, impl) cases whose time benchmark ran on other hardware
 TIME_TOLERANCE = 0.03
@@ -720,12 +730,14 @@ TIME_TOLERANCE = 0.03
 
 def time_bench(node, impl, algo):
     """Mean training time of the case in the time benchmark, or None."""
-    path = TIME_BENCH / f"{TIME_PREFIX[impl]}-{node}-ecbdl_15m" / "runs.csv"
-    if (WHAT, DEPTH_TXT) != ("ECBDL'14 15M", "depth ≤ 10") or (node, impl) in TIME_SKIP or not path.exists():
+    if (WHAT, DEPTH_TXT) not in TIME_BENCHES or (node, impl) in TIME_SKIP:
         return None
-    protocol = "cart_depth10" if algo == "cart" else "c45_depth10_unpruned"
+    folder, suffix, protocols = TIME_BENCHES[WHAT, DEPTH_TXT]
+    path = folder / f"{TIME_PREFIX[impl]}-{node}-{suffix}" / "runs.csv"
+    if not path.exists():
+        return None
     t = [float(r["train_seconds"]) for r in read_csv_rows(path)
-         if r["protocol"] == protocol and r.get("status", "ok") == "ok"]
+         if r["protocol"] == protocols[algo] and r.get("status", "ok") == "ok"]
     return statistics.mean(t) if t else None
 
 
@@ -737,8 +749,9 @@ def read_csv_rows(path):
 def time_check(summary):
     """Markdown lines: each case's time per tree against its first tree and the
     time benchmark. Prints a warning for every difference above TIME_TOLERANCE."""
-    ref = (f"the time benchmark ({TIME_BENCH.name}, ecbdl_15m)"
-           if (WHAT, DEPTH_TXT) == ("ECBDL'14 15M", "depth ≤ 10") else f"the time benchmark (none for {WHAT}, {DEPTH_TXT})")
+    tb = TIME_BENCHES.get((WHAT, DEPTH_TXT))
+    ref = (f"the time benchmark ({tb[0].name}, {tb[1]}, {' and '.join(tb[2].values())})" if tb
+           else f"the time benchmark (none for {WHAT}, {DEPTH_TXT})")
     lines = ["### Time check", "",
              f"Time per tree (./tree's train time) against the first tree of each process and {ref}. "
              f"Flagged (!) above {TIME_TOLERANCE:.0%}.", "",
@@ -1153,10 +1166,12 @@ def chart_cpu_gpu(folder, summary):
                     "at the PSU" if has_psu else "both CPU packages (RAPL) + the GPU in use (NVML; GPU and Hybrid "
                     "runs only). No PSU, RAM or fans")
             psu_note = ""
-            if has_psu and node in METERS:
-                m = METERS[node]
-                psu_note = (f" PSU: the meter (refresh {m['period_s']:.0f} s) modelled from the fast sensors, "
-                            f"fit rms {m['rms_W']:.0f} W.")
+            ms = [m for m in METERS.values() if m["node"] == node]
+            if has_psu and ms:
+                rms = sorted({f"{m['rms_W']:.0f}" for m in ms}, key=float)
+                psu_note = (f" PSU: the meter (refresh {ms[0]['period_s']:.0f} s) modelled from the fast sensors, "
+                            f"fit rms {'–'.join([rms[0], rms[-1]] if len(rms) > 1 else rms)} W"
+                            f"{f' ({len(ms)} jobs, a model each)' if len(ms) > 1 else ''}.")
             ax_e.set_title(f"{ALGOS[algo]}. Means of runs × trees: {n}", fontsize=10.5, color=INK, loc="left",
                            fontweight="bold")
             if row == 0:
@@ -1170,7 +1185,7 @@ def chart_cpu_gpu(folder, summary):
 
 
 
-METERS = {}  # node -> meter_rows() row, for chart titles
+METERS = {}  # job id -> meter_rows() row, for chart titles
 
 
 def phase_of(job, times):
@@ -1217,8 +1232,8 @@ def chart_meter(folder, jobs):
         ax.set_xlim(lo, hi)
         ax.set_ylim(lo, hi)
         ax.set_aspect("equal")
-        ax.set_title(f"{job.host}: {len(job.fit_y)} readings, refresh {job.psu_period:.1f} s"
-                     f"\n{model_text(METERS[job.node])}\n"
+        ax.set_title(f"{job.host} (job {job.job_id}): {len(job.fit_y)} readings, refresh {job.psu_period:.1f} s"
+                     f"\n{model_text(METERS[job.job_id])}\n"
                      f"D {job.D:.1f} s, W {job.W:g} s; rms {job.fit_rms:.1f} W", fontsize=8, loc="left", color=INK)
         ax.set_xlabel("model, as the meter would read it (W)", fontsize=8, color=INK)
         if col == 0:
@@ -1342,7 +1357,7 @@ def chart_traces(folder, jobs, rows):
         ax.axis("off")
     for ax, key in zip(axes.flat, keys):
         r = first[key]
-        job = next(j for j in jobs.values() if j.node == key[0])
+        job = jobs[r["_job"]]
         a, b, start, end = r["_window"]
         lo, hi = start - 10, end + 10
         if job.has_psu:
@@ -1402,7 +1417,7 @@ def main():
                   + ", ".join(f"{k} {v:.0f} W" for k, v in job.idle.items()))
         rows += analyse(job)
     for m in meter_rows(jobs):
-        METERS[m["node"]] = m
+        METERS[m["job"]] = m
     summary = summarise(rows)
     warmup = read_warmup(folder)
     if warmup:
