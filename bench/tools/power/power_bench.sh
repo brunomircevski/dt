@@ -23,8 +23,8 @@
 #   1. warm-up: each fast backend (Multicore, GPU, Hybrid) trains two trees
 #      per algorithm; the second one's time sets K = ceil(TARGET / t) + 1
 #      trees per measured process;
-#   2. (GPU nodes) the warm-up check: GPU and Hybrid, CART, 10 trees at
-#      --repeat-warmup 2 and at WARMUP (CHECK=0 skips it);
+#   2. (GPU nodes, CHECK=1) the warm-up check: GPU and Hybrid, CART,
+#      CHECK_TREES trees at each --repeat-warmup in CHECK_WARMUPS;
 #   3. IDLE s idle; the calibration staircase: 1, 2, 4, ... and all CPUs
 #      busy (spin loops), CAL s each; IDLE s idle;
 #   4. REPS rounds of every case (round-robin), PRE s idle before each process;
@@ -33,7 +33,8 @@
 # fresh process's only tree) and prints its training window as Unix times; the
 # GPU backends add --repeat-warmup WARMUP: the child keeps its CPU threads busy
 # for WARMUP s before its timer, as a single run's data load does (without it, a
-# GPU tree after idle CPUs set up 10-40% slower on hopper).
+# GPU tree after idle CPUs set up 10-40% slower on hopper). 2 s reproduces the
+# time benchmark's single runs on the final build (job 549: 0, 2, 5, 15 s).
 #
 # Placement as in the time benchmark (bench/tools/cluster/job.sh and bench/tools/run.py):
 # Serial-Simple and Serial-Opt on CPU 0 (taskset; the load then has one
@@ -44,9 +45,9 @@
 # Environment: DATA (.f32 or CSV; default ECBDL'14's train.f32 with ROWS=15000000, the
 # time benchmark's ecbdl_15m), REPS (3), REPS_BY (per backend, e.g. "simple=1";
 # default "simple=1"), TARGET (120 s of training per measured process), IDLE
-# (300), CAL (60 s per staircase level; 0: no staircase), PRE (20), WARMUP (15),
-# CHECK (1), CHECK_ONLY (1: the warm-up check alone, at every warm-up in
-# CHECK_WARMUPS, default "2 WARMUP"), ALGOS ("cart c45"), IMPLS (cpu: "simple serial parallel", all: all
+# (300), CAL (60 s per staircase level; 0: no staircase), PRE (20), WARMUP (2),
+# CHECK (0; 1: the warm-up check inside the job), CHECK_ONLY (1: the warm-up
+# check alone), CHECK_WARMUPS ("0 2 5 15"), CHECK_TREES (20), ALGOS ("cart c45"), IMPLS (cpu: "simple serial parallel", all: all
 # five), BIN (the folder of ./tree and ./tree_cpu; default the repository root),
 # DEPTH (10; -1: no depth limit), HANDOFF (--hybrid's --handoff-rows; default
 # ./tree's own rule; benchmarks take bench/handoff-tuning/handoff_rows.json's),
@@ -67,10 +68,10 @@ TARGET=${TARGET:-120}
 IDLE=${IDLE:-300}
 CAL=${CAL:-60}
 PRE=${PRE:-20}
-WARMUP=${WARMUP:-15}
-CHECK=${CHECK:-1}
+WARMUP=${WARMUP:-2}
 CHECK_ONLY=${CHECK_ONLY:-}
-CHECK_WARMUPS=${CHECK_WARMUPS:-2 $WARMUP}
+CHECK=${CHECK:-${CHECK_ONLY:-0}}
+CHECK_WARMUPS=${CHECK_WARMUPS:-0 2 5 15}
 ALGOS=${ALGOS:-cart c45}
 BIN=${BIN:-.}
 DEPTH=${DEPTH:-10}
@@ -227,14 +228,14 @@ for algo in $ALGOS; do
     echo "repeat $impl $algo ${REPEAT[$impl-$algo]} (warm-up train $ms ms)" >> "$OUT/machine.txt"
   done
 done
-# The warm-up check: is WARMUP still needed, and enough? (CART, 10 trees.)
+# The warm-up check: which WARMUP reproduces the time benchmark? (CART.)
 if [ "$CHECK" = 1 ] && [ "$KIND" = all ]; then
   # one process first, so that the first check does not pay for the page cache
   [ -z "$CHECK_ONLY" ] || run "warmup-gpuonly-cart" gpuonly cart 2
   for w in $CHECK_WARMUPS; do
     for impl in gpuonly cuda; do
       sleep "$PRE"
-      run "check-$impl-w$w" "$impl" cart "${CHECK_TREES:-10}" "$w"
+      run "check-$impl-w$w" "$impl" cart "${CHECK_TREES:-20}" "$w"
     done
   done
 fi

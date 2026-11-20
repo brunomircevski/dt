@@ -1,6 +1,6 @@
-job 171 on hopper, 2026-11-16T05:21:51+01:00, kind all
-commit f53347a9d336
-data bench/data/ecbdl/train.csv (first 15000000 rows), reps 3 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 15 s, algos cart c45, impls simple serial parallel gpuonly cuda
+job 549 on hopper, 2026-11-20T15:08:29+01:00, kind all
+commit 81bf6e6c8979
+data bench/tools/data/ecbdl/train.f32 (first 15000000 rows), reps 3 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 15 s, algos cart c45, impls simple serial parallel gpuonly cuda
 used_gpu 2 (NUMA node 1, cpus 16-31,0-15, 32 threads, first-touch memory)
 protocol -d 10
 command simple taskset -c 0 ./tree_cpu --simple 
@@ -17,7 +17,7 @@ NUMA node(s):                            2
 governor intel_cpufreq schedutil
 cpus available 32
 power1_accuracy 97.500%
-power1_average 504000000
+power1_average 373000000
 power1_average_interval 1000
 power1_average_interval_max 3600000
 power1_average_interval_min 1000
@@ -31,11 +31,11 @@ rapl_max intel-rapl:0 package-0 262143328850
 rapl_max intel-rapl:0:0 dram 262143328850
 rapl_max intel-rapl:1 package-1 262143328850
 rapl_max intel-rapl:1:0 dram 262143328850
-psu_file 1794802911.446640869 481
+psu_file 1795183708.718971958 373
                total        used        free      shared  buff/cache   available
-Mem:            1007          16         877           2         120         991
-node 0 free: 449236 MB
-node 1 free: 449806 MB
+Mem:            1007          14         876           2         123         992
+node 0 free: 447779 MB
+node 1 free: 449859 MB
 index, name, power.limit [W], driver_version, memory.used [MiB]
 0, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
 1, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB

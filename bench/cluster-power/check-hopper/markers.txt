@@ -1,20 +1,20 @@
-1794802911.836069 job_start
-1794802911.842412 start warmup-gpuonly-cart impl=gpuonly algo=cart repeat=2
-1794802979.615500 end warmup-gpuonly-cart rc=0
-1794802999.621125 start check-gpuonly-w0 impl=gpuonly algo=cart repeat=12
-1794803078.575777 end check-gpuonly-w0 rc=0
-1794803098.583164 start check-cuda-w0 impl=cuda algo=cart repeat=12
-1794803180.479747 end check-cuda-w0 rc=0
-1794803200.484069 start check-gpuonly-w2 impl=gpuonly algo=cart repeat=12
-1794803303.302761 end check-gpuonly-w2 rc=0
-1794803323.308254 start check-cuda-w2 impl=cuda algo=cart repeat=12
-1794803426.292780 end check-cuda-w2 rc=0
-1794803446.300935 start check-gpuonly-w5 impl=gpuonly algo=cart repeat=12
-1794803583.320398 end check-gpuonly-w5 rc=0
-1794803603.328236 start check-cuda-w5 impl=cuda algo=cart repeat=12
-1794803737.781174 end check-cuda-w5 rc=0
-1794803757.787592 start check-gpuonly-w15 impl=gpuonly algo=cart repeat=12
-1794804009.649935 end check-gpuonly-w15 rc=0
-1794804029.656715 start check-cuda-w15 impl=cuda algo=cart repeat=12
-1794804283.830781 end check-cuda-w15 rc=0
-1794804283.835759 job_end
+1795183709.824879 job_start
+1795183709.829420 start warmup-gpuonly-cart impl=gpuonly algo=cart repeat=2
+1795183788.318608 end warmup-gpuonly-cart rc=0
+1795183808.326490 start check-gpuonly-w0 impl=gpuonly algo=cart repeat=20
+1795183927.070824 end check-gpuonly-w0 rc=0
+1795183947.078822 start check-cuda-w0 impl=cuda algo=cart repeat=20
+1795184073.962869 end check-cuda-w0 rc=0
+1795184093.971126 start check-gpuonly-w2 impl=gpuonly algo=cart repeat=20
+1795184242.460034 end check-gpuonly-w2 rc=0
+1795184262.467852 start check-cuda-w2 impl=cuda algo=cart repeat=20
+1795184417.728807 end check-cuda-w2 rc=0
+1795184437.737742 start check-gpuonly-w5 impl=gpuonly algo=cart repeat=20
+1795184638.622290 end check-gpuonly-w5 rc=0
+1795184658.629382 start check-cuda-w5 impl=cuda algo=cart repeat=20
+1795184866.844910 end check-cuda-w5 rc=0
+1795184886.852936 start check-gpuonly-w15 impl=gpuonly algo=cart repeat=20
+1795185288.930243 end check-gpuonly-w15 rc=0
+1795185308.938596 start check-cuda-w15 impl=cuda algo=cart repeat=20
+1795185718.150511 end check-cuda-w15 rc=0
+1795185718.154972 job_end

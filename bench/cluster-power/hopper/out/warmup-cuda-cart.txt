@@ -1,32 +1,32 @@
 CART on bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend hybrid)
   rows 15000000 train, 631 features, 2 classes
   pruning off
-  repeat 1/2: train 2672.1 ms, unix 1795138039.837215 1795138042.509806
-  repeat 2/2: train 2628.2 ms, unix 1795138058.659095 1795138061.287682
+  repeat 1/2: train 3042.9 ms, unix 1795194978.245849 1795194981.289865
+  repeat 2/2: train 3041.1 ms, unix 1795194984.647374 1795194987.689560
 Tree:
   nodes 1863, leaves 932, depth 10
   train accuracy 97.9198%
 Timings:
-  load                 51835.7 ms
-  gpu setup              859.7 ms
-  setup buffers          137.4 ms
-  setup allocate           8.5 ms
-  setup upload           697.9 ms
-  setup finish            15.9 ms
+  load                 30448.5 ms
+  gpu setup             1249.9 ms
+  setup buffers          201.9 ms
+  setup allocate          12.2 ms
+  setup upload           992.9 ms
+  setup finish            43.0 ms
   presort                  0.0 ms
-  build                 1768.4 ms
+  build                 1791.2 ms
   prune                    0.0 ms
-  train total           2628.2 ms
-  evaluate               475.5 ms
+  train total           3041.1 ms
+  evaluate               473.0 ms
 Timeline:
-  span staging buffers: 0.070 52.084 ms
-  span hand-off buffers: 52.084 137.495 ms
-  span device memory: 137.496 145.973 ms
-  span upload: 145.974 843.915 ms
-  span x log x table: 843.916 844.597 ms
-  span x log x table copy: 844.598 859.686 ms
-  span presort (GPU): 151.224 844.730 ms
-  span cpu subtrees: 2015.705 2602.663 ms, busy 132.726 ms in 135 tasks
-  span build: 860.120 2628.562 ms
+  span staging buffers: 0.302 77.477 ms
+  span hand-off buffers: 77.479 202.169 ms
+  span device memory: 202.172 214.357 ms
+  span upload: 214.358 1207.212 ms
+  span x log x table: 1207.235 1208.580 ms
+  span x log x table copy: 1208.582 1250.086 ms
+  span presort (GPU): 224.824 1208.028 ms
+  span cpu subtrees: 2413.206 3015.297 ms, busy 132.133 ms in 135 tasks
+  span build: 1250.967 3042.158 ms
 Memory:
-  peak after training 111675392 KiB
+  peak after training 111675376 KiB

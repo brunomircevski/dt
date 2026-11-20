@@ -1,13 +1,13 @@
-job 519 on hopper, 2026-11-20T02:23:50+01:00, kind all
+job 559 on hopper, 2026-11-20T18:14:11+01:00, kind all
 commit 81bf6e6c8979
-data bench/tools/data/ecbdl/train.f32 (first 15000000 rows), reps 3 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 15 s, algos cart c45, impls simple serial parallel gpuonly cuda
+data bench/tools/data/ecbdl/train.f32 (first 15000000 rows), reps 3 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 2 s, algos cart c45, impls simple serial parallel gpuonly cuda
 used_gpu 2 (NUMA node 1, cpus 16-31,0-15, 32 threads, first-touch memory)
 protocol -d 10
 command simple taskset -c 0 ./tree_cpu --simple 
 command serial taskset -c 0 ./tree_cpu --serial 
 command parallel taskset -c 0-31 ./tree_cpu --multicore --threads 32 
-command gpuonly env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --gpu --threads 32 --repeat-warmup 15
-command cuda env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --hybrid --threads 32 --repeat-warmup 15
+command gpuonly env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --gpu --threads 32 --repeat-warmup 2
+command cuda env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --hybrid --threads 32 --repeat-warmup 2
 kernel 7.0.0-42-generic
 dmi Supermicro SYS-741GE-TNRT
 Model name:                              Intel(R) Xeon(R) Gold 6444Y
@@ -17,7 +17,7 @@ NUMA node(s):                            2
 governor intel_cpufreq schedutil
 cpus available 32
 power1_accuracy 97.500%
-power1_average 496000000
+power1_average 377000000
 power1_average_interval 1000
 power1_average_interval_max 3600000
 power1_average_interval_min 1000
@@ -31,19 +31,19 @@ rapl_max intel-rapl:0 package-0 262143328850
 rapl_max intel-rapl:0:0 dram 262143328850
 rapl_max intel-rapl:1 package-1 262143328850
 rapl_max intel-rapl:1:0 dram 262143328850
-psu_file 1795137829.453844185 495
+psu_file 1795194851.207810399 380
                total        used        free      shared  buff/cache   available
-Mem:            1007          15         876           2         122         991
-node 0 free: 447829 MB
-node 1 free: 449292 MB
+Mem:            1007          15         876           2         123         992
+node 0 free: 447479 MB
+node 1 free: 449587 MB
 index, name, power.limit [W], driver_version, memory.used [MiB]
 0, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
 1, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
 2, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
 3, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
-repeat parallel cart 15 (warm-up train 9216.7 ms)
-repeat gpuonly cart 49 (warm-up train 2517.0 ms)
-repeat cuda cart 47 (warm-up train 2628.2 ms)
-repeat parallel c45 13 (warm-up train 10269.8 ms)
-repeat gpuonly c45 49 (warm-up train 2513.7 ms)
-repeat cuda c45 48 (warm-up train 2593.4 ms)
+repeat parallel cart 15 (warm-up train 9005.2 ms)
+repeat gpuonly cart 44 (warm-up train 2855.6 ms)
+repeat cuda cart 41 (warm-up train 3041.1 ms)
+repeat parallel c45 13 (warm-up train 10094.7 ms)
+repeat gpuonly c45 44 (warm-up train 2843.2 ms)
+repeat cuda c45 41 (warm-up train 3007.3 ms)
