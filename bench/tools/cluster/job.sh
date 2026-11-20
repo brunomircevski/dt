@@ -112,7 +112,7 @@ DTBENCH="${DTBENCH:-$HOME/micromamba/envs/dtbench}"
 # that way already (0-23 socket 0); dell numbers them round-robin over its four
 # nodes (0 node 0, 1 node 2, 2 node 1, 3 node 3), where "the first t CPUs"
 # spread 2-12 threads over both sockets and NUMA balancing then migrated
-# 0.1-0.8 M pages a run (2026-11-20, jobs/dell-clock, bench/cluster-cpu-scaling).
+# 0.1-0.8 M pages a run (2026-11-20, bench/cluster-cpu-scaling, dell-clock-2026-11-20).
 CPUS="$(lscpu -p=CPU,SOCKET,NODE | grep -v '^#' | sort -t, -k2,2n -k3,3n -k1,1n | cut -d, -f1 | paste -sd,)"
 [ -z "${NUMA_NODE:-}" ] || CPUS="$(cat "/sys/devices/system/node/node$NUMA_NODE/cpulist")"
 if [ -n "$CUDA" ]; then  # the GPU's node first, then every other node's CPUs
