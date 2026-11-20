@@ -359,24 +359,22 @@ def scaling():
         ax.text(10, 13, "ideal", fontsize=6, color=MUTED, rotation=37)
         ax.axvline(24, color=MUTED, lw=0.5, ls=(0, (1, 2)), zorder=0)
         ax.text(25, 1.5, "2nd socket $\\rightarrow$", fontsize=5.5, color=MUTED, va="bottom")
+        labels = []  # [speed-up at 48 threads, text, colour]: placed together below, apart
         for ds, m, dl, c in sets:
             f = RES / "cluster-cpu-scaling" / f"cpu-{node}-{ds}" / "scaling.csv"
             USED.append(B.rows_out_of_date([], json.load(open(f.parent / "machine.json"))))
-            end = {}
-            for algo in ("cart", "c45"):
-                rr = [x for x in csv.DictReader(open(f)) if x["protocol"] == PROTO[algo]]
-                end[algo] = float(rr[-1]["speedup"])
             for algo, ls in [("cart", "-"), ("c45", "--")]:
-                other = end["c45" if algo == "cart" else "cart"]
-                r = [x for x in csv.DictReader(open(f)) if x["protocol"] == PROTO[algo]]
+                r =[x for x in csv.DictReader(open(f)) if x["protocol"] == PROTO[algo]]
                 t = [int(x["threads"]) for x in r]
                 sp = [float(x["speedup"]) for x in r]
                 ax.plot(t, sp, ls=ls, color=c, lw=0.9, marker=m, ms=2.4, mfc="white" if algo == "c45" else c,
                         mew=0.6, markevery=[0, 3, 7, 13])
-                t1 = float(r[0]["time_mean"])
-                ax.annotate(rf"{sp[-1]:.0f}$\times$ ({100 * sp[-1] / 48:.0f}\%)", (t[-1], sp[-1]),
-                            xytext=(2, 3.5 if end[algo] >= other else -3.5), textcoords="offset points",
-                            fontsize=5.3, color=c, va="center")
+                labels.append([sp[-1], rf"{sp[-1]:.0f}$\times$ ({100 * sp[-1] / 48:.0f}\%)", c])
+        labels.sort()
+        for i in range(1, len(labels)):  # at least 2.6 speed-up units (one label's height) apart
+            labels[i][0] = max(labels[i][0], labels[i - 1][0] + 2.6)
+        for y, text, c in labels:
+            ax.annotate(text, (49, y), fontsize=5.3, color=c, va="center")
         ax.set_xlim(0, 60)
         ax.set_ylim(0, 48)
         ax.set_xticks([1, 8, 16, 24, 32, 40, 48])
