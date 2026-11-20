@@ -133,13 +133,11 @@ def figure(data, out):
     for ax, (node, host) in zip(axes, NODES):
         ax.plot([1, top], [1, top], color=GRID, linewidth=1.5, zorder=0)
         ax.text(top * 0.3, top * 0.3 + 2.5, "ideal", fontsize=9, color=MUTED, rotation=34)
-        if node == "epyc":  # CPUs 0-23 socket 0, 24-47 socket 1; dell's alternate between the sockets
-            half = top // 2
-            ax.axvline(half + 0.5, color=MUTED, linewidth=0.8, linestyle=(0, (1, 3)), zorder=0)
-            ax.text(half + 1.5, 1.5, "2nd socket \u2192", fontsize=8.5, color=MUTED, va="bottom")
-        else:
-            ax.text(top * 0.55, 1.5, "threads alternate between the sockets", fontsize=8.5, color=MUTED,
-                    va="bottom")
+        # job.sh orders the CPUs socket by socket, NUMA node by node (since e129991e): the second
+        # socket joins after half the threads on both nodes
+        half = top // 2
+        ax.axvline(half + 0.5, color=MUTED, linewidth=0.8, linestyle=(0, (1, 3)), zorder=0)
+        ax.text(half + 1.5, 1.5, "2nd socket \u2192", fontsize=8.5, color=MUTED, va="bottom")
         machine = None
         ends = []
         lines = []
@@ -197,8 +195,8 @@ def figure(data, out):
     dates = days[0] if len(days) == 1 else f"{days[0]} to {days[-1]}"
     note = "\n".join(textwrap.fill(part, 190) for part in (
              f"Speed-up: the 1-thread time (--serial) over the time with n threads (--multicore), {runs_note(data)}.",
-             "End label: speed-up (parallel efficiency) at 48 threads. Threads take the CPUs in the kernel's order: on "
-             "epyc1 socket 0's 24 cores, then socket 1's; on dell the sockets alternate. Memory first-touch.",
+             "End label: speed-up (parallel efficiency) at 48 threads. Threads take the CPUs socket by socket and NUMA "
+             "node by node: socket 0's 24 cores, then socket 1's (on dell 12 cores per NUMA node). Memory first-touch.",
              "Every thread count grows the same tree. Training time excludes "
              f"reading the data. ./tree {', '.join(commits)}, run {dates}.",
              *([B.OUT_OF_DATE_NOTE + " (faded lines)."] if any(stale.values()) else [])))
