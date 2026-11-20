@@ -1,3 +1,0 @@
-run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
-cpu-epyc-airline,airline,cart_depth10,tree,48,ok,True,1.5828,1.528,1.6545999999999998,1.59262,0.04834285883147577,5,1.0,7.330728897941299,27612446720,27595972608,27619835904,27606183936,2047,1024,10,0.671011,,,,0.0
-cpu-epyc-airline,airline,c45_depth10_unpruned,tree,48,ok,True,1.6927,1.6577,1.7335999999999998,1.69268,0.02964113695525184,5,1.0,11.04856793093495,27606016000,27599851520,27612565504,27599753216,929,465,10,0.666198,,,,0.0005

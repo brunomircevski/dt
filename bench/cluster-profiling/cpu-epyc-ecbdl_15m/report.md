@@ -1,6 +1,6 @@
 ## cpu-epyc-ecbdl_15m
 
-**cpu-epyc-ecbdl_15m**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor performance, turbo on, ./tree f53347a9d336, CPUs in order of use 0-47, 5 run(s) per case, warm-up 50000 rows
+**cpu-epyc-ecbdl_15m**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor performance, turbo on, ./tree 81bf6e6c8979, CPUs in order of use 0-47, 10 run(s) per case, every run a fresh process, no warm-up
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
@@ -10,10 +10,10 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree 6 MiB
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 4.45 s | 4.42 s–4.5 s | 1.00× | 111.41 GiB | 111.41 GiB | 1,863 | 932 | 10 | 97.92% |  |
+| ./tree | 4.45 s | 4.41 s–4.5 s | 1.00× | 111.41 GiB | 111.41 GiB | 1,863 | 932 | 10 | 97.92% |  |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree | 4.69 s | 4.67 s–4.75 s | 1.00× | 111.39 GiB | 111.39 GiB | 725 | 363 | 10 | 97.92% |  |
+| ./tree | 4.69 s | 4.64 s–4.78 s | 1.00× | 111.39 GiB | 111.39 GiB | 725 | 363 | 10 | 97.92% |  |

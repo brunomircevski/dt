@@ -115,6 +115,52 @@ seconds of training). Three things were redone:
   already measured. Resubmitting by hand needs `TREE_GIT_DESCRIBE` set (hopper
   has no git); without it `job.sh` stops at once.
 
+### The 2026-11-19 rerun
+
+Every result that `benchlib.out_of_date` still marked, except ampere's (the
+node was unavailable from 2026-11-19 for two weeks; its runs stay as faded
+placeholders): ./tree 81bf6e6c, built once (job 425), the same tree code as
+the CPU runs of 2026-11-17. `final.sh` planned it; the runs it kept are in
+`plans/kept.txt` (153 at the end). What changed for it (81bf6e6c):
+- **`--simple` stands** (`benchlib.SIMPLE_SINCE`: its code has not changed
+  since 2026-11-02), except on full SOREL-20M, whose dell run was on dell1:
+  3 runs a case on epyc and dell.
+- **3 runs** where one process trains for over an hour, or for over 30 min
+  on one thread (`--serial`, `--simple`: `LONG_SECONDS=1800`); 10 otherwise.
+- **Parts:** a run longer than about 4 h is split into SLURM jobs of under
+  4 h (`run.py --run-id <dir>/<name>/parts/pN`, explicit repetitions), merged
+  with `merge_parts.py <dir>/<name>` (rows in the order measured, repetitions
+  renumbered, `machine.json` lists every part's host, start and command). So
+  the shared nodes are never held for a day, and a part can go to whichever
+  of two identical nodes is free.
+- **Etiquette:** never long jobs (over 4 h) on epyc1 and epyc2 at once, and
+  one dell with short jobs only; at most one job running and one waiting per
+  node (a feeder script on the login node submitted the next job with
+  `--dependency=afterany` on the running one, so the node never sat idle
+  between them and the queue never held more than a few of ours).
+- **Data check once:** `benchlib.verify_dataset` keeps its result next to the
+  data (`.verified-<dataset>.json`, keyed by size, mtime and inode), so the
+  27 min check of full SOREL runs once, not in every part.
+
+Which node ran what (jobs 426–528; parts in brackets):
+
+| Node | Jobs, in order |
+|---|---|
+| hopper | `--hybrid` and `--gpu` on SUSY, HIGGS, MNIST8M (470), ECBDL'14 15M, SOREL 4M, chess 1M–1000M (479); hybrid-vs-gpu-only HIGGS and SOREL 4M (485), MNIST8M with its profile (488); cluster-profiling `--hybrid` and `--gpu` (502); cluster-power (519) |
+| epyc1 | J48 on MNIST8M (`vs-epyc-mnist8m` p4–p6: 426, 493, 521); `--simple` on full SOREL (p1–p3: 480, 503, 522); `--serial` on full ECBDL'14 (p1: 517); cluster-power (528) |
+| epyc2 | `vs-epyc-higgs` (p1–p2: 435, 496); `vs-epyc-mnist8m` without J48 (p1–p3: 481, 505, 520); `--serial` on full SOREL (p1–p3: 486, 512, 523); thread scaling MNIST8M (p1–p2: 491, 518) and HIGGS, `--serial` on SOREL 4M (516); cluster-profiling and its plain runs (524, 525); `--serial` on full ECBDL'14 (p2: 526); `--simple` on full SOREL (p4: 527) |
+| dell2 | `--multicore` on SUSY, HIGGS, MNIST8M, ECBDL'14 15M and full (449), SOREL 4M and chess 1M–1000M, thread scaling HIGGS (487); thread scaling MNIST8M (p1–p3: 482, 492, 494); cluster-profiling and its plain runs (499, 509); `--serial` on full SOREL (p3–p4: 514, 515) |
+| dell3 | `--simple` on full SOREL (p1, p3, p5: 457, 489, 511); `--serial` on full SOREL (p1–p2: 483, 497) |
+| dell4 | `--simple` on full SOREL (p2, p4, p6: 464, 490, 510); `--serial` on full ECBDL'14 (p1–p2: 484, 513); `--multicore` on full SOREL (495) |
+
+Submitted from 2026-11-19 08:33, done on 2026-11-20 at 13:30 (epyc1's
+power job last). Every tree hash matches the runs before. Moved out of
+bench and replaced (not in git after the commit, in git before it): the old
+run folders; also the 2026-11-09 per-library folders of
+cluster-cpu-vs-others (`vs-epyc-<data>-<tool>-<algorithm>`, superseded by
+`vs-epyc-<data>`) and the Airline folders of cluster-profiling (its data is
+gone; the chart has left it out since b9395c7f).
+
 To add runs later (e.g. 5 more, to 10), run the same command into a fresh
 clone's empty bench and append its folders with `bench/tools/merge_runs.py`.
 

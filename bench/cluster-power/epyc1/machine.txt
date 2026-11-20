@@ -1,6 +1,6 @@
-job 169 on epyc1, 2026-11-15T21:52:33+01:00, kind cpu
-commit f53347a9d336
-data bench/data/ecbdl/train.csv (first 15000000 rows), reps 3 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 15 s, algos cart c45, impls simple serial parallel
+job 528 on epyc1, 2026-11-20T11:03:50+01:00, kind cpu
+commit 81bf6e6c8979
+data bench/tools/data/ecbdl/train.f32 (first 15000000 rows), reps 3 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 15 s, algos cart c45, impls simple serial parallel
 protocol -d 10
 command simple taskset -c 0 ./tree_cpu --simple 
 command serial taskset -c 0 ./tree_cpu --serial 
@@ -14,7 +14,7 @@ NUMA node(s):                            2
 governor amd-pstate-epp performance
 cpus available 48
 power1_accuracy 90.0%
-power1_average 136000000
+power1_average 262000000
 power1_average_interval 2000
 power1_average_interval_max 604800000
 power1_average_interval_min 2000
@@ -27,8 +27,8 @@ rapl_max intel-rapl:0:0 core 65532610987
 rapl_max intel-rapl:1 package-1 65532610987
 rapl_max intel-rapl:1:0 core 65532610987
                total        used        free      shared  buff/cache   available
-Mem:             503           4         492           0           9         499
-node 0 free: 251924 MB
-node 1 free: 252436 MB
-repeat parallel cart 28 (warm-up train 4547.6 ms)
-repeat parallel c45 26 (warm-up train 4853.2 ms)
+Mem:             503           4         473           0          26         498
+node 0 free: 252693 MB
+node 1 free: 232630 MB
+repeat parallel cart 28 (warm-up train 4565.4 ms)
+repeat parallel c45 26 (warm-up train 4936.4 ms)

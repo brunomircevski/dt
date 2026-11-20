@@ -5,6 +5,12 @@
    "c45_depth10_unpruned",
    "tree_simple",
    1
+  ],
+  [
+   "sorel",
+   "cart_depth10",
+   "tree_simple",
+   1
   ]
  ],
  "protocols": {
@@ -13,7 +19,6 @@
    "impls": {
     "tree": [
      "--cart",
-     "--no-prune",
      "-d",
      "30"
     ],
@@ -27,19 +32,16 @@
     },
     "tree_cuda": [
      "--cart",
-     "--no-prune",
      "-d",
      "30"
     ],
     "tree_gpu_only": [
      "--cart",
-     "--no-prune",
      "-d",
      "30"
     ],
     "tree_simple": [
      "--cart",
-     "--no-prune",
      "-d",
      "30"
     ]
@@ -50,7 +52,6 @@
    "impls": {
     "tree": [
      "--cart",
-     "--no-prune",
      "-d",
      "12"
     ],
@@ -64,19 +65,16 @@
     },
     "tree_cuda": [
      "--cart",
-     "--no-prune",
      "-d",
      "12"
     ],
     "tree_gpu_only": [
      "--cart",
-     "--no-prune",
      "-d",
      "12"
     ],
     "tree_simple": [
      "--cart",
-     "--no-prune",
      "-d",
      "12"
     ]
@@ -89,7 +87,7 @@
      "--cart",
      "-d",
      "30",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "sklearn": {
@@ -106,21 +104,21 @@
      "--cart",
      "-d",
      "30",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_gpu_only": [
      "--cart",
      "-d",
      "30",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_simple": [
      "--cart",
      "-d",
      "30",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ]
    }
@@ -130,7 +128,7 @@
    "impls": {
     "tree": [
      "--cart",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "sklearn": {
@@ -139,17 +137,17 @@
     },
     "tree_cuda": [
      "--cart",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_gpu_only": [
      "--cart",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_simple": [
      "--cart",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ]
    }
@@ -158,20 +156,16 @@
    "title": "CART, grown to pure leaves, no pruning, no depth limit",
    "impls": {
     "tree": [
-     "--cart",
-     "--no-prune"
+     "--cart"
     ],
     "tree_cuda": [
-     "--cart",
-     "--no-prune"
+     "--cart"
     ],
     "tree_gpu_only": [
-     "--cart",
-     "--no-prune"
+     "--cart"
     ],
     "tree_simple": [
-     "--cart",
-     "--no-prune"
+     "--cart"
     ]
    }
   },
@@ -180,7 +174,6 @@
    "impls": {
     "tree": [
      "--cart",
-     "--no-prune",
      "-d",
      "10"
     ],
@@ -188,21 +181,28 @@
      "mode": "fit",
      "max_depth": 10
     },
+    "rpart": {
+     "mode": "fit",
+     "maxdepth": 10
+    },
+    "cuml": {
+     "depth": 10
+    },
+    "xgboost": {
+     "depth": 10
+    },
     "tree_cuda": [
      "--cart",
-     "--no-prune",
      "-d",
      "10"
     ],
     "tree_gpu_only": [
      "--cart",
-     "--no-prune",
      "-d",
      "10"
     ],
     "tree_simple": [
      "--cart",
-     "--no-prune",
      "-d",
      "10"
     ]
@@ -213,7 +213,6 @@
    "impls": {
     "tree": [
      "--c45",
-     "--no-prune",
      "-d",
      "10"
     ],
@@ -221,27 +220,25 @@
      "options": "-U -M 2",
      "max_depth": 10
     },
-    "sklearn": {
-     "mode": "fit",
-     "criterion": "entropy",
-     "max_depth": 10,
-     "min_samples_leaf": 2
-    },
+    "yadt": [
+     "-np",
+     "-m",
+     "2",
+     "-depth",
+     "10"
+    ],
     "tree_cuda": [
      "--c45",
-     "--no-prune",
      "-d",
      "10"
     ],
     "tree_gpu_only": [
      "--c45",
-     "--no-prune",
      "-d",
      "10"
     ],
     "tree_simple": [
      "--c45",
-     "--no-prune",
      "-d",
      "10"
     ]
@@ -254,28 +251,28 @@
      "--cart",
      "-d",
      "10",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_cuda": [
      "--cart",
      "-d",
      "10",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_gpu_only": [
      "--cart",
      "-d",
      "10",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ],
     "tree_simple": [
      "--cart",
      "-d",
      "10",
-     "--alpha",
+     "--prune",
      "{alpha}"
     ]
    }
@@ -286,22 +283,30 @@
     "tree": [
      "--c45",
      "-d",
-     "10"
+     "10",
+     "--prune",
+     "0.25"
     ],
     "tree_cuda": [
      "--c45",
      "-d",
-     "10"
+     "10",
+     "--prune",
+     "0.25"
     ],
     "tree_gpu_only": [
      "--c45",
      "-d",
-     "10"
+     "10",
+     "--prune",
+     "0.25"
     ],
     "tree_simple": [
      "--c45",
      "-d",
-     "10"
+     "10",
+     "--prune",
+     "0.25"
     ]
    }
   },
@@ -309,7 +314,9 @@
    "title": "C4.5, error-based pruning (CF 0.25, subtree raising), min 2 rows",
    "impls": {
     "tree": [
-     "--c45"
+     "--c45",
+     "--prune",
+     "0.25"
     ],
     "j48": {
      "options": "-C 0.25 -M 2"
@@ -321,19 +328,20 @@
      "-m",
      "2"
     ],
-    "sklearn": {
-     "mode": "fit",
-     "criterion": "entropy",
-     "ccp_alpha": "{alpha}"
-    },
     "tree_cuda": [
-     "--c45"
+     "--c45",
+     "--prune",
+     "0.25"
     ],
     "tree_gpu_only": [
-     "--c45"
+     "--c45",
+     "--prune",
+     "0.25"
     ],
     "tree_simple": [
-     "--c45"
+     "--c45",
+     "--prune",
+     "0.25"
     ]
    }
   },
@@ -341,8 +349,7 @@
    "title": "C4.5, unpruned (only C4.5's collapse of useless splits), min 2 rows",
    "impls": {
     "tree": [
-     "--c45",
-     "--no-prune"
+     "--c45"
     ],
     "j48": {
      "options": "-U -M 2"
@@ -353,16 +360,293 @@
      "2"
     ],
     "tree_cuda": [
+     "--c45"
+    ],
+    "tree_gpu_only": [
+     "--c45"
+    ],
+    "tree_simple": [
+     "--c45"
+    ]
+   }
+  },
+  "cart_depth5": {
+   "title": "CART, grown to depth 5, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "5"
+    ],
+    "cuml": {
+     "depth": 5
+    },
+    "xgboost": {
+     "depth": 5
+    },
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "5"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "5"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "5"
+    ]
+   }
+  },
+  "c45_depth5_unpruned": {
+   "title": "C4.5, grown to depth 5, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
      "--c45",
-     "--no-prune"
+     "-d",
+     "5"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "5"
     ],
     "tree_gpu_only": [
      "--c45",
-     "--no-prune"
+     "-d",
+     "5"
     ],
     "tree_simple": [
      "--c45",
-     "--no-prune"
+     "-d",
+     "5"
+    ]
+   }
+  },
+  "cart_depth15": {
+   "title": "CART, grown to depth 15, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "15"
+    ],
+    "cuml": {
+     "depth": 15
+    },
+    "xgboost": {
+     "depth": 15
+    },
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "15"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "15"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "15"
+    ]
+   }
+  },
+  "c45_depth15_unpruned": {
+   "title": "C4.5, grown to depth 15, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "15"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "15"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "15"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "15"
+    ]
+   }
+  },
+  "cart_depth20": {
+   "title": "CART, grown to depth 20, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "20"
+    ],
+    "cuml": {
+     "depth": 20
+    },
+    "xgboost": {
+     "depth": 20
+    },
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "20"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "20"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "20"
+    ]
+   }
+  },
+  "c45_depth20_unpruned": {
+   "title": "C4.5, grown to depth 20, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "20"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "20"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "20"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "20"
+    ]
+   }
+  },
+  "cart_depth25": {
+   "title": "CART, grown to depth 25, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "25"
+    ],
+    "cuml": {
+     "depth": 25
+    },
+    "xgboost": {
+     "depth": 25
+    },
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "25"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "25"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "25"
+    ]
+   }
+  },
+  "c45_depth25_unpruned": {
+   "title": "C4.5, grown to depth 25, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "25"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "25"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "25"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "25"
+    ]
+   }
+  },
+  "cart_depth30": {
+   "title": "CART, grown to depth 30, no pruning",
+   "impls": {
+    "tree": [
+     "--cart",
+     "-d",
+     "30"
+    ],
+    "cuml": {
+     "depth": 30
+    },
+    "xgboost": {
+     "depth": 30
+    },
+    "tree_cuda": [
+     "--cart",
+     "-d",
+     "30"
+    ],
+    "tree_gpu_only": [
+     "--cart",
+     "-d",
+     "30"
+    ],
+    "tree_simple": [
+     "--cart",
+     "-d",
+     "30"
+    ]
+   }
+  },
+  "c45_depth30_unpruned": {
+   "title": "C4.5, grown to depth 30, unpruned (only C4.5's collapse of useless splits)",
+   "impls": {
+    "tree": [
+     "--c45",
+     "-d",
+     "30"
+    ],
+    "tree_cuda": [
+     "--c45",
+     "-d",
+     "30"
+    ],
+    "tree_gpu_only": [
+     "--c45",
+     "-d",
+     "30"
+    ],
+    "tree_simple": [
+     "--c45",
+     "-d",
+     "30"
     ]
    }
   }
@@ -370,46 +654,45 @@
  "impls": {
   "tree": {
    "label": "./tree",
-   "threads": "multi",
-   "warmup": false
+   "threads": "multi"
   },
   "tree_cuda": {
-   "label": "./tree CUDA",
-   "threads": "all",
-   "warmup": false
+   "label": "./tree Hybrid",
+   "threads": "all"
   },
   "tree_gpu_only": {
-   "label": "./tree CUDA, GPU only",
-   "threads": "all",
-   "warmup": false
+   "label": "./tree GPU",
+   "threads": "all"
   },
   "tree_simple": {
    "label": "./tree simple",
-   "threads": "single",
-   "warmup": false
+   "threads": "single"
   },
   "sklearn": {
    "label": "scikit-learn",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "rpart": {
    "label": "rpart",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "j48": {
    "label": "Weka J48",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "yadt": {
    "label": "YaDT",
-   "threads": "multi",
-   "warmup": false
+   "threads": "multi"
+  },
+  "cuml": {
+   "label": "cuML",
+   "threads": "all"
+  },
+  "xgboost": {
+   "label": "XGBoost",
+   "threads": "all"
   }
  },
- "warmup_rows": "50000",
  "datasets": {
   "_baseline": {
    "name": "_baseline",
@@ -7612,22 +7895,22 @@
  "data_files": {
   "_baseline": {
    "meta.json": "4b324f2a45ca7ec08b13730e7b34b62ad730cb736c853f9cc37d32e8e0e2c7e7",
-   "test.f32": "03586feac2b171b20efedcc1e911e5b02ee4b79ac718b05790275441dccd5e4e",
-   "test.y.i32": "ea27eaef1452c2147c54f99f138113941b241ea047cf016adb62dad0aff76db8",
-   "test.yadt.csv": "e9846c11091c9df30b38cf2875615b42b4e5403f93b3cf3050e02caaf3f6a794",
-   "train.csv": "db2931af58aaf09174a4c38d4adcfa0456da35270a65c5943250604a6a24633d",
+   "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168",
    "train.f32": "4cdf1b4cfdc1bfea73f3b4d3c2224fdabd464dc8395978a6d7c1e54d36d7052a",
    "train.y.i32": "e45debe117bd9a6b4b0e4518549b4e34f1a7727098d6a4d55cef9d9ec3a894fa",
+   "train.csv": "db2931af58aaf09174a4c38d4adcfa0456da35270a65c5943250604a6a24633d",
    "train.yadt.csv": "77928268dc58a666aa3a1621b04edfcdd215191de8bb53cb333d1fcef2b95efb",
-   "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168"
+   "test.f32": "03586feac2b171b20efedcc1e911e5b02ee4b79ac718b05790275441dccd5e4e",
+   "test.y.i32": "ea27eaef1452c2147c54f99f138113941b241ea047cf016adb62dad0aff76db8",
+   "test.yadt.csv": "e9846c11091c9df30b38cf2875615b42b4e5403f93b3cf3050e02caaf3f6a794"
   },
   "sorel": {
    "meta.json": "8687dc2a03c4b008730e29022be383dc9669c0fc87cfb5343ccaae87015a28c4",
-   "test.f32": "00f4fa115fa36eb0bba378c1beb639c7b85b0d54a856219714a47eff1480b62a",
-   "test.y.i32": "f2b6d8ab72049bb59dc2206d3d43f3945e7ec9a9fb84006be4fb237d2c0185ac",
-   "train.csv": "8a37f48247f38d91d20fdda66035a9bda4938eff244e0423707a2e65f105879c",
    "train.f32": "c4ca1b9282d91e8d047f51f29ccae43ac0822ad258a8df8599422bf85e5176c6",
-   "train.y.i32": "cb06e2174b6f355da876dd1bb11f744c4aa627712b95504b100f62b6f8921628"
+   "train.y.i32": "cb06e2174b6f355da876dd1bb11f744c4aa627712b95504b100f62b6f8921628",
+   "train.csv": "8a37f48247f38d91d20fdda66035a9bda4938eff244e0423707a2e65f105879c",
+   "test.f32": "00f4fa115fa36eb0bba378c1beb639c7b85b0d54a856219714a47eff1480b62a",
+   "test.y.i32": "f2b6d8ab72049bb59dc2206d3d43f3945e7ec9a9fb84006be4fb237d2c0185ac"
   }
  }
 }

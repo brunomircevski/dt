@@ -3,6 +3,18 @@
   [
    "higgs",
    "cart_depth10",
+   "tree",
+   1
+  ],
+  [
+   "higgs",
+   "cart_depth10",
+   "tree",
+   48
+  ],
+  [
+   "higgs",
+   "cart_depth10",
    "sklearn",
    1
   ],
@@ -11,6 +23,18 @@
    "cart_depth10",
    "rpart",
    1
+  ],
+  [
+   "higgs",
+   "c45_depth10_unpruned",
+   "tree",
+   1
+  ],
+  [
+   "higgs",
+   "c45_depth10_unpruned",
+   "tree",
+   48
   ],
   [
    "higgs",
@@ -396,6 +420,12 @@
      "-d",
      "5"
     ],
+    "cuml": {
+     "depth": 5
+    },
+    "xgboost": {
+     "depth": 5
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -446,6 +476,12 @@
      "-d",
      "15"
     ],
+    "cuml": {
+     "depth": 15
+    },
+    "xgboost": {
+     "depth": 15
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -496,6 +532,12 @@
      "-d",
      "20"
     ],
+    "cuml": {
+     "depth": 20
+    },
+    "xgboost": {
+     "depth": 20
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -546,6 +588,12 @@
      "-d",
      "25"
     ],
+    "cuml": {
+     "depth": 25
+    },
+    "xgboost": {
+     "depth": 25
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -596,6 +644,12 @@
      "-d",
      "30"
     ],
+    "cuml": {
+     "depth": 30
+    },
+    "xgboost": {
+     "depth": 30
+    },
     "tree_cuda": [
      "--cart",
      "-d",

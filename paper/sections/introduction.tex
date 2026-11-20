@@ -12,11 +12,12 @@ SLIQ~\cite{mehta1996sliq} and SPRINT~\cite{shafer1996sprint} introduced presorti
 In this paper, we investigate parallel implementations of CART and C4.5 for multicore CPUs, CUDA-enabled GPUs and heterogeneous CPU--GPU systems. They search for splits exactly, without binning: every threshold between two consecutive distinct attribute values is evaluated. All our implementations grow the same tree. We checked this node by node against each other, and against scikit-learn (CART) and Release~8 of Quinlan's C4.5 program, which agree with ours except at exact ties and where Release~8's single-precision arithmetic rounds a gain. Comparisons among our implementations therefore always compare runs that build the same tree. Of the existing implementations we compare against, scikit-learn and Weka J48 grow the same or almost the same trees on the CPU, while the GPU libraries split on histogram bins, so their trees can differ. We therefore report tree size and test accuracy with every training time.
 
 We evaluate five implementations, from a straightforward sequential baseline to a hybrid one that uses the CPU and the GPU together. The experiments use five public datasets with up to 32 million samples and 2,381 attributes, recent CPU servers, and two generations of data-center GPUs.
-% Numbers: Tables tab:time-cart and tab:time-c45 (depth <= 10, no pruning,
-% epyc; ./tree f53347a9, libraries 2026-11-09). Libraries against Serial
-% Optimized only (both run on one thread). Re-derive after the final rerun;
-% the GPU ratio is a placeholder until then.
-On one thread, our optimized sequential implementation trains CART trees 8.7--27$\times$ faster than scikit-learn~\cite{pedregosa2011sklearn} and C4.5 trees 112--168$\times$ faster than Weka J48~\cite{hall2009weka}, with the same or almost the same trees. On the 48 cores of a two-socket server, our multicore implementation is up to 41$\times$ faster than the optimized sequential one. Our GPU implementation on NVIDIA H100 is up to \tbd{}$\times$ faster than the multicore one.
+% Numbers: Tables tab:time-cart and tab:time-c45 (depth <= 10, no pruning;
+% final runs 2026-11-17 to 2026-11-20). Libraries against Serial Optimized
+% only (both run on one thread): sklearn 27.4x HIGGS, 8.75x MNIST8M; J48
+% 104x HIGGS, 148x MNIST8M. Multicore/Serial Optimized max 40.1 (SOREL-20M
+% CART). GPU only (H100)/Multicore (epyc) max 1.71 (SOREL 4M CART), min 1.06.
+On one thread, our optimized sequential implementation trains CART trees 8.7--27$\times$ faster than scikit-learn~\cite{pedregosa2011sklearn} and C4.5 trees 104--148$\times$ faster than Weka J48~\cite{hall2009weka}, with the same or almost the same trees. On the 48 cores of a two-socket server, our multicore implementation is up to 40$\times$ faster than the optimized sequential one. Our GPU implementation on NVIDIA H100 is up to 1.7$\times$ faster than the multicore one.
 
 The main contributions of this paper are:
 \begin{itemize}

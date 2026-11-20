@@ -2,7 +2,7 @@
 """Merge a run measured in parts (several SLURM jobs, each under a few hours, so a
 long benchmark does not hold a node for a day) into one run folder.
 
-  merge_parts.py <run folder> [--impls a,b,...] [--keep-parts]
+  merge_parts.py <run folder> [--impls a,b,...] [--protocols a,b,...] [--keep-parts]
 
 The parts are <run folder>/parts/p1, p2, ... (run.py --run-id <dir>/<name>/parts/pN),
 each a run.py of its own with some of the repetitions (and maybe some of the
@@ -46,6 +46,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("folder")
     ap.add_argument("--impls", help="the merged command's --impls (default: every part's, in order)")
+    ap.add_argument("--protocols", help="the merged command's --protocols (default: every part's, in order)")
     ap.add_argument("--keep-parts", action="store_true")
     args = ap.parse_args()
     target = Path(args.folder).resolve()
@@ -59,7 +60,7 @@ def main():
             sys.exit(f"{p}: no results (still running or failed?)")
 
     old_rows = rows_of(target)
-    rows, impls, cases, reps = list(old_rows), [], [], defaultdict(int)
+    rows, impls, protocols, cases, reps = list(old_rows), [], [], [], defaultdict(int)
     old_machine = json.loads((target / "machine.json").read_text()) if (target / "machine.json").exists() else None
     old_plan = json.loads((target / "plan.json").read_text()) if (target / "plan.json").exists() else None
     for c in (old_plan or {}).get("cases", []):
@@ -72,6 +73,9 @@ def main():
         for i in (words[words.index("--impls") + 1].split(",") if "--impls" in words else []):
             if i not in impls:
                 impls.append(i)
+        for i in (words[words.index("--protocols") + 1].split(",") if "--protocols" in words else []):
+            if i not in protocols:
+                protocols.append(i)
         for c in plan["cases"]:
             if c not in cases:
                 cases.append(c)
@@ -92,6 +96,8 @@ def main():
     first = json.loads((parts[0] / "machine.json").read_text())
     words = shlex.split(first.get("command", ""))
     set_arg(words, "--impls", args.impls or ",".join(impls))
+    if args.protocols or protocols:
+        set_arg(words, "--protocols", args.protocols or ",".join(protocols))
     set_arg(words, "--reps", str(total))
     set_arg(words, "--run-id", run_id)
     machine = {**first, "command": shlex.join(words), "parts": info}

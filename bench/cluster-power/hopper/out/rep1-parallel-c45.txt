@@ -1,27 +1,28 @@
-C4.5 on bench/data/ecbdl/train.csv (first 15000000 rows) (backend multicore)
+C4.5 on bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend multicore)
   rows 15000000 train, 631 features, 2 classes
   pruning off
-  repeat 1/12: train 11201.0 ms, unix 1794814486.546666 1794814497.748838
-  repeat 2/12: train 11041.1 ms, unix 1794814497.972749 1794814509.015617
-  repeat 3/12: train 11281.6 ms, unix 1794814509.237603 1794814520.520653
-  repeat 4/12: train 11203.5 ms, unix 1794814520.762209 1794814531.966801
-  repeat 5/12: train 11025.0 ms, unix 1794814532.195210 1794814543.221614
-  repeat 6/12: train 10839.1 ms, unix 1794814543.448745 1794814554.289507
-  repeat 7/12: train 10487.1 ms, unix 1794814554.514900 1794814565.003163
-  repeat 8/12: train 10858.1 ms, unix 1794814565.232127 1794814576.091664
-  repeat 9/12: train 10679.5 ms, unix 1794814576.319898 1794814587.000798
-  repeat 10/12: train 9983.6 ms, unix 1794814587.229718 1794814597.214829
-  repeat 11/12: train 10147.4 ms, unix 1794814597.449582 1794814607.598142
-  repeat 12/12: train 10220.9 ms, unix 1794814607.831900 1794814618.054227
+  repeat 1/13: train 10376.7 ms, unix 1795148495.906430 1795148506.284596
+  repeat 2/13: train 10117.5 ms, unix 1795148506.533009 1795148516.651772
+  repeat 3/13: train 10357.9 ms, unix 1795148516.883066 1795148527.242081
+  repeat 4/13: train 10081.0 ms, unix 1795148527.475839 1795148537.557926
+  repeat 5/13: train 10082.0 ms, unix 1795148537.792332 1795148547.875617
+  repeat 6/13: train 10309.8 ms, unix 1795148548.142213 1795148558.455668
+  repeat 7/13: train 10212.6 ms, unix 1795148558.699411 1795148568.913629
+  repeat 8/13: train 10096.5 ms, unix 1795148569.147012 1795148579.244705
+  repeat 9/13: train 10088.5 ms, unix 1795148579.482129 1795148589.572022
+  repeat 10/13: train 10253.2 ms, unix 1795148589.815674 1795148600.070505
+  repeat 11/13: train 10017.6 ms, unix 1795148600.315324 1795148610.334188
+  repeat 12/13: train 10065.3 ms, unix 1795148610.562881 1795148620.629253
+  repeat 13/13: train 10125.4 ms, unix 1795148620.865644 1795148630.992188
 Tree:
   nodes 725, leaves 363, depth 10
   train accuracy 97.9154%
 Timings:
-  load                 28229.7 ms
-  presort               2866.9 ms
-  build                 7353.7 ms
+  load                 30339.4 ms
+  presort               2822.5 ms
+  build                 7302.7 ms
   prune                    0.2 ms
-  train total          10220.9 ms
-  evaluate               467.2 ms
+  train total          10125.4 ms
+  evaluate               452.8 ms
 Memory:
-  peak after training 114904048 KiB
+  peak after training 114907652 KiB

@@ -3,20 +3,32 @@
   [
    "mnist8m",
    "cart_depth10",
-   "sklearn",
+   "tree",
    1
   ],
   [
    "mnist8m",
    "cart_depth10",
-   "rpart",
+   "tree",
+   48
+  ],
+  [
+   "mnist8m",
+   "cart_depth10",
+   "sklearn",
    1
   ],
   [
    "mnist8m",
    "c45_depth10_unpruned",
-   "j48",
+   "tree",
    1
+  ],
+  [
+   "mnist8m",
+   "c45_depth10_unpruned",
+   "tree",
+   48
   ],
   [
    "mnist8m",
@@ -29,6 +41,12 @@
    "c45_depth10_unpruned",
    "yadt",
    48
+  ],
+  [
+   "mnist8m",
+   "c45_depth10_unpruned",
+   "j48",
+   1
   ]
  ],
  "protocols": {
@@ -396,6 +414,12 @@
      "-d",
      "5"
     ],
+    "cuml": {
+     "depth": 5
+    },
+    "xgboost": {
+     "depth": 5
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -446,6 +470,12 @@
      "-d",
      "15"
     ],
+    "cuml": {
+     "depth": 15
+    },
+    "xgboost": {
+     "depth": 15
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -496,6 +526,12 @@
      "-d",
      "20"
     ],
+    "cuml": {
+     "depth": 20
+    },
+    "xgboost": {
+     "depth": 20
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -546,6 +582,12 @@
      "-d",
      "25"
     ],
+    "cuml": {
+     "depth": 25
+    },
+    "xgboost": {
+     "depth": 25
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -596,6 +638,12 @@
      "-d",
      "30"
     ],
+    "cuml": {
+     "depth": 30
+    },
+    "xgboost": {
+     "depth": 30
+    },
     "tree_cuda": [
      "--cart",
      "-d",

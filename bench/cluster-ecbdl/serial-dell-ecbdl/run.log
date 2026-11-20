@@ -1,55 +1,116 @@
-log: bench/results/cluster-ecbdl/serial-dell-ecbdl/run.log, job 29 on dell1, started 2026-11-15 20:01:20
 
-=== 20:01:20  1/3 machine check
+##### part p1 (dell4)
+log: bench/cluster-ecbdl/serial-dell-ecbdl/parts/p1/run.log, job 484 on dell4, started 2026-11-19 12:54:24
+
+=== 12:54:24  1/3 machine check
 CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
 CPU governor: powersave 
-load average: 47.27 44.63 37.28
-free memory per NUMA node: node 0 193 GiB, node 1 250 GiB, node 2 249 GiB, node 3 249 GiB
+load average: 19.65 5.55 2.51
+free memory per NUMA node: node 0 123 GiB, node 1 124 GiB, node 2 124 GiB, node 3 125 GiB
 CPU order (the threads take them from the first): CPU, NUMA node, socket, core
-0:0/0/0 1:2/1/1 2:1/0/2 3:3/1/3 4:0/0/4 5:2/1/5 6:1/0/6 7:3/1/7 8:0/0/8 9:2/1/9 10:1/0/10 11:3/1/11 12:0/0/12 13:2/1/13 14:1/0/14 15:3/1/15 16:0/0/16 17:2/1/17 18:1/0/18 19:3/1/19 20:0/0/20 21:2/1/21 22:1/0/22 23:3/1/23 24:0/0/24 25:2/1/25 26:1/0/26 27:3/1/27 28:0/0/28 29:2/1/29 30:1/0/30 31:3/1/31 32:0/0/32 33:2/1/33 34:1/0/34 35:3/1/35 36:0/0/36 37:2/1/37 38:1/0/38 39:3/1/39 40:0/0/40 41:2/1/41 42:1/0/42 43:3/1/43 44:0/0/44 45:2/1/45 46:1/0/46 47:3/1/47
-code: f53347a9d336 (from submit.sh: hopper has no git)
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:1/0/12 13:1/0/13 14:1/0/14 15:1/0/15 16:1/0/16 17:1/0/17 18:1/0/18 19:1/0/19 20:1/0/20 21:1/0/21 22:1/0/22 23:1/0/23 24:2/1/24 25:2/1/25 26:2/1/26 27:2/1/27 28:2/1/28 29:2/1/29 30:2/1/30 31:2/1/31 32:2/1/32 33:2/1/33 34:2/1/34 35:2/1/35 36:3/1/36 37:3/1/37 38:3/1/38 39:3/1/39 40:3/1/40 41:3/1/41 42:3/1/42 43:3/1/43 44:3/1/44 45:3/1/45 46:3/1/46 47:3/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
 runs per case: 5
 
-=== 20:01:20  2/3 benchmark: ecbdl, cart_depth10,c45_depth10_unpruned, tree, threads 1 (of 48), 5 run(s) per case
+=== 12:54:24  2/3 benchmark: ecbdl, cart_depth10,c45_depth10_unpruned, tree, threads 1 (of 48), 5 run(s) per case
 2 cases, 15 processes:
   ecbdl | cart_depth10 | tree | 1
   ecbdl | c45_depth10_unpruned | tree | 1
 checking the data (SHA-256 of every file, every CSV row against the binary files):
   _baseline: identical in every format (0 s)
-  ecbdl: identical in every format (940 s)
+  ecbdl: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
 2 cases x 5 run(s), then 1 footprint run(s) x 5: 15 processes. Time left is shown once every case has run once.
-[1/15] 20:17:02 run 1/5: CART ./tree, 1 thread, ecbdl ...
-    ok: train 534.3 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 16m14s, elapsed 16m22s
-[2/15] 20:33:25 run 1/5: C4.5 ./tree, 1 thread, ecbdl ...
-    ok: train 546.5 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 15m37s, elapsed 32m17s, about 2h07m left
-[3/15] 20:49:20 run 2/5: CART ./tree, 1 thread, ecbdl ...
-    ok: train 530.6 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 16m34s, elapsed 48m52s, about 1h51m left
-[4/15] 21:05:55 run 2/5: C4.5 ./tree, 1 thread, ecbdl ...
-    ok: train 549.4 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 16m00s, elapsed 1h04m, about 1h36m left
-[5/15] 21:21:55 run 3/5: C4.5 ./tree, 1 thread, ecbdl ...
-    ok: train 546.4 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 15m27s, elapsed 1h20m, about 1h20m left
-[6/15] 21:37:23 run 3/5: CART ./tree, 1 thread, ecbdl ...
-    ok: train 529.5 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 16m02s, elapsed 1h36m, about 1h03m left
-[7/15] 21:53:25 run 4/5: CART ./tree, 1 thread, ecbdl ...
-    ok: train 533 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 18m22s, elapsed 1h54m, about 47m40s left
-[8/15] 22:11:47 run 4/5: C4.5 ./tree, 1 thread, ecbdl ...
-    ok: train 549.5 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 15m39s, elapsed 2h10m, about 32m03s left
-[9/15] 22:27:27 run 5/5: CART ./tree, 1 thread, ecbdl ...
-    ok: train 530.9 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 17m02s, elapsed 2h27m, about 15m38s left
-[10/15] 22:44:29 run 5/5: C4.5 ./tree, 1 thread, ecbdl ...
-    ok: train 547.8 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 16m25s, elapsed 2h43m, about 0m00s left
+[1/15] 12:54:36 run 1/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 540.9 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 13m15s, elapsed 13m43s
+[2/15] 13:08:10 run 1/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 564.3 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 12m39s, elapsed 27m04s, about 1h43m left
+[3/15] 13:21:30 run 2/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 531.8 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 15m29s, elapsed 42m33s, about 1h33m left
+[4/15] 13:37:00 run 2/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 555.9 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 14m13s, elapsed 56m46s, about 1h23m left
+[5/15] 13:51:13 run 3/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 552.6 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 12m17s, elapsed 1h09m, about 1h08m left
+[6/15] 14:03:30 run 3/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 534 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 11m34s, elapsed 1h20m, about 51m50s left
+[7/15] 14:15:05 run 4/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 536.8 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 12m12s, elapsed 1h32m, about 38m03s left
+[8/15] 14:27:18 run 4/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 554.9 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 12m06s, elapsed 1h44m, about 25m12s left
+[9/15] 14:39:25 run 5/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 536 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 13m02s, elapsed 1h58m, about 12m28s left
+[10/15] 14:52:27 run 5/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 558.9 s, peak 231,624 MiB, 785 nodes, depth 10, test acc 98.32% | process 15m06s, elapsed 2h13m, about 0m00s left
 runtime footprint of each tool (200-row _baseline dataset):
-[11/15] 23:00:55 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h43m, about 0m00s left
-[12/15] 23:00:55 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0007 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h43m, about 0m00s left
-[13/15] 23:00:55 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0013 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h43m, about 0m00s left
-[14/15] 23:00:55 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0007 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h43m, about 0m00s left
-[15/15] 23:00:55 footprint: CART ./tree, 1 thread, _baseline ...
-    ok: train 0.0013 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h43m, about 0m00s left
-results: /home/bmircevski/dt-final/bench/results/cluster-ecbdl/serial-dell-ecbdl/results.jsonl
+[11/15] 15:07:34 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0007 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h13m, about 0m00s left
+[12/15] 15:07:34 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h13m, about 0m00s left
+[13/15] 15:07:34 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h13m, about 0m00s left
+[14/15] 15:07:34 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h13m, about 0m00s left
+[15/15] 15:07:34 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h13m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-ecbdl/serial-dell-ecbdl/parts/p1/results.jsonl
 
-=== 23:00:55  3/3 tables and CSV files
-done 2026-11-15 23:00:55
+=== 15:07:34  3/3 tables and CSV files
+done 2026-11-19 15:07:35
+
+##### part p2 (dell4)
+log: bench/cluster-ecbdl/serial-dell-ecbdl/parts/p2/run.log, job 513 on dell4, started 2026-11-20 00:47:22
+
+=== 00:47:22  1/3 machine check
+CPUs allocated: 48 (0-47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: powersave 
+load average: 19.61 5.54 2.51
+free memory per NUMA node: node 0 124 GiB, node 1 124 GiB, node 2 124 GiB, node 3 125 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:1/0/12 13:1/0/13 14:1/0/14 15:1/0/15 16:1/0/16 17:1/0/17 18:1/0/18 19:1/0/19 20:1/0/20 21:1/0/21 22:1/0/22 23:1/0/23 24:2/1/24 25:2/1/25 26:2/1/26 27:2/1/27 28:2/1/28 29:2/1/29 30:2/1/30 31:2/1/31 32:2/1/32 33:2/1/33 34:2/1/34 35:2/1/35 36:3/1/36 37:3/1/37 38:3/1/38 39:3/1/39 40:3/1/40 41:3/1/41 42:3/1/42 43:3/1/43 44:3/1/44 45:3/1/45 46:3/1/46 47:3/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
+runs per case: 5
+
+=== 00:47:22  2/3 benchmark: ecbdl, cart_depth10,c45_depth10_unpruned, tree, threads 1 (of 48), 5 run(s) per case
+2 cases, 15 processes:
+  ecbdl | cart_depth10 | tree | 1
+  ecbdl | c45_depth10_unpruned | tree | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  ecbdl: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
+2 cases x 5 run(s), then 1 footprint run(s) x 5: 15 processes. Time left is shown once every case has run once.
+[1/15] 00:47:33 run 1/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 525.7 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 12m42s, elapsed 13m08s
+[2/15] 01:00:31 run 1/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 551.6 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 11m45s, elapsed 25m14s, about 1h37m left
+[3/15] 01:12:37 run 2/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 532.7 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 12m34s, elapsed 37m48s, about 1h24m left
+[4/15] 01:25:11 run 2/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 546.8 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 13m29s, elapsed 51m17s, about 1h15m left
+[5/15] 01:38:41 run 3/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 546.8 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 13m12s, elapsed 1h04m, about 1h04m left
+[6/15] 01:51:53 run 3/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 528.8 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 13m13s, elapsed 1h17m, about 51m48s left
+[7/15] 02:05:06 run 4/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 528.7 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 12m27s, elapsed 1h30m, about 39m02s left
+[8/15] 02:17:34 run 4/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 547.7 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 13m35s, elapsed 1h43m, about 25m58s left
+[9/15] 02:31:09 run 5/5: CART ./tree, 1 thread, ecbdl ...
+    ok: train 529.2 s, peak 231,624 MiB, 1,917 nodes, depth 10, test acc 98.30% | process 11m38s, elapsed 1h55m, about 13m20s left
+[10/15] 02:42:47 run 5/5: C4.5 ./tree, 1 thread, ecbdl ...
+    ok: train 547.5 s, peak 231,625 MiB, 785 nodes, depth 10, test acc 98.32% | process 12m17s, elapsed 2h07m, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[11/15] 02:55:05 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0007 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h07m, about 0m00s left
+[12/15] 02:55:05 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0008 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h07m, about 0m00s left
+[13/15] 02:55:05 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h07m, about 0m00s left
+[14/15] 02:55:05 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h07m, about 0m00s left
+[15/15] 02:55:05 footprint: CART ./tree, 1 thread, _baseline ...
+    ok: train 0.0006 s, peak 6 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 2h07m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-ecbdl/serial-dell-ecbdl/parts/p2/results.jsonl
+
+=== 02:55:05  3/3 tables and CSV files
+done 2026-11-20 02:55:05

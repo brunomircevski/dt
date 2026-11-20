@@ -1,84 +1,92 @@
-1794804285.738312 job_start
-1794804285.743328 start warmup-parallel-cart impl=parallel algo=cart repeat=2
-1794804334.238233 end warmup-parallel-cart rc=0
-1794804334.254710 start warmup-gpuonly-cart impl=gpuonly algo=cart repeat=2
-1794804400.745245 end warmup-gpuonly-cart rc=0
-1794804400.766275 start warmup-cuda-cart impl=cuda algo=cart repeat=2
-1794804467.225334 end warmup-cuda-cart rc=0
-1794804467.241113 start warmup-parallel-c45 impl=parallel algo=c45 repeat=2
-1794804518.774986 end warmup-parallel-c45 rc=0
-1794804518.793986 start warmup-gpuonly-c45 impl=gpuonly algo=c45 repeat=2
-1794804585.146227 end warmup-gpuonly-c45 rc=0
-1794804585.160071 start warmup-cuda-c45 impl=cuda algo=c45 repeat=2
-1794804651.392163 end warmup-cuda-c45 rc=0
-1794804671.416941 idle_start
-1794804971.425539 idle_end
-1794804971.432865 cal_start n=1
-1794805031.442987 cal_end n=1
-1794805031.448159 cal_start n=2
-1794805091.456783 cal_end n=2
-1794805091.464342 cal_start n=4
-1794805151.474443 cal_end n=4
-1794805151.478616 cal_start n=8
-1794805211.488656 cal_end n=8
-1794805211.493515 cal_start n=16
-1794805271.504863 cal_end n=16
-1794805271.508237 cal_start n=32
-1794805331.527705 cal_end n=32
-1794805331.529528 step_end
-1794805631.535302 step_idle_end
-1794805651.545740 start rep1-simple-cart impl=simple algo=cart repeat=1
-1794808379.206170 end rep1-simple-cart rc=0
-1794808399.213232 start rep1-serial-cart impl=serial algo=cart repeat=1
-1794808817.647997 end rep1-serial-cart rc=0
-1794808837.655537 start rep1-parallel-cart impl=parallel algo=cart repeat=15
-1794809007.649212 end rep1-parallel-cart rc=0
-1794809027.657257 start rep1-gpuonly-cart impl=gpuonly algo=cart repeat=51
-1794810004.742606 end rep1-gpuonly-cart rc=0
-1794810024.749112 start rep1-cuda-cart impl=cuda algo=cart repeat=51
-1794811010.918094 end rep1-cuda-cart rc=0
-1794811030.924900 start rep1-simple-c45 impl=simple algo=c45 repeat=1
-1794813989.491069 end rep1-simple-c45 rc=0
-1794814009.500222 start rep1-serial-c45 impl=serial algo=c45 repeat=1
-1794814438.277599 end rep1-serial-c45 rc=0
-1794814458.286307 start rep1-parallel-c45 impl=parallel algo=c45 repeat=12
-1794814618.839958 end rep1-parallel-c45 rc=0
-1794814638.845379 start rep1-gpuonly-c45 impl=gpuonly algo=c45 repeat=50
-1794815605.343259 end rep1-gpuonly-c45 rc=0
-1794815625.350979 start rep1-cuda-c45 impl=cuda algo=c45 repeat=51
-1794816614.282467 end rep1-cuda-c45 rc=0
-1794816634.289118 start rep2-serial-cart impl=serial algo=cart repeat=1
-1794817053.444070 end rep2-serial-cart rc=0
-1794817073.452709 start rep2-parallel-cart impl=parallel algo=cart repeat=15
-1794817253.342332 end rep2-parallel-cart rc=0
-1794817273.348373 start rep2-gpuonly-cart impl=gpuonly algo=cart repeat=51
-1794818255.668429 end rep2-gpuonly-cart rc=0
-1794818275.674937 start rep2-cuda-cart impl=cuda algo=cart repeat=51
-1794819260.989937 end rep2-cuda-cart rc=0
-1794819280.997204 start rep2-serial-c45 impl=serial algo=c45 repeat=1
-1794819705.093978 end rep2-serial-c45 rc=0
-1794819725.101426 start rep2-parallel-c45 impl=parallel algo=c45 repeat=12
-1794819890.570705 end rep2-parallel-c45 rc=0
-1794819910.577619 start rep2-gpuonly-c45 impl=gpuonly algo=c45 repeat=50
-1794820873.730676 end rep2-gpuonly-c45 rc=0
-1794820893.737440 start rep2-cuda-c45 impl=cuda algo=c45 repeat=51
-1794821881.103846 end rep2-cuda-c45 rc=0
-1794821901.109316 start rep3-serial-cart impl=serial algo=cart repeat=1
-1794822319.145690 end rep3-serial-cart rc=0
-1794822339.155432 start rep3-parallel-cart impl=parallel algo=cart repeat=15
-1794822508.980615 end rep3-parallel-cart rc=0
-1794822528.986451 start rep3-gpuonly-cart impl=gpuonly algo=cart repeat=51
-1794823505.188830 end rep3-gpuonly-cart rc=0
-1794823525.195477 start rep3-cuda-cart impl=cuda algo=cart repeat=51
-1794824524.244776 end rep3-cuda-cart rc=0
-1794824544.251707 start rep3-serial-c45 impl=serial algo=c45 repeat=1
-1794824976.679940 end rep3-serial-c45 rc=0
-1794824996.687923 start rep3-parallel-c45 impl=parallel algo=c45 repeat=12
-1794825176.444179 end rep3-parallel-c45 rc=0
-1794825196.452155 start rep3-gpuonly-c45 impl=gpuonly algo=c45 repeat=50
-1794826157.772117 end rep3-gpuonly-c45 rc=0
-1794826177.779446 start rep3-cuda-c45 impl=cuda algo=c45 repeat=51
-1794827170.755182 end rep3-cuda-c45 rc=0
-1794827190.761218 idle2_start
-1794827490.771639 idle2_end
-1794827490.775797 job_end
+1795137830.806678 job_start
+1795137830.813382 start warmup-parallel-cart impl=parallel algo=cart repeat=2
+1795137893.015088 end warmup-parallel-cart rc=0
+1795137893.038046 start warmup-gpuonly-cart impl=gpuonly algo=cart repeat=2
+1795137971.985107 end warmup-gpuonly-cart rc=0
+1795137972.006939 start warmup-cuda-cart impl=cuda algo=cart repeat=2
+1795138062.373929 end warmup-cuda-cart rc=0
+1795138062.396297 start warmup-parallel-c45 impl=parallel algo=c45 repeat=2
+1795138156.842818 end warmup-parallel-c45 rc=0
+1795138156.858583 start warmup-gpuonly-c45 impl=gpuonly algo=c45 repeat=2
+1795138225.107662 end warmup-gpuonly-c45 rc=0
+1795138225.128577 start warmup-cuda-c45 impl=cuda algo=c45 repeat=2
+1795138321.512130 end warmup-cuda-c45 rc=0
+1795138341.542234 start check-gpuonly-w2 impl=gpuonly algo=cart repeat=10
+1795138459.472697 end check-gpuonly-w2 rc=0
+1795138479.481622 start check-cuda-w2 impl=cuda algo=cart repeat=10
+1795138619.848753 end check-cuda-w2 rc=0
+1795138639.856229 start check-gpuonly-w15 impl=gpuonly algo=cart repeat=10
+1795138876.815117 end check-gpuonly-w15 rc=0
+1795138896.822348 start check-cuda-w15 impl=cuda algo=cart repeat=10
+1795139143.449505 end check-cuda-w15 rc=0
+1795139163.456346 idle_start
+1795139463.465920 idle_end
+1795139463.472856 cal_start n=1
+1795139523.483887 cal_end n=1
+1795139523.489259 cal_start n=2
+1795139583.495632 cal_end n=2
+1795139583.499726 cal_start n=4
+1795139643.507833 cal_end n=4
+1795139643.511382 cal_start n=8
+1795139703.523016 cal_end n=8
+1795139703.525444 cal_start n=16
+1795139763.539501 cal_end n=16
+1795139763.542869 cal_start n=32
+1795139823.555830 cal_end n=32
+1795139823.557668 step_end
+1795140123.563442 step_idle_end
+1795140143.576305 start rep1-simple-cart impl=simple algo=cart repeat=1
+1795142769.022221 end rep1-simple-cart rc=0
+1795142789.028084 start rep1-serial-cart impl=serial algo=cart repeat=1
+1795143111.337100 end rep1-serial-cart rc=0
+1795143131.345182 start rep1-parallel-cart impl=parallel algo=cart repeat=15
+1795143302.007507 end rep1-parallel-cart rc=0
+1795143322.015380 start rep1-gpuonly-cart impl=gpuonly algo=cart repeat=49
+1795144255.704644 end rep1-gpuonly-cart rc=0
+1795144275.712255 start rep1-cuda-cart impl=cuda algo=cart repeat=47
+1795145194.402287 end rep1-cuda-cart rc=0
+1795145214.409422 start rep1-simple-c45 impl=simple algo=c45 repeat=1
+1795148081.401212 end rep1-simple-c45 rc=0
+1795148101.408899 start rep1-serial-c45 impl=serial algo=c45 repeat=1
+1795148445.503364 end rep1-serial-c45 rc=0
+1795148465.511638 start rep1-parallel-c45 impl=parallel algo=c45 repeat=13
+1795148631.767022 end rep1-parallel-c45 rc=0
+1795148651.774281 start rep1-gpuonly-c45 impl=gpuonly algo=c45 repeat=49
+1795149590.764103 end rep1-gpuonly-c45 rc=0
+1795149610.773188 start rep1-cuda-c45 impl=cuda algo=c45 repeat=48
+1795150573.767387 end rep1-cuda-c45 rc=0
+1795150593.772692 start rep2-serial-cart impl=serial algo=cart repeat=1
+1795150959.267771 end rep2-serial-cart rc=0
+1795150979.274714 start rep2-parallel-cart impl=parallel algo=cart repeat=15
+1795151175.784442 end rep2-parallel-cart rc=0
+1795151195.793485 start rep2-gpuonly-cart impl=gpuonly algo=cart repeat=49
+1795152145.055201 end rep2-gpuonly-cart rc=0
+1795152165.063707 start rep2-cuda-cart impl=cuda algo=cart repeat=47
+1795153101.559990 end rep2-cuda-cart rc=0
+1795153121.567721 start rep2-serial-c45 impl=serial algo=c45 repeat=1
+1795153489.313095 end rep2-serial-c45 rc=0
+1795153509.319201 start rep2-parallel-c45 impl=parallel algo=c45 repeat=13
+1795153690.468896 end rep2-parallel-c45 rc=0
+1795153710.474800 start rep2-gpuonly-c45 impl=gpuonly algo=c45 repeat=49
+1795154671.190557 end rep2-gpuonly-c45 rc=0
+1795154691.197666 start rep2-cuda-c45 impl=cuda algo=c45 repeat=48
+1795155626.752425 end rep2-cuda-c45 rc=0
+1795155646.759302 start rep3-serial-cart impl=serial algo=cart repeat=1
+1795155974.071333 end rep3-serial-cart rc=0
+1795155994.077832 start rep3-parallel-cart impl=parallel algo=cart repeat=15
+1795156166.027083 end rep3-parallel-cart rc=0
+1795156186.035729 start rep3-gpuonly-cart impl=gpuonly algo=cart repeat=49
+1795157142.182146 end rep3-gpuonly-cart rc=0
+1795157162.190144 start rep3-cuda-cart impl=cuda algo=cart repeat=47
+1795158075.094852 end rep3-cuda-cart rc=0
+1795158095.102735 start rep3-serial-c45 impl=serial algo=c45 repeat=1
+1795158424.744732 end rep3-serial-c45 rc=0
+1795158444.751799 start rep3-parallel-c45 impl=parallel algo=c45 repeat=13
+1795158610.086404 end rep3-parallel-c45 rc=0
+1795158630.092242 start rep3-gpuonly-c45 impl=gpuonly algo=c45 repeat=49
+1795159567.278531 end rep3-gpuonly-c45 rc=0
+1795159587.286621 start rep3-cuda-c45 impl=cuda algo=c45 repeat=48
+1795160519.609657 end rep3-cuda-c45 rc=0
+1795160539.615146 idle2_start
+1795160839.625995 idle2_end
+1795160839.632040 job_end

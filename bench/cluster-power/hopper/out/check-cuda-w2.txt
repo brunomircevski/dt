@@ -1,0 +1,40 @@
+CART on bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend hybrid)
+  rows 15000000 train, 631 features, 2 classes
+  pruning off
+  repeat 1/10: train 2962.2 ms, unix 1795138560.055153 1795138563.018163
+  repeat 2/10: train 3013.5 ms, unix 1795138566.277420 1795138569.291682
+  repeat 3/10: train 2910.5 ms, unix 1795138572.607849 1795138575.519313
+  repeat 4/10: train 2848.4 ms, unix 1795138578.841914 1795138581.690974
+  repeat 5/10: train 2806.2 ms, unix 1795138584.811419 1795138587.618374
+  repeat 6/10: train 3013.6 ms, unix 1795138590.976508 1795138593.990917
+  repeat 7/10: train 2937.7 ms, unix 1795138597.251645 1795138600.190185
+  repeat 8/10: train 2902.7 ms, unix 1795138603.410681 1795138606.314092
+  repeat 9/10: train 2917.9 ms, unix 1795138609.476345 1795138612.395136
+  repeat 10/10: train 2974.9 ms, unix 1795138615.713493 1795138618.690512
+Tree:
+  nodes 1863, leaves 932, depth 10
+  train accuracy 97.9198%
+Timings:
+  load                 77534.7 ms
+  gpu setup             1218.5 ms
+  setup buffers          155.5 ms
+  setup allocate          38.8 ms
+  setup upload           970.2 ms
+  setup finish            53.9 ms
+  presort                  0.0 ms
+  build                 1756.4 ms
+  prune                    0.0 ms
+  train total           2974.9 ms
+  evaluate               497.7 ms
+Timeline:
+  span staging buffers: 0.037 55.581 ms
+  span hand-off buffers: 55.583 155.572 ms
+  span device memory: 155.574 194.399 ms
+  span upload: 194.400 1164.552 ms
+  span x log x table: 1164.554 1166.105 ms
+  span x log x table copy: 1166.107 1218.365 ms
+  span presort (GPU): 204.263 1165.373 ms
+  span cpu subtrees: 2362.923 2951.018 ms, busy 136.354 ms in 135 tasks
+  span build: 1220.605 2976.995 ms
+Memory:
+  peak after training 111674876 KiB

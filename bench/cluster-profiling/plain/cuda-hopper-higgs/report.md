@@ -1,8 +1,8 @@
 ## cuda-hopper-higgs
 
-**cuda-hopper-higgs**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor schedutil, turbo on, ./tree f53347a9d336, CPUs in order of use 16-31,0-15, 5 run(s) per case, warm-up 50000 rows
+**cuda-hopper-higgs**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor schedutil, turbo on, ./tree 81bf6e6c8979, CPUs in order of use 16-31,0-15, 10 run(s) per case, every run a fresh process, no warm-up
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 643 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 638 MiB
 
 ### higgs (10,500,000 train / 500,000 test rows, 28 features, 2 classes)
 
@@ -10,10 +10,10 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 643
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 125 ms | 118 ms–136 ms |  | 3.95 GiB (+ GPU 3.33 GiB) | 3.33 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
+| ./tree Hybrid | 333 ms | 294 ms–336 ms |  | 3.95 GiB (+ GPU 3.33 GiB) | 3.33 GiB | 2,029 | 1,015 | 10 | 70.63% |  |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 147 ms | 141 ms–155 ms |  | 3.99 GiB (+ GPU 3.33 GiB) | 3.36 GiB | 935 | 468 | 10 | 63.76% |  |
+| ./tree Hybrid | 353 ms | 344 ms–364 ms |  | 3.98 GiB (+ GPU 3.33 GiB) | 3.36 GiB | 935 | 468 | 10 | 63.76% |  |

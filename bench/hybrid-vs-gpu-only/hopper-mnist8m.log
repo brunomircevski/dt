@@ -1,0 +1,5 @@
+2026-11-19 16:39:09  hybrid-vs-gpu-only/cuda-hopper-mnist8m
+2026-11-19 18:19:22  hybrid-vs-gpu-only/gpuonly-hopper-mnist8m
+2026-11-19 20:28:17  hybrid-vs-gpu-only/profile/cuda-hopper-mnist8m (--profile)
+2026-11-19 22:02:49  hybrid-vs-gpu-only/profile/gpuonly-hopper-mnist8m (--profile)
+2026-11-19 23:22:43  done

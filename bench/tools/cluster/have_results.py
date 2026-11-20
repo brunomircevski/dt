@@ -75,6 +75,9 @@ def have_run(target, impls, protocols, threads, runs, long_runs, env=""):
         return False
     machine, plan = json.loads(machine_f.read_text()), json.loads(plan_f.read_text())
     args = command_args(machine.get("command", ""))
+    if threads == "scaling":  # job.sh: 1, 2, 4, then every 4 to the node's CPU count
+        cpus = int(machine.get("logical_cpus") or 0)
+        threads = ",".join(map(str, [1, 2, 4, *range(8, cpus + 1, 4)]))
     if (args["impls"] != impls or args["protocols"] != protocols or args["threads"] != threads
             or args["flags"] != expected_flags(env)):
         return False
