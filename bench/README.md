@@ -33,7 +33,7 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 
 | Directory | What | Main result |
 |---|---|---|
-| [`cluster-cpu-scaling`](cluster-cpu-scaling/BENCHMARK.md) | HIGGS and MNIST8M, 1–48 threads on epyc and dell; chart: speed-up over one thread | HIGGS, 48 threads: 19–23× one thread on epyc, 16–21× on dell. MNIST8M: 33–35× (epyc), 24–27× (dell2; dell1, with twice the memory channels, 34–36×). |
+| [`cluster-cpu-scaling`](cluster-cpu-scaling/BENCHMARK.md) | HIGGS and MNIST8M, 1–48 threads on epyc and dell; chart: speed-up over one thread | HIGGS, 48 threads: 19–23× one thread on epyc, 16–19× on dell (dell rerun 2026-11-20 with the CPUs in node order: HIGGS at low thread counts now spreads 2–12%, not 30–69%). MNIST8M: 33–35× (epyc), 24–26× (dell; dell1, with twice the memory channels, 34–36×). |
 | [`cluster-profiling`](cluster-profiling/BENCHMARK.md) | where the growing time goes (`--profile`), chess 10M–2000M, HIGGS and ECBDL'14 15M, epyc, dell and hopper | Partition is 35–69% on epyc; the GPU's share grows from 2–3% at chess 10M to 59–64% at 2000M and 74–80% on ECBDL. C4.5 on big chess runs at two speeds (open). |
 | [`hybrid-vs-gpu-only`](hybrid-vs-gpu-only/BENCHMARK.md) | CUDA `--hybrid` against `--gpu`, depth 5–30 and no limit, HIGGS, MNIST8M and SOREL 4M, ampere and hopper, `--handoff-rows` swept per dataset and node | On hopper, with the GPU setup timed (the hybrid's 0.12 s more for its hand-off buffers), GPU only is faster to depth 10 (HIGGS 0.60–0.68×, MNIST8M and SOREL 4M 0.92–0.97×). Deeper the hybrid leads, on HIGGS from depth 25: with no limit HIGGS 1.2–1.8×, MNIST8M 1.5–1.6×, SOREL 4M 1.08–1.20× (ampere, out of date: 2.1–2.3×, 1.4–1.5×, 1.08–1.16×). |
 
