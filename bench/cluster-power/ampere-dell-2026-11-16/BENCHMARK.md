@@ -19,7 +19,7 @@ Method: [Method](#method). Every table, with more columns:
 [summary.md](summary.md); every process: [runs.csv](runs.csv); the meter
 models: [meter.csv](meter.csv).
 The same measurement without a depth limit, where `--hybrid` gains (MNIST8M,
-Multicore, GPU and Hybrid on hopper): [cluster-power-mnist8m](../../cluster-power-mnist8m/BENCHMARK.md).
+Multicore, GPU and Hybrid on hopper): [cluster-power, MNIST8M](../BENCHMARK.md#mnist8m-no-depth-limit-where---hybrid-gains).
 
 **Energy** is the whole server's, at the PSU, over the training windows only
 (the CSV load, the gaps between trees and the evaluation are left out), from
@@ -76,7 +76,7 @@ What it shows:
 Per node, CPU, GPU and PSU energy and power side by side:
 [epyc1](chart-cpu-gpu-epyc.png), [dell4](chart-cpu-gpu-dell.png),
 [ampere](chart-cpu-gpu-ampere.png), [hopper](chart-cpu-gpu-hopper.png)
-(CART above C4.5); time against energy: [chart-time-energy.png](chart-time-energy.png); power
+(CART above C4.5); power
 over time of each case's first process: [chart-traces.png](chart-traces.png).
 
 ## The meter model
@@ -96,7 +96,7 @@ The model fitted on either half of a job gives the same energy per tree
 within 0.2% on epyc1, dell4 and hopper (Multicore on epyc1: 1.6%), and within
 2.7% on ampere.
 
-**Model against the meter** ([chart-methods.png](chart-methods.png)): on
+**Model against the meter** ([summary.md](summary.md#psu-energy-the-model-against-the-meter)): on
 windows much longer than the meter's refresh (the Serial runs, Multicore on
 dell4 and hopper) the meter's own energy agrees with the model within 1.5%,
 and the readings inside the training windows have a mean residual within
@@ -130,7 +130,7 @@ GPU and Hybrid trees need their CPU threads busy before the timer starts
 (`--repeat-warmup`), as a single run's CSV load keeps them: without it,
 trees 3–12 of a process are 13–14% (H100) and 18–27% (A100) slower.
 
-![warm-up](chart-warmup.png)
+Every tree: [warmup.csv](warmup.csv).
 
 | Node | warm-up | GPU trees 3–12 | Hybrid trees 3–12 | time benchmark (GPU / Hybrid) |
 |---|---|---|---|---|
@@ -208,7 +208,7 @@ The job gives the fit the range of loads it needs: idle; a staircase of
 once-a-minute meter samples each step); all five backends; and, on the GPU
 nodes, GPU and Hybrid runs with their CPU warm-ups.
 
-**Checks** (`BENCHMARK.md`, `chart-meter.png`, `chart-methods.png`):
+**Checks** (`summary.md`, `chart-meter.png`):
 
 1. The coefficients fitted on the first and on the second half of the job
    alone, and the energy each half's model gives.

@@ -19,12 +19,13 @@ Styles:
   profile   100 % stacked bars: where the training time goes, per backend
   bars      grouped bars, log scale: the five implementations on every dataset
   energy    time, mean power and total energy of one C4.5 tree on ECBDL'14 15M,
-            epyc and hopper, from bench/cluster-power/summary.csv
+            epyc and hopper, from bench/cluster-power/ecbdl_15m-depth10/summary.csv
 """
 
 import csv
 import json
 import re
+import shutil
 import statistics
 import sys
 from collections import defaultdict
@@ -190,7 +191,9 @@ def log_axis(ax, axis="y", lo=None, hi=None):
     a.set_minor_formatter(NullFormatter())
 
 
-def save(fig, name):
+def save(fig, name, copy=None):
+    """paper/figs/test-<name>.pdf; copy: also <copy>.pdf (the same file) and <copy>.png (for the
+    benchmark's BENCHMARK.md), the figure the paper shows kept with its benchmark's data."""
     OUT.mkdir(exist_ok=True)
     stale = sum(USED)
     if stale:
@@ -200,8 +203,12 @@ def save(fig, name):
                  bbox=dict(boxstyle="round,pad=0.25", fc="#fab219", ec="none"))
     USED.clear()
     fig.savefig(OUT / f"test-{name}.pdf", metadata={"CreationDate": None})  # no date (the font subset tags still vary)
-    plt.close(fig)
     print("wrote", OUT / f"test-{name}.pdf")
+    if copy:
+        shutil.copyfile(OUT / f"test-{name}.pdf", copy.with_suffix(".pdf"))
+        fig.savefig(copy.with_suffix(".png"), dpi=300, facecolor="white")
+        print("wrote", copy.with_suffix(".pdf"), copy.with_suffix(".png"))
+    plt.close(fig)
 
 
 # ---------------------------------------------------------------- 1. ladder
@@ -590,10 +597,10 @@ def bars():
 
 
 # ---------------------------------------------------------------- power (energy per tree)
-# bench/cluster-power/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
+# bench/cluster-power/ecbdl_15m-depth10/summary.csv, ECBDL'14 15M, depth <= 10, unpruned. Whole-server
 # energy at the PSU (each node's meter modelled from the fast sensors, bench/cluster-power/BENCHMARK.md);
 # components: CPU packages (RAPL), DRAM (RAPL, Intel nodes), the GPU in use (NVML), the rest.
-POWER = ROOT / "bench" / "cluster-power"
+POWER = ROOT / "bench" / "cluster-power" / "ecbdl_15m-depth10"
 P_NODES = [("epyc1", "epyc"), ("hopper", "hopper")]  # the power benchmark's servers
 P_IMPLS = [("simple", "simple"), ("serial", "serial"), ("parallel", "cpu"), ("gpuonly", "gpuonly"),
            ("cuda", "cuda")]  # (power_bench name, STYLE key)
@@ -726,12 +733,12 @@ def energy(algo="c45", cpu_nodes=("epyc",), gpu_nodes=("hopper",)):
                        label="CPU part of a GPU run")]
     fig.legend(handles=h, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.06), fontsize=6,
                handlelength=2.4, handleheight=1.2)
-    save(fig, "energy")
+    save(fig, "energy", copy=POWER.parent / "paper-fig-energy-ecbdl_15m")
 
 
-# bench/cluster-power-mnist8m: the same measurement on MNIST8M without a depth limit, the
+# bench/cluster-power/mnist8m-nodepth: the same measurement on MNIST8M without a depth limit, the
 # three fast implementations on one server (hopper, the H100 PCIe server), CART and C4.5.
-POWER_DEEP = RES / "cluster-power-mnist8m"
+POWER_DEEP = RES / "cluster-power" / "mnist8m-nodepth"
 
 
 def energy_deep():
@@ -805,7 +812,7 @@ def energy_deep():
          plt.Rectangle((0, 0), 1, 1, color=STYLE["gpuonly"][1], label="GPU")]
     fig.legend(handles=h, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.09), fontsize=6,
                handlelength=2.4, handleheight=1.2)
-    save(fig, "energy-mnist8m")
+    save(fig, "energy-mnist8m", copy=POWER_DEEP.parent / "paper-fig-energy-mnist8m")
 
 
 if __name__ == "__main__":

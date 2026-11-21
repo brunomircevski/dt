@@ -1,5 +1,5 @@
 #!/bin/bash
-# Redraw every chart from the results in bench/ (and bench/cluster-power,
+# Redraw every chart from the results in bench/ (bench/cluster-power's too, and
 # paper/figs). Run it from the repository root whenever results arrive:
 #
 #   bench/tools/cluster/charts.sh            # all charts
@@ -45,8 +45,10 @@ for n in ampere hopper; do
 done
 $PY bench/tools/hybrid_profile_chart.py "$d" --node ampere --dataset mnist8m --hybrid-only --seconds > /dev/null
 $PY bench/tools/hybrid_profile_chart.py "$d" --node ampere --dataset mnist8m --hybrid-only > /dev/null
-$PY bench/tools/power/analyze.py bench/cluster-power > /dev/null
-echo "bench/cluster-power/chart-*.png"
+for d in "$R"/cluster-power/ecbdl_15m-depth10 "$R"/cluster-power/mnist8m-nodepth; do
+  $PY bench/tools/power/analyze.py "$d" > /dev/null
+  echo "$d/chart-*.png"
+done
 if [ -n "$paper" ]; then
   if kpsewhich type1ec.sty > /dev/null; then
     $PY paper/tools/charts.py

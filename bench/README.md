@@ -48,8 +48,7 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 
 | Directory | What | Main result |
 |---|---|---|
-| [`cluster-power`](cluster-power/BENCHMARK.md) | energy per tree of ./tree's five backends on epyc1 and hopper (ampere and dell4 until 2026-11-16 kept as history), ECBDL'14 15M, depth ≤ 10, CART and C4.5 | Per CART tree the H100 uses the least: 1.99 kJ on the GPU, 27% less than Multicore on epyc1 (2.73 kJ); Hybrid 14% more than GPU (final build, 2026-11-20; GPU trees after a 2 s warm-up, as long as in the time benchmark). |
-| [`cluster-power-mnist8m`](cluster-power-mnist8m/BENCHMARK.md) | the same measurement where `--hybrid` gains: MNIST8M without a depth limit, `--multicore`, `--gpu` and `--hybrid` on hopper, CART and C4.5, 6 rounds | `--hybrid` 1.55–1.59× faster than `--gpu` at 1.45–1.51× the power: 2.7% (CART, 7.93 kJ) and 9.0% (C4.5, 9.08 kJ) less energy per tree; `--multicore` 3.1–3.4× more (2 s GPU warm-up since 2026-11-21, as long as in the time benchmark). |
+| [`cluster-power`](cluster-power/BENCHMARK.md) | energy per tree at the power supply, two measurements: ECBDL'14 15M at depth ≤ 10, ./tree's five backends on epyc1 and hopper (`ecbdl_15m-depth10/`); MNIST8M without a depth limit, where `--hybrid` gains: `--multicore`, `--gpu` and `--hybrid` on hopper (`mnist8m-nodepth/`); CART and C4.5; the paper's two energy figures; ampere and dell4 until 2026-11-16 kept as history | ECBDL'14: per CART tree the H100 uses the least, 1.99 kJ on the GPU, 27% less than Multicore on epyc1 (2.73 kJ); Hybrid 14% more than GPU. MNIST8M: `--hybrid` 1.55–1.59× faster than `--gpu` at 1.45–1.51× the power, so 2.7% (CART, 7.93 kJ) and 9.0% (C4.5, 9.08 kJ) less energy per tree; `--multicore` 3.1–3.4× more (final build, 2026-11-20/21; GPU trees after a 2 s warm-up, as long as in the time benchmark). |
 
 ## A new node or machine
 

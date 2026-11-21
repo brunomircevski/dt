@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Energy of ./tree's backends from bench/tools/power/power_bench.sh jobs: tables and charts.
 
-  bench/tools/.venv/bin/python bench/tools/power/analyze.py bench/cluster-power
+  bench/tools/.venv/bin/python bench/tools/power/analyze.py bench/cluster-power/ecbdl_15m-depth10
+  bench/tools/.venv/bin/python bench/tools/power/analyze.py bench/cluster-power/mnist8m-nodepth
 
-The folder holds a job folder per node (epyc1/, hopper/) and any more jobs of
-the same node (epyc1-2/, hopper-2/: a top-up of some cases; each job's
+One measurement (a dataset and depth limit) per folder, which holds a job
+folder per node (epyc1/, hopper/) and any more jobs of the same node (epyc1-2/, hopper-2/: a top-up of some cases; each job's
 processes are measured with that job's own meter model, then the runs of a
 case are pooled), each with markers.txt, machine.txt, samples.csv.gz (pwrlog.py, every 0.1 s)
 and out/<run>.txt (./tree's output, with the --repeat K training windows).
@@ -13,8 +14,8 @@ standard deviation per case), meter.csv (the meter model of each node),
 warmup.csv (the warm-up check), summary.md (tables) and charts chart-*.png.
 POWER_TIME_BENCH (environment): the time benchmark's cluster-ecbdl folder for
 the time check of ECBDL'14 15M at depth <= 10 (default bench/cluster-ecbdl);
-MNIST8M without a depth limit is checked against bench/hybrid-vs-gpu-only. The dataset and depth limit in titles and tables come from the
-jobs' machine.txt (the first job's "data" and "protocol" lines).
+MNIST8M without a depth limit is checked against bench/hybrid-vs-gpu-only.
+The dataset and depth limit in titles and tables come from the jobs' machine.txt (the first job's "data" and "protocol" lines).
 
 Per process (one ./tree --repeat K), over its K training windows (each one a
 fresh process's only tree; the gaps between them, fork, CUDA setup and the
@@ -909,72 +910,6 @@ def chart_energy(folder, summary):
     plt.close(fig)
 
 
-def chart_scatter(folder, summary):
-    """Time against energy, linear axes, with lines of constant power; an inset zooms
-    in on the fast implementations, which sit in the corner at this scale."""
-    fig, ax = plt.subplots(figsize=(9.5, 6.6))
-    ts = [s["train_s"] for s in summary]
-    es = [s["energy_J"] / 1e3 for s in summary]
-    fast = [s for s in summary if s["train_s"] < 60]
-    fx = max(s["train_s"] for s in fast) * 1.15
-    fy = max(s["energy_J"] for s in fast) / 1e3 * 1.15
-
-    def draw(a, xmax, ymax, size, hidden=None):
-        for watts in (100, 200, 500, 1000):
-            a.plot([0, xmax], [0, xmax * watts / 1e3], color=GRID, lw=1, zorder=0)
-            # label just inside the plot, where the line leaves it
-            x = min(xmax, ymax * 1e3 / watts)
-            y = x * watts / 1e3
-            if hidden and hidden(x, y):
-                continue
-            if x < xmax:
-                a.text(x, ymax, f" {watts} W", fontsize=7.5, color=MUTED, ha="left", va="top")
-            else:
-                a.text(xmax, y, f"{watts} W ", fontsize=7.5, color=MUTED, ha="right", va="bottom")
-        for s in summary:
-            color = NODE_COLORS.get(s["node"], INK)
-            t, e, ea = s["train_s"], s["energy_J"] / 1e3, s["above_idle_J"] / 1e3
-            a.scatter(t, e, marker=MARKERS[s["impl"]], s=size,
-                      facecolors=color if s["algo"] == "cart" else "white", edgecolors=color,
-                      linewidths=1.5, zorder=3, clip_on=True)
-            a.scatter(t, ea, marker=MARKERS[s["impl"]], s=size * 0.3, color=color, alpha=0.45, zorder=2)
-            a.plot([t, t], [ea, e], color=color, alpha=0.35, lw=0.8, zorder=1)
-        a.set_xlim(0, xmax)
-        a.set_ylim(0, ymax)
-        a.grid(color=GRID, which="major")
-        style(a)
-
-    xmax, ymax = max(ts) * 1.08, max(es) * 1.1
-    box = (0.07, 0.42, 0.42, 0.52)  # inset, in axes fractions
-    draw(ax, xmax, ymax, 60, lambda x, y: x < (box[0] + box[2] + 0.02) * xmax and y > box[1] * ymax)
-    ax.set_xlabel("training time per tree (s)", color=INK)
-    ax.set_ylabel("energy per tree (kJ)", color=INK)
-    ins = ax.inset_axes(list(box))
-    ins.set_facecolor("white")
-    ins.patch.set_alpha(1)
-    ins.set_zorder(5)
-    draw(ins, fx, fy, 50)
-    ins.tick_params(labelsize=7)
-    for a in (ax, ins):
-        unit_ticks(a, "x", "s")
-        unit_ticks(a, "y", "kJ")
-    ins.set_title("zoom: Parallel, GPU, Hybrid", fontsize=8, color=MUTED, loc="left")
-    ax.indicate_inset_zoom(ins, edgecolor=MUTED, alpha=0.6)
-    handles = [plt.Line2D([], [], marker=MARKERS[i], ls="", color=INK, label=IMPLS[i])
-               for i in IMPL_ORDER if any(s["impl"] == i for s in summary)]
-    handles += [Patch(color=NODE_COLORS[n], label=NODE_HW[n]) for n in NODE_ORDER
-                if any(s["node"] == n for s in summary)]
-    handles += [plt.Line2D([], [], marker="o", ls="", markerfacecolor=INK, color=INK, label="CART"),
-                plt.Line2D([], [], marker="o", ls="", markerfacecolor="white", color=INK, label="C4.5"),
-                plt.Line2D([], [], marker="o", ls="", color=INK, alpha=0.45, markersize=4,
-                           label="small dot: energy above idle")]
-    ax.legend(handles=handles, fontsize=7.5, frameon=False, loc="lower right")
-    ax.set_title(f"{WHAT}, {DEPTH_TXT}: time and energy per tree (grey lines: constant power)",
-                 fontsize=11, color=INK, loc="left")
-    fig.tight_layout()
-    save(fig, folder / "chart-time-energy.png", dpi=150)
-    plt.close(fig)
-
 
 def chart_cpu_gpu(folder, summary):
     """Nodes with CPU (RAPL) and GPU (NVML) sensors: one chart per node, one
@@ -1282,63 +1217,6 @@ def chart_meter(folder, jobs):
     plt.close(fig)
 
 
-def chart_methods(folder, summary):
-    """Per case: the meter's own energy and the readings inside the training
-    windows, relative to the model's energy."""
-    cases = [s for s in summary if not math.isnan(s["psu_J"])]
-    if not cases:
-        return
-    fig, axes = plt.subplots(1, 2, figsize=(13, 0.32 * len(cases) + 1.6), sharey=True)
-    y = np.arange(len(cases))
-    for ax, (name, val, err) in zip(axes, (
-            ("meter's own energy over the windows vs model (%)",
-             [(s["meter_J"] / s["psu_J"] - 1) * 100 for s in cases], None),
-            ("mean residual of the readings inside the windows (% of power, ± 2 se)",
-             [s["res_in_W"] / s["power_W"] * 100 if s["res_in_n"] else float("nan") for s in cases],
-             [2 * s["res_in_se_W"] / s["power_W"] * 100 if s["res_in_n"] else 0 for s in cases]))):
-        ax.barh(y, val, color=[NODE_COLORS.get(s["node"], INK) for s in cases], height=0.6,
-                xerr=err, error_kw={"lw": 0.8, "capsize": 2, "color": INK})
-        ax.axvline(0, color=INK, lw=0.7)
-        for v in (-3, 3):
-            ax.axvline(v, color=GRID, lw=0.8, ls="--")
-        ax.set_title(name, fontsize=9, loc="left", color=INK)
-        ax.grid(axis="x", color=GRID, lw=0.5)
-        unit_ticks(ax, "x", "%")
-        style(ax)
-    axes[0].set_yticks(y, [f"{label(s)} · {s['algo'].upper().replace('C45', 'C4.5')} "
-                           f"({fmt_s(s['train_s'])}/tree)" for s in cases], fontsize=7.5)
-    axes[0].invert_yaxis()
-    fig.suptitle("PSU energy per tree: the meter model against the meter (trees of a few seconds: "
-                 "only the model resolves them)", fontsize=10.5, color=INK, x=0.01, ha="left")
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
-    save(fig, folder / "chart-methods.png", dpi=140, bbox_inches="tight")
-    plt.close(fig)
-
-
-def chart_warmup(folder, warmup):
-    if not warmup:
-        return
-    nodes = [n for n in NODE_ORDER if any(w["node"] == n for w in warmup)]
-    fig, axes = plt.subplots(1, len(nodes), figsize=(6.5 * len(nodes), 3.8), squeeze=False)
-    for ax, node in zip(axes[0], nodes):
-        for impl in ("gpuonly", "cuda"):
-            for ws in sorted({w["warmup_s"] for w in warmup if w["node"] == node}):
-                pts = sorted((w["tree"], w["train_s"]) for w in warmup
-                             if (w["node"], w["impl"], w["warmup_s"]) == (node, impl, ws))
-                if pts:
-                    ax.plot([p[0] for p in pts], [p[1] for p in pts], marker=MARKERS[impl], ms=4,
-                            color=IMPL_COLORS[impl], alpha=0.35 + 0.65 * (ws == max(w["warmup_s"] for w in warmup)),
-                            label=f"{IMPLS[impl]}, warm-up {ws:g} s")
-        ax.set_title(f"{node}: CART tree time by tree of the process", fontsize=9.5, loc="left", color=INK)
-        ax.set_xlabel("tree (each in its own forked child)", fontsize=8, color=INK)
-        ax.set_ylabel("training time", fontsize=8, color=INK)
-        unit_ticks(ax, "y", "s")
-        ax.grid(color=GRID, lw=0.5)
-        style(ax)
-        ax.legend(fontsize=7, frameon=False)
-    fig.tight_layout()
-    save(fig, folder / "chart-warmup.png", dpi=140)
-    plt.close(fig)
 
 
 def chart_traces(folder, jobs, rows):
@@ -1428,12 +1306,9 @@ def main():
     write_tables(folder, jobs, rows, summary, warmup)
     chart_power(folder, summary)
     chart_energy(folder, summary)
-    chart_scatter(folder, summary)
     chart_traces(folder, jobs, rows)
     chart_cpu_gpu(folder, summary)
     chart_meter(folder, jobs)
-    chart_methods(folder, summary)
-    chart_warmup(folder, warmup)
     print((folder / "summary.md").read_text())
 
 

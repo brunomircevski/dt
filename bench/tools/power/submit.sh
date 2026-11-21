@@ -4,7 +4,8 @@
 #
 #   bench/tools/power/submit.sh [-o OUT] [-d JOBID] [-c] [-s SUFFIX] NODE... [VAR=value...]
 #
-#   -o OUT    results folder (default bench/cluster-power); the job writes OUT/<node>/
+#   -o OUT    results folder, one per measurement (default bench/cluster-power/ecbdl_15m-depth10;
+#             MNIST8M without a depth limit: bench/cluster-power/mnist8m-nodepth); the job writes OUT/<node>/
 #   -d JOBID  start after that job ends (afterany), e.g. the node's last time-benchmark job
 #   -c        the warm-up check alone (CHECK_ONLY=1, GPU nodes), into OUT/check-<node>/
 #   -s SUFFIX the node's next job, into OUT/<node>-SUFFIX/ (e.g. -s 2: more runs of some cases,
@@ -19,7 +20,7 @@
 # (bench/tools/cluster/build.sh) at the commit in TREE_GIT_DESCRIBE (default: git
 # describe of this checkout).
 set -euo pipefail
-OUT=bench/cluster-power DEP= CHECK= SUFFIX=
+OUT=bench/cluster-power/ecbdl_15m-depth10 DEP= CHECK= SUFFIX=
 while getopts "o:d:cs:" option; do
   case "$option" in
     o) OUT="$OPTARG" ;;
