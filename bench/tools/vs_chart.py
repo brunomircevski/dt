@@ -56,16 +56,22 @@ def summary(run, protocol, impl=None, threads=None):
                     "min": num("time_min"), "max": num("time_max"), "ram": num("peak_rss"),
                     "vram": num("gpu_peak"), "acc": num("test_accuracy"), "nodes": num("nodes"),
                     "host": machine.get("host"), "commit": machine.get("versions", {}).get("tree_git"),
-                    "stale": B.rows_out_of_date([], machine),
+                    "stale": B.rows_out_of_date([{"impl": r["impl"]}], machine),  # impl: --simple's own rule
                     "date": machine.get("started", "")[:10]}
     return None
 
 
 FAILED = "failed"  # a bar whose tool ran and failed on every run (not a missing run)
+# (dataset, impl) a tool cannot fit at all, so the final runs leave it out (BENCHMARK.md):
+# rpart on MNIST8M (6.3 billion values, over R's 2^31 - 1; rpart() segfaults past the reader)
+CANNOT_FIT = {("mnist8m", "rpart")}
 
 
 def failed(run, protocol, impl, threads):
-    """FAILED if the folder's summary.csv has this case and none of its runs is ok, else None."""
+    """FAILED if the folder's summary.csv has this case and none of its runs is ok, or the
+    tool cannot fit the folder's dataset (CANNOT_FIT), else None."""
+    if any(run.name.endswith(f"-{ds}") and impl == tool for ds, tool in CANNOT_FIT):
+        return FAILED
     f = run / "summary.csv"
     if not f.exists():
         return None

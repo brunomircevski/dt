@@ -104,8 +104,10 @@ def summary(path):
     f = path / "summary.csv"
     if not f.exists():
         return rows
-    USED.append(B.rows_out_of_date([], json.load(open(path / "machine.json"))))
-    for r in csv.DictReader(open(f)):
+    table = list(csv.DictReader(open(f)))
+    USED.append(B.rows_out_of_date([{"impl": i} for i in {r["impl"] for r in table}] or [{}],
+                                   json.load(open(path / "machine.json"))))  # impl: --simple's own rule
+    for r in table:
         if r["status"] != "ok":
             continue
         for k, v in r.items():
