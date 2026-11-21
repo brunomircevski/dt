@@ -7,7 +7,8 @@ long benchmark does not hold a node for a day) into one run folder.
 The parts are <run folder>/parts/p1, p2, ... (run.py --run-id <dir>/<name>/parts/pN),
 each a run.py of its own with some of the repetitions (and maybe some of the
 tools: J48's 4.7 h runs on MNIST8M are parts of their own). Rows already in the
-run folder (an older run of the same command, topped up) stay first. The
+run folder (an older run of the same command, topped up) stay first, and so do
+the parts its machine.json lists (name a top-up's parts after them, e.g. p7 on). The
 merged folder is what one run.py would have written: results.jsonl (rows in the
 order measured, run_id the folder, rep renumbered per case), plan.json (every
 case), machine.json (the first part's, its command with every tool, the total
@@ -101,10 +102,11 @@ def main():
     set_arg(words, "--reps", str(total))
     set_arg(words, "--run-id", run_id)
     machine = {**first, "command": shlex.join(words), "parts": info}
-    if old_machine:
-        machine["parts"] = [{"part": "before", "host": old_machine.get("host"),
-                             "started": old_machine.get("started"), "command": old_machine.get("command"),
-                             "runs": sum(r.get("kind") == "run" for r in old_rows)}] + info
+    if old_machine:  # a top-up: the parts merged before stay listed, else the old run is one "before" part
+        machine["parts"] = (old_machine.get("parts")
+                            or [{"part": "before", "host": old_machine.get("host"),
+                                 "started": old_machine.get("started"), "command": old_machine.get("command"),
+                                 "runs": sum(r.get("kind") == "run" for r in old_rows)}]) + info
     plan = {**json.loads((parts[0] / "plan.json").read_text()), "cases": cases}
 
     (target / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))

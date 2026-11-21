@@ -2,7 +2,7 @@
 # Submit power_bench.sh jobs, one per node, from the repository root (on the
 # mordor3 login node):
 #
-#   bench/tools/power/submit.sh [-o OUT] [-d JOBID] [-c] [-s SUFFIX] NODE... [VAR=value...]
+#   bench/tools/power/submit.sh [-o OUT] [-d JOBID] [-c] [-s SUFFIX] [-t TIME] NODE... [VAR=value...]
 #
 #   -o OUT    results folder, one per measurement (default bench/cluster-power/ecbdl_15m-depth10;
 #             MNIST8M without a depth limit: bench/cluster-power/mnist8m-nodepth); the job writes OUT/<node>/
@@ -11,6 +11,8 @@
 #   -s SUFFIX the node's next job, into OUT/<node>-SUFFIX/ (e.g. -s 2: more runs of some cases,
 #             "IMPLS=serial simple" REPS=7 REPS_BY=simple=2; analyze.py pools a case's runs of
 #             every job of the node, each measured with its own job's meter model)
+#   -t TIME   SLURM time limit (default 8:00:00 epyc1, 12:00:00 hopper; a top-up of 7 Serial-Simple
+#             trees a case takes ~10-11 h)
 #   VAR=value power_bench.sh settings for every job given (they override the node's)
 #
 # NODE: epyc1 (kind cpu) or hopper (kind all), the two power-benchmark servers
@@ -20,14 +22,15 @@
 # (bench/tools/cluster/build.sh) at the commit in TREE_GIT_DESCRIBE (default: git
 # describe of this checkout).
 set -euo pipefail
-OUT=bench/cluster-power/ecbdl_15m-depth10 DEP= CHECK= SUFFIX=
-while getopts "o:d:cs:" option; do
+OUT=bench/cluster-power/ecbdl_15m-depth10 DEP= CHECK= SUFFIX= TIME=
+while getopts "o:d:cs:t:" option; do
   case "$option" in
     o) OUT="$OPTARG" ;;
     d) DEP="$OPTARG" ;;
     c) CHECK=1 ;;
     s) SUFFIX="$OPTARG" ;;
-    *) sed -n '2,20p' "$0"; exit 2 ;;
+    t) TIME="$OPTARG" ;;
+    *) sed -n '2,22p' "$0"; exit 2 ;;
   esac
 done
 shift $((OPTIND - 1))
@@ -35,7 +38,7 @@ NODES=() EXTRA=()
 for a in "$@"; do
   case "$a" in *=*) EXTRA+=("$a") ;; *) NODES+=("$a") ;; esac
 done
-[ ${#NODES[@]} -gt 0 ] || { sed -n '2,20p' "$0"; exit 2; }
+[ ${#NODES[@]} -gt 0 ] || { sed -n '2,22p' "$0"; exit 2; }
 DESCRIBE="${TREE_GIT_DESCRIBE:-$(git describe --always --dirty --abbrev=12)}"
 env=()
 mkdir -p "$OUT"
@@ -46,6 +49,7 @@ for node in "${NODES[@]}"; do
     hopper) p=hopper t=12:00:00 kind=all env=() ;;
     *) echo "unknown node $node (power benchmark: epyc1 or hopper)" >&2; exit 2 ;;
   esac
+  [ -z "$TIME" ] || t="$TIME"
   dir="$OUT/$node${SUFFIX:+-$SUFFIX}" name="pwr-$node${SUFFIX:+-$SUFFIX}"
   if [ -n "$CHECK" ]; then
     [ "$kind" = all ] || { echo "-c: $node has no GPU" >&2; exit 2; }
