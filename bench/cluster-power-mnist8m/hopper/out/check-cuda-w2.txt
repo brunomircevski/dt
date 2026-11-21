@@ -1,0 +1,40 @@
+CART on /dev/shm/power-bench-561/train.f32 (backend hybrid)
+  rows 8100000 train, 784 features, 10 classes
+  pruning off
+  repeat 1/10: train 7931.4 ms, unix 1795214239.100113 1795214247.032134
+  repeat 2/10: train 7768.2 ms, unix 1795214250.119968 1795214257.888592
+  repeat 3/10: train 7677.8 ms, unix 1795214261.087056 1795214268.765251
+  repeat 4/10: train 7797.9 ms, unix 1795214271.939953 1795214279.738315
+  repeat 5/10: train 7869.4 ms, unix 1795214282.815034 1795214290.684869
+  repeat 6/10: train 7827.4 ms, unix 1795214293.842898 1795214301.670753
+  repeat 7/10: train 7855.8 ms, unix 1795214304.843974 1795214312.700234
+  repeat 8/10: train 7827.4 ms, unix 1795214315.817292 1795214323.645195
+  repeat 9/10: train 7737.5 ms, unix 1795214326.744058 1795214334.481995
+  repeat 10/10: train 7974.6 ms, unix 1795214337.643336 1795214345.618349
+Tree:
+  nodes 301939, leaves 150970, depth 115
+  train accuracy 100.0000%
+Timings:
+  load                   909.0 ms
+  gpu setup              655.3 ms
+  setup buffers          138.5 ms
+  setup allocate           7.3 ms
+  setup upload           475.8 ms
+  setup finish            33.7 ms
+  presort                  0.0 ms
+  build                 7319.2 ms
+  prune                    0.0 ms
+  train total           7974.6 ms
+  evaluate               399.3 ms
+Timeline:
+  span staging buffers: 0.024 64.885 ms
+  span hand-off buffers: 64.886 138.533 ms
+  span device memory: 138.536 145.831 ms
+  span upload: 145.832 621.652 ms
+  span x log x table: 621.663 622.328 ms
+  span x log x table copy: 622.329 655.268 ms
+  span presort (GPU): 148.984 622.548 ms
+  span cpu subtrees: 1701.557 7946.403 ms, busy 83274.212 ms in 5157 tasks
+  span build: 655.783 7974.998 ms
+Memory:
+  peak after training 75202544 KiB

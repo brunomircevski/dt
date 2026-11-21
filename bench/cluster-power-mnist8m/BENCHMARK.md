@@ -17,38 +17,50 @@ next to the GPU?
 `bench/handoff-tuning/handoff_rows.json`). Every case grows the same tree:
 CART 301,939 nodes, depth 115; C4.5 218,325 nodes, depth 147.
 
-**When.** Job 415, 2026-11-18 17:45–21:21, ./tree at 608b387f (binaries of
-job 410's build, tests passed), `power_bench.sh all` with
+**When.** Job 561, 2026-11-20 23:25 – 2026-11-21 02:08, ./tree 81bf6e6c (the
+final build, as cluster-power), `power_bench.sh all` with
 `DATA=~/datasets/mnist8m/train.f32 SHM=1 DEPTH=-1 HANDOFF=8192
-IMPLS="parallel gpuonly cuda" ALGOS="cart c45" CHECK=0 REPS=6`; the rest at
-the defaults (120 s of training per process, 15 s `--repeat-warmup` for the
-GPU backends, 300 s idle before and after, the 60 s calibration staircase,
-20 s idle before each process):
+IMPLS="parallel gpuonly cuda" ALGOS="cart c45" REPS=6` and a short warm-up
+check (`CHECK=1 CHECK_WARMUPS="0 2 15" CHECK_TREES=10`); the rest at the
+defaults (120 s of training per process, 2 s `--repeat-warmup` for the GPU
+backends, 300 s idle before and after, the 60 s calibration staircase, 20 s
+idle before each process). It replaces job 415 (2026-11-18, 15 s warm-up:
+GPU trees 3–5% faster than in the time benchmark; the energy per tree within
+1% of this job's; in git before this change):
 
-    TREE_GIT_DESCRIBE=608b387fa187 bench/tools/power/submit.sh \
+    TREE_GIT_DESCRIBE=81bf6e6c8979 bench/tools/power/submit.sh \
       -o bench/cluster-power-mnist8m hopper DATA=$HOME/datasets/mnist8m/train.f32 \
-      SHM=1 DEPTH=-1 HANDOFF=8192 "IMPLS=parallel gpuonly cuda" "ALGOS=cart c45" CHECK=0 REPS=6
+      SHM=1 DEPTH=-1 HANDOFF=8192 "IMPLS=parallel gpuonly cuda" "ALGOS=cart c45" \
+      CHECK=1 "CHECK_WARMUPS=0 2 15" CHECK_TREES=10 REPS=6
     bench/tools/.venv/bin/python bench/tools/power/analyze.py bench/cluster-power-mnist8m
 
 **Method** as in [cluster-power](../cluster-power/BENCHMARK.md#method): the
 whole server's energy at the PSU over the training windows only, each tree a
 fresh process's only tree, from hopper's meter (1 s refresh) modelled from
 RAPL and NVML sampled every 0.1 s (since 2026-11-19 the simpler model
-a + G_idle + b·CPU + GPU: 53 + 155 + 1.03·CPU + GPU here, rms 19 W). Choices for this run:
+a + G_idle + b·CPU + GPU: 56 + 154 + 1.02·CPU + GPU here, rms 17 W). Choices for this run:
 
 - **Six rounds**, round-robin over the six cases, each a process of 5–17
   trees (36–102 trees a case). Six rounds were enough: the energy per tree
   varies 0.2–0.6% between rounds (standard deviation over the mean).
-- **No warm-up check** (`CHECK=0`): cluster-power's check on hopper found
-  ≥ 5 s needed; 15 s is used. With 8–15 s trees the GPU setup is a small part
-  of a tree anyway.
+- **2 s warm-up, as cluster-power** (each GPU tree's child keeps its CPU
+  threads busy 2 s before its timer, as a single run's data load does), so
+  the trees take as long as in the time benchmark
+  ([hybrid-vs-gpu-only](../hybrid-vs-gpu-only/BENCHMARK.md), hopper, the same
+  `--handoff-rows`): GPU 12.1 and 15.2 s against 12.3 and 15.3 s (−1.3%,
+  −1.1%), Hybrid 7.82 and 9.52 s against 8.04 and 9.58 s (−2.8%, −0.6%). The
+  job's check (CART, 10 trees each): GPU 12.3 s with no warm-up, 11.9 s with
+  2 s, 11.8 s with 15 s; Hybrid 7.8 s at every warm-up. Hybrid CART stays
+  2–3% under the time benchmark at every warm-up, so the warm-up is not the
+  cause; it is within the 3% the time check allows
+  ([summary.md](summary.md#time-check)).
 - **The data in /dev/shm** (`SHM=1`): ./tree drops its input from the page
   cache, so each of the 42 processes would have read 25 GB from NFS again.
   Loading is outside the windows either way; this keeps the job short and the
   NFS out of it.
 - **Long trees, so the meter itself checks the model:** the trees take
   7.8–34 s, many meter refreshes each. The meter's own readings over the same
-  windows give an energy within 1.3% of the model's for every case.
+  windows give an energy within 1.2% of the model's for every case.
 
 ## Results
 
@@ -56,29 +68,32 @@ a + G_idle + b·CPU + GPU: 53 + 155 + 1.03·CPU + GPU here, rms 19 W). Choices f
 
 | Backend | CART: t | P | E | above idle | C4.5: t | P | E | above idle |
 |---|---|---|---|---|---|---|---|---|
-| Multicore | 28.5 s | 915 W | 26.1 kJ ± 0.2% | 14.3 kJ | 34.4 s | 911 W | 31.3 kJ ± 0.2% | 17.1 kJ |
-| GPU | 11.8 s | 694 W | 8.20 kJ ± 0.4% | 3.29 kJ | 14.6 s | 689 W | 10.1 kJ ± 0.5% | 4.00 kJ |
-| Hybrid | 7.80 s | 1,015 W | **7.92 kJ** ± 0.3% | 4.68 kJ | 9.28 s | 981 W | **9.11 kJ** ± 0.1% | 5.25 kJ |
+| Multicore | 28.5 s | 913 W | 26.0 kJ ± 0.4% | 14.5 kJ | 34.4 s | 910 W | 31.3 kJ ± 0.2% | 17.4 kJ |
+| GPU | 12.1 s | 672 W | 8.15 kJ ± 0.5% | 3.26 kJ | 15.2 s | 659 W | 9.99 kJ ± 0.5% | 3.87 kJ |
+| Hybrid | 7.82 s | 1,015 W | **7.93 kJ** ± 0.3% | 4.78 kJ | 9.52 s | 954 W | **9.08 kJ** ± 0.2% | 5.24 kJ |
 
 t: time per tree; P: mean power of the whole server while training; E: energy
 per tree (± standard deviation over the six rounds); above idle: E minus what
-the idle server (415 W) would have used in the same time. More columns
+the idle server (403 W) would have used in the same time. More columns
 (peaks, the split into CPU sockets, memory, GPU, unused GPUs and the rest, the
 model checks): [summary.md](summary.md); every process: [runs.csv](runs.csv).
 
-- **Hybrid is the fastest and needs the least energy, by a little**: 1.51×
-  (CART) and 1.58× (C4.5) faster than GPU, but it draws 1.46× and 1.42× the
-  power (1,015 against 694 W), so a tree costs only 3.3% (CART) and 9.6% (C4.5)
-  less energy (7.92 against 8.20 kJ, 9.11 against 10.1 kJ).
-- **Where the power goes:** GPU only keeps the CPUs at 208 W (the packages'
-  idle is 124 W) and the H100 at 226–230 W; the hybrid's 32 CPU threads grow the
-  small subtrees, so the CPUs draw 430–463 W, with the H100 at 249–256 W.
-- **Above idle the hybrid costs more:** 4.68 against 3.29 kJ (CART, +42%),
-  5.25 against 4.00 kJ (C4.5, +31%). Its energy advantage comes only from
-  keeping the 415 W idle server on for a shorter time. Without the three
-  unused H100s (about 150 W) the two are even: CART +5%, C4.5 −2%.
-- **Multicore needs 3.1–3.4× the energy of either GPU backend** (26.1 and
-  31.3 kJ): 2.4× slower than GPU only at a power (913 W) close to the hybrid's.
+- **Hybrid is the fastest and needs the least energy, by a little**: 1.55×
+  (CART) and 1.59× (C4.5) faster than GPU, but it draws 1.51× and 1.45× the
+  power (1,015 against 672 W), so a tree costs only 2.7% (CART) and 9.0% (C4.5)
+  less energy (7.93 against 8.15 kJ, 9.08 against 9.99 kJ).
+- **Where the power goes:** GPU only keeps the CPUs at 182–187 W (the
+  packages' idle is 114 W) and the H100 at 222–228 W; the hybrid's 32 CPU
+  threads grow the small subtrees, so the CPUs draw 407–460 W, with the H100
+  at 252–254 W.
+- **Above idle the hybrid costs more:** 4.78 against 3.26 kJ (CART, +47%),
+  5.24 against 3.87 kJ (C4.5, +35%). Its energy advantage comes only from
+  keeping the 403 W idle server on for a shorter time. Without the three
+  unused H100s (about 150 W) GPU only is ahead for CART (6.28 against
+  6.73 kJ, the hybrid +7%) and the two are even for C4.5 (7.65 against
+  7.62 kJ).
+- **Multicore needs 3.1–3.4× the energy of either GPU backend** (26.0 and
+  31.3 kJ): 2.3× slower than GPU only at a power (910 W) close to the hybrid's.
 
 ## Files
 
