@@ -27,7 +27,8 @@ bench/tools/README.md, "How time is measured"):
   3. tree size and training and test accuracy are recorded.
 The repetitions run in a shuffled order (a new order every repetition), so slow
 drift (heat, background load) spreads over all cases. A case whose first run
-trains longer than --long-seconds (an hour) runs --long-runs (3) times in all. Every process reports the
+trains longer than --long-seconds (an hour) runs --long-runs times in all (default 0:
+every case --reps times). Every process reports the
 rows and features it loaded; a mismatch with the dataset is an error. After the
 runs, each tool runs --reps times on the tiny _baseline dataset (no warm-up, no
 evaluation): its runtime footprint.
@@ -685,9 +686,9 @@ def main():
                         help="a case whose first run trains longer (train_seconds; the whole "
                              "process if it failed) "
                              "runs only --long-runs times in all (default 3600)")
-    parser.add_argument("--long-runs", type=int, default=3,
+    parser.add_argument("--long-runs", type=int, default=0,
                         help="runs of a case whose first run took longer than --long-seconds "
-                             "(default 3; 0 = no limit)")
+                             "(default 0 = no limit: every case --reps times)")
     parser.add_argument("--spin", type=float, default=0,
                         help="seconds of every CPU busy (untimed) right before the first run, "
                              "after the dataset check: a node idle for a while runs its first "

@@ -152,7 +152,7 @@ CACHE=(--drop-cache)
 step "2/3 benchmark: $DATASET, $PROTOCOLS, $IMPLS, threads $THREADS (of $(nproc)), $RUNS run(s) per case"
 "$PY" bench/tools/run.py "$DATASET" --protocols "$PROTOCOLS" --impls "$IMPLS" --threads "$THREADS" \
   --cpus "$CPUS" ${MEMBIND[@]+"${MEMBIND[@]}"} "${CACHE[@]}" --reps "$RUNS" --timeout "$TIMEOUT" --run-id "$DIR/$NAME" "$ACCURACY" \
-  --spin "${SPIN:-10}" --long-runs "${LONG_RUNS:-3}" --long-seconds "${LONG_SECONDS:-3600}" ${HANDOFF:+--handoff-rows "$HANDOFF"} ${RUN_EXTRA:-}
+  --spin "${SPIN:-10}" --long-runs "${LONG_RUNS:-0}" --long-seconds "${LONG_SECONDS:-3600}" ${HANDOFF:+--handoff-rows "$HANDOFF"} ${RUN_EXTRA:-}
 
 step "3/3 tables and CSV files"
 "$PY" bench/tools/report.py "$OUT" --md "$OUT/report.md" --csv "$OUT/summary.csv" --runs-csv "$OUT/runs.csv"

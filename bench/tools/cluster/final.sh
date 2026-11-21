@@ -17,9 +17,10 @@
 # (BENCHMARK-CHANGES.MD, section 1).
 # -m RUNS: runs per case (default 10).
 # -l LONG: runs of a case where one process trains for over an hour, or over 30 min
-#   on one thread (--serial, --simple) (default 3): --simple on full ECBDL'14 and
-#   SOREL-20M, and in every run.py any case whose first run trained that long
-#   (run.py --long-runs, --long-seconds; e.g. J48 on MNIST8M). More runs later: -m 20 -l 5.
+#   on one thread (--serial, --simple) (default: as -m, every case 10 runs since
+#   2026-11-21; until then 3): --simple on full ECBDL'14 and SOREL-20M, and in every
+#   run.py any case whose first run trained that long (run.py --long-runs,
+#   --long-seconds; e.g. J48 on MNIST8M). Fewer for those later: e.g. -m 20 -l 10.
 # -F: run everything again. Without it a run whose folder already holds it,
 #   complete and current (bench/tools/cluster/have_results.py), is kept: not run, not
 #   moved (plans/kept.txt lists them).
@@ -65,7 +66,7 @@
 set -euo pipefail
 ALL_KINDS=gpu,cpu,scaling,serial,simple,vs,gpulibs,profiling,hybrid
 ALL_NODES=hopper,ampere,epyc1,epyc2,dell2,dell3,dell4
-TEST= SUBMIT=1 RUNS=10 LONG=3 RERUN= KINDS=$ALL_KINDS NODES=$ALL_NODES ONLY_DATA=
+TEST= SUBMIT=1 RUNS=10 LONG= RERUN= KINDS=$ALL_KINDS NODES=$ALL_NODES ONLY_DATA=
 while getopts "tnFm:l:k:N:D:h" option; do
   case "$option" in
     t) TEST=1 ;;
@@ -123,6 +124,7 @@ if [ -n "$TEST" ]; then
   GPU_DATA=susy CPU_DATA=susy SCALING_DATA=higgs GPULIBS_DATA=mnist8m VS_DATA=susy PROFILE_DATA=susy
   HYBRID_DATA=susy OUT=cluster-test RUNS=1 LONG=1
 fi
+LONG=${LONG:-$RUNS}
 EXTRA+=",LONG_RUNS=$LONG"  # job.sh: run.py --long-runs
 
 dir_of() {
@@ -135,7 +137,7 @@ dir_of() {
   esac
 }
 
-# runs <kind> <dataset>: -l (3) where one process takes over an hour (--simple
+# runs <kind> <dataset>: -l (default -m) where one process takes over an hour (--simple
 # 1.7-2 h on full ECBDL'14 and 3.6-3.9 h on SOREL-20M), else -m (10). Within a
 # run.py, a case whose first run took over an hour stops at -l runs
 # (run.py --long-runs; J48 5.3 h on MNIST8M, rpart maybe).
