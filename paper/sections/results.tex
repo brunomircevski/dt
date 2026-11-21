@@ -88,7 +88,7 @@ MNIST8M & 16\,816 & 265 & 9.75 &  &  \\
 \label{sec:energy}
 Table~\ref{tab:energy} lists the results, and Fig.~\ref{fig:energy} shows them for C4.5. We quote C4.5 below; a CART tree needs at most 12\,\% less energy, and every conclusion holds for both algorithms.
 
-\textbf{Energy follows training time.} On ECBDL'14, the mean power of the whole server varies only from 256 to 906\,W across all implementations and both servers, whereas the energy per tree spans three orders of magnitude. Each optimization step therefore saves about as much energy as time. On epyc, \ImplSerialOpt{} is 17$\times$ faster than \ImplSerialBase{} at almost the same power and uses 17$\times$ less energy. \ImplParallel{} draws 2.3$\times$ the power of \ImplSerialOpt{}, but it finishes 31$\times$ sooner and so needs 14$\times$ less energy (2.87\,kJ).
+\textbf{Energy follows training time.} On ECBDL'14, the mean power of the whole server varies only from 260 to 906\,W across all implementations and both servers, whereas the energy per tree spans three orders of magnitude. Each optimization step therefore saves about as much energy as time. On epyc, \ImplSerialOpt{} is 17$\times$ faster than \ImplSerialBase{} at almost the same power and uses 17$\times$ less energy. \ImplParallel{} draws 2.3$\times$ the power of \ImplSerialOpt{}, but it finishes 31$\times$ sooner and so needs 14$\times$ less energy (2.87\,kJ).
 
 \textbf{The H100 server needs the least energy.} \ImplGpu{} on the H100 trains a tree with 2.01\,kJ, 30\,\% less than \ImplParallel{} on epyc: it draws 18\,\% more power but finishes 1.7$\times$ sooner. The difference grows when the idle consumption is excluded: above it, a tree costs 0.86\,kJ on the H100 server and 2.27\,kJ on epyc, 2.7$\times$ as much.
 
@@ -99,12 +99,13 @@ Table~\ref{tab:energy} lists the results, and Fig.~\ref{fig:energy} shows them f
 Overall, the energy of a tree is governed by its training time. Only between implementations of about the same speed, such as \ImplGpu{} and \ImplHybrid{} on ECBDL'14, does the extra power decide.
 
 % bench/cluster-power/summary.md, final build 81bf6e6c (jobs 559 hopper and
-% 528 epyc1, 2026-11-20): whole-server energy at the power supply (meter model),
+% 528 epyc1, 2026-11-20; Serial trees topped up to 10 and 3 by jobs 562 hopper and
+% 560 epyc1, 2026-11-20/21): whole-server energy at the power supply (meter model),
 % training windows only. GPU and hybrid trees after a 2 s CPU warm-up: within 2%
 % of the time benchmark's single runs (bench/cluster-power/BENCHMARK.md, Time
 % check; warm-up check job 549).
 \begin{table}
-\caption{Energy of one tree on the ECBDL'14 15M subsample (depth $\le$ 10, no pruning): mean training time $t$, mean power $P$ of the whole server while training (measured at its power supply, idle power included), and the energy $E = P \cdot t$. CPU implementations on epyc, GPU implementations on the H100.}
+\caption{Energy of one tree on the ECBDL'14 15M subsample (depth $\le$ 10, no pruning): mean training time $t$, mean power $P$ of the whole server while training (measured at its power supply, idle power included), and the energy $E = P \cdot t$. CPU implementations on epyc, GPU implementations on the H100. Means of 3 trees (\ImplSerialBase{}), 10 trees (\ImplSerialOpt{}), and 3 runs of 13--44 trees (the others).}
 \label{tab:energy}
 \centering
 \setlength{\tabcolsep}{5pt}
@@ -115,8 +116,8 @@ Overall, the energy of a tree is governed by its training time. Only between imp
  & & $t$ & $P$ & $E$ & $t$ & $P$ & $E$ \\
 Implementation & Server & (s) & (W) & (kJ) & (s) & (W) & (kJ) \\
 \midrule
-\ImplSerialBase & epyc   & 2\,291 & 256 & 587  & 2\,596 & 257 & 666  \\
-\ImplSerialOpt  & epyc   & 147    & 263 & 38.5 & 150    & 262 & 39.3 \\
+\ImplSerialBase & epyc   & 2\,295 & 261 & 598  & 2\,598 & 260 & 677  \\
+\ImplSerialOpt  & epyc   & 147    & 265 & 38.9 & 150    & 265 & 39.8 \\
 \ImplParallel   & epyc   & 4.56   & 598 & 2.73 & 4.79   & 598 & 2.87 \\
 \ImplGpu        & hopper & 2.82   & 704 & 1.99 & 2.84   & 707 & 2.01 \\
 \ImplHybrid     & hopper & 2.94   & 770 & 2.26 & 2.92   & 772 & 2.26 \\

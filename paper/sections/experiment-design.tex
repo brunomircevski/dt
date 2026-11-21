@@ -94,11 +94,11 @@ Each configuration is run ten times (or three times when a single run exceeds on
 
 Energy is measured in a separate benchmark on the \texttt{epyc} and \texttt{hopper} servers. We report whole-server energy measured at the power supply, as this reflects the actual energy cost of training. Because the servers' power meters update at most once per second, their resolution is too coarse to measure trees that train in a few seconds. Each implementation therefore trains trees one after another for several minutes, each tree in a fresh process, and we report the mean energy per tree. Before each \ImplGpu{} and \ImplHybrid{} tree, its CPU threads stay busy for 2\,s, as the dataset load keeps them in a single run, so these trees take as long as in the time benchmark (within 2\,\%).
 
-Even then, the meter cannot separate the training of a tree from the short gaps between trees, so we estimate the power of the whole server from faster readings. Every 0.1\,s, we read the power of the CPUs (RAPL) and the GPU (NVML), which shows exactly when each tree is being trained. For each server, we fit a linear power model to the meter readings using several hours of measurements:
+Even then, the meter cannot separate the training of a tree from the short gaps between trees, so we estimate the power of the whole server from faster readings. Every 0.1\,s, we read the power of the CPUs (RAPL) and the GPU (NVML), which shows exactly when each tree is being trained. For each server, we fit a linear power model to the meter readings of each measurement run, which lasts several hours (shown for the main runs):
 \[
 \begin{array}{r@{\;}l}
 P_{\mathrm{epyc}} & \approx 23\,\mathrm{W} + 1.39\,P_{\mathrm{CPU}},\\[2pt]
 P_{\mathrm{hopper}} & \approx 57\,\mathrm{W} + 154\,\mathrm{W} + 1.02\,P_{\mathrm{CPU}} + P_{\mathrm{GPU}},
 \end{array}
 \]
-where $P_{\mathrm{CPU}}$ is CPU power (including DRAM on \texttt{hopper}), $P_{\mathrm{GPU}}$ is the power of the active GPU, and 154\,W is the measured idle power of \texttt{hopper}'s three unused GPUs. A tree's energy is computed by integrating this estimated power over the training interval alone. On long runs, where the power meter alone is accurate, the model agrees with the direct meter reading within 1.8\,\%.
+where $P_{\mathrm{CPU}}$ is CPU power (including DRAM on \texttt{hopper}), $P_{\mathrm{GPU}}$ is the power of the active GPU, and 154\,W is the measured idle power of \texttt{hopper}'s three unused GPUs. A tree's energy is computed by integrating this estimated power over the training interval alone. On long runs, where the power meter alone is accurate, the model agrees with the direct meter reading within 1.2\,\%.

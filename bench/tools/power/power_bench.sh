@@ -43,8 +43,8 @@
 # and first-touch memory.
 #
 # Environment: DATA (.f32 or CSV; default ECBDL'14's train.f32 with ROWS=15000000, the
-# time benchmark's ecbdl_15m), REPS (3), REPS_BY (per backend, e.g. "simple=1";
-# default "simple=1"), TARGET (120 s of training per measured process), IDLE
+# time benchmark's ecbdl_15m), REPS (3), REPS_BY (per backend; default "simple=3
+# serial=10": one tree per process, as many as the time benchmark's runs), TARGET (120 s of training per measured process), IDLE
 # (300), CAL (60 s per staircase level; 0: no staircase), PRE (20), WARMUP (2),
 # CHECK (0; 1: the warm-up check inside the job), CHECK_ONLY (1: the warm-up
 # check alone), CHECK_WARMUPS ("0 2 5 15"), CHECK_TREES (20), ALGOS ("cart c45"), IMPLS (cpu: "simple serial parallel", all: all
@@ -63,7 +63,7 @@ if [ -z "${DATA:-}" ]; then  # ecbdl_15m: a prefix of ecbdl (bench/tools/dataset
 fi
 ROWS=${ROWS:-}
 REPS=${REPS:-3}
-REPS_BY=${REPS_BY:-simple=1}
+REPS_BY=${REPS_BY:-simple=3 serial=10}
 TARGET=${TARGET:-120}
 IDLE=${IDLE:-300}
 CAL=${CAL:-60}

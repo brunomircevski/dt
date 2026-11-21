@@ -1245,7 +1245,7 @@ def chart_meter(folder, jobs):
         # a stretch of a run
         ax = axes[1][col]
         procs = [p for p in job.processes() if p[0].startswith("rep")]
-        pick = next((p for impl in ("gpuonly", "cuda", "parallel") for p in procs if p[1]["impl"] == impl), None)
+        pick = next((p for impl in ("gpuonly", "cuda", "parallel", "serial") for p in procs if p[1]["impl"] == impl), None)
         if pick is None:
             ax.axis("off")
             continue

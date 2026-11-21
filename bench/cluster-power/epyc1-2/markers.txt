@@ -1,0 +1,58 @@
+1795213500.079606 job_start
+1795213520.084027 idle_start
+1795213820.089664 idle_end
+1795213820.092816 cal_start n=1
+1795213880.097686 cal_end n=1
+1795213880.099785 cal_start n=2
+1795213940.104545 cal_end n=2
+1795213940.106745 cal_start n=4
+1795214000.111574 cal_end n=4
+1795214000.113732 cal_start n=8
+1795214060.119642 cal_end n=8
+1795214060.121920 cal_start n=16
+1795214120.128467 cal_end n=16
+1795214120.130837 cal_start n=32
+1795214180.139709 cal_end n=32
+1795214180.141996 cal_start n=48
+1795214240.155594 cal_end n=48
+1795214240.157749 step_end
+1795214540.162098 step_idle_end
+1795214560.167798 start rep1-serial-cart impl=serial algo=cart repeat=1
+1795214744.895295 end rep1-serial-cart rc=0
+1795214764.898476 start rep1-simple-cart impl=simple algo=cart repeat=1
+1795217104.841574 end rep1-simple-cart rc=0
+1795217124.844969 start rep1-serial-c45 impl=serial algo=c45 repeat=1
+1795217313.829482 end rep1-serial-c45 rc=0
+1795217333.833563 start rep1-simple-c45 impl=simple algo=c45 repeat=1
+1795219976.844523 end rep1-simple-c45 rc=0
+1795219996.848727 start rep2-serial-cart impl=serial algo=cart repeat=1
+1795220181.811953 end rep2-serial-cart rc=0
+1795220201.816472 start rep2-simple-cart impl=simple algo=cart repeat=1
+1795222532.334294 end rep2-simple-cart rc=0
+1795222552.338312 start rep2-serial-c45 impl=serial algo=c45 repeat=1
+1795222740.205690 end rep2-serial-c45 rc=0
+1795222760.209517 start rep2-simple-c45 impl=simple algo=c45 repeat=1
+1795225391.744029 end rep2-simple-c45 rc=0
+1795225411.747934 start rep3-serial-cart impl=serial algo=cart repeat=1
+1795225595.784300 end rep3-serial-cart rc=0
+1795225615.788881 start rep3-serial-c45 impl=serial algo=c45 repeat=1
+1795225804.581615 end rep3-serial-c45 rc=0
+1795225824.585020 start rep4-serial-cart impl=serial algo=cart repeat=1
+1795226009.651716 end rep4-serial-cart rc=0
+1795226029.655887 start rep4-serial-c45 impl=serial algo=c45 repeat=1
+1795226217.893354 end rep4-serial-c45 rc=0
+1795226237.897789 start rep5-serial-cart impl=serial algo=cart repeat=1
+1795226423.117490 end rep5-serial-cart rc=0
+1795226443.121326 start rep5-serial-c45 impl=serial algo=c45 repeat=1
+1795226630.600568 end rep5-serial-c45 rc=0
+1795226650.604309 start rep6-serial-cart impl=serial algo=cart repeat=1
+1795226834.901884 end rep6-serial-cart rc=0
+1795226854.906011 start rep6-serial-c45 impl=serial algo=c45 repeat=1
+1795227044.384329 end rep6-serial-c45 rc=0
+1795227064.388755 start rep7-serial-cart impl=serial algo=cart repeat=1
+1795227248.583441 end rep7-serial-cart rc=0
+1795227268.587328 start rep7-serial-c45 impl=serial algo=c45 repeat=1
+1795227456.030833 end rep7-serial-c45 rc=0
+1795227476.034953 idle2_start
+1795227776.040755 idle2_end
+1795227776.044532 job_end

@@ -4,7 +4,9 @@ ECBDL'14 15M (the first 15M rows of ECBDL'14's train.csv, 631 features),
 depth ≤ 10, no pruning, CART and C4.5. Code 81bf6e6c (the final build of the
 2026-11-19 time benchmark rerun, `~/dt-final`; GPU set-up timed). Jobs 559
 (hopper, 2026-11-20 18:14–22:07, GPU and Hybrid with a 2 s warm-up) and 528
-(epyc1, 2026-11-20 11:03–13:29); the warm-up check: job 549 (hopper,
+(epyc1, 2026-11-20 11:03–13:29), each topped up with more Serial-Opt and
+Serial-Simple trees by a second job (562, hopper, 2026-11-21 02:09–06:55; 560,
+epyc1, 2026-11-20 23:25 – 2026-11-21 03:02: `hopper-2/`, `epyc1-2/`); the warm-up check: job 549 (hopper,
 2026-11-20 15:08–15:41, 0, 2, 5 and 15 s, 20 trees each). The first hopper job
 on this build (519, 15 s warm-up) and the 2026-11-16 check (job 171) are in
 the git history.
@@ -32,16 +34,17 @@ Energy per tree (± one standard deviation over the processes):
 
 | Backend | Node | CART: t | E | above idle | C4.5: t | E | above idle |
 |---|---|---|---|---|---|---|---|
-| Serial-Simple | epyc1 | 2,291 s | 587 kJ | 302 kJ | 2,596 s | 666 kJ | 343 kJ |
-| Serial-Simple | hopper | 2,549 s | 1.38 MJ | 344 kJ | 2,783 s | 1.51 MJ | 375 kJ |
-| Serial-Opt | epyc1 | 147 s | 38.5 kJ ± 0.9% | 20.3 kJ | 150 s | 39.3 kJ ± 1.2% | 20.7 kJ |
-| Serial-Opt | hopper | 252 s | 136 kJ ± 0.4% | 33.9 kJ | 260 s | 141 kJ ± 0.3% | 35.0 kJ |
+| Serial-Simple | epyc1 | 2,295 s | 598 kJ ± 1.6% | 298 kJ | 2,598 s | 677 kJ ± 1.4% | 337 kJ |
+| Serial-Simple | hopper | 2,550 s | 1.38 MJ ± 0.2% | 343 kJ | 2,786 s | 1.50 MJ ± 0.1% | 375 kJ |
+| Serial-Opt | epyc1 | 147 s | 38.9 kJ ± 0.8% | 19.6 kJ | 150 s | 39.8 kJ ± 1.0% | 20.1 kJ |
+| Serial-Opt | hopper | 251 s | 136 kJ ± 0.8% | 33.7 kJ | 259 s | 140 kJ ± 0.9% | 34.8 kJ |
 | Multicore | epyc1 | 4.56 s | 2.73 kJ ± 0.3% | 2.16 kJ | 4.79 s | 2.87 kJ ± 0.6% | 2.27 kJ |
 | Multicore | hopper | 9.13 s | 8.27 kJ ± 0.2% | 4.57 kJ | 10.1 s | 9.10 kJ ± 0.2% | 4.98 kJ |
 | GPU | hopper (H100) | 2.82 s | **1.99 kJ** ± 1.4% | 840 J | 2.84 s | **2.01 kJ** ± 0.9% | 855 J |
 | Hybrid | hopper (H100) | 2.94 s | 2.26 kJ ± 0.7% | 1.07 kJ | 2.92 s | 2.26 kJ ± 0.3% | 1.07 kJ |
 
-Runs × trees: Serial-Simple 1 × 1, Serial-Opt 3 × 1, the others 3 processes of
+Runs × trees: Serial-Simple 3 × 1, Serial-Opt 10 × 1 (each tree its own
+process, as the time benchmark's 3 and 10 runs), the others 3 processes of
 13–44 trees (about 120 s of training each).
 
 ![energy per tree](chart-energy.png)
@@ -57,10 +60,16 @@ What it shows:
   about 0.1 s per tree, and its CPU threads work while the GPU does (CPU
   packages + DRAM 0.94 kJ against 0.71 kJ per tree).
 - **Serial-Opt uses 10–17× less energy than Serial-Simple**, and Multicore
-  another 14–16× less than Serial-Opt.
+  another 14× less than Serial-Opt.
 - **Idle power weighs on hopper's single-thread runs**: hopper idles at
-  404 W (four H100s, three of them unused by any run), epyc1 at 119 W, so a
-  Serial run costs 2.3–3.6× as much on hopper as on epyc1.
+  404 W (four H100s, three of them unused by any run), epyc1 at 119–132 W, so a
+  Serial run costs 2.2–3.5× as much on hopper as on epyc1.
+- **The top-up jobs agree with the first ones** on hopper within 0.8%
+  (idle 405 against 406 W). epyc1 idled 13 W higher in its top-up job (the
+  meter: 132 against 119 W; each job had the node to itself), so its
+  one-thread trees used 1.3–2.7% more energy at the same speed (Serial-Opt
+  39.0–40.0 against 38.5–39.3 kJ); above idle 2–5% less. The tables pool both
+  jobs: the spread over the processes is then at most 1.6%.
 - **The warm-up is 2 s since job 559**, so GPU and Hybrid trees take as long
   as the time benchmark's single runs ([Time check](#time-check)). With the
   15 s warm-up of job 519 (same build) they were 11–12% faster (GPU 2.54 s,
@@ -83,8 +92,15 @@ over time of each case's first process: [chart-traces.png](chart-traces.png).
 
 | Node | meter refresh | readings | delay D, window W | model (W) | rms of a reading |
 |---|---|---|---|---|---|
-| epyc1 | 6.3 s | 893 | 1.5 s, 2 s | 23 + 1.39·CPU | 12 W |
-| hopper | 1.0 s | 9,782 | 0.5 s, 1 s | 57 + 154 + 1.02·CPU + GPU | 14 W |
+| epyc1 (job 528) | 6.3 s | 893 | 1.5 s, 2 s | 23 + 1.39·CPU | 12 W |
+| epyc1 (job 560) | 6.3 s | 1,248 | 1.4 s, 2.5 s | 36 + 1.35·CPU | 8 W |
+| hopper (job 559) | 1.0 s | 9,782 | 0.5 s, 1 s | 57 + 154 + 1.02·CPU + GPU | 14 W |
+| hopper (job 562) | 1.0 s | 9,540 | 0.5 s, 1 s | 58 + 154 + 1.01·CPU + GPU | 3 W |
+
+Each job's processes are measured with that job's own model. The top-up jobs
+run only one-thread trees besides the staircase, so their fits see a narrower
+range of loads (epyc1's halves: 53 + 1.26·CPU and 10 + 1.50·CPU), but give
+the same energy per tree within 0.3%.
 
 CPU = RAPL packages + DRAM (epyc1: packages only), GPU = the GPU the GPU
 backends use (NVML), counted as measured (× 1); 154 W = G_idle, the mean
@@ -92,17 +108,18 @@ NVML power of hopper's three unused GPUs over the job (measured, not fitted),
 so that the constant (57 W) is the server without them. The model's idle
 power matches the meter's within 2 W on hopper and 5 W on epyc1 (124 against
 119 W). The model fitted on either half of a job gives the same energy per
-tree within 0.7% (Multicore on epyc1: 1.4%). The MNIST8M job's fit: 53 + 155 + 1.03·CPU + GPU, rms 19 W.
+tree within 0.7% (Multicore on epyc1: 1.4%). The MNIST8M job's fit: 56 + 154 + 1.02·CPU + GPU, rms 17 W.
 
 **Model against the meter** ([chart-methods.png](chart-methods.png)): on
 windows much longer than the meter's refresh (the Serial runs, Multicore on
 hopper, every MNIST8M case) the meter's own energy agrees with the model
-within 1.8% (here Serial-Opt on epyc1), and the readings inside the training
-windows have a mean residual within ±0.6% of the power on every hopper case,
-the 2.5 s H100 trees included. On epyc1 the model is 0.9–1.8% low on the
-single-thread runs (mean residual inside +1.7% on Serial-Opt, +0.9% on
-Serial-Simple; −0.9% on Multicore): the bias the old busy term removed
-([below](#the-simpler-model-2026-11-19)), still within 2%. Leaving a case
+within 1.2% (here Serial-Simple on epyc1 and Hybrid on MNIST8M), and the
+readings inside the training windows have a mean residual within ±0.6% of
+the power on every hopper case, the 3 s H100 trees included. On epyc1 the
+model is 0.3–1.1% low on the single-thread runs (mean residual inside
++0.3–0.4% on Serial-Opt, +0.8–1.1% on Serial-Simple; −0.9% on Multicore): the
+bias the old busy term removed ([below](#the-simpler-model-2026-11-19)),
+within 2%. Leaving a case
 out moves its energy by ≤ 0.5%. The meter's
 own reading of a short window is what the model replaces: on the November 8
 hopper job it was 3–5% low on the 3 s GPU trees.
@@ -155,7 +172,8 @@ and `summary.md` show job 549.
 - Hybrid uses the default `--handoff-rows` of the final build
   (max(512, min(10 × features, 2^depth, 16384)) = 1024 at depth 10 for
   ECBDL'14), like the time benchmark.
-- Serial-Simple: one process per case (38–47 min each).
+- Serial-Simple: three processes per case (38–47 min each), Serial-Opt ten
+  (2.5–4.4 min).
 - epyc1 has no DRAM sensor (AMD): its memory is in "rest of the server".
   hopper's three unused H100s (~51 W each, 154 W together: G_idle in the
   model) are their own component,
@@ -297,8 +315,8 @@ trains K trees, each in its own forked child, so that every tree is a fresh
 process's only tree, and prints each tree's training window as Unix times.
 K = ceil(TARGET / t) + 1 (t from a warm-up run): about 120 s of training per
 process; 3 processes per case, round-robin, 20 s of idle before each
-(Serial-Simple: one process of one tree, 39–47 min). The mean energy per
-tree is reported.
+(Serial-Opt: 10 processes of one tree, 2.5–4.4 min; Serial-Simple: 3, 38–47
+min; `REPS_BY`). The mean energy per tree is reported.
 
 **Warm-up of the GPU backends.** A GPU or Hybrid tree whose CPU threads were
 idle before it sets up slower (the CPU clocks are low: hopper schedutil):
@@ -323,12 +341,18 @@ node first and first-touch memory.
 (`bench/cluster-ecbdl`, single runs).
 
 Run it (from the repository root, on the login node, with ./tree and
-./tree_cpu built by `bench/tools/cluster/build.sh`; about 2.5 h on epyc1,
-4 h on hopper and 35 min for the check):
+./tree_cpu built by `bench/tools/cluster/build.sh`; with 10 Serial-Opt and 3
+Serial-Simple trees a case about 5.5 h on epyc1, 7.5 h on hopper, and 35 min
+for the check):
 
     bench/tools/power/submit.sh -c hopper           # the warm-up check (0, 2, 5, 15 s)
     bench/tools/power/submit.sh epyc1 hopper        # one job per node
     bench/tools/.venv/bin/python bench/tools/power/analyze.py bench/cluster-power
+
+More runs of some cases go into a node's next job folder, pooled by
+`analyze.py` (each job with its own meter model); this run's top-ups:
+
+    bench/tools/power/submit.sh -s 2 epyc1 hopper "IMPLS=serial simple" REPS=7 REPS_BY=simple=2
 
 ### Earlier runs
 
