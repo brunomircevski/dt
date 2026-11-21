@@ -51,19 +51,25 @@ import benchlib as B  # noqa: E402
 USED = []
 
 FULL, HALF = 4.80, 2.35  # inches: LNCS \textwidth and a bit under half of it
+# One type scale for every chart (pt, at the printed size: save() makes each figure exactly
+# FULL wide, and the paper includes it at that width, so nothing is scaled).
+FS_TEXT, FS_TICK, FS_ANN = 7, 6, 5.5  # titles/axis labels/legend, tick labels, numbers on marks
 
 plt.rcParams.update({
     "text.usetex": True,
     "text.latex.preamble": r"\usepackage[T1]{fontenc}\usepackage{amsmath}",
     "font.family": "serif",
-    "font.size": 8, "axes.titlesize": 8, "axes.labelsize": 8,
-    "xtick.labelsize": 7, "ytick.labelsize": 7, "legend.fontsize": 7,
+    "font.size": FS_TEXT, "axes.titlesize": FS_TEXT, "axes.labelsize": FS_TEXT,
+    "xtick.labelsize": FS_TICK, "ytick.labelsize": FS_TICK, "legend.fontsize": FS_TEXT - 0.5,
+    "axes.titlelocation": "left", "axes.titlepad": 3, "axes.labelpad": 2,
+    "xtick.major.pad": 1.5, "ytick.major.pad": 1.5,
+    "legend.columnspacing": 1.2, "legend.handletextpad": 0.4, "legend.handlelength": 1.2,
     "axes.linewidth": 0.5, "xtick.major.width": 0.5, "ytick.major.width": 0.5,
     "xtick.minor.width": 0.4, "ytick.minor.width": 0.4,
     "xtick.major.size": 2.5, "ytick.major.size": 2.5, "xtick.minor.size": 1.5,
     "ytick.minor.size": 1.5, "lines.linewidth": 1.0, "lines.markersize": 3.5,
     "axes.spines.top": False, "axes.spines.right": False,
-    "legend.frameon": False, "legend.handlelength": 1.6, "legend.borderaxespad": 0.2,
+    "legend.frameon": False, "legend.borderaxespad": 0.2,
     "pdf.fonttype": 42, "savefig.bbox": "tight", "savefig.pad_inches": 0.01,
 })
 
@@ -191,7 +197,51 @@ def log_axis(ax, axis="y", lo=None, hi=None):
     a.set_minor_formatter(NullFormatter())
 
 
-def save(fig, name, copy=None):
+def ink_box(fig):
+    """The figure's drawn extent (tight bbox), in inches."""
+    fig.draw_without_rendering()
+    return fig.get_tightbbox(fig._get_renderer())
+
+
+def fit_width(fig, width):
+    """Resize the figure until what it draws is exactly `width` inches wide (the text stays the
+    same size, the axes take up the difference); -> the save box, that wide, centred."""
+    from matplotlib.transforms import Bbox
+    for _ in range(6):
+        b = ink_box(fig)
+        if abs(b.width - width) < 0.005:
+            break
+        w, h = fig.get_size_inches()
+        fig.set_size_inches(w + width - b.width, h)
+    b = ink_box(fig)
+    x0 = b.x0 - (width - b.width) / 2
+    return Bbox([[x0, b.y0 - 0.01], [x0 + width, b.y1 + 0.01]])
+
+
+def axes_mid(fig):
+    """Horizontal middle of the panels, as a figure fraction."""
+    return (min(a.get_position().x0 for a in fig.axes) + max(a.get_position().x1 for a in fig.axes)) / 2
+
+
+def legend_below(fig, handles, gap=0.04, **kw):
+    """One legend row centred under everything drawn so far (axes, tick labels, x labels)."""
+    b = ink_box(fig)
+    h = fig.get_size_inches()[1]
+    kw = dict(dict(ncol=len(handles)), **kw)
+    return fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(axes_mid(fig), (b.y0 - gap) / h),
+                      bbox_transform=fig.transFigure, **kw)
+
+
+def legend_above(fig, handles, gap=0.02, **kw):
+    """One legend row centred over everything drawn so far (panel titles)."""
+    b = ink_box(fig)
+    h = fig.get_size_inches()[1]
+    kw = dict(dict(ncol=len(handles)), **kw)
+    return fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(axes_mid(fig), (b.y1 + gap) / h),
+                      bbox_transform=fig.transFigure, **kw)
+
+
+def save(fig, name, copy=None, width=FULL):
     """paper/figs/test-<name>.pdf; copy: also <copy>.pdf (the same file) and <copy>.png (for the
     benchmark's BENCHMARK.md), the figure the paper shows kept with its benchmark's data."""
     OUT.mkdir(exist_ok=True)
@@ -202,11 +252,12 @@ def save(fig, name, copy=None):
                  "a placeholder until the rerun", ha="left", va="bottom", fontsize=6.5, color=INK,
                  bbox=dict(boxstyle="round,pad=0.25", fc="#fab219", ec="none"))
     USED.clear()
-    fig.savefig(OUT / f"test-{name}.pdf", metadata={"CreationDate": None})  # no date (the font subset tags still vary)
+    box = fit_width(fig, width)
+    fig.savefig(OUT / f"test-{name}.pdf", bbox_inches=box, metadata={"CreationDate": None})  # no date (the font subset tags still vary)
     print("wrote", OUT / f"test-{name}.pdf")
     if copy:
         shutil.copyfile(OUT / f"test-{name}.pdf", copy.with_suffix(".pdf"))
-        fig.savefig(copy.with_suffix(".png"), dpi=300, facecolor="white")
+        fig.savefig(copy.with_suffix(".png"), bbox_inches=box, dpi=300, facecolor="white")
         print("wrote", copy.with_suffix(".pdf"), copy.with_suffix(".png"))
     plt.close(fig)
 
@@ -219,7 +270,7 @@ def ladder():
     n = len(stages)
     shades = ["#2a78d6", "#eb6834", "#1baf7a", "#7f4fc9", "#eda100"]
     marks = ["o", "s", "D", "^", "v"]
-    fig, axes = plt.subplots(1, 2, figsize=(FULL, 2.1), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(FULL, 1.75), sharey=True, gridspec_kw={"wspace": 0.06})
     for ax, algo in zip(axes, ["cart", "c45"]):
         times = {}
         for ds, c, m in zip(datasets, shades, marks):
@@ -236,24 +287,21 @@ def ladder():
             fmt = (lambda v: f"{v:.0f}") if max(f) >= 10 else (lambda v: f"{v:.1f}")
             rng = fmt(min(f)) if fmt(min(f)) == fmt(max(f)) else f"{fmt(min(f))}--{fmt(max(f))}"
             ax.text(i + 0.5, 2.6e4 if i % 2 == 0 else 7e3, rf"$\times${rng}",
-                    ha="center", va="center", fontsize=5.5, color=INK,
+                    ha="center", va="center", fontsize=FS_ANN, color=INK,
                     bbox=dict(boxstyle="round,pad=0.15", fc="white", ec=GRID, lw=0.4))
         total = [times[d][0] / times[d][-1] for d in datasets]
-        ax.set_title(rf"\textbf{{{ALGO[algo]}}}: overall $\times${min(total):.0f}--{max(total):.0f}",
-                     loc="left", pad=3)
+        ax.set_title(rf"\textbf{{{ALGO[algo]}}}: overall $\times${min(total):.0f}--{max(total):.0f}")
         log_axis(ax, "y")
         ax.set_ylim(0.05, 6e4)
         ax.axvspan(2.6, n - 0.7, color="#f3f3f3", zorder=-1, lw=0)
-        ax.text(n - 1.5, 2.6e4, "H100", ha="center", va="center", fontsize=6, color=MUTED)
-        ax.set_xticks(range(n), names)
-        ax.set_xlim(-0.3, n - 0.7)
+        ax.text(n - 1.5, 2.6e4, "H100", ha="center", va="center", fontsize=FS_ANN, color=MUTED)
+        ax.set_xticks(range(n), names, linespacing=0.95)
+        ax.set_xlim(-0.35, n - 0.65)
         ax.grid(axis="y", color=GRID, lw=0.4, zorder=0)
-        ax.tick_params(axis="x", length=0, labelsize=6.2)
+        ax.tick_params(axis="x", length=0)
     axes[0].set_ylabel("training time (s)")
-    h, l = axes[0].get_legend_handles_labels()
-    fig.legend(h, l, loc="lower center", ncol=5, bbox_to_anchor=(0.5, -0.1), fontsize=6.5,
-               handlelength=1.6, columnspacing=1.2)
-    fig.subplots_adjust(wspace=0.08)
+    h, _ = axes[0].get_legend_handles_labels()
+    legend_below(fig, h, handlelength=1.6)
     save(fig, "ladder")
 
 
@@ -362,40 +410,42 @@ def heatmap():
 # ---------------------------------------------------------------- 4. scaling
 def scaling():
     sets = [("higgs", "o", "HIGGS", "#2a78d6"), ("mnist8m", "s", "MNIST8M", "#eb6834")]
-    for node, title in [("epyc", "epyc1: 2 × EPYC 9255"), ("dell", "dell: 2 × Xeon Gold 6542Y")]:
-        fig, ax = plt.subplots(figsize=(HALF, 1.85))
+    fig, axes = plt.subplots(1, 2, figsize=(FULL, 1.6), sharey=True, gridspec_kw={"wspace": 0.06})
+    for ax, (node, title) in zip(axes, [("epyc", r"\textbf{epyc1}: 2 $\times$ EPYC 9255"),
+                                        ("dell", r"\textbf{dell}: 2 $\times$ Xeon Gold 6542Y")]):
         ax.plot([1, 48], [1, 48], color=GRID, lw=0.8, zorder=0)
-        ax.text(10, 13, "ideal", fontsize=6, color=MUTED, rotation=37)
-        ax.axvline(24, color=MUTED, lw=0.5, ls=(0, (1, 2)), zorder=0)
-        ax.text(25, 1.5, "2nd socket $\\rightarrow$", fontsize=5.5, color=MUTED, va="bottom")
+        ax.text(12, 15.5, "ideal", fontsize=FS_ANN, color=MUTED, rotation=33, ha="center")
+        ax.axvline(24, color=MUTED, lw=0.5, ls=(0, (1, 2)), zorder=1)
+        ax.text(25, 1.5, "2nd socket $\\rightarrow$", fontsize=FS_ANN, color=MUTED, va="bottom")
         labels = []  # [speed-up at 48 threads, text, colour]: placed together below, apart
         for ds, m, dl, c in sets:
             f = RES / "cluster-cpu-scaling" / f"cpu-{node}-{ds}" / "scaling.csv"
             USED.append(B.rows_out_of_date([], json.load(open(f.parent / "machine.json"))))
             for algo, ls in [("cart", "-"), ("c45", "--")]:
-                r =[x for x in csv.DictReader(open(f)) if x["protocol"] == PROTO[algo]]
+                r = [x for x in csv.DictReader(open(f)) if x["protocol"] == PROTO[algo]]
                 t = [int(x["threads"]) for x in r]
                 sp = [float(x["speedup"]) for x in r]
                 ax.plot(t, sp, ls=ls, color=c, lw=0.9, marker=m, ms=2.4, mfc="white" if algo == "c45" else c,
                         mew=0.6, markevery=[0, 3, 7, 13])
                 labels.append([sp[-1], rf"{sp[-1]:.0f}$\times$ ({100 * sp[-1] / 48:.0f}\%)", c])
         labels.sort()
-        for i in range(1, len(labels)):  # at least 2.6 speed-up units (one label's height) apart
-            labels[i][0] = max(labels[i][0], labels[i - 1][0] + 2.6)
+        for i in range(1, len(labels)):  # at least one label's height apart
+            labels[i][0] = max(labels[i][0], labels[i - 1][0] + 3.2)
         for y, text, c in labels:
-            ax.annotate(text, (49, y), fontsize=5.3, color=c, va="center")
-        ax.set_xlim(0, 60)
+            ax.annotate(text, (49.5, y), fontsize=FS_ANN, color=c, va="center")
+        ax.set_xlim(0, 62)
         ax.set_ylim(0, 48)
         ax.set_xticks([1, 8, 16, 24, 32, 40, 48])
+        ax.set_yticks([0, 10, 20, 30, 40])
         ax.set_xlabel("threads")
-        ax.set_ylabel("speed-up over 1 thread")
-        ax.set_title(title, loc="left", pad=3, fontsize=7)
+        ax.set_title(title)
         ax.grid(color=GRID, lw=0.3, zorder=0)
-        h = [Line2D([], [], color=c, lw=0.9, marker=m, ms=2.5, label=dl) for _, m, dl, c in sets]
-        h += [Line2D([], [], color=MUTED, lw=0.9, ls="-", label="CART"),
-              Line2D([], [], color=MUTED, lw=0.9, ls="--", label="C4.5")]
-        ax.legend(handles=h, loc="upper left", fontsize=5.8, labelspacing=0.2, handlelength=1.8)
-        save(fig, f"scaling-{node}")
+    axes[0].set_ylabel("speed-up over 1 thread")
+    h = [Line2D([], [], color=c, lw=0.9, marker=m, ms=2.5, label=dl) for _, m, dl, c in sets]
+    h += [Line2D([], [], color=MUTED, lw=0.9, ls="-", label="CART"),
+          Line2D([], [], color=MUTED, lw=0.9, ls="--", label="C4.5")]
+    legend_below(fig, h, handlelength=1.8)
+    save(fig, "scaling")
 
 
 # ---------------------------------------------------------------- 7. depth
@@ -407,8 +457,8 @@ def depth():
              "c45": [f"c45_depth{d}_unpruned" for d in depths[:-1]] + ["c45_unpruned"]}
     c_hy, c_go = STYLE["cuda"][1], "#b9c2bc"
     sets = [("higgs", "HIGGS"), ("mnist8m", "MNIST8M"), ("sorel_4m", "SOREL 4M")]
-    fig, axes = plt.subplots(len(sets), 2, figsize=(FULL, 1.375 * len(sets)), sharex=True,
-                             gridspec_kw={"hspace": 0.32, "wspace": 0.12})
+    fig, axes = plt.subplots(len(sets), 2, figsize=(FULL, 0.95 * len(sets)), sharex=True,
+                             gridspec_kw={"hspace": 0.42, "wspace": 0.1})
     x = np.arange(len(depths))
     w = 0.38
     for row, (ds, name) in enumerate(sets):
@@ -422,21 +472,22 @@ def depth():
             ax.bar(x + w / 2, tg, w, color=c_go, lw=0, label="GPU-Based", zorder=2)
             for i in range(len(x)):
                 r = tg[i] / th[i]
-                ax.text(x[i], max(th[i], tg[i]) + 0.02 * top, f"{r:.1f}" + r"$\times$",
-                        ha="center", va="bottom", fontsize=5.3, color=INK)
-            ax.set_ylim(0, top * 1.15)
+                ax.text(x[i], max(th[i], tg[i]) + 0.03 * top, f"{r:.1f}" + r"$\times$",
+                        ha="center", va="bottom", fontsize=FS_ANN, color=INK)
+            ax.set_ylim(0, top * 1.22)
+            ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(4, steps=[1, 2, 5, 10]))
             ax.grid(axis="y", color=GRID, lw=0.3, zorder=0)
             ax.tick_params(axis="x", length=0)
             ax.set_xticks(x, depths)
-            ax.set_title(rf"\textbf{{{name}}}, {ALGO[algo]}", loc="left", pad=2, fontsize=7)
-            if col:
-                ax.tick_params(axis="y", labelleft=False)
-            else:
+            ax.set_title(rf"\textbf{{{name}}}, {ALGO[algo]}", pad=2)
+            if not col:
                 ax.set_ylabel("time (s)")
-        axes[row, 1].sharey(axes[row, 0])
-    fig.supxlabel("depth limit", fontsize=7, y=0.0)
-    h, l = axes[0, 0].get_legend_handles_labels()
-    fig.legend(h, l, loc="upper right", ncol=2, bbox_to_anchor=(0.91, 1.02), frameon=False)
+        axes[row, 1].sharey(axes[row, 0])  # one scale a row, its numbers on both panels
+    for ax in axes[-1]:
+        ax.set_xlabel("depth limit")
+    h, _ = axes[0, 0].get_legend_handles_labels()
+    h.append(Line2D([], [], ls="", label=r"1.2$\times$ above the bars: GPU-Based time $\div$ Hybrid time"))
+    legend_below(fig, h)
     save(fig, "depth")
 
 
@@ -507,10 +558,13 @@ def profile():
              ("cuda-hopper", "Hybrid")]
     cases = P.load(RES / "cluster-profiling", datasets)
     USED.extend(c["stale"] for c in cases.values())
-    fig, axes = plt.subplots(1, 2, figsize=(FULL, 2.25), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(FULL, 2.0), sharey=True, gridspec_kw={"wspace": 0.2})
+    gap = 0.8  # between dataset groups: room for the group's name
+    heads = []
     for ax, (proto, algo) in zip(axes, P.PROTOCOLS):
         y, ticks = 0, []
         for ds in datasets:
+            heads.append((y - 0.62, labels[ds]))
             for mode, ml in modes:
                 case = cases.get((mode, ds, proto))
                 if case:
@@ -520,37 +574,32 @@ def profile():
                     for step, _, color in P.STEPS:
                         v = sum(val for (s, _), val in parts.items() if s == step) / total
                         ax.barh(y, v, left=left, color=color, height=0.78, lw=0)
-                        if v > 0.12:
+                        if v > 0.1:
                             ax.text(left + v / 2, y, f"{100 * v:.0f}", ha="center", va="center",
-                                    fontsize=5, color=P.text_color(color))
+                                    fontsize=FS_ANN - 0.5, color=P.text_color(color))
                         left += v
                     gpu = sum(val for (_, d), val in parts.items() if d == "GPU") / total
                     if gpu > 0:
                         ax.plot([gpu], [y - 0.39], marker="v", color=INK, ms=2.2, clip_on=False)
-                    ax.text(1.015, y, tsec(case["row"]["train_seconds"]) + " s", va="center",
-                            fontsize=5.3, transform=ax.get_yaxis_transform())
+                    ax.text(1.015, y, tsec(case["row"]["train_seconds"]) + r"\,s", va="center",
+                            fontsize=FS_ANN, transform=ax.get_yaxis_transform())
                 ticks.append((y, ml))
                 y += 1
-            y += 0.45
-        ax.set_yticks([t for t, _ in ticks], [l for _, l in ticks], fontsize=5.5)
-        # dataset labels as group headers on the left panel
+            y += gap
+        ax.set_yticks([t for t, _ in ticks], [l for _, l in ticks])
         ax.set_xlim(0, 1)
-        ax.set_xticks([0, 0.25, 0.5, 0.75, 1], ["0", "25", "50", "75", "100\\%"])
+        ax.set_ylim(y - gap - 0.5, -1.05)
+        ax.set_xticks([0, 0.25, 0.5, 0.75, 1], ["0", "25", "50", "75", "100"])
+        ax.set_xlabel(r"share of training time (\%)")
         ax.tick_params(axis="y", length=0, pad=1.5)
         ax.spines["left"].set_visible(False)
-        ax.set_title(rf"\textbf{{{algo}}}", loc="left", pad=3)
-    axes[0].invert_yaxis()
-    fig.supxlabel("share of training time", fontsize=7, y=0.0)
-    for i, ds in enumerate(datasets):
-        yc = i * (len(modes) + 0.45) + 1.5
-        axes[0].text(-0.25, yc, labels[ds], rotation=90, ha="center", va="center", fontsize=6,
-                     transform=axes[0].get_yaxis_transform())
+        ax.set_title(rf"\textbf{{{algo}}}", pad=1)
+        for yh, name in heads[-len(datasets):]:  # dataset name over its group, in each panel
+            ax.text(0, yh, rf"\textit{{{name}}}", ha="left", va="baseline", fontsize=FS_ANN, color=MUTED)
     h = [plt.Rectangle((0, 0), 1, 1, color=c, label=tex(n).replace("↔", r"$\leftrightarrow$"))
          for _, n, c in P.STEPS]
     h.append(Line2D([], [], ls="", marker="v", color=INK, ms=3, label="GPU-busy share"))
-    fig.legend(handles=h, loc="lower center", ncol=6, bbox_to_anchor=(0.5, -0.12),
-               handlelength=1.0, columnspacing=0.9)
-    fig.subplots_adjust(wspace=0.45)
+    legend_below(fig, h, handlelength=1.0)
     save(fig, "profile")
 
 # ---------------------------------------------------------------- 8. bars
@@ -560,12 +609,12 @@ def bars():
     datasets = ["susy", "higgs", "mnist8m", "ecbdl", "ecbdl_15m", "sorel", "sorel_4m"]
     impls = [("simple", "epyc"), ("serial", "epyc"), ("cpu", "epyc"), ("gpuonly", "hopper"),
              ("cuda", "hopper")]
-    labels = {"simple": "Serial Simple, 1 thread", "serial": "Serial Optimized, 1 thread",
-              "cpu": "Multicore CPU, 48 threads", "gpuonly": "GPU-Based, H100", "cuda": "Hybrid, H100"}
+    labels = {"simple": "Serial Simple", "serial": "Serial Optimized",
+              "cpu": "Multicore CPU", "gpuonly": "GPU-Based", "cuda": "Hybrid"}
     n = len(impls)
     w = 0.72 / n
     x = np.arange(len(datasets))
-    fig, axes = plt.subplots(2, 1, figsize=(FULL, 3.6), sharex=True, gridspec_kw={"hspace": 0.12})
+    fig, axes = plt.subplots(2, 1, figsize=(FULL, 2.9), sharex=True, gridspec_kw={"hspace": 0.1})
     for ax, algo in zip(axes, ["cart", "c45"]):
         for j, (mode, node) in enumerate(impls):
             _, c, _ = STYLE[mode]
@@ -577,10 +626,10 @@ def bars():
                 t = r["time_mean"]
                 ax.bar(xi, t, w * 0.9, color=c, ec=INK, lw=0.3, zorder=2,
                        label=labels[mode] if i == 0 else None)
-                ax.text(xi, t * 1.12, tsec(t), rotation=90, ha="center", va="bottom", fontsize=4.6,
+                ax.text(xi, t * 1.15, tsec(t), rotation=90, ha="center", va="bottom", fontsize=FS_ANN - 0.5,
                         color=INK)
         log_axis(ax, "y")
-        ax.set_ylim(0.03, 8e4)
+        ax.set_ylim(0.03, 1.5e5)
         ax.set_yticks([0.1, 1, 10, 100, 1000, 10000])
         ax.grid(axis="y", color=GRID, lw=0.4, zorder=0)
         ax.set_ylabel(rf"\textbf{{{ALGO[algo]}}}: time (s)")
@@ -588,11 +637,10 @@ def bars():
         for i in range(1, len(datasets)):
             ax.axvline(i - 0.5, color=GRID, lw=0.4, zorder=0)
     names = {"ecbdl_15m": "ECBDL'14\n15M samples", "sorel_4m": "SOREL\n4M samples"}
-    axes[1].set_xticks(x, [tex(names.get(d, DATA[d][0])) for d in datasets], fontsize=5.4)
+    axes[1].set_xticks(x, [tex(names.get(d, DATA[d][0])) for d in datasets], linespacing=0.95)
     axes[1].set_xlim(-0.5, len(datasets) - 0.5)
-    h, l = axes[0].get_legend_handles_labels()
-    fig.legend(h, l, loc="lower center", ncol=5, bbox_to_anchor=(0.5, 0.885), fontsize=5.8,
-               handlelength=1.0, columnspacing=0.8, handletextpad=0.3)
+    h, _ = axes[0].get_legend_handles_labels()
+    legend_below(fig, h, handlelength=1.0)
     save(fig, "bars")
 
 
@@ -669,8 +717,8 @@ def energy(algo="c45", cpu_nodes=("epyc",), gpu_nodes=("hopper",)):
     rows = power_rows()
     cases = [(k, n) for k, n in p_cases(rows)
              if n in (gpu_nodes if k in ("gpuonly", "cuda") else cpu_nodes)]
-    fig, axes = plt.subplots(1, 4, figsize=(FULL, 2.2), sharey=True,
-                             gridspec_kw={"wspace": 0.16, "width_ratios": [1, 1, 0.95, 0.9]})
+    fig, axes = plt.subplots(1, 4, figsize=(FULL, 1.35), sharey=True,
+                             gridspec_kw={"wspace": 0.14})
     ax_t, ax_p, ax_c, ax_e = axes
     # CPU+GPU panel: bars in the implementation's colour; on the GPU runs the CPU packages'
     # part (the start of the bar) carries blue stripes
@@ -680,7 +728,7 @@ def energy(algo="c45", cpu_nodes=("epyc",), gpu_nodes=("hopper",)):
     HATCH = "/////"  # about 5 pt apart along the bar in the PDF
     plt.rcParams["hatch.linewidth"] = 1.8  # about half the gap; read when the bars are made
     y = np.arange(len(cases))[::-1].astype(float)
-    hgt, fs = 0.62, 4.9
+    hgt, fs = 0.7, FS_ANN
     for yi, (k, node) in zip(y, cases):
         r = rows[(k, node, algo)]
         c, lc = STYLE[k][1], to_rgba(STYLE[k][1], 0.35)
@@ -706,24 +754,23 @@ def energy(algo="c45", cpu_nodes=("epyc",), gpu_nodes=("hopper",)):
     ax_t.set_xlim(1, 8e4)
     ax_t.set_xticks([1, 100, 1e4], [r"1\,s", r"100\,s", r"10k\,s"])
     ax_t.xaxis.set_minor_formatter(NullFormatter())
-    ax_t.set_title("time per tree", loc="left", pad=3, fontsize=7)
+    ax_t.set_title("time per tree")
     ax_p.set_xlim(0, 1100)
     ax_p.set_xticks([0, 400, 800], [r"0\,W", r"400\,W", r"800\,W"])
-    ax_p.set_title("server power", loc="left", pad=3, fontsize=7)
-    ax_c.set_xlim(0, 720)
+    ax_p.set_title("server power")
+    ax_c.set_xlim(0, 760)
     ax_c.set_xticks([0, 400], [r"0\,W", r"400\,W"])
-    ax_c.set_title("CPU+GPU power", loc="left", pad=3, fontsize=7)
+    ax_c.set_title("CPU+GPU power")
     joule_axis(ax_e, "x")
-    ax_e.set_xlim(1e3, 1.5e7)
+    ax_e.set_xlim(1e3, 3e7)
     ax_e.set_xticks([1e3, 1e5, 1e7])
-    ax_e.set_title("total energy per tree", loc="left", pad=3, fontsize=7)
+    ax_e.set_title("energy per tree")
     for ax in axes:
         ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
         ax.set_axisbelow(True)
         ax.tick_params(axis="y", length=0)
-        ax.tick_params(axis="x", labelsize=5.2)
-    ax_t.set_yticks(y, [f"{STYLE[k][0]}, {P_GPU[n] if k in ('gpuonly', 'cuda') else n}"
-                        for k, n in cases], fontsize=6.2)
+    ax_t.set_yticks(y, [STYLE[k][0] for k, n in cases])
+    ax_t.set_ylim(y[-1] - 0.55, y[0] + 0.55)
     for i in range(1, len(cases)):
         if cases[i][0] != cases[i - 1][0]:
             for ax in axes:
@@ -731,8 +778,7 @@ def energy(algo="c45", cpu_nodes=("epyc",), gpu_nodes=("hopper",)):
     h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="idle server"),
          plt.Rectangle((0, 0), 1, 1, fc=STYLE["gpuonly"][1], ec=STRIPE["gpuonly"], lw=0, hatch=HATCH,
                        label="CPU part of a GPU run")]
-    fig.legend(handles=h, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.06), fontsize=6,
-               handlelength=2.4, handleheight=1.2)
+    legend_below(fig, h, handlelength=2.4, handleheight=1.0)
     save(fig, "energy", copy=POWER.parent / "paper-fig-energy-ecbdl_15m")
 
 
@@ -757,15 +803,15 @@ def energy_deep():
         commit = re.search(r"^commit (\S+)", machine.read_text(), re.M)
         USED.append(B.out_of_date(commit and commit.group(1), machine.parent.name.rstrip("0123456789")))
     impls = [("parallel", "cpu"), ("gpuonly", "gpuonly"), ("cuda", "cuda")]
-    cases = [(algo, impl, key) for algo in ("c45", "cart") for impl, key in impls if (impl, algo) in rows]
-    fig, axes = plt.subplots(1, 4, figsize=(FULL, 0.24 * len(cases) + 0.55), sharey=True,
-                             gridspec_kw={"wspace": 0.16})
+    cases = [(algo, impl, key) for algo in ("c45",) for impl, key in impls if (impl, algo) in rows]
+    fig, axes = plt.subplots(1, 4, figsize=(FULL, 0.2 * len(cases) + 0.35), sharey=True,
+                             gridspec_kw={"wspace": 0.14})
     ax_t, ax_p, ax_c, ax_e = axes
     STRIPE = {"cpu": "#123f7a", "gpuonly": "#1a4d99", "cuda": "#8cc4ff"}
     HATCH = "/////"
     plt.rcParams["hatch.linewidth"] = 1.8
     y = np.arange(len(cases))[::-1].astype(float)
-    hgt, fs = 0.62, 4.9
+    hgt, fs = 0.7, FS_ANN
     for yi, (algo, impl, k) in zip(y, cases):
         r = rows[(impl, algo)]
         c, lc = STYLE[k][1], to_rgba(STYLE[k][1], 0.35)
@@ -792,16 +838,16 @@ def energy_deep():
     for ax, top, unit, title in ((ax_t, t_max, "s", "time per tree"), (ax_p, p_max, "W", "server power"),
                                  (ax_c, c_max, "W", "CPU+GPU power"),
                                  (ax_e, e_max, "kJ", "energy per tree")):
-        ax.set_xlim(0, top * 1.38)
+        ax.set_xlim(0, top * 1.45)
         ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(3, steps=[1, 2, 2.5, 5, 10]))
         ax.xaxis.set_major_formatter(FuncFormatter(
             lambda v, _, u=unit: rf"{v / 1e3:g}\,k{u}" if u == "W" and v >= 1e3 else rf"{v:g}\,{u}"))
-        ax.set_title(title, loc="left", pad=3, fontsize=7)
+        ax.set_title(title)
         ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
         ax.set_axisbelow(True)
         ax.tick_params(axis="y", length=0)
-        ax.tick_params(axis="x", labelsize=5.2)
-    ax_t.set_yticks(y, [f"{ALGO[a]}, {STYLE[k][0]}" for a, _, k in cases], fontsize=6.2)
+    ax_t.set_yticks(y, [STYLE[k][0] for a, _, k in cases])
+    ax_t.set_ylim(y[-1] - 0.55, y[0] + 0.55)
     for i in range(1, len(cases)):
         if cases[i][0] != cases[i - 1][0]:
             for ax in axes:
@@ -810,8 +856,7 @@ def energy_deep():
          plt.Rectangle((0, 0), 1, 1, fc=STYLE["gpuonly"][1], ec=STRIPE["gpuonly"], lw=0, hatch=HATCH,
                        label="CPU packages"),
          plt.Rectangle((0, 0), 1, 1, color=STYLE["gpuonly"][1], label="GPU")]
-    fig.legend(handles=h, loc="lower center", ncol=3, bbox_to_anchor=(0.5, -0.09), fontsize=6,
-               handlelength=2.4, handleheight=1.2)
+    legend_below(fig, h, handlelength=2.4, handleheight=1.0)
     save(fig, "energy-mnist8m", copy=POWER_DEEP.parent / "paper-fig-energy-mnist8m")
 
 

@@ -15,8 +15,7 @@
 \end{figure}
 
 \begin{figure}
-\includegraphics[width=0.49\textwidth]{test-scaling-epyc.pdf}\hfill
-\includegraphics[width=0.49\textwidth]{test-scaling-dell.pdf}
+\includegraphics[width=\textwidth]{test-scaling.pdf}
 \caption{Speed-up of \ImplParallel{} over one thread on epyc1 (left) and dell (right), depth $\le$ 10, unpruned. Labels: speed-up and parallel efficiency at 48 threads; dotted line: the second socket starts at 25 threads.}
 \label{fig:test-scaling}
 \end{figure}
@@ -40,14 +39,12 @@
 \end{figure}
 
 \begin{figure}
-\includegraphics[width=\textwidth]{test-energy.pdf}
-\caption{Time, power and energy to train one C4.5 tree on the ECBDL'14 15M subsample (depth $\le$ 10, unpruned). Each row is one implementation on one server: the CPU implementations on epyc, the GPU implementations on the H100 server. From left to right: training time; mean power of the whole server while training, with the share the idle server would draw in a lighter shade; the part of that power drawn by the CPUs and the GPU in use (hatched: the CPUs during a GPU run); and the energy per tree, time $\times$ power. Time and energy are on logarithmic scales.}
-\label{fig:energy}
-\end{figure}
-
-\begin{figure}
+{\small\textbf{(a)} ECBDL'14 15M subsample, depth $\le$ 10}\par\smallskip
+\includegraphics[width=\textwidth]{test-energy.pdf}\par\bigskip
+{\small\textbf{(b)} MNIST8M, no depth limit}\par\smallskip
 \includegraphics[width=\textwidth]{test-energy-mnist8m.pdf}
-\caption{Time, power and energy to train one tree on MNIST8M without a depth limit (unpruned): \ImplParallel{}, \ImplGpu{} and \ImplHybrid{} on the same H100 server, all 32 CPUs. Panels as in Fig.~\ref{fig:energy}, on linear scales: the lighter shade in the server power and the energy is the idle server's share; in the CPU+GPU power the hatched part is the CPU packages, the rest the GPU in use (none for \ImplParallel{}). Means of six rounds of 5--17 trees each (standard deviation of the energy at most 0.6\,\%).}
+\caption{Time, power and energy to train one C4.5 tree (unpruned, mean over the runs). (a)~CPU implementations on epyc, GPU ones on the H100 server; time and energy on log scales. (b)~All on the H100 server; linear scales. Lighter shade: the idle server's share; hatched: the CPU packages.}
+\label{fig:energy}
 \label{fig:energy-deep}
 \end{figure}
 
