@@ -16,7 +16,7 @@ where it was the smallest; and MNIST8M (8.1M × 784) in between. The trees are
 the same in both modes (node counts under each group). The hybrid runs at the
 fastest `--handoff-rows` of a sweep on the same node and dataset
 ([the sweep](#--handoff-rows-the-sweep)). Its picks are now stored in
-`bench/handoff-tuning/handoff_rows.json` ("nodepth"); later runs take them from there (and the
+`bench/tools/handoff/handoff_rows.json` ("nodepth"); later runs take them from there (and the
 depth-10 sweep's value for depth 10) instead of sweeping again
 ([bench/tools/README.md](../tools/README.md#the-hybrids-hand-off-size)).
 
@@ -29,7 +29,7 @@ The GPU's socket's CPUs come first and the memory is not bound
 **When.** hopper: ./tree 81bf6e6c (the same tree code as f53347a9), 2026-11-19,
 10 runs a case, in two jobs (`hopper-higgs-sorel_4m.log`, `hopper-mnist8m.log`;
 `hybrid_vs_gpu_only.sh` with `RUNS=10`), taking the `--handoff-rows` of the
-2026-11-15/16 sweep from `bench/handoff-tuning/handoff_rows.json` instead of
+2026-11-15/16 sweep from `bench/tools/handoff/handoff_rows.json` instead of
 sweeping again. The CUDA runs time ./tree's GPU setup (memory pool, staging
 buffers, and for `--hybrid` its page-locked hand-off buffers): only the bare
 CUDA context is untimed ([bench/tools/README.md](../tools/README.md#how-time-is-measured)).

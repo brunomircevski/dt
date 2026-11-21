@@ -269,7 +269,7 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
   rows-based default (rows / 8192 or / 4096, 1024-4096) was 6-12% slower.
   With a shallow depth limit the tree reaches the limit almost everywhere, so
   the GPU runs all D levels anyway and a hand-off only moves the last levels'
-  work to the slower CPU. At depth 10 (291a736f, bench/handoff-tuning/)
+  work to the slower CPU. At depth 10 (291a736f, bench/tools/handoff/)
   the fastest was 512-2048 on every dataset (ECBDL 4096, with 1024 within
   0.6%), and 10 × features alone made CART 4-11% slower on MNIST8M and SOREL
   4M; the 2^D cap (1024 at depth 10) brings CART within 0.6% of the fastest

@@ -9,7 +9,7 @@ without the GPU setup (train_seconds - gpu_setup_seconds: presort and build,
 what the hand-off acts on) over that protocol's fastest. The setup (allocation
 and upload) does not depend on the value, and on the H100 it takes one of two
 speeds from run to run (docs/PERFORMANCE.md), enough to decide a close sweep. "default" is measured for reference only. The
-value is also stored in bench/handoff-tuning/handoff_rows.json under node, dataset and <key>
+value is also stored in bench/tools/handoff/handoff_rows.json under node, dataset and <key>
 ("depth10", "nodepth"), where bench/tools/run.py takes it for every --hybrid run.
 """
 
@@ -42,7 +42,7 @@ best = min(numeric, key=score.get)
 (folder / f"{node}-{dataset}.json").write_text(json.dumps(
     {"min_rows": int(best), "times": times, "score": score}, indent=1) + "\n")
 
-store = Path(__file__).resolve().parents[2] / "handoff-tuning" / "handoff_rows.json"
+store = Path(__file__).resolve().parent / "handoff_rows.json"
 with open(store.with_suffix(".lock"), "w") as lock:  # both GPU nodes may write at once
     fcntl.flock(lock, fcntl.LOCK_EX)
     data = json.loads(store.read_text()) if store.exists() else {}

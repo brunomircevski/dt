@@ -41,7 +41,7 @@ __pycache__
 /bench/tools/.venv/
 /bench/tools/.tools/
 /bench/tools/data
-/bench/profiles/
+/bench/tools/profiles/
 /bench/tools/cluster/*.log
 /bench/tools/cluster/plans/
 *.nsys-rep
@@ -49,4 +49,4 @@ __pycache__
 
 # Reference PDFs (kept locally, listed in refs/REFERENCES.md)
 /refs/*.pdf
-bench/handoff-tuning/handoff_rows.lock
+bench/tools/handoff/handoff_rows.lock

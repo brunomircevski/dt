@@ -257,7 +257,7 @@ changed from rows / 8192 or / 4096 (1,024–4,096) to 10 × features
 (512–16,384); the `--hybrid` results here are on the old default, except
 hybrid-vs-gpu-only, which set the value from its own sweep. From the next
 rerun on, every `--hybrid` run takes the value measured best for its node,
-dataset and depth limit from `bench/handoff-tuning/handoff_rows.json` (`bench/tools/handoff/handoff_sweep.sh`;
+dataset and depth limit from `bench/tools/handoff/handoff_rows.json` (`bench/tools/handoff/handoff_sweep.sh`;
 [bench/tools/README.md](../README.md#the-hybrids-hand-off-size)).
 
 ## Settings specific to the cluster

@@ -14,7 +14,7 @@ next to the GPU?
 4× H100 PCIe, 1 TB. Three backends of ./tree: `--multicore` (`./tree_cpu`, all
 32 CPUs), `--gpu` and `--hybrid` (GPU 2, NUMA node 1's CPUs first, 32 threads;
 `--handoff-rows 8192`, hopper's MNIST8M no-limit value in
-`bench/handoff-tuning/handoff_rows.json`). Every case grows the same tree:
+`bench/tools/handoff/handoff_rows.json`). Every case grows the same tree:
 CART 301,939 nodes, depth 115; C4.5 218,325 nodes, depth 147.
 
 **When.** Job 561, 2026-11-20 23:25 – 2026-11-21 02:08, ./tree 81bf6e6c (the

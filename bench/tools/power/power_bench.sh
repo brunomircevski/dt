@@ -50,7 +50,7 @@
 # check alone), CHECK_WARMUPS ("0 2 5 15"), CHECK_TREES (20), ALGOS ("cart c45"), IMPLS (cpu: "simple serial parallel", all: all
 # five), BIN (the folder of ./tree and ./tree_cpu; default the repository root),
 # DEPTH (10; -1: no depth limit), HANDOFF (--hybrid's --handoff-rows; default
-# ./tree's own rule; benchmarks take bench/handoff-tuning/handoff_rows.json's),
+# ./tree's own rule; benchmarks take bench/tools/handoff/handoff_rows.json's),
 # SHM (1: copy the .f32 dataset to /dev/shm first, removed at the end: ./tree
 # drops its input from the page cache, so every process would read it again
 # from NFS).
