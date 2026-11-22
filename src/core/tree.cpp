@@ -32,6 +32,27 @@ std::uint16_t Tree::predict(const float *row) const {
   return node->label;
 }
 
+double Tree::trainingAccuracy() const {
+  if (nodes.empty() || nodes[0].count == 0) {
+    return 0.0;
+  }
+  // From the root: a pruned node may still have its old children's ids.
+  std::size_t correct = 0;
+  std::vector<std::uint32_t> stack{0};
+  while (!stack.empty()) {
+    const std::uint32_t id = stack.back();
+    stack.pop_back();
+    const Node &node = nodes[id];
+    if (node.isLeaf()) {
+      correct += counts(id)[node.label];
+    } else {
+      stack.push_back(node.right);
+      stack.push_back(node.left);
+    }
+  }
+  return static_cast<double>(correct) / static_cast<double>(nodes[0].count);
+}
+
 double Tree::accuracy(const Dataset &dataset, ThreadPool *pool) const {
   if (dataset.rowCount == 0) {
     return 0.0;

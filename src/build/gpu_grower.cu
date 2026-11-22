@@ -72,6 +72,7 @@
 #include <deque>
 #include <future>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <condition_variable>
 #include <thread>
@@ -79,6 +80,8 @@
 #include <numeric>
 #include <pthread.h>
 #include <sched.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -86,6 +89,52 @@
 namespace dt {
 
 namespace {
+
+// Put the pages of [data, data + bytes) on all NUMA nodes in turn, wherever
+// the threads that touch them first run (mbind(MPOL_INTERLEAVE) on the
+// online nodes). Only a hint: nothing happens on one node or on failure.
+void interleavePages(void *data, std::size_t bytes) {
+#if defined(__linux__) && defined(SYS_mbind)
+  std::FILE *file = std::fopen("/sys/devices/system/node/online", "r");
+  if (!file) {
+    return;
+  }
+  unsigned long mask = 0; // nodes 0-63
+  unsigned first = 0;
+  unsigned last = 0;
+  char separator = 0;
+  for (;;) {
+    const int read = std::fscanf(file, "%u%c", &first, &separator);
+    if (read < 1) {
+      break;
+    }
+    last = first;
+    if (read == 2 && separator == '-' && std::fscanf(file, "%u%c", &last, &separator) < 1) {
+      break;
+    }
+    for (unsigned node = first; node <= last && node < 64; ++node) {
+      mask |= 1ul << node;
+    }
+    if (read < 2 || separator != ',') {
+      break;
+    }
+  }
+  std::fclose(file);
+  if ((mask & (mask - 1)) == 0) {
+    return; // one node
+  }
+  constexpr std::uintptr_t kPage = 4096;
+  const std::uintptr_t begin = (reinterpret_cast<std::uintptr_t>(data) + kPage - 1) / kPage * kPage;
+  const std::uintptr_t end = (reinterpret_cast<std::uintptr_t>(data) + bytes) / kPage * kPage;
+  if (end > begin) {
+    constexpr int kInterleave = 3; // MPOL_INTERLEAVE (<numaif.h>, not always installed)
+    (void)syscall(SYS_mbind, begin, end - begin, kInterleave, &mask, 64ul, 0u);
+  }
+#else
+  (void)data;
+  (void)bytes;
+#endif
+}
 
 // One node of the current GPU level, on the host side.
 struct LevelNode {
@@ -99,13 +148,14 @@ struct LevelNode {
 class GpuGrower final : public Grower {
 public:
   GpuGrower(const Dataset &train, const Options &options, ThreadPool &pool,
-            GpuSetupTimings &setupTimings)
+            GpuSetupTimings &setupTimings, Dataset *releasable)
       : train_(train), options_(options), pool_(pool),
         rows_(train.rowCount), features_(train.featureCount()),
         classCount_(static_cast<int>(train.classCount())),
         codec_(makeEntryCodec(train.classCount(), train.rowCount)),
         hostGoesLeft_(new std::uint8_t[train.rowCount]),
         profile_(trace::on()) {
+    releasable_ = releasable;
     if (classCount_ > kMaxGpuClasses) {
       throw std::runtime_error("The Cuda backend supports at most 64 classes.");
     }
@@ -116,8 +166,11 @@ public:
   }
 
   ~GpuGrower() override {
-    if (toucher_.joinable()) {
-      toucher_.join();
+    if (valuesUpload_.valid()) { // grow() started it, arrangeRows() was not called
+      valuesUpload_.wait();
+    }
+    if (valuesRelease_.valid()) {
+      valuesRelease_.wait();
     }
     for (cudaEvent_t event : {gathered_, copied_, timeOrigin_, presortBegin_, presortEnd_}) {
       if (event) {
@@ -179,7 +232,10 @@ public:
     rules_ = &rules;
     store_ = &store;
     cpuBuilder_ = &cpuBuilder;
-    arenaUsed_ = 0;
+    arenaFree_.clear();
+    if (arena_) {
+      arenaFree_.emplace(0, features_ * rows_);
+    }
 
     const std::vector<std::uint32_t> counts = hostRootCounts_; // presortStart()
     std::vector<std::uint32_t> allFeatures(features_);
@@ -217,6 +273,19 @@ public:
     trace::Doing doing(trace::Work::Assemble);
     if (leafOfRow) {
       mergeLeaves(leafOfRow->ids);
+      // C4.5's pruning will arrange the rows on the GPU (arrangeRows()),
+      // which needs the raw values again; they were not kept through the
+      // grow (4 bytes per value of device memory). The column buffer is
+      // free now: upload them in the background while the CPU assembles
+      // the tree and sets the thresholds (nothing else uses the staging
+      // buffers until then).
+      if (c45PruneUsesRowMajor(features_)) {
+        float *values = arrangedValues();
+        valuesUpload_ = std::async(std::launch::async, [this, values]() {
+          uploadStaged(values, train_.values.data(), rows_ * features_ * sizeof(float),
+                       "uploadValues");
+        });
+      }
     }
     store.toTree(tree, &pool_, leafOfRow);
     rules_ = nullptr;
@@ -228,7 +297,7 @@ public:
   bool arrangeRows(std::span<const std::uint32_t> slotOfId, std::size_t slots,
                    std::span<const std::uint32_t> ids, float *rowMajor, std::uint32_t *rowOf,
                    std::uint16_t *labels, std::uint32_t *slotCounts) override {
-    if (!rawValues_.get() || ids.size() != rows_ || slots == 0) {
+    if (ids.size() != rows_ || slots == 0) {
       return false;
     }
     // The result in the column buffer: the grow is done with it.
@@ -266,11 +335,23 @@ public:
       temp = take(tempBytes);
       return used;
     };
-    const std::size_t resultBytes = (rows * features_ * sizeof(float) + 255) / 256 * 256;
+    // The row-major result, then the raw values it is gathered from (only
+    // for a row-major result), uploaded again here instead of kept on the
+    // GPU through the grow: the column buffer is free now.
+    const std::size_t resultBytes = rowMajor ? arrangedBytes() : 0;
     const std::size_t scratchBytes = layout(nullptr);
+    char *const buffer = reinterpret_cast<char *>(columns_.get());
+    float *const values = rowMajor ? arrangedValues() : nullptr;
+    const bool uploaded = valuesUpload_.valid();
+    if (uploaded) {
+      trace::Doing waiting(trace::Work::GpuWait);
+      valuesUpload_.get(); // (rethrows its error)
+    }
     char *pooled = nullptr;
-    if (resultBytes + scratchBytes <= slotCount_ * slotEntries_ * sizeof(Entry)) {
-      layout(reinterpret_cast<char *>(columns_.get()) + resultBytes);
+    if (2 * resultBytes + scratchBytes <= slotCount_ * slotEntries_ * sizeof(Entry)) {
+      layout(buffer + 2 * resultBytes);
+    } else if (ring_.capacity() * sizeof(Entry) >= scratchBytes) { // --hybrid: free now
+      layout(reinterpret_cast<char *>(ring_.get()));
     } else if (cudaMallocAsync(reinterpret_cast<void **>(&pooled), scratchBytes, stream_) ==
                cudaSuccess) {
       layout(pooled);
@@ -278,7 +359,10 @@ public:
       (void)cudaGetLastError(); // out of memory: the CPU arranges them
       return false;
     }
-    float *arranged = reinterpret_cast<float *>(columns_.get());
+    float *arranged = reinterpret_cast<float *>(buffer);
+    if (values && !uploaded) {
+      uploadStaged(values, train_.values.data(), rows * features_ * sizeof(float), "uploadValues");
+    }
     uploadStaged(nodeSlots, slotOfId.data(), slotOfId.size_bytes(), "uploadArrange");
     uploadStaged(keys, ids.data(), rows * sizeof(std::uint32_t), "uploadArrange");
     cub::DoubleBuffer<std::uint32_t> sortedKeys(keys, keysAlt);
@@ -295,7 +379,7 @@ public:
     const std::size_t width = rowMajor ? features_ : 1;
     profile_.run("arrangeRows", stream_, [&]() {
       arrangeKernel<<<static_cast<unsigned>((rows * width + 255) / 256), 256, 0, stream_>>>(
-          rawValues_.get(), rows, static_cast<std::uint32_t>(width), sortedOrder.Current(),
+          values, rows, static_cast<std::uint32_t>(width), sortedOrder.Current(),
           sortedKeys.Current(), labels_.get(), classCount_, rowMajor ? arranged : nullptr,
           sortedLabels, counts);
     });
@@ -321,12 +405,18 @@ public:
     return true;
   }
 
+  // arrangeRows()'s row-major result at the start of the column buffer, then
+  // the raw values it is gathered from.
+  std::size_t arrangedBytes() const { return (rows_ * features_ * sizeof(float) + 255) / 256 * 256; }
+  float *arrangedValues() const {
+    return reinterpret_cast<float *>(reinterpret_cast<char *>(columns_.get()) + arrangedBytes());
+  }
+
   // The host arena: it only holds the columns of nodes handed to the CPU.
   std::span<std::byte> workspace() override {
     if (!arena_) { // --gpu
       arena_.reset(new Entry[features_ * rows_]);
     }
-    waitTouched(features_ * rows_ * sizeof(Entry)); // the caller writes all of it
     return {reinterpret_cast<std::byte *>(arena_.get()), features_ * rows_ * sizeof(Entry)};
   }
 
@@ -348,18 +438,26 @@ private:
         staging().prepareHandOff();
       }
     }
-    bool keepValues = false;
     {
       ScopedTimer timer(timings.allocateSeconds);
       timeline::Section section("device memory");
       initDevice();
-      keepValues = allocateDevice();
+      allocateDevice();
     }
     {
       // Ends when the last value is on the GPU; presort kernels may still run.
       ScopedTimer timer(timings.uploadSeconds);
       timeline::Section section("upload");
-      uploadAndPresort(keepValues);
+      uploadAndPresort();
+    }
+    // Everything is on the GPU now: --hybrid gives the values back if
+    // allowed (the grow reads none; its hand-offs then reuse their memory),
+    // in the background. (--gpu would gain nothing: the load needed them.)
+    if (releasable_ && options_.backend == Backend::Hybrid) {
+      releasable_->valuesReleased = true;
+      valuesRelease_ = std::async(std::launch::async, [this]() {
+        releaseValues(*releasable_, 0, releasable_->values.size());
+      });
     }
     ScopedTimer timer(timings.finishSeconds);
     prepareHost();
@@ -399,9 +497,8 @@ private:
     }
   }
 
-  // The device buffers. Returns whether a copy of the raw values stays on
-  // the GPU for C4.5's pruning.
-  bool allocateDevice() {
+  // The device buffers.
+  void allocateDevice() {
     const std::size_t total = features_ * rows_;
     std::size_t freeBytes = 0;
     std::size_t totalBytes = 0;
@@ -410,8 +507,16 @@ private:
     // The columns: one slot each, and kSpareSlots to move them to (see
     // PartitionTarget). The hand-offs go through a ring of kRingParts parts.
     slotCount_ = features_ + kSpareSlots;
-    ringPartEntries_ = std::max<std::size_t>(
-        kTile, std::min(kRingBytes, total * sizeof(Entry)) / kRingParts / sizeof(Entry));
+    // --gpu hands nothing off: the ring only pools C4.5's distinct values
+    // during the presort, so it is smaller (the features that do not fit are
+    // done after the presort, distinctValues()) and freed after it, into the
+    // stream-ordered pool the level arrays come from; CART needs none.
+    const bool handsOff = options_.backend != Backend::Gpu;
+    const std::size_t ringBytes =
+        handsOff ? kRingBytes : options_.algorithm == Algorithm::C45 ? kDistinctPoolBytes : 0;
+    ringPartEntries_ = ringBytes > 0 ? std::max<std::size_t>(kTile, std::min(ringBytes, total * sizeof(Entry)) /
+                                                                         kRingParts / sizeof(Entry))
+                                     : 0;
     // Slots start at page boundaries: then a column's old and new place
     // have the same alignment, as in two separate buffers (unaligned slots
     // made the partition 5% slower on airline).
@@ -425,9 +530,6 @@ private:
                                std::to_string(freeBytes >> 20) +
                                " MiB free. Use --multicore instead.");
     }
-    // C4.5's pruning starts by ordering the rows by leaf (arrangeRows()),
-    // which needs the raw values again: a copy stays on the GPU if it fits.
-    const bool keepValues = leaves && needed + total * sizeof(float) <= freeBytes;
     double allocSeconds = 0.0;
     std::optional<ScopedTimer> allocTimer(std::in_place, allocSeconds);
     columns_.reserve(slotCount_ * slotEntries_);
@@ -455,12 +557,11 @@ private:
 
     allocTimer.reset();
     trace::add("gpu_alloc_seconds", allocSeconds);
-    return keepValues;
   }
 
   // Upload the labels and the raw values; presort each feature as soon as its
   // values are on the GPU.
-  void uploadAndPresort(bool keepValues) {
+  void uploadAndPresort() {
     const std::size_t total = features_ * rows_;
     // Raw values: uploaded into the end of the column buffer (see
     // presortFeature()), through page-locked staging buffers, without
@@ -468,9 +569,7 @@ private:
     float *target = uploadedValues();
     // Presort each feature as soon as its raw values are uploaded (copies
     // on a copy stream, the presort on stream_ waiting for the chunk that
-    // completes the feature): ECBDL 0.5-0.6 s less on an H100. The kept copy
-    // of the raw values (C4.5 pruning) is made per feature, before the
-    // presort can overwrite them.
+    // completes the feature): ECBDL 0.5-0.6 s less on an H100.
     {
       // The GPU clock's origin on the timeline: stream_ is idle here.
       CUDA_CHECK(cudaEventRecord(timeOrigin_, stream_));
@@ -483,22 +582,12 @@ private:
       presortStart(distinct);
       std::size_t next = 0; // the next feature to presort
       const std::size_t featureBytes = rows_ * sizeof(float);
-      if (keepValues) {
-        rawValues_.reserve(total);
-      }
       uploadStaged(target, train_.values.data(), total * sizeof(float), "upload", copyStreams_[0],
                    [&](std::size_t uploaded, cudaEvent_t done) {
                      if (done && next < features_ && (next + 1) * featureBytes <= uploaded) {
                        CUDA_CHECK(cudaStreamWaitEvent(stream_, done, 0));
                      }
                      while (next < features_ && (next + 1) * featureBytes <= uploaded) {
-                       if (keepValues) {
-                         profile_.run("copyValues", stream_, [&]() {
-                           CUDA_CHECK(cudaMemcpyAsync(rawValues_.get() + next * rows_,
-                                                      target + next * rows_, featureBytes,
-                                                      cudaMemcpyDeviceToDevice, stream_));
-                         });
-                       }
                        if (next == 0) { // the presort's first kernel starts here
                          CUDA_CHECK(cudaEventRecord(presortBegin_, stream_));
                        }
@@ -528,20 +617,30 @@ private:
     // Host memory for the columns of nodes handed to the CPU (every row is
     // handed over at most once per grow, so features * rows entries always
     // suffice). Pageable: the hand-offs go through page-locked buffers (see
-    // handOff()). --gpu hands nothing over (workspace() allocates the
-    // arena if the pruning asks for it).
+    // handOff()). Only reserved: a hand-off's block takes only the columns
+    // that can still split its nodes, and goes back to the arena once their
+    // CPU subtrees are done (allocateArena()), so the pages touched are those
+    // of the most hand-offs alive at once. --gpu hands nothing over
+    // (workspace() allocates the arena if the pruning asks for it).
+    //
+    // Its pages are interleaved over the NUMA nodes: touched first by the
+    // copy threads (drain()), which run on the GPU's node, they would all be
+    // on that node, and the CPU subtrees on the other socket would read
+    // them remotely (SOREL 4M CART at depth 30: build 15-20% slower on the
+    // H100 server, 1% interleaved). The old arena, touched in advance by
+    // all threads, was spread over both nodes too.
     if (options_.backend != Backend::Gpu) {
       arena_.reset(new Entry[total]);
+      interleavePages(arena_.get(), total * sizeof(Entry));
     }
-    // CART with a fixed alpha stops early and hands few rows to the CPU
-    // (airline: 2 of 12 GB): the copies fault in the few pages they need.
-    const bool fewHandOffs = options_.backend == Backend::Gpu ||
-                             (options_.algorithm == Algorithm::Cart &&
-                              options_.cart.prune);
     {
       trace::Phase phase("presort finish");
       presortFinish(options_.algorithm == Algorithm::C45 ? &overlapDistinct_ : nullptr);
       CUDA_CHECK(cudaStreamSynchronize(stream_));
+      if (options_.backend == Backend::Gpu) {
+        ring_.release(); // see allocateDevice()
+        ringPartEntries_ = 0;
+      }
     }
     // The presort's span on the GPU, on the timeline's clock.
     float beginMs = 0.0f;
@@ -550,15 +649,6 @@ private:
     CUDA_CHECK(cudaEventElapsedTime(&endMs, timeOrigin_, presortEnd_));
     timeline::add("presort (GPU)", timeOrigin_seconds_ + beginMs / 1000.0,
                   timeOrigin_seconds_ + endMs / 1000.0);
-    // Only now: touching the arena during presortFinish() made the download
-    // of C4.5's distinct values (4 GB on SOREL 4M) 3x slower, both on the
-    // GPU's socket (setup 3.4 s instead of 2.2 s on an A100 server; the build
-    // 0.05 s longer this way, CART's setup 0.1 s shorter).
-    if (fewHandOffs) {
-      touchedBytes_ = total * sizeof(Entry);
-    } else {
-      toucher_ = std::thread([this, bytes = total * sizeof(Entry)]() { touchArena(bytes); });
-    }
   }
 
   // Copy `bytes` from pageable host memory to the device at the speed of
@@ -687,42 +777,6 @@ private:
         download(chunk + Staging::kBuffers);
       }
     }
-  }
-
-  // Touch the arena's pages on all threads, in the background (the pool is
-  // idle while the GPU grows the first levels), so the hand-offs' copies
-  // into it do not fault them in: that made C4.5 on airline 0.2-0.9 s
-  // slower on an H100 server. The pages are spread over the NUMA nodes, like the threads that
-  // read them. In chunks, in order: a hand-off waits only for the part it
-  // fills (waitTouched()). (MADV_POPULATE_WRITE, which leaves the contents
-  // alone, holds the process's mmap lock: other threads' allocations and
-  // page faults waited for it, and an H100 server's presort went from 0.5 to
-  // 4.2 s when its memory was low.)
-  void touchArena(std::size_t bytes) {
-    constexpr std::size_t kChunks = 256;
-    trace::Doing doing(trace::Work::PageLock);
-    std::vector<char> done(kChunks, 0);
-    std::size_t next = 0; // chunks below it are done (touchMutex_)
-    char *data = reinterpret_cast<char *>(arena_.get());
-    pool_.parallelFor(kChunks, [&](std::size_t chunk) {
-      const std::size_t begin = bytes * chunk / kChunks;
-      const std::size_t end = bytes * (chunk + 1) / kChunks;
-      std::memset(data + begin, 0, end - begin);
-      std::lock_guard<std::mutex> lock(touchMutex_);
-      done[chunk] = 1;
-      while (next < kChunks && done[next]) {
-        ++next;
-      }
-      touchedBytes_ = bytes * next / kChunks;
-      touchCv_.notify_all();
-    });
-  }
-
-  // Wait until the first `bytes` of the arena are touched.
-  void waitTouched(std::size_t bytes) {
-    trace::Doing waiting(trace::Work::PageLock);
-    std::unique_lock<std::mutex> lock(touchMutex_);
-    touchCv_.wait(lock, [&]() { return touchedBytes_ >= bytes; });
   }
 
   // Where setup() uploads the raw values (column-major, rows_ per feature)
@@ -904,7 +958,7 @@ private:
 
   // Too small for the GPU: copy the presorted columns and use the CPU.
   void growOnCpu(LevelNode root) {
-    waitTouched(features_ * stride_ * sizeof(Entry));
+    allocateArena(features_ * stride_);
     for (std::size_t feature = 0; feature < features_; ++feature) {
       downloadStaged(arena_.get() + feature * stride_, column(feature), stride_ * sizeof(Entry),
                      "downloadColumns");
@@ -1686,53 +1740,48 @@ private:
   // loop waited for it.
   void handOff(std::vector<LevelNode> &children) {
     NvtxRange range("hand-off copy");
-    std::size_t handOffRows = 0;
-    for (const LevelNode &child : children) {
-      handOffRows += child.count;
-    }
-    // Block layout: column f of all children back to back, stride handOffRows,
-    // cut into pieces of at most a ring part: copy jobs of up to kTile
-    // entries, made in block order, relative to their piece.
+    // Block layout: child after child, each child's columns (only the
+    // features that can still split it) back to back, stride its rows, cut
+    // into pieces of at most a ring part: copy jobs of up to kTile entries,
+    // made in block order, relative to their piece.
     struct Piece {
       std::size_t begin, end; // in the block
       std::size_t firstJob, jobCount;
     };
     std::vector<Piece> pieces;
     std::vector<CopyJob> jobs;
-    std::vector<std::size_t> next(children.size(), 0); // into each child's features
-    for (std::uint32_t f = 0; f < features_; ++f) {
-      std::size_t offset = 0;
-      for (std::size_t c = 0; c < children.size(); ++c) {
-        const LevelNode &child = children[c];
-        if (next[c] < child.features.size() && child.features[next[c]] == f) {
-          ++next[c];
-          const std::size_t from = columnBase(f) + child.begin;
-          const std::size_t to = f * handOffRows + offset;
-          for (std::size_t at = to; at < to + child.count;) {
-            if (pieces.empty() || at >= pieces.back().begin + ringPartEntries_) {
-              pieces.push_back({at, at, jobs.size(), 0});
-            }
-            Piece &piece = pieces.back();
-            const std::size_t end = std::min({to + child.count, piece.begin + ringPartEntries_,
-                                              at + kTile});
-            jobs.push_back({from + (at - to), at - piece.begin, static_cast<std::uint32_t>(end - at)});
-            ++piece.jobCount;
-            piece.end = end;
-            at = end;
+    std::vector<std::size_t> childOffset(children.size());
+    std::size_t handOffRows = 0;
+    std::size_t blockEntries = 0;
+    for (std::size_t c = 0; c < children.size(); ++c) {
+      const LevelNode &child = children[c];
+      childOffset[c] = blockEntries;
+      handOffRows += child.count;
+      for (std::size_t rank = 0; rank < child.features.size(); ++rank) {
+        const std::size_t from = columnBase(child.features[rank]) + child.begin;
+        const std::size_t to = blockEntries + rank * child.count;
+        for (std::size_t at = to; at < to + child.count;) {
+          if (pieces.empty() || at >= pieces.back().begin + ringPartEntries_) {
+            pieces.push_back({at, at, jobs.size(), 0});
           }
+          Piece &piece = pieces.back();
+          const std::size_t end = std::min({to + child.count, piece.begin + ringPartEntries_,
+                                            at + kTile});
+          jobs.push_back({from + (at - to), at - piece.begin, static_cast<std::uint32_t>(end - at)});
+          ++piece.jobCount;
+          piece.end = end;
+          at = end;
         }
-        offset += child.count;
       }
+      blockEntries += child.features.size() * child.count;
     }
-    const std::size_t blockEntries = features_ * handOffRows;
     trace::add("handoff_rows", static_cast<double>(handOffRows));
     trace::add("handoff_nodes", static_cast<double>(children.size()));
     trace::add("handoff_bytes", static_cast<double>(blockEntries * sizeof(Entry)));
     trace::add("d2h_bytes", static_cast<double>(blockEntries * sizeof(Entry)));
     trace::add("handoffs", 1);
-    waitTouched((arenaUsed_ + blockEntries) * sizeof(Entry));
-    Entry *host = arena_.get() + arenaUsed_;
-    arenaUsed_ += blockEntries;
+    const std::size_t blockOffset = allocateArena(blockEntries);
+    Entry *host = arena_.get() + blockOffset;
     if (!jobs.empty()) {
       upload(copyJobs_, jobs);
     }
@@ -1767,14 +1816,69 @@ private:
     CUDA_CHECK(cudaStreamWaitEvent(copyStreams_[0], copied_, 0));
     auto tasks = std::make_unique<PendingTasks>();
     tasks->grower = this;
-    tasks->columns = Columns{host, handOffRows};
-    std::size_t offset = 0;
-    for (LevelNode &child : children) {
-      tasks->subtrees.push_back({child.node, static_cast<std::uint32_t>(offset), child.count,
-                                 child.depth, std::move(child.features), {}, {}});
-      offset += child.count;
+    for (std::size_t c = 0; c < children.size(); ++c) {
+      LevelNode &child = children[c];
+      // The child's columns in its part of the block: feature
+      // child.features[r] in slot r. The part is the arena's again once
+      // every CPU task of the child's subtree is done (the last copy of
+      // `hold` goes).
+      auto slots = std::make_shared<SlotMap>(features_, 0u);
+      for (std::size_t rank = 0; rank < child.features.size(); ++rank) {
+        (*slots)[child.features[rank]] = static_cast<std::uint32_t>(rank);
+      }
+      const std::size_t offset = blockOffset + childOffset[c];
+      const std::size_t entries = child.features.size() * child.count;
+      std::shared_ptr<void> hold(nullptr, [this, offset, entries](void *) {
+        releaseArena(offset, entries);
+      });
+      tasks->columns.push_back(
+          Columns{host + childOffset[c], child.count, 0, nullptr, std::move(hold)});
+      tasks->subtrees.push_back({child.node, 0u, child.count, child.depth,
+                                 std::move(child.features), std::move(slots), {}});
     }
     CUDA_CHECK(cudaLaunchHostFunc(copyStreams_[0], startTasks, tasks.release()));
+  }
+
+  // The host arena's free ranges (offset -> entries), first fit at the
+  // lowest offset, so that the blocks reuse the pages the earlier ones
+  // touched. Every row is handed off at most once per grow, so the blocks
+  // of a grow add up to at most features * rows entries: a block always
+  // fits after the highest one handed out so far.
+  std::size_t allocateArena(std::size_t entries) {
+    std::lock_guard<std::mutex> lock(arenaMutex_);
+    for (auto range = arenaFree_.begin(); range != arenaFree_.end(); ++range) {
+      if (range->second >= entries) {
+        const std::size_t offset = range->first;
+        const std::size_t left = range->second - entries;
+        arenaFree_.erase(range);
+        if (left > 0) {
+          arenaFree_.emplace(offset + entries, left);
+        }
+        arenaHigh_ = std::max(arenaHigh_, offset + entries);
+        return offset;
+      }
+    }
+    throw std::logic_error("GpuGrower: the host arena is full");
+  }
+
+  void releaseArena(std::size_t offset, std::size_t entries) {
+    if (entries == 0) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(arenaMutex_);
+    auto next = arenaFree_.lower_bound(offset);
+    if (next != arenaFree_.end() && offset + entries == next->first) { // join the next range
+      entries += next->second;
+      next = arenaFree_.erase(next);
+    }
+    if (next != arenaFree_.begin()) { // join the previous range
+      auto previous = std::prev(next);
+      if (previous->first + previous->second == offset) {
+        previous->second += entries;
+        return;
+      }
+    }
+    arenaFree_.emplace(offset, entries);
   }
 
   // One hand-off buffer to copy into the arena (a stream callback: no CUDA
@@ -1817,16 +1921,22 @@ private:
   // The CPU tasks of one hand-off (a stream callback: no CUDA calls).
   struct PendingTasks {
     GpuGrower *grower;
-    Columns columns;
+    std::vector<Columns> columns; // per subtree
     std::vector<Subtree> subtrees;
   };
 
   static void CUDART_CB startTasks(void *data) {
     std::unique_ptr<PendingTasks> tasks(static_cast<PendingTasks *>(data));
     GpuGrower *grower = tasks->grower;
-    for (Subtree &subtree : tasks->subtrees) {
+    for (std::size_t index = 0; index < tasks->subtrees.size(); ++index) {
       grower->pool_.submit(
-          [grower, columns = tasks->columns, subtree = std::move(subtree)]() mutable {
+          [grower, columns = std::move(tasks->columns[index]),
+           subtree = std::move(tasks->subtrees[index])]() mutable {
+            // The block goes back to the arena before the task counts as done.
+            struct Release {
+              Columns &columns;
+              ~Release() { columns.hold.reset(); }
+            } release{columns};
             NvtxRange range("cpu subtree");
             const double start = timeline::now();
             grower->cpuBuilder_->grow(columns, std::move(subtree));
@@ -1858,12 +1968,13 @@ private:
 
   std::unique_ptr<std::uint8_t[]> hostGoesLeft_;
   std::unique_ptr<Entry[]> arena_;
-  std::size_t arenaUsed_ = 0;
+  std::future<void> valuesUpload_; // the raw values for arrangeRows() (grow())
+  Dataset *releasable_ = nullptr;  // its values may be given back after the upload
+  std::future<void> valuesRelease_; // giving them back (setup())
+  std::mutex arenaMutex_;
+  std::map<std::size_t, std::size_t> arenaFree_; // free ranges of the arena (allocateArena())
+  std::size_t arenaHigh_ = 0;                    // the end of the highest block so far
   std::size_t handOffNext_ = 0; // the next of Staging::handOff
-  std::thread toucher_; // touchArena()
-  std::mutex touchMutex_;
-  std::condition_variable touchCv_;
-  std::size_t touchedBytes_ = 0; // the first bytes of the arena are touched (touchMutex_)
 
   cudaStream_t stream_ = nullptr;
   cudaStream_t copyStreams_[2] = {}; // hand-off copies to the host (handOff())
@@ -1894,13 +2005,13 @@ private:
   std::size_t slotEntries_ = 0; // rows_, rounded up to kSlotAlign
   // Hand-off staging (see handOff()).
   static constexpr std::size_t kRingBytes = std::size_t{512} << 20;
+  static constexpr std::size_t kDistinctPoolBytes = std::size_t{64} << 20; // --gpu (allocateDevice())
   static constexpr std::size_t kRingParts = 4;
   static_assert(kRingBytes / kRingParts <= Staging::kHandOffBytes);
   DeviceArray<Entry> ring_;
   std::size_t ringPartEntries_ = 0;
   std::size_t ringNext_ = 0;
   cudaEvent_t ringFree_[kRingParts] = {}; // the last copy out of each part is done
-  DeviceArray<float> rawValues_; // C4.5 with pruning: for arrangeRows()
   DeviceArray<std::uint16_t> labels_;
   DeviceArray<unsigned char> sortTemp_;
   std::size_t sortTempBytes_ = 0;
@@ -1944,8 +2055,9 @@ double gpuPrepare() {
 }
 
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &options,
-                                      ThreadPool &pool, GpuSetupTimings &setup) {
-  return std::make_unique<GpuGrower>(train, options, pool, setup);
+                                      ThreadPool &pool, GpuSetupTimings &setup,
+                                      Dataset *releasable) {
+  return std::make_unique<GpuGrower>(train, options, pool, setup, releasable);
 }
 
 } // namespace dt

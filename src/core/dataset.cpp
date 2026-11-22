@@ -861,4 +861,15 @@ void splitTail(const Dataset &dataset, std::size_t testRows, Dataset &train, Dat
   test = selectRows(dataset, testIndex, pool);
 }
 
+void releaseValues(Dataset &dataset, std::size_t first, std::size_t last) {
+  constexpr std::uintptr_t kPage = 4096;
+  std::uintptr_t begin = reinterpret_cast<std::uintptr_t>(dataset.values.data() + first);
+  std::uintptr_t end = reinterpret_cast<std::uintptr_t>(dataset.values.data() + last);
+  begin = (begin + kPage - 1) / kPage * kPage;
+  end = end / kPage * kPage;
+  if (end > begin) {
+    madvise(reinterpret_cast<void *>(begin), end - begin, MADV_DONTNEED);
+  }
+}
+
 } // namespace dt

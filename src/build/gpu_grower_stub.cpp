@@ -8,7 +8,8 @@ namespace dt {
 
 double gpuPrepare() { return 0.0; }
 
-std::unique_ptr<Grower> makeGpuGrower(const Dataset &, const Options &, ThreadPool &, GpuSetupTimings &) {
+std::unique_ptr<Grower> makeGpuGrower(const Dataset &, const Options &, ThreadPool &, GpuSetupTimings &,
+                                      Dataset *) {
   throw std::runtime_error("This binary was built without CUDA (use `make` instead of "
                            "`make cpu`), or pick --multicore, --serial or --simple.");
 }

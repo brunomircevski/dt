@@ -57,8 +57,7 @@ copies ping-ponged instead (and a third mirrored the host arena, see Memory).
    as its raw values are uploaded: the copies run on a copy stream, and the
    presort waits only for the staging event of the chunk that completes the
    feature, so the upload and the presort overlap (ECBDL 0.5-0.6 s less on the
-   H100 node). With C4.5 pruning the kept copy of the raw values is made per
-   feature, just before its presort.
+   H100 node).
    For C4.5 the device keeps each feature's distinct values (CUB's
    `DeviceSelect::Unique` on the sorted values' bits, into free device
    memory) and copies only those to the host for the thresholds, instead of
@@ -100,13 +99,23 @@ anything.
 Small children become `CpuTreeBuilder` tasks on the thread pool, which grow them
 while the GPU continues with the next level. The host buffer they read from
 (the arena, room for every column of every row: 75 GB for ECBDL'14's 15M
-sample) is pageable. The copies go through two page-locked 128 MB buffers,
-one per copy stream, like the upload: a host function on the copy stream
-copies the buffer into the arena on the staging threads, and the two
-streams take turns, so that one downloads while the other's buffer is
-copied out. The arena's pages are touched on all threads in the background
-during the presort, so the copies do not fault them in; a hand-off waits
-only for the part of the arena it fills.
+sample) is pageable and only reserved: each hand-off takes a block of it, its
+children one after the other, each with only the columns that can still split
+it, and a child's part goes back once its CPU subtree is grown (first fit at
+the lowest free offset, so the blocks reuse the same pages). The pages touched
+are those of the hand-offs alive at once: without a depth limit 1.0-1.4 of
+HIGGS's 2.2 GiB and 16 of MNIST8M's 47 GiB. The copies go through two
+page-locked 128 MB buffers, one per copy stream, like the upload: a host
+function on the copy stream copies the buffer into the arena on the staging
+threads, and the two streams take turns, so that one downloads while the
+other's buffer is copied out. The staging threads run on the GPU's node, so
+the arena's pages are interleaved over the NUMA nodes (`mbind`): touched
+first by those threads, all of them would be on the GPU's node, and the CPU
+subtrees on the other socket would read them remotely (SOREL 4M CART at depth
+30 15-20% slower on the H100 node). Until 2026-11-21 the whole arena's pages
+were touched on all threads in the background during the presort, so the
+copies did not fault them in; without that the hybrid is as fast (within 3% on
+every benchmark case on the H100 node) and needs 35-66% less RAM (see Memory).
 Page-locking the arena instead took the CUDA driver's lock for 1.2-1.9 s
 (sometimes 4-6 s on the H100 node) and stalled the level loop's CUDA calls.
 
@@ -120,7 +129,7 @@ the split feature's own column the partition does not read the bitmap at
 all: the left rows are the first `leftCount` entries. On chess_1b (H100,
 CART depth 10, total 0.97 s) each alone saved 0.07 and 0.12 s.
 
-The columns are gathered into a 512 MB ring of four parts on the device and
+The columns are gathered into a 512 MB ring of four parts on the device (`--hybrid` only) and
 copied to the host on the copy streams, and a host callback there
 (`cudaLaunchHostFunc`) starts the CPU tasks when the copy is done: the level
 loop goes on with the next level instead of waiting for each hand-off to
@@ -132,11 +141,14 @@ For C4.5 with pruning the grower also records the leaf of every row: a
 kernel writes them for the nodes finished on the GPU, the CPU tasks for
 theirs, and they are merged at the end, streamed from the staging buffers
 straight into the ids. Pruning then does not route the rows down the tree
-again (see CPU.md). When there is room, the device also keeps a copy of the
-raw values, and the pruning's first step (rows sorted by leaf, their features
-transposed to rows, their labels and the class counts of every leaf) runs on
-the GPU (`arrangeRows`): a stable radix sort by leaf and one gather kernel
-instead of two CPU passes over 115M rows.
+again (see CPU.md). The pruning's first step (rows sorted by leaf, their
+features transposed to rows, their labels and the class counts of every leaf)
+runs on the GPU (`arrangeRows`), in the column buffer, which is free by then: a
+stable radix sort by leaf and one gather kernel instead of two CPU passes over
+115M rows. With fewer than 32 features (the rows are transposed only then) it
+needs the raw values: they are uploaded again into the column buffer, in the
+background while the leaves are merged. Until 2026-11-21 a copy of them stayed
+on the device through the whole build instead (HIGGS: 1.1 GiB).
 
 Sending subtree raising's big row slices through the tree on the GPU (the
 CPU keeping every decision, the GPU only routing and counting) was tried and
@@ -308,8 +320,8 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
 ## Memory
 
 Device: one copy of the columns in `features + 1` slots (`8 × rows ×
-(features + 1)` bytes, 0.76 GB for 5M × 18), a 512 MB ring for the hand-offs to
-the CPU, with C4.5 pruning a copy of the raw values if it fits (for `arrangeRows`),
+(features + 1)` bytes, 0.76 GB for 5M × 18), with `--hybrid` a 512 MB ring for
+the hand-offs to the CPU (`--gpu` hands nothing over and has none),
 plus small per-level arrays (the largest: the tile histograms, 4·K bytes per
 tile with K the class count, e.g. about 124 MB at MNIST8M's root level). The builder checks free memory first and
 suggests `--multicore` if it does not fit.
@@ -319,7 +331,12 @@ suggests `--multicore` if it does not fit.
   value only, stable) with another free slot as the second buffer, and stays
   in whichever holds the result. A slot is taken once the raw values in it
   are sorted. C4.5's distinct values are collected in the ring (free until the
-  build) and downloaded once.
+  build) and downloaded once; with `--gpu` in a 64 MB buffer, freed after the
+  presort. The features whose values do not fit are done again after the
+  presort, in batches (`downloadDistinct`). The buffer is freed with
+  `cudaFree` after the presort's synchronization: freed into the stream-ordered
+  pool instead, HIGGS's `--gpu` C4.5 build on the H100 node took either ~130
+  or ~220 ms from run to run.
 * **Hand-offs** to the CPU go through the ring, in pieces of a quarter of it:
   each piece is gathered into the next part once that part's last copy to the
   host is done, so the GPU waits only when it is a whole ring ahead of PCIe.
@@ -328,7 +345,24 @@ suggests `--multicore` if it does not fit.
 * **Cost:** on the H100, HIGGS (10.5M × 28) went from 7.2 to 3.4 GiB at the
   same speed, airline (115M × 13) from 35 to 13.3 GiB, 2-4% slower (the
   partition waits a little for the column before it, and the ring for PCIe);
-  see [PERFORMANCE.md](PERFORMANCE.md).
+  see [PERFORMANCE.md](PERFORMANCE.md). Since 2026-11-21 `--gpu` needs no ring
+  and no device copy of the raw values for C4.5's pruning: HIGGS at depth 10 3413 →
+  2901-2965 MiB, C4.5 with pruning 4993 → 3519 MiB, SUSY C4.5 1705 → 1257 MiB.
+
+Host: the raw values (`4 × rows × features` bytes, from the load), the arena
+(see the hand-offs above), the CPU tasks' buffers and the staging buffers.
+`--hybrid` gives the raw values back to the operating system once they are
+presorted on the GPU (`madvise(MADV_DONTNEED)`, on a background thread), when
+nothing reads them later: one tree (no `--repeat`, no warm-up) and no C4.5
+pruning. ./tree's training accuracy is then counted from the leaves' class
+counts instead of by predicting the training rows (the same number). The CPU
+subtrees never read the raw values: they work on the hand-offs' columns. (The
+CPU backends keep them: their big nodes mark their rows from a scan of the
+winner's raw values, and marking them from the sorted entries instead was up
+to 48% slower, `--serial` on 1B rows of chess.) With the arena only touched where hand-offs
+land and the raw values given back, the hybrid's peak RAM went from 3.9 to 1.7 GiB on HIGGS at depth 10, 4.2
+to 1.7-1.8 GiB without a depth limit, and 71.7 to 24.3 GiB on MNIST8M (C4.5)
+without a depth limit, at the same speed ([PERFORMANCE.md](PERFORMANCE.md#november-2026-less-memory-for---hybrid-and---gpu)).
 
 ## Pseudo code
 

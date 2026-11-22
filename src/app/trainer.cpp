@@ -16,9 +16,23 @@
 
 namespace dt {
 
+bool trainingMayReleaseValues(const Options &options) {
+  // Only --hybrid: its CPU subtrees work on the hand-offs' columns and never
+  // read the raw values. The CPU backends mark the rows of their big nodes
+  // from a raw column; marking them from the sorted entries instead was up
+  // to 48% slower (--serial on 1B rows of chess, 5-10% for --multicore on
+  // SUSY C4.5 at depth 10).
+  const bool c45Prune = options.algorithm == Algorithm::C45 && options.c45.prune;
+  return options.backend == Backend::Hybrid && !c45Prune && options.repeat <= 1 &&
+         !options.warmUp;
+}
+
 Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
-               TrainTimings &timings, bool verbose) {
+               TrainTimings &timings, bool verbose, Dataset *releasable) {
   validateOptions(options);
+  if (releasable && (releasable != &train || !trainingMayReleaseValues(options))) {
+    releasable = nullptr;
+  }
   if (train.classCount() == 0 || train.rowCount == 0) {
     throw std::runtime_error("Cannot train on an empty dataset.");
   }
@@ -49,7 +63,7 @@ Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
     }
     trace::Phase phase("gpu setup");
     trace::Doing doing(trace::Work::GpuHost);
-    grower = makeGpuGrower(train, options, *pool, timings.gpuSetup);
+    grower = makeGpuGrower(train, options, *pool, timings.gpuSetup, releasable);
     timings.gpuSetupSeconds = timings.gpuSetup.total();
   } else if (options.backend == Backend::Simple) {
     grower = makeSimpleGrower(train);

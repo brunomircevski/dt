@@ -30,7 +30,15 @@ struct TrainTimings {
 // Train a CART or C4.5 tree on `train` as configured by `options`. `pool`
 // is used by the Parallel and Cuda backends (the Serial backend ignores it);
 // the Cuda backend needs one (it may have zero workers).
+// `releasable` (null, or `train` itself, used for nothing else afterwards):
+// the training may give the memory of its feature values back once it no
+// longer needs them (then train.valuesReleased is set; the labels stay).
+// Only where nothing reads them later (see trainingMayReleaseValues()).
 Tree trainTree(const Dataset &train, const Options &options, ThreadPool *pool,
-               TrainTimings &timings, bool verbose = true);
+               TrainTimings &timings, bool verbose = true, Dataset *releasable = nullptr);
+
+// Whether trainTree() could give the training values back: one tree, grown
+// by --hybrid, and no C4.5 pruning (which reads them).
+bool trainingMayReleaseValues(const Options &options);
 
 } // namespace dt

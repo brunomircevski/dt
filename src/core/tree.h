@@ -56,6 +56,11 @@ public:
   // Fraction of rows classified correctly.
   double accuracy(const Dataset &dataset, ThreadPool *pool) const;
 
+  // Fraction of the training rows classified correctly, from the class
+  // counts of the leaves: each training row reaches the leaf it was counted
+  // in, so this is accuracy() on the training set, without its values.
+  double trainingAccuracy() const;
+
   std::size_t nodeCount() const { return nodes.size(); }
   std::size_t leafCount() const;
   int depth() const;

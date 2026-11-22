@@ -64,9 +64,12 @@ struct GpuSetupTimings {
 };
 
 // Cuda backend; small nodes are finished by CPU tasks on `pool`. Its setup
-// (allocation, upload, presort) is timed in `setup`.
+// (allocation, upload, presort) is timed in `setup`. `releasable` (null, or
+// `train` itself): --hybrid may give the memory of its values back once they
+// are on the GPU (see trainTree()).
 std::unique_ptr<Grower> makeGpuGrower(const Dataset &train, const Options &options,
-                                      ThreadPool &pool, GpuSetupTimings &setup);
+                                      ThreadPool &pool, GpuSetupTimings &setup,
+                                      Dataset *releasable = nullptr);
 
 // The GPU's one-time start-up: the CUDA context (slow: 0.4-0.7 s). Call it
 // early on another thread, e.g. while the dataset loads, so training does not

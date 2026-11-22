@@ -476,7 +476,13 @@ void CpuTreeBuilder::split(const Columns &columns, Subtree &item, std::vector<Su
   }
   if (!leftTerminal) {
     if (pool_ && count >= options_.nodeTaskRows) {
-      pool_->submit([this, columns, child = std::move(left)]() mutable {
+      pool_->submit([this, columns = Columns(columns), child = std::move(left)]() mutable {
+        // Drop the hold before the pool counts the task as done (also when
+        // it throws): the pool destroys the task only after that.
+        struct Release {
+          Columns &columns;
+          ~Release() { columns.hold.reset(); }
+        } release{columns};
         grow(columns, std::move(child));
       });
     } else {

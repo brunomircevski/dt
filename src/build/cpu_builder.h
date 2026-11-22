@@ -43,6 +43,11 @@ struct Columns {
   std::size_t stride = 0;
   std::size_t slots = 0; // slots in data (0: one per feature)
   const Dataset *train = nullptr;
+  // Keeps `data` alive while a task works on it (the CUDA backend's
+  // hand-offs: their host block is reused once every task of its subtree is
+  // done); every pool task the builder spawns holds a copy and drops it
+  // before it counts as finished. Null for the CPU growers.
+  std::shared_ptr<void> hold;
 
   Entry *slot(std::size_t index) const { return data + index * stride; }
 };

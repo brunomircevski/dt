@@ -167,6 +167,15 @@ public:
   T *get() const { return data_; }
   std::size_t capacity() const { return capacity_; }
 
+  // Free it (in stream order with a stream).
+  void release(cudaStream_t stream = nullptr) {
+    if (data_) {
+      CUDA_CHECK(stream ? cudaFreeAsync(data_, stream) : cudaFree(data_));
+    }
+    data_ = nullptr;
+    capacity_ = 0;
+  }
+
 private:
   T *data_ = nullptr;
   std::size_t capacity_ = 0;

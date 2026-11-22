@@ -42,6 +42,9 @@ struct Dataset {
   std::size_t rowCount = 0;
   Values values;                       // values[feature * rowCount + row]
   std::vector<std::uint16_t> labels;   // class id per row
+  // The training gave the memory of `values` back once it had presorted
+  // them (trainTree()'s `releasable`): they must not be read any more.
+  bool valuesReleased = false;
 
   std::size_t featureCount() const { return featureNames.size(); }
   std::size_t classCount() const { return classNames.size(); }
@@ -77,6 +80,11 @@ DistinctValues distinctValues(const Dataset &dataset);
 // so a dataset's first N rows need no file of their own.
 Dataset loadDataset(const std::string &filePath, ThreadPool *pool, std::size_t maxRows = 0);
 
+
+// Give the memory of values[first, last) back to the system (only whole
+// pages inside the range): they read as 0 afterwards. Set
+// dataset.valuesReleased before the first call.
+void releaseValues(Dataset &dataset, std::size_t first, std::size_t last);
 
 // Rows of each class, counted on `pool`.
 std::vector<std::uint32_t> countClasses(const Dataset &dataset, ThreadPool *pool);

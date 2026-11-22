@@ -2,6 +2,41 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/](../bench/README.md).
 
+## November 2026: less memory for `--hybrid` and `--gpu`
+
+Measured against 1f55adb2 on 2026-11-21/22: hopper (H100 PCIe, GPU 2, NUMA node 1, 32 threads, node 1's CPUs first), the whole node, the old and new binaries interleaved, every hopper benchmark case (`--gpu` and `--hybrid`, the same flags and `--handoff-rows` as the benchmarks): the 48 depth-10 cases (SUSY, HIGGS, chess 1M-2B, MNIST8M, ECBDL'14 15M, SOREL 4M) 6 times each, the 72 cases of the depth sweep (HIGGS, MNIST8M, SOREL 4M, depth 5-30 and none) 3 times, the closest ones again 10 times. Peak RAM and the GPU's memory are sampled the way `run.py` does (one `nvidia-smi -lms 10`). Every tree's sha256 equals the old one's in every run and `tests/check.sh` passes. The CPU backends (`--serial`, `--multicore`, `--simple`) are unchanged.
+
+What changed (CUDA.md, "Hand-offs" and "Memory"):
+
+* **The hybrid's arena is only reserved.** Each hand-off takes a block of it (first fit, its children one after the other with only the columns that can still split them), and a child's block goes back when its CPU subtree is done. Before, the whole arena (8 bytes per value of every column) was touched in the background during the presort.
+* **`--hybrid` gives the raw values back** to the OS once the GPU has presorted them (`madvise(MADV_DONTNEED)` on a background thread), when nothing reads them later: one tree, no C4.5 pruning.
+* **`--gpu` has no 512 MB ring** (it hands nothing to the CPU), and C4.5's distinct values go through a 64 MB buffer, freed with `cudaFree` after the presort.
+* **No device copy of the raw values for C4.5's pruning:** `arrangeRows` runs in the column buffer, and with fewer than 32 features the values are uploaded again in the background.
+
+Peak memory, MiB (the GPU's: `memory.used`, with the CUDA context):
+
+| | before | after |
+|---|--:|--:|
+| `--hybrid` RAM, HIGGS CART depth 10 | 4044 | 1746 |
+| `--hybrid` RAM, HIGGS C4.5 no depth limit | 4294 | 1746 |
+| `--hybrid` RAM, SUSY CART depth 10 | 1585 | 922 |
+| `--hybrid` RAM, chess 1B CART depth 10 | 25447 | 10141 |
+| `--hybrid` RAM, MNIST8M C4.5 no depth limit | 73446 | 24844 |
+| `--hybrid` RAM, ECBDL'14 15M CART depth 10 | 109055 | 36740 |
+| `--hybrid` RAM, SOREL 4M CART no depth limit | 109706 | 36942 |
+| `--gpu` GPU, HIGGS CART depth 10 | 3413 | 2901 |
+| `--gpu` GPU, SUSY C4.5 depth 10 | 1705 | 1257 |
+| `--gpu` GPU, chess 100M CART depth 10 | 3525 | 3013 |
+| `--gpu` GPU, HIGGS C4.5 with pruning | 4993 | 3519 |
+
+`--gpu`'s RAM is unchanged, and so is `--hybrid`'s GPU memory, except with C4.5 pruning (HIGGS 4609 → 3487 MiB). Speed (median training time per case, the new binary against the old): `--gpu` +0.1%, `--hybrid` +0.1% (geomeans over the 60 cases of each). No case is more than 3% slower; the most is `--hybrid` HIGGS C4.5 at depth 30, +2.6% over 10 runs (17 ms). With C4.5 pruning (not a benchmark case), HIGGS and SUSY are 1-7% faster.
+
+Found on the way:
+
+* **The arena's pages on one socket.** Without the background touch, the staging threads (pinned to the GPU's node) touch the arena first when they copy a hand-off in, so all of it lands on node 1 and the CPU subtrees on node 0 read it remotely: SOREL 4M CART at depth 30 was 15-20% slower, MNIST8M without a depth limit 5-8%. Interleaving the arena's pages over the nodes (`mbind(MPOL_INTERLEAVE)`, before any touch) brings both back to within 1-2%. Touching it all up front fixed it too, but kept the RAM; transparent huge pages alone did not.
+* **Not for the CPU backends.** Releasing the raw values in `--serial` and `--multicore` too means their big nodes mark their rows from the sorted entries instead of a scan of the winner's raw column: `--serial` built chess 100M and 1B 28-48% slower (the whole training 10-27%), `--multicore` C4.5 on SUSY at depth 10 5-10%. They keep the values.
+* **The measurement.** A first test harness polled `nvidia-smi --query-compute-apps` every 20 ms (a new process each time); that alone made hybrid MNIST8M at depth 10 look 3-4% slower (about 0.34 s of CPU time taken from the build). Without it the two binaries take the same time (2358 against 2360 ms).
+
 ## November 2026: the GPU setup's fixed cost (mordor3 cluster)
 
 Measured against 2c688938 on 2026-11-16: hopper (H100 PCIe, GPU 2, NUMA node 1, 32 threads) and ampere (A100 80 GB, GPU 0, node 0, 48 threads), whole nodes, baseline and patched binaries interleaved, `--gpu`, depth 10, CART unless noted, `--profile` on every run; every tree equal to the baseline's.

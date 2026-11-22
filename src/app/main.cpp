@@ -219,7 +219,7 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   // The calling thread works too, so threads - 1 workers. Loading and
   // evaluation always use it; training only with --multicore, --gpu and --hybrid.
   auto pool = std::make_unique<ThreadPool>(threadCount(options) - 1);
-  const LoadedData data = loadData(options, *pool);
+  LoadedData data = loadData(options, *pool);
   printDataSummary(options, data);
   // train total starts only once the start-up has finished: with a fast
   // (binary) load, waiting for it is start-up, not training.
@@ -250,7 +250,10 @@ int run(const Options &options, bool &exitWithoutCleanup) {
     trace::start();
   }
   const double start = unixNow();
-  const Tree tree = trainTree(data.train, options, pool.get(), timings);
+  // The training values are used for nothing else: the training may give
+  // their memory back (the training accuracy then comes from the leaves).
+  const Tree tree = trainTree(data.train, options, pool.get(), timings, /*verbose=*/true,
+                              &data.train);
   if (options.repeat > 0) {
     printRepeatWindow(options, options.repeat, timings, start);
   }
@@ -264,7 +267,10 @@ int run(const Options &options, bool &exitWithoutCleanup) {
   if (options.accuracy) {
     ScopedTimer timer(results.evalSeconds);
     NvtxRange range("accuracy");
-    results.trainAccuracy = tree.accuracy(data.train, pool.get());
+    // The training rows' leaves are the ones the tree's class counts were
+    // counted in: the same accuracy as classifying them again.
+    results.trainAccuracy = data.train.valuesReleased ? tree.trainingAccuracy()
+                                                      : tree.accuracy(data.train, pool.get());
     if (data.test.rowCount > 0) {
       results.testAccuracy = tree.accuracy(data.test, pool.get());
     }
