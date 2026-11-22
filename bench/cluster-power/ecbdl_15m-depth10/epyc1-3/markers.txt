@@ -1,0 +1,50 @@
+1795269716.082806 job_start
+1795269736.089137 idle_start
+1795270036.093676 idle_end
+1795270036.096557 cal_start n=1
+1795270096.101669 cal_end n=1
+1795270096.103379 cal_start n=2
+1795270156.108525 cal_end n=2
+1795270156.110380 cal_start n=4
+1795270216.115603 cal_end n=4
+1795270216.117895 cal_start n=8
+1795270276.123728 cal_end n=8
+1795270276.125864 cal_start n=16
+1795270336.132711 cal_end n=16
+1795270336.134435 cal_start n=32
+1795270396.145728 cal_end n=32
+1795270396.147350 cal_start n=48
+1795270456.163872 cal_end n=48
+1795270456.166047 step_end
+1795270756.170962 step_idle_end
+1795270776.177080 start rep1-simple-cart impl=simple algo=cart repeat=1
+1795273150.924422 end rep1-simple-cart rc=0
+1795273170.928684 start rep1-simple-c45 impl=simple algo=c45 repeat=1
+1795275808.960992 end rep1-simple-c45 rc=0
+1795275828.964323 start rep2-simple-cart impl=simple algo=cart repeat=1
+1795278185.770475 end rep2-simple-cart rc=0
+1795278205.774576 start rep2-simple-c45 impl=simple algo=c45 repeat=1
+1795280838.060863 end rep2-simple-c45 rc=0
+1795280858.064836 start rep3-simple-cart impl=simple algo=cart repeat=1
+1795283188.836392 end rep3-simple-cart rc=0
+1795283208.840798 start rep3-simple-c45 impl=simple algo=c45 repeat=1
+1795285853.148187 end rep3-simple-c45 rc=0
+1795285873.151963 start rep4-simple-cart impl=simple algo=cart repeat=1
+1795288205.555349 end rep4-simple-cart rc=0
+1795288225.558996 start rep4-simple-c45 impl=simple algo=c45 repeat=1
+1795290869.456626 end rep4-simple-c45 rc=0
+1795290889.460275 start rep5-simple-cart impl=simple algo=cart repeat=1
+1795293220.777832 end rep5-simple-cart rc=0
+1795293240.781825 start rep5-simple-c45 impl=simple algo=c45 repeat=1
+1795295873.780482 end rep5-simple-c45 rc=0
+1795295893.784710 start rep6-simple-cart impl=simple algo=cart repeat=1
+1795298236.723029 end rep6-simple-cart rc=0
+1795298256.727336 start rep6-simple-c45 impl=simple algo=c45 repeat=1
+1795300894.869134 end rep6-simple-c45 rc=0
+1795300914.872876 start rep7-simple-cart impl=simple algo=cart repeat=1
+1795303251.405892 end rep7-simple-cart rc=0
+1795303271.409651 start rep7-simple-c45 impl=simple algo=c45 repeat=1
+1795305905.601046 end rep7-simple-c45 rc=0
+1795305925.604803 idle2_start
+1795306225.609997 idle2_end
+1795306225.613156 job_end
