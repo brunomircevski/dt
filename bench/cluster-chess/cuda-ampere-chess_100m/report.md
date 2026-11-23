@@ -1,8 +1,8 @@
 ## cuda-ampere-chess_100m
 
-**cuda-ampere-chess_100m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree f53347a9d336, CPUs in order of use 0-23,24-47, 5 run(s) per case, warm-up 50000 rows
+**cuda-ampere-chess_100m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-43-generic #43~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Sat Oct 31 06:52:47 UTC 2 x86_64, governor ondemand, turbo on, ./tree 7f98876f7e2a, CPUs in order of use 0-23,24-47, 10 run(s) per case, every run a fresh process, no warm-up
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 632 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 633 MiB
 
 ### chess_100m (100,000,000 train / 0 test rows, 2 features, 2 classes)
 
@@ -10,10 +10,10 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 632
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 111 ms | 101 ms–111 ms |  | 3.04 GiB (+ GPU 3.42 GiB) | 2.43 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree Hybrid | 293 ms | 284 ms–326 ms |  | 1.51 GiB (+ GPU 3.41 GiB) | 916 MiB | 17 | 9 | 4 | 100.00% |  |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 110 ms | 106 ms–111 ms |  | 3.04 GiB (+ GPU 3.42 GiB) | 2.43 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree Hybrid | 306 ms | 289 ms–322 ms |  | 1.51 GiB (+ GPU 3.41 GiB) | 916 MiB | 17 | 9 | 4 | 100.00% |  |

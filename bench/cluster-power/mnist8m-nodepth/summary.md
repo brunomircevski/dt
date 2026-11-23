@@ -2,17 +2,17 @@
 
 | Implementation | Node | runs × trees | t per tree | mean P | P above idle | peak P | E per tree | E above idle | E without the unused GPUs | split of E |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Multicore | hopper | 6 × 6 | 28.5 s ± 0.4% | 913 W | 510 W | 958 W | 26 kJ ± 0.4% | 14.5 kJ | 20.2 kJ (-22.4%) | CPU socket 0 7.67 kJ, CPU socket 1 7.6 kJ, Memory 2.89 kJ, Unused GPUs 5.82 kJ, Rest of the server 2.05 kJ |
-| GPU | hopper | 6 × 11 | 12.1 s ± 0.7% | 672 W | 268 W | 850 W | 8.15 kJ ± 0.5% | 3.26 kJ | 6.28 kJ (-22.9%) | CPU socket 0 1.22 kJ, CPU socket 1 1.05 kJ, Memory 490 J, GPU in use 2.77 kJ, Unused GPUs 1.87 kJ, Rest of the server 746 J |
-| Hybrid | hopper | 6 × 17 | 7.82 s ± 0.3% | 1015 W | 611 W | 1222 W | 7.93 kJ ± 0.2% | 4.78 kJ | 6.73 kJ (-15.2%) | CPU socket 0 1.85 kJ, CPU socket 1 1.75 kJ, Memory 625 J, GPU in use 1.97 kJ, Unused GPUs 1.2 kJ, Rest of the server 539 J |
+| Multicore | hopper | 6 × 6 | 28.5 s ± 0.3% | 915 W | 510 W | 963 W | 26.1 kJ ± 0.4% | 14.5 kJ | 20.2 kJ (-22.4%) | CPU socket 0 7.67 kJ, CPU socket 1 7.6 kJ, Memory 2.89 kJ, Unused GPUs 5.85 kJ, Rest of the server 2.07 kJ |
+| GPU | hopper | 6 × 12 | 12 s ± 0.8% | 679 W | 275 W | 868 W | 8.17 kJ ± 0.4% | 3.3 kJ | 6.31 kJ (-22.8%) | CPU socket 0 1.24 kJ, CPU socket 1 1.06 kJ, Memory 487 J, GPU in use 2.78 kJ, Unused GPUs 1.86 kJ, Rest of the server 733 J |
+| Hybrid | hopper | 6 × 16 | 7.89 s ± 0.4% | 994 W | 589 W | 1209 W | 7.85 kJ ± 0.2% | 4.65 kJ | 6.63 kJ (-15.5%) | CPU socket 0 1.8 kJ, CPU socket 1 1.69 kJ, Memory 598 J, GPU in use 1.99 kJ, Unused GPUs 1.22 kJ, Rest of the server 547 J |
 
 ### C4.5 (gain ratio), MNIST8M, no depth limit, no pruning
 
 | Implementation | Node | runs × trees | t per tree | mean P | P above idle | peak P | E per tree | E above idle | E without the unused GPUs | split of E |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Multicore | hopper | 6 × 5 | 34.4 s ± 0.2% | 910 W | 507 W | 965 W | 31.3 kJ ± 0.2% | 17.4 kJ | 24.2 kJ (-22.6%) | CPU socket 0 9.19 kJ, CPU socket 1 9.11 kJ, Memory 3.47 kJ, Unused GPUs 7.07 kJ, Rest of the server 2.44 kJ |
-| GPU | hopper | 6 × 10 | 15.2 s ± 0.2% | 659 W | 255 W | 855 W | 9.99 kJ ± 0.5% | 3.87 kJ | 7.65 kJ (-23.4%) | CPU socket 0 1.48 kJ, CPU socket 1 1.27 kJ, Memory 601 J, GPU in use 3.36 kJ, Unused GPUs 2.34 kJ, Rest of the server 926 J |
-| Hybrid | hopper | 6 × 14 | 9.52 s ± 0.5% | 954 W | 551 W | 1185 W | 9.08 kJ ± 0.2% | 5.24 kJ | 7.62 kJ (-16.1%) | CPU socket 0 2.04 kJ, CPU socket 1 1.83 kJ, Memory 686 J, GPU in use 2.42 kJ, Unused GPUs 1.46 kJ, Rest of the server 651 J |
+| Multicore | hopper | 6 × 5 | 34.3 s ± 0.4% | 912 W | 507 W | 970 W | 31.3 kJ ± 0.4% | 17.4 kJ | 24.2 kJ (-22.5%) | CPU socket 0 9.18 kJ, CPU socket 1 9.1 kJ, Memory 3.47 kJ, Unused GPUs 7.04 kJ, Rest of the server 2.49 kJ |
+| GPU | hopper | 6 × 9 | 15.1 s ± 0.8% | 661 W | 257 W | 861 W | 10 kJ ± 1.0% | 3.88 kJ | 7.67 kJ (-23.3%) | CPU socket 0 1.52 kJ, CPU socket 1 1.29 kJ, Memory 599 J, GPU in use 3.34 kJ, Unused GPUs 2.33 kJ, Rest of the server 923 J |
+| Hybrid | hopper | 6 × 14 | 9.56 s ± 0.3% | 937 W | 532 W | 1177 W | 8.95 kJ ± 0.2% | 5.08 kJ | 7.48 kJ (-16.4%) | CPU socket 0 1.98 kJ, CPU socket 1 1.77 kJ, Memory 653 J, GPU in use 2.42 kJ, Unused GPUs 1.47 kJ, Rest of the server 650 J |
 
 ### The meter model
 
@@ -20,7 +20,7 @@ Each node's meter, fitted over every reading of its job: reading(t) = mean over 
 
 | Node | job | meter | refresh | readings | D | W | model | first half | second half | rms | idle: model / meter |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| hopper | 561 | sys_W | 1.0 s | 8863 | 0.5 s | 1 s | 56 W + 154 W + 1.02·CPU + GPU | 56 W + 154 W + 1.02·CPU + GPU | 57 W + 154 W + 1.03·CPU + GPU | 17.3 W | 403 / 400 W |
+| hopper | 792 | sys_W | 1.0 s | 8838 | 0.4 s | 1.25 s | 55 W + 154 W + 1.03·CPU + GPU | 54 W + 154 W + 1.03·CPU + GPU | 56 W + 154 W + 1.03·CPU + GPU | 16.7 W | 405 / 403 W |
 
 ### PSU energy: the model against the meter
 
@@ -28,12 +28,12 @@ E per tree from the model (used everywhere above) against: the model with each h
 
 | Implementation | Node | Algorithm | E per tree (model) | halves | held out | held-out readings: mean residual | meter | readings inside | mean residual inside |
 |---|---|---|---|---|---|---|---|---|---|
-| Multicore | hopper | CART | 26 kJ | -0.1% / +0.1% | -0.0% | 859: +0.4 ± 0.3 W | 26 kJ (-0.2%) | 803 | -0.2 ± 0.2 W (-0.0%) |
-| Multicore | hopper | C4.5 | 31.3 kJ | -0.1% / +0.1% | -0.2% | 818: +8.0 ± 0.5 W | 31.5 kJ (+0.6%) | 764 | +5.4 ± 0.3 W (+0.6%) |
-| GPU | hopper | CART | 8.15 kJ | -0.1% / +0.1% | -0.0% | 1006: -0.8 ± 0.4 W | 8.13 kJ (-0.2%) | 722 | +0.5 ± 0.3 W (+0.1%) |
-| GPU | hopper | C4.5 | 9.99 kJ | -0.1% / +0.1% | -0.1% | 1103: +1.8 ± 0.4 W | 9.98 kJ (-0.1%) | 842 | +2.1 ± 0.3 W (+0.3%) |
-| Hybrid | hopper | CART | 7.93 kJ | -0.1% / +0.1% | +0.0% | 1128: +1.3 ± 0.9 W | 7.83 kJ (-1.2%) | 687 | +0.2 ± 1.0 W (+0.0%) |
-| Hybrid | hopper | C4.5 | 9.08 kJ | -0.1% / +0.1% | +0.1% | 1080: -4.0 ± 0.7 W | 8.97 kJ (-1.2%) | 718 | -5.7 ± 0.8 W (-0.6%) |
+| Multicore | hopper | CART | 26.1 kJ | -0.0% / +0.0% | -0.1% | 851: +4.5 ± 0.4 W | 26.1 kJ (+0.2%) | 781 | +3.0 ± 0.3 W (+0.3%) |
+| Multicore | hopper | C4.5 | 31.3 kJ | -0.0% / +0.0% | -0.1% | 842: +1.2 ± 0.4 W | 31.3 kJ (+0.0%) | 782 | +1.1 ± 0.2 W (+0.1%) |
+| GPU | hopper | CART | 8.17 kJ | -0.1% / +0.1% | -0.1% | 1086: +3.8 ± 0.4 W | 8.19 kJ (+0.2%) | 760 | +3.6 ± 0.3 W (+0.5%) |
+| GPU | hopper | C4.5 | 10 kJ | -0.1% / +0.1% | +0.0% | 991: -0.9 ± 0.4 W | 9.96 kJ (-0.4%) | 744 | -0.0 ± 0.3 W (-0.0%) |
+| Hybrid | hopper | CART | 7.85 kJ | -0.0% / +0.0% | +0.1% | 1062: -1.4 ± 0.8 W | 7.76 kJ (-1.1%) | 630 | -1.2 ± 1.0 W (-0.1%) |
+| Hybrid | hopper | C4.5 | 8.95 kJ | -0.0% / +0.0% | +0.1% | 1084: -2.4 ± 0.7 W | 8.85 kJ (-1.1%) | 690 | -3.4 ± 0.9 W (-0.4%) |
 
 ### Time check
 
@@ -41,12 +41,12 @@ Time per tree (./tree's train time) against the first tree of each process and t
 
 | Implementation | Node | Algorithm | t per tree | first tree | time benchmark |
 |---|---|---|---|---|---|
-| Multicore | hopper | CART | 28.5 s | 28.5 s (+0.2%) | – |
-| Multicore | hopper | C4.5 | 34.4 s | 34.4 s (-0.2%) | – |
-| GPU | hopper | CART | 12.1 s | 12.2 s (-0.3%) | 12.3 s (-1.3%) |
-| GPU | hopper | C4.5 | 15.2 s | 15 s (+0.9%) | 15.3 s (-1.1%) |
-| Hybrid | hopper | CART | 7.82 s | 8.05 s (-3.0%) | 8.04 s (-2.8%) |
-| Hybrid | hopper | C4.5 | 9.52 s | 9.52 s (-0.0%) | 9.58 s (-0.6%) |
+| Multicore | hopper | CART | 28.5 s | 28.6 s (-0.2%) | – |
+| Multicore | hopper | C4.5 | 34.3 s | 34.4 s (-0.2%) | – |
+| GPU | hopper | CART | 12 s | 12 s (+0.1%) | 12.3 s (-2.2%) |
+| GPU | hopper | C4.5 | 15.1 s | 15.2 s (-0.5%) | 15.4 s (-1.7%) |
+| Hybrid | hopper | CART | 7.89 s | 8.13 s (-2.9%) | 8.11 s (-2.7%) |
+| Hybrid | hopper | C4.5 | 9.56 s | 9.44 s (+1.3%) | 9.56 s (-0.0%) |
 
 ### Warm-up check
 
@@ -54,9 +54,9 @@ GPU and Hybrid, CART, one process per warm-up (--repeat-warmup S: each tree's ch
 
 | Node | Implementation | warm-up | trees | trees 1–2 | trees 3– | slowest |
 |---|---|---|---|---|---|---|
-| hopper | GPU | 0 s | 10 | 12.143 s | 12.323 s | 12.514 s |
-| hopper | GPU | 2 s | 10 | 11.960 s | 11.938 s | 12.306 s |
-| hopper | GPU | 15 s | 10 | 11.729 s | 11.758 s | 11.875 s |
-| hopper | Hybrid | 0 s | 10 | 7.881 s | 7.815 s | 7.999 s |
-| hopper | Hybrid | 2 s | 10 | 7.850 s | 7.821 s | 7.975 s |
-| hopper | Hybrid | 15 s | 10 | 7.691 s | 7.846 s | 8.005 s |
+| hopper | GPU | 0 s | 10 | 12.265 s | 12.227 s | 12.516 s |
+| hopper | GPU | 2 s | 10 | 11.864 s | 12.010 s | 12.236 s |
+| hopper | GPU | 15 s | 10 | 11.737 s | 11.755 s | 11.808 s |
+| hopper | Hybrid | 0 s | 10 | 7.942 s | 7.834 s | 8.036 s |
+| hopper | Hybrid | 2 s | 10 | 7.948 s | 7.852 s | 8.148 s |
+| hopper | Hybrid | 15 s | 10 | 7.825 s | 7.846 s | 7.925 s |

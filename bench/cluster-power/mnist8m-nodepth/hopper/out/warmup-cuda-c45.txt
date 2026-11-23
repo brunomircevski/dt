@@ -1,32 +1,32 @@
-C4.5 on /dev/shm/power-bench-561/train.f32 (backend hybrid)
+C4.5 on /dev/shm/power-bench-792/train.f32 (backend hybrid)
   rows 8100000 train, 784 features, 10 classes
   pruning off
-  repeat 1/2: train 9572.6 ms, unix 1795213754.317317 1795213763.891577
-  repeat 2/2: train 9641.6 ms, unix 1795213767.051493 1795213776.694661
+  repeat 1/2: train 9508.0 ms, unix 1795431065.436793 1795431074.946442
+  repeat 2/2: train 9690.8 ms, unix 1795431078.064520 1795431087.756740
 Tree:
   nodes 218325, leaves 109163, depth 147
   train accuracy 99.6117%
 Timings:
-  load                   970.9 ms
-  gpu setup              982.5 ms
-  setup buffers          203.2 ms
-  setup allocate          33.8 ms
-  setup upload           717.4 ms
-  setup finish            28.1 ms
+  load                   894.6 ms
+  gpu setup              949.8 ms
+  setup buffers          196.5 ms
+  setup allocate          10.5 ms
+  setup upload           715.1 ms
+  setup finish            27.7 ms
   presort                  0.0 ms
-  build                 8652.3 ms
-  prune                    6.8 ms
-  train total           9641.6 ms
-  evaluate               403.7 ms
+  build                 8733.0 ms
+  prune                    8.0 ms
+  train total           9690.8 ms
+  evaluate               396.8 ms
 Timeline:
-  span staging buffers: 0.024 100.709 ms
-  span hand-off buffers: 100.710 203.260 ms
-  span device memory: 203.263 237.056 ms
-  span upload: 237.058 954.424 ms
-  span x log x table: 954.425 955.928 ms
-  span x log x table copy: 955.930 981.761 ms
-  span presort (GPU): 243.084 955.464 ms
-  span cpu subtrees: 1571.759 9521.228 ms, busy 92755.223 ms in 5450 tasks
-  span build: 984.055 9636.381 ms
+  span staging buffers: 0.031 62.477 ms
+  span hand-off buffers: 62.478 196.507 ms
+  span device memory: 196.516 207.022 ms
+  span upload: 207.023 922.076 ms
+  span x log x table: 922.078 923.430 ms
+  span x log x table copy: 923.432 949.035 ms
+  span presort (GPU): 213.318 923.151 ms
+  span cpu subtrees: 1544.819 9565.727 ms, busy 90770.254 ms in 5450 tasks
+  span build: 951.172 9684.175 ms
 Memory:
-  peak after training 75209360 KiB
+  peak after training 40777516 KiB

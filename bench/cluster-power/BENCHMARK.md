@@ -2,13 +2,16 @@
 
 How much energy one tree costs on each of ./tree's backends, measured for the
 whole server at the power supply (PSU). There are two measurements, with one
-folder each. Both use the same method and code: 81bf6e6c, the final build of the
-2026-11-19 time benchmark rerun (`~/dt-final`; GPU set-up timed).
+folder each. Both use the same method. The CPU backends run 81bf6e6c, the
+final build of the 2026-11-19 time benchmark rerun (`~/dt-final`); GPU and
+Hybrid run 7f98876f (2026-11-23: less RAM for `--hybrid`, less VRAM for
+`--gpu`, the same trees), like the time benchmarks they are checked against.
+The GPU set-up is timed in both.
 
 | Measurement | Folder | What | Servers | Jobs |
 |---|---|---|---|---|
-| [ECBDL'14 15M, depth ≤ 10](#ecbdl14-15m-depth--10-all-five-backends) | [`ecbdl_15m-depth10/`](ecbdl_15m-depth10/summary.md) | all five backends, CART and C4.5 | epyc1, hopper | 528 + 560 + 657 (epyc1), 559 + 562 + 616 (hopper), 549 (warm-up check) |
-| [MNIST8M, no depth limit](#mnist8m-no-depth-limit-where---hybrid-gains) | [`mnist8m-nodepth/`](mnist8m-nodepth/summary.md) | Multicore, GPU and Hybrid, CART and C4.5 | hopper | 561 |
+| [ECBDL'14 15M, depth ≤ 10](#ecbdl14-15m-depth--10-all-five-backends) | [`ecbdl_15m-depth10/`](ecbdl_15m-depth10/summary.md) | all five backends, CART and C4.5 | epyc1, hopper | 528 + 560 + 657 (epyc1), 559 + 562 + 616 + 793 (hopper), 549 (warm-up check) |
+| [MNIST8M, no depth limit](#mnist8m-no-depth-limit-where---hybrid-gains) | [`mnist8m-nodepth/`](mnist8m-nodepth/summary.md) | Multicore, GPU and Hybrid, CART and C4.5 | hopper | 792 |
 
 **The paper's figures**, the same files as `paper/figs/` (drawn by
 `paper/tools/charts.py energy energy_deep`, which writes both copies):
@@ -38,7 +41,11 @@ ECBDL'14 15M is the first 15M rows of ECBDL'14's train.csv, with 631 features.
 The trees grow to depth ≤ 10 with no pruning, CART and C4.5.
 
 **Jobs:**
-- **hopper:** job 559 (2026-11-20 18:14–22:07, GPU and Hybrid with a 2 s warm-up).
+- **hopper:** job 559 (2026-11-20 18:14–22:07, 81bf6e6c), and job 793
+  (2026-11-23 14:29–16:01, `hopper-4/`) for GPU and Hybrid again on 7f98876f
+  (`submit.sh -s 4 hopper "IMPLS=gpuonly cuda" REPS=3`, a 2 s warm-up).
+  559's GPU and Hybrid processes are listed in `hopper/superseded.txt`, which
+  `analyze.py` leaves out; they are in git at 2c9ff876.
 - **epyc1:** job 528 (2026-11-20 11:03–13:29).
 - **Top-ups:** each node got a second job with more Serial-Opt and Serial-Simple
   trees: 562 on hopper (2026-11-21 02:09–06:55, `hopper-2/`) and 560 on epyc1
@@ -67,27 +74,31 @@ Energy per tree (± one standard deviation over the processes):
 | Serial-Opt | hopper | 251 s | 136 kJ ± 0.8% | 33.7 kJ | 259 s | 140 kJ ± 0.9% | 34.8 kJ |
 | Multicore | epyc1 | 4.56 s | 2.73 kJ ± 0.3% | 2.16 kJ | 4.79 s | 2.87 kJ ± 0.6% | 2.27 kJ |
 | Multicore | hopper | 9.13 s | 8.27 kJ ± 0.2% | 4.57 kJ | 10.1 s | 9.10 kJ ± 0.2% | 4.98 kJ |
-| GPU | hopper (H100) | 2.82 s | **1.99 kJ** ± 1.4% | 840 J | 2.84 s | **2.01 kJ** ± 0.9% | 855 J |
-| Hybrid | hopper (H100) | 2.94 s | 2.26 kJ ± 0.7% | 1.07 kJ | 2.92 s | 2.26 kJ ± 0.3% | 1.07 kJ |
+| GPU | hopper (H100) | 2.80 s | **1.98 kJ** ± 0.9% | 856 J | 2.84 s | **2.03 kJ** ± 0.9% | 885 J |
+| Hybrid | hopper (H100) | 2.97 s | 2.09 kJ ± 0.6% | 897 J | 2.95 s | 2.10 kJ ± 0.1% | 907 J |
 
 Runs × trees:
 - **Serial-Simple:** 10 × 1, each tree its own process, as in the time
   benchmark's 10 runs (until 2026-11-21: 3 × 1).
 - **Serial-Opt:** 10 × 1, as in the time benchmark's 10 runs.
-- **The others:** 3 processes of 13–44 trees (about 120 s of training each).
+- **The others:** 3 processes of 13–45 trees (about 120 s of training each).
 
 ![energy per tree](ecbdl_15m-depth10/chart-energy.png)
 
 What it shows:
 
-- **The H100 server uses the least energy per tree:** 1.99 and 2.01 kJ
-  (GPU). That is 27% (CART) and 30% (C4.5) less than Multicore on epyc1 (2.73
-  and 2.87 kJ). Above idle the gap is wider: 0.84–0.86 kJ against 2.16–2.27 kJ
-  (2.6×).
-- **Hybrid costs 12–14% more energy than GPU** and is 3–4% slower. Two causes:
-  with the GPU set-up timed (since 81bf6e6c), its page-locked hand-off buffers
-  cost about 0.1 s per tree; and its CPU threads work while the GPU does (CPU
-  packages + DRAM 0.94 kJ against 0.71 kJ per tree).
+- **The H100 server uses the least energy per tree:** 1.98 and 2.03 kJ
+  (GPU). That is 27% (CART) and 29% (C4.5) less than Multicore on epyc1 (2.73
+  and 2.87 kJ). Above idle the gap is wider: 0.86–0.89 kJ against 2.16–2.27 kJ
+  (2.5–2.6×).
+- **Hybrid costs 3–5% more energy than GPU** (2.09 against 1.98 kJ, 2.10
+  against 2.03 kJ) at the same power (704–709 against 708–714 W), because it
+  is 4–6% slower: its page-locked hand-off buffers cost about 0.1 s per tree.
+  Its CPU packages + DRAM use 0.76–0.77 kJ against GPU's 0.71–0.73 kJ.
+  - Before 7f98876f (job 559) it cost 12–14% more: it wrote its whole host
+    buffer for hand-offs before growing (CPU packages + DRAM 0.94 kJ, 2.26 kJ
+    a tree), at about the same time (2.92–2.94 s). GPU is within 1% of job 559
+    (1.99 and 2.01 kJ).
 - **Serial-Opt uses 10–17× less energy than Serial-Simple**, and Multicore
   another 14× less than Serial-Opt.
 - **Idle power weighs on hopper's single-thread runs.** hopper idles at 404 W
@@ -107,7 +118,7 @@ What it shows:
     fans); a one-thread tree's energy on epyc1 is therefore known to ±2%.
 - **The warm-up is 2 s since job 559**, so GPU and Hybrid trees take as long
   as the time benchmark's single runs ([Time check](#time-check)).
-  - With the 15 s warm-up of job 519 (same build) they were 11–12% faster
+  - With the 15 s warm-up of job 519 (81bf6e6c, like 559) they were 11–12% faster
     (GPU 2.54 s, Hybrid 2.62 s) and used 6–7% less energy (GPU 1.88 kJ,
     Hybrid 2.12–2.14 kJ).
   - The CPU backends of the two hopper jobs agree within 1.4%.
@@ -149,7 +160,8 @@ limit and no pruning, CART and C4.5.
 Every case grows the same tree: CART 301,939 nodes, depth 115; C4.5 218,325
 nodes, depth 147.
 
-**When:** job 561, 2026-11-20 23:25 – 2026-11-21 02:08, ./tree 81bf6e6c.
+**When:** job 792, 2026-11-23 11:47–14:29, ./tree 7f98876f (all three
+backends; `./tree_cpu` is the same CPU code as 81bf6e6c).
 - It ran `power_bench.sh all` with `DATA=~/datasets/mnist8m/train.f32 SHM=1
   DEPTH=-1 HANDOFF=8192 IMPLS="parallel gpuonly cuda" ALGOS="cart c45"
   REPS=6`, plus a short warm-up check (`CHECK=1 CHECK_WARMUPS="0 2 15"
@@ -157,23 +169,27 @@ nodes, depth 147.
 - Everything else is at the defaults: 120 s of training per process, a 2 s
   `--repeat-warmup` for the GPU backends, 300 s idle before and after, the 60 s
   calibration staircase, 20 s idle before each process.
-- It replaces job 415 (2026-11-18, 15 s warm-up), whose GPU trees were 3–5%
-  faster than in the time benchmark. Its energy per tree was within 1% of this
-  job's; it is in the git history.
+- It replaces job 561 (2026-11-20/21, 81bf6e6c, the same settings; in git at
+  2c9ff876): Multicore and GPU are within 0.4% of it, and the hybrid, at the
+  same speed (7.89 and 9.56 s against 7.82 and 9.52 s), draws 2% less power
+  (994 against 1,015 W, 937 against 954 W) and needs 1.0–1.4% less energy
+  (7.85 against 7.93 kJ, 8.95 against 9.08 kJ). Job 561 replaced job 415
+  (2026-11-18, 15 s warm-up), whose GPU trees were 3–5% faster than in the
+  time benchmark.
 
 ![the paper's figure: time, power and energy of one tree on MNIST8M](paper-fig-energy-mnist8m.png)
 
 | Backend | CART: t | P | E | above idle | C4.5: t | P | E | above idle |
 |---|---|---|---|---|---|---|---|---|
-| Multicore | 28.5 s | 913 W | 26.0 kJ ± 0.4% | 14.5 kJ | 34.4 s | 910 W | 31.3 kJ ± 0.2% | 17.4 kJ |
-| GPU | 12.1 s | 672 W | 8.15 kJ ± 0.5% | 3.26 kJ | 15.2 s | 659 W | 9.99 kJ ± 0.5% | 3.87 kJ |
-| Hybrid | 7.82 s | 1,015 W | **7.93 kJ** ± 0.3% | 4.78 kJ | 9.52 s | 954 W | **9.08 kJ** ± 0.2% | 5.24 kJ |
+| Multicore | 28.5 s | 915 W | 26.1 kJ ± 0.4% | 14.5 kJ | 34.3 s | 912 W | 31.3 kJ ± 0.4% | 17.4 kJ |
+| GPU | 12.0 s | 679 W | 8.17 kJ ± 0.4% | 3.30 kJ | 15.1 s | 661 W | 10.0 kJ ± 1.0% | 3.88 kJ |
+| Hybrid | 7.89 s | 994 W | **7.85 kJ** ± 0.2% | 4.65 kJ | 9.56 s | 937 W | **8.95 kJ** ± 0.2% | 5.08 kJ |
 
 Columns:
 - **t:** time per tree.
 - **P:** mean power of the whole server while training.
 - **E:** energy per tree (± standard deviation over the six rounds).
-- **Above idle:** E minus what the idle server (403 W) would have used in the
+- **Above idle:** E minus what the idle server (405 W) would have used in the
   same time.
 
 More columns (peaks, the split into CPU sockets, memory, GPU, unused GPUs and
@@ -181,38 +197,39 @@ the rest, the model checks) are in [summary.md](mnist8m-nodepth/summary.md);
 every process is in [runs.csv](mnist8m-nodepth/runs.csv).
 
 - **Hybrid is the fastest and needs the least energy, by a little.** It is
-  1.55× (CART) and 1.59× (C4.5) faster than GPU, but draws 1.51× and 1.45× the
-  power (1,015 against 672 W). So a tree costs only 2.7% (CART) and 9.0% (C4.5)
-  less energy (7.93 against 8.15 kJ, 9.08 against 9.99 kJ).
+  1.52× (CART) and 1.58× (C4.5) faster than GPU, but draws 1.46× and 1.42× the
+  power (994 against 679 W, 937 against 661 W). So a tree costs 4.0% (CART)
+  and 10.5% (C4.5) less energy (7.85 against 8.17 kJ, 8.95 against 10.0 kJ).
 - **Where the power goes:**
-  - GPU only keeps the CPUs at 182–187 W (the packages' idle is 114 W) and the
-    H100 at 222–228 W.
+  - GPU only keeps the CPUs at 186–192 W (the packages' idle is 114 W) and the
+    H100 at 221–231 W.
   - The hybrid's 32 CPU threads grow the small subtrees, so the CPUs draw
-    407–460 W, with the H100 at 252–254 W.
-- **Above idle the hybrid costs more:** 4.78 against 3.26 kJ (CART, +47%) and
-  5.24 against 3.87 kJ (C4.5, +35%). Its energy advantage comes only from
-  keeping the 403 W idle server on for a shorter time.
+    393–442 W, with the H100 at 253–254 W.
+- **Above idle the hybrid costs more:** 4.65 against 3.30 kJ (CART, +41%) and
+  5.08 against 3.88 kJ (C4.5, +31%). Its energy advantage comes only from
+  keeping the 405 W idle server on for a shorter time.
 - **Without the three unused H100s** (about 150 W), GPU only is ahead for
-  CART (6.28 against 6.73 kJ, the hybrid +7%), and the two are even for C4.5
-  (7.65 against 7.62 kJ).
-- **Multicore needs 3.1–3.4× the energy of either GPU backend** (26.0 and
-  31.3 kJ). It is 2.3× slower than GPU only, at a power (910 W) close to the
-  hybrid's.
+  CART (6.31 against 6.63 kJ, the hybrid +5%), and the hybrid for C4.5
+  (7.48 against 7.67 kJ, −2%).
+- **Multicore needs 3.1–3.5× the energy of either GPU backend** (26.1 and
+  31.3 kJ). It is 2.3–2.4× slower than GPU only, at a power (912–915 W) close
+  to the hybrid's.
 
 Choices for this run:
 
-- **Six rounds**, round-robin over the six cases, each a process of 5–17
-  trees (36–102 trees a case). Six rounds were enough: the energy per tree
+- **Six rounds**, round-robin over the six cases, each a process of 5–16
+  trees (30–96 trees a case). Six rounds were enough: the energy per tree
   varies 0.2–0.6% between rounds (standard deviation over the mean).
 - **A 2 s warm-up, as on ECBDL'14:** each GPU tree's child keeps its CPU
   threads busy for 2 s before its timer, as a single run's data load does.
   - **So the trees take as long as in the time benchmark**
     ([hybrid-vs-gpu-only](../hybrid-vs-gpu-only/BENCHMARK.md), hopper, the
     same `--handoff-rows`):
-    - GPU: 12.1 and 15.2 s against 12.3 and 15.3 s (−1.3%, −1.1%);
-    - Hybrid: 7.82 and 9.52 s against 8.04 and 9.58 s (−2.8%, −0.6%).
-  - **The job's check** (CART, 10 trees each): GPU 12.3 s with no warm-up,
-    11.9 s with 2 s, 11.8 s with 15 s; Hybrid 7.8 s at every warm-up.
+    - GPU: 12.0 and 15.1 s against 12.3 and 15.4 s (−2.2%, −1.7%);
+    - Hybrid: 7.89 and 9.56 s against 8.11 and 9.56 s (−2.7%, −0.0%).
+  - **The job's check** (CART, 10 trees each, trees 3 on): GPU 12.2 s with no
+    warm-up, 12.0 s with 2 s, 11.8 s with 15 s; Hybrid 7.8–7.9 s at every
+    warm-up.
   - **Hybrid CART stays 2–3% under the time benchmark at every warm-up**, so
     the warm-up is not the cause. It is within the 3% the time check allows
     ([summary.md](mnist8m-nodepth/summary.md#time-check)).
@@ -221,8 +238,8 @@ Choices for this run:
   again. Loading is outside the windows either way; this keeps the job short
   and the NFS out of it.
 - **Long trees, so the meter itself checks the model.** The trees take
-  7.8–34 s, many meter refreshes each. The meter's own readings over the same
-  windows give an energy within 1.2% of the model's for every case.
+  7.9–34 s, many meter refreshes each. The meter's own readings over the same
+  windows give an energy within 1.1% of the model's for every case.
 
 More charts: [chart-energy.png](mnist8m-nodepth/chart-energy.png),
 [chart-power.png](mnist8m-nodepth/chart-power.png),
@@ -243,7 +260,8 @@ meter against the model over the whole job).
 | hopper (job 559) | 1.0 s | 9,782 | 0.5 s, 1 s | 57 + 154 + 1.02·CPU + GPU | 14 W |
 | hopper (job 562) | 1.0 s | 9,540 | 0.5 s, 1 s | 58 + 154 + 1.01·CPU + GPU | 3 W |
 | hopper (job 616) | 1.0 s | 21,160 | 0.5 s, 1 s | 57 + 154 + 1.01·CPU + GPU | 2 W |
-| hopper (job 561, MNIST8M) | 1.0 s | 8,863 | 0.5 s, 1 s | 56 + 154 + 1.02·CPU + GPU | 17 W |
+| hopper (job 793) | 1.0 s | 4,897 | 0.4 s, 1.25 s | 53 + 154 + 1.03·CPU + GPU | 15 W |
+| hopper (job 792, MNIST8M) | 1.0 s | 8,838 | 0.4 s, 1.25 s | 55 + 154 + 1.03·CPU + GPU | 17 W |
 
 Each job's processes are measured with that job's own model. The top-up jobs
 run only one-thread trees besides the staircase, so their fits see a narrower
@@ -258,9 +276,8 @@ The terms of the model:
   without them.
 
 Checks of the model:
-- **Idle power:** the model's matches the meter's within 2 W on the ECBDL'14
-  hopper jobs, 3.4 W on MNIST8M (403 against 400 W) and 5 W on epyc1 (124
-  against 119 W).
+- **Idle power:** the model's matches the meter's within 2 W on every hopper
+  job and within 5 W on epyc1 (124 against 119 W).
 - **Halves:** the model fitted on either half of a job gives the same energy
   per tree within 0.7% (Multicore on epyc1: 1.4%).
 - **Model against the meter**
@@ -268,7 +285,7 @@ Checks of the model:
   [MNIST8M](mnist8m-nodepth/summary.md#psu-energy-the-model-against-the-meter)):
   - On windows much longer than the meter's refresh (the Serial runs,
     Multicore on hopper, every MNIST8M case), the meter's own energy agrees
-    with the model within 1.2% (the worst case: Hybrid on MNIST8M).
+    with the model within 1.1% (the worst cases: Hybrid on MNIST8M).
   - The readings inside the training windows have a mean residual within
     ±0.6% of the power on every hopper case, the 3 s H100 trees included.
   - On epyc1 the model is 0.3–0.5% low on the single-thread runs (mean
@@ -286,8 +303,9 @@ same build); `analyze.py` flags any gap above 3%.
 
 - **ECBDL'14** ([../cluster-ecbdl](../cluster-ecbdl), 10 runs a case):
   - **epyc1: within 2.2%** on every backend (Multicore 4.56 s against 4.47 s).
-  - **hopper's GPU and Hybrid: within 2%** (GPU 2.82 and 2.84 s against 2.81
-    and 2.84 s; Hybrid 2.94 and 2.92 s against 2.94 and 2.98 s). The measured
+  - **hopper's GPU and Hybrid: within 1.2%** (job 793 on 7f98876f: GPU 2.80
+    and 2.84 s against 2.83 and 2.86 s; Hybrid 2.97 and 2.95 s against 2.94
+    and 2.97 s). The measured
     trees spin their CPU threads for 2 s before the timer, which leaves them as
     warm as a time benchmark run's input load does
     ([Warm-up check](#warm-up-check)).
@@ -295,7 +313,7 @@ same build); `analyze.py` flags any gap above 3%.
     processes; its first tree of each process was about 2% slower than the
     rest.
 - **MNIST8M** ([hybrid-vs-gpu-only](../hybrid-vs-gpu-only/BENCHMARK.md),
-  hopper): within 1.3% for GPU, 2.8% (CART) and 0.6% (C4.5) for Hybrid (see
+  hopper): within 2.2% for GPU, 2.7% (CART) and 0.0% (C4.5) for Hybrid (see
   above).
 
 ## Warm-up check
@@ -558,9 +576,15 @@ pools (each job with its own meter model). This run's top-ups:
     bench/tools/power/submit.sh -s 3 -t 13:00:00 epyc1 IMPLS=simple REPS=7 REPS_BY=simple=7
     bench/tools/power/submit.sh -s 3 -t 14:00:00 hopper IMPLS=simple REPS=7 REPS_BY=simple=7
 
+GPU and Hybrid again on a new build (here 7f98876f), into a new folder; the
+old processes are then listed in that node's first folder's `superseded.txt`
+(implementation names, here `gpuonly cuda`), which `analyze.py` leaves out:
+
+    bench/tools/power/submit.sh -s 4 hopper "IMPLS=gpuonly cuda" REPS=3
+
 **MNIST8M**, about 2.7 h on hopper:
 
-    TREE_GIT_DESCRIBE=81bf6e6c8979 bench/tools/power/submit.sh \
+    TREE_GIT_DESCRIBE=7f98876f7e2a bench/tools/power/submit.sh \
       -o bench/cluster-power/mnist8m-nodepth hopper DATA=$HOME/datasets/mnist8m/train.f32 \
       SHM=1 DEPTH=-1 HANDOFF=8192 "IMPLS=parallel gpuonly cuda" "ALGOS=cart c45" \
       CHECK=1 "CHECK_WARMUPS=0 2 15" CHECK_TREES=10 REPS=6
@@ -572,7 +596,7 @@ figures (with their copies here).
 ## Files
 
 - `ecbdl_15m-depth10/`, `mnist8m-nodepth/`: one measurement each.
-  - **The jobs:** `epyc1/`, `epyc1-2/`, `epyc1-3/`, `hopper/`, `hopper-2/`, `hopper-3/`, `check-hopper/`,
+  - **The jobs:** `epyc1/`, `epyc1-2/`, `epyc1-3/`, `hopper/` (with `superseded.txt`), `hopper-2/`, `hopper-3/`, `hopper-4/`, `check-hopper/`,
     each with machine.txt, markers.txt, samples.csv.gz and out/ (./tree's
     output of every process).
   - **analyze.py's output:** `summary.md`, `summary.csv`, `runs.csv`,
@@ -596,6 +620,7 @@ figures (with their copies here).
   - the 2026-11-16 run of this benchmark on f53347a9 (jobs 169 epyc1, 174
     hopper);
   - job 519 (hopper, the final build with a 15 s warm-up);
-  - MNIST8M job 415 (15 s warm-up).
+  - MNIST8M job 415 (15 s warm-up) and job 561 (81bf6e6c, at 2c9ff876);
+  - job 559's GPU and Hybrid processes (81bf6e6c), superseded by job 793.
 - The 2026-11-16 run on four servers (with ampere and dell4) is in
   [ampere-dell-2026-11-16](ampere-dell-2026-11-16/BENCHMARK.md).

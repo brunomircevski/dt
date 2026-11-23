@@ -1,38 +1,37 @@
-C4.5 on /dev/shm/power-bench-561/train.f32 (backend gpu)
+C4.5 on /dev/shm/power-bench-792/train.f32 (backend gpu)
   rows 8100000 train, 784 features, 10 classes
   pruning off
-  repeat 1/10: train 14994.9 ms, unix 1795220247.850406 1795220262.846054
-  repeat 2/10: train 15354.5 ms, unix 1795220265.894822 1795220281.250911
-  repeat 3/10: train 14746.4 ms, unix 1795220284.284371 1795220299.031559
-  repeat 4/10: train 15198.0 ms, unix 1795220302.087281 1795220317.286042
-  repeat 5/10: train 15414.4 ms, unix 1795220320.292408 1795220335.708656
-  repeat 6/10: train 15273.5 ms, unix 1795220338.821084 1795220354.096155
-  repeat 7/10: train 15543.1 ms, unix 1795220357.132736 1795220372.677629
-  repeat 8/10: train 15578.8 ms, unix 1795220375.691295 1795220391.271730
-  repeat 9/10: train 14993.2 ms, unix 1795220394.414830 1795220409.409087
-  repeat 10/10: train 14686.1 ms, unix 1795220412.513824 1795220427.200701
+  repeat 1/9: train 15383.8 ms, unix 1795437527.367493 1795437542.752717
+  repeat 2/9: train 15127.8 ms, unix 1795437545.697411 1795437560.826627
+  repeat 3/9: train 15325.2 ms, unix 1795437563.865159 1795437579.191847
+  repeat 4/9: train 14661.1 ms, unix 1795437582.220559 1795437596.882720
+  repeat 5/9: train 15371.0 ms, unix 1795437599.959320 1795437615.331847
+  repeat 6/9: train 14967.3 ms, unix 1795437618.295778 1795437633.263892
+  repeat 7/9: train 15330.7 ms, unix 1795437636.721666 1795437652.053829
+  repeat 8/9: train 15277.2 ms, unix 1795437655.064077 1795437670.342831
+  repeat 9/9: train 15047.0 ms, unix 1795437673.364113 1795437688.411890
 Tree:
   nodes 218325, leaves 109163, depth 147
   train accuracy 99.6117%
 Timings:
-  load                   942.9 ms
-  gpu setup              579.0 ms
-  setup buffers           65.9 ms
-  setup allocate           8.7 ms
-  setup upload           486.9 ms
-  setup finish            17.6 ms
+  load                  1005.9 ms
+  gpu setup              556.2 ms
+  setup buffers           48.4 ms
+  setup allocate           9.3 ms
+  setup upload           484.4 ms
+  setup finish            14.1 ms
   presort                  0.0 ms
-  build                14100.0 ms
-  prune                    7.1 ms
-  train total          14686.1 ms
-  evaluate               409.0 ms
+  build                14484.5 ms
+  prune                    6.3 ms
+  train total          15047.0 ms
+  evaluate               398.8 ms
 Timeline:
-  span staging buffers: 0.033 65.949 ms
-  span device memory: 65.951 74.604 ms
-  span upload: 74.605 561.499 ms
-  span x log x table: 561.501 561.975 ms
-  span x log x table copy: 561.976 578.613 ms
-  span presort (GPU): 79.513 562.545 ms
-  span build: 579.762 14679.715 ms
+  span staging buffers: 0.032 48.452 ms
+  span device memory: 48.453 57.710 ms
+  span upload: 57.711 542.089 ms
+  span x log x table: 542.091 542.641 ms
+  span x log x table copy: 542.641 555.653 ms
+  span presort (GPU): 62.993 543.124 ms
+  span build: 556.937 15041.408 ms
 Memory:
-  peak after training 25776712 KiB
+  peak after training 25778944 KiB

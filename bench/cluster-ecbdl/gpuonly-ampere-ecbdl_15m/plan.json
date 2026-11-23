@@ -181,6 +181,16 @@
      "mode": "fit",
      "max_depth": 10
     },
+    "rpart": {
+     "mode": "fit",
+     "maxdepth": 10
+    },
+    "cuml": {
+     "depth": 10
+    },
+    "xgboost": {
+     "depth": 10
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -210,12 +220,13 @@
      "options": "-U -M 2",
      "max_depth": 10
     },
-    "sklearn": {
-     "mode": "fit",
-     "criterion": "entropy",
-     "max_depth": 10,
-     "min_samples_leaf": 2
-    },
+    "yadt": [
+     "-np",
+     "-m",
+     "2",
+     "-depth",
+     "10"
+    ],
     "tree_cuda": [
      "--c45",
      "-d",
@@ -317,11 +328,6 @@
      "-m",
      "2"
     ],
-    "sklearn": {
-     "mode": "fit",
-     "criterion": "entropy",
-     "ccp_alpha": "{alpha}"
-    },
     "tree_cuda": [
      "--c45",
      "--prune",
@@ -372,6 +378,12 @@
      "-d",
      "5"
     ],
+    "cuml": {
+     "depth": 5
+    },
+    "xgboost": {
+     "depth": 5
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -422,6 +434,12 @@
      "-d",
      "15"
     ],
+    "cuml": {
+     "depth": 15
+    },
+    "xgboost": {
+     "depth": 15
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -472,6 +490,12 @@
      "-d",
      "20"
     ],
+    "cuml": {
+     "depth": 20
+    },
+    "xgboost": {
+     "depth": 20
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -522,6 +546,12 @@
      "-d",
      "25"
     ],
+    "cuml": {
+     "depth": 25
+    },
+    "xgboost": {
+     "depth": 25
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -572,6 +602,12 @@
      "-d",
      "30"
     ],
+    "cuml": {
+     "depth": 30
+    },
+    "xgboost": {
+     "depth": 30
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -618,46 +654,45 @@
  "impls": {
   "tree": {
    "label": "./tree",
-   "threads": "multi",
-   "warmup": false
+   "threads": "multi"
   },
   "tree_cuda": {
    "label": "./tree Hybrid",
-   "threads": "all",
-   "warmup": false
+   "threads": "all"
   },
   "tree_gpu_only": {
    "label": "./tree GPU",
-   "threads": "all",
-   "warmup": false
+   "threads": "all"
   },
   "tree_simple": {
    "label": "./tree simple",
-   "threads": "single",
-   "warmup": false
+   "threads": "single"
   },
   "sklearn": {
    "label": "scikit-learn",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "rpart": {
    "label": "rpart",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "j48": {
    "label": "Weka J48",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "yadt": {
    "label": "YaDT",
-   "threads": "multi",
-   "warmup": false
+   "threads": "multi"
+  },
+  "cuml": {
+   "label": "cuML",
+   "threads": "all"
+  },
+  "xgboost": {
+   "label": "XGBoost",
+   "threads": "all"
   }
  },
- "warmup_rows": "50000",
  "datasets": {
   "_baseline": {
    "name": "_baseline",
@@ -2610,22 +2645,22 @@
  "data_files": {
   "_baseline": {
    "meta.json": "4b324f2a45ca7ec08b13730e7b34b62ad730cb736c853f9cc37d32e8e0e2c7e7",
-   "test.f32": "03586feac2b171b20efedcc1e911e5b02ee4b79ac718b05790275441dccd5e4e",
-   "test.y.i32": "ea27eaef1452c2147c54f99f138113941b241ea047cf016adb62dad0aff76db8",
-   "test.yadt.csv": "e9846c11091c9df30b38cf2875615b42b4e5403f93b3cf3050e02caaf3f6a794",
-   "train.csv": "db2931af58aaf09174a4c38d4adcfa0456da35270a65c5943250604a6a24633d",
+   "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168",
    "train.f32": "4cdf1b4cfdc1bfea73f3b4d3c2224fdabd464dc8395978a6d7c1e54d36d7052a",
    "train.y.i32": "e45debe117bd9a6b4b0e4518549b4e34f1a7727098d6a4d55cef9d9ec3a894fa",
+   "train.csv": "db2931af58aaf09174a4c38d4adcfa0456da35270a65c5943250604a6a24633d",
    "train.yadt.csv": "77928268dc58a666aa3a1621b04edfcdd215191de8bb53cb333d1fcef2b95efb",
-   "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168"
+   "test.f32": "03586feac2b171b20efedcc1e911e5b02ee4b79ac718b05790275441dccd5e4e",
+   "test.y.i32": "ea27eaef1452c2147c54f99f138113941b241ea047cf016adb62dad0aff76db8",
+   "test.yadt.csv": "e9846c11091c9df30b38cf2875615b42b4e5403f93b3cf3050e02caaf3f6a794"
   },
   "ecbdl_15m": {
-   "meta.json": "8ff93a2be2649169a8f6188a5f3ee07224564a658793f343d5158ed2876cdd6f",
-   "test.f32": "89289779fa0dd238798d6aace852ba207cb3132d04dd50f51693805750dec70f",
-   "test.y.i32": "e9defcc0b77562d3684e79c59dcdd6ef9c7d25a7b6609d67103a6cf105337cfe",
-   "train.csv": "a75edf17fe6aaff071321f1be93e1636c4d5c5a5d24fb03e9eeeb6f1a1227bd0",
+   "ecbdl_15m.meta.json": "8ff93a2be2649169a8f6188a5f3ee07224564a658793f343d5158ed2876cdd6f",
    "train.f32": "7d3880fae4ae25f1554b08080e9d81b5415ff624f84422408a5aea5f8a2e46fd",
-   "train.y.i32": "a4709242ab8251e056e4e77fa218899284327888cf8c5fe2d646f0566def20aa"
+   "train.y.i32": "a4709242ab8251e056e4e77fa218899284327888cf8c5fe2d646f0566def20aa",
+   "train.csv": "a75edf17fe6aaff071321f1be93e1636c4d5c5a5d24fb03e9eeeb6f1a1227bd0",
+   "test.f32": "89289779fa0dd238798d6aace852ba207cb3132d04dd50f51693805750dec70f",
+   "test.y.i32": "e9defcc0b77562d3684e79c59dcdd6ef9c7d25a7b6609d67103a6cf105337cfe"
   }
  }
 }

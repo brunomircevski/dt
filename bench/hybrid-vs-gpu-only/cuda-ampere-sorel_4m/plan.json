@@ -253,6 +253,16 @@
      "mode": "fit",
      "max_depth": 10
     },
+    "rpart": {
+     "mode": "fit",
+     "maxdepth": 10
+    },
+    "cuml": {
+     "depth": 10
+    },
+    "xgboost": {
+     "depth": 10
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -282,12 +292,13 @@
      "options": "-U -M 2",
      "max_depth": 10
     },
-    "sklearn": {
-     "mode": "fit",
-     "criterion": "entropy",
-     "max_depth": 10,
-     "min_samples_leaf": 2
-    },
+    "yadt": [
+     "-np",
+     "-m",
+     "2",
+     "-depth",
+     "10"
+    ],
     "tree_cuda": [
      "--c45",
      "-d",
@@ -389,11 +400,6 @@
      "-m",
      "2"
     ],
-    "sklearn": {
-     "mode": "fit",
-     "criterion": "entropy",
-     "ccp_alpha": "{alpha}"
-    },
     "tree_cuda": [
      "--c45",
      "--prune",
@@ -444,6 +450,12 @@
      "-d",
      "5"
     ],
+    "cuml": {
+     "depth": 5
+    },
+    "xgboost": {
+     "depth": 5
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -494,6 +506,12 @@
      "-d",
      "15"
     ],
+    "cuml": {
+     "depth": 15
+    },
+    "xgboost": {
+     "depth": 15
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -544,6 +562,12 @@
      "-d",
      "20"
     ],
+    "cuml": {
+     "depth": 20
+    },
+    "xgboost": {
+     "depth": 20
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -594,6 +618,12 @@
      "-d",
      "25"
     ],
+    "cuml": {
+     "depth": 25
+    },
+    "xgboost": {
+     "depth": 25
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -644,6 +674,12 @@
      "-d",
      "30"
     ],
+    "cuml": {
+     "depth": 30
+    },
+    "xgboost": {
+     "depth": 30
+    },
     "tree_cuda": [
      "--cart",
      "-d",
@@ -690,46 +726,45 @@
  "impls": {
   "tree": {
    "label": "./tree",
-   "threads": "multi",
-   "warmup": false
+   "threads": "multi"
   },
   "tree_cuda": {
    "label": "./tree Hybrid",
-   "threads": "all",
-   "warmup": false
+   "threads": "all"
   },
   "tree_gpu_only": {
    "label": "./tree GPU",
-   "threads": "all",
-   "warmup": false
+   "threads": "all"
   },
   "tree_simple": {
    "label": "./tree simple",
-   "threads": "single",
-   "warmup": false
+   "threads": "single"
   },
   "sklearn": {
    "label": "scikit-learn",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "rpart": {
    "label": "rpart",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "j48": {
    "label": "Weka J48",
-   "threads": "single",
-   "warmup": true
+   "threads": "single"
   },
   "yadt": {
    "label": "YaDT",
-   "threads": "multi",
-   "warmup": false
+   "threads": "multi"
+  },
+  "cuml": {
+   "label": "cuML",
+   "threads": "all"
+  },
+  "xgboost": {
+   "label": "XGBoost",
+   "threads": "all"
   }
  },
- "warmup_rows": "50000",
  "datasets": {
   "_baseline": {
    "name": "_baseline",
@@ -7932,22 +7967,22 @@
  "data_files": {
   "_baseline": {
    "meta.json": "4b324f2a45ca7ec08b13730e7b34b62ad730cb736c853f9cc37d32e8e0e2c7e7",
-   "test.f32": "03586feac2b171b20efedcc1e911e5b02ee4b79ac718b05790275441dccd5e4e",
-   "test.y.i32": "ea27eaef1452c2147c54f99f138113941b241ea047cf016adb62dad0aff76db8",
-   "test.yadt.csv": "e9846c11091c9df30b38cf2875615b42b4e5403f93b3cf3050e02caaf3f6a794",
-   "train.csv": "db2931af58aaf09174a4c38d4adcfa0456da35270a65c5943250604a6a24633d",
+   "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168",
    "train.f32": "4cdf1b4cfdc1bfea73f3b4d3c2224fdabd464dc8395978a6d7c1e54d36d7052a",
    "train.y.i32": "e45debe117bd9a6b4b0e4518549b4e34f1a7727098d6a4d55cef9d9ec3a894fa",
+   "train.csv": "db2931af58aaf09174a4c38d4adcfa0456da35270a65c5943250604a6a24633d",
    "train.yadt.csv": "77928268dc58a666aa3a1621b04edfcdd215191de8bb53cb333d1fcef2b95efb",
-   "yadt.names": "29a3113a27c17d5ea3f3703aee776978e0e512eca5091641114ec74c5b618168"
+   "test.f32": "03586feac2b171b20efedcc1e911e5b02ee4b79ac718b05790275441dccd5e4e",
+   "test.y.i32": "ea27eaef1452c2147c54f99f138113941b241ea047cf016adb62dad0aff76db8",
+   "test.yadt.csv": "e9846c11091c9df30b38cf2875615b42b4e5403f93b3cf3050e02caaf3f6a794"
   },
   "sorel_4m": {
-   "meta.json": "3f927963b5ecc6ca083e6285eef414db058833d9728e3f3a37d650841e701bec",
-   "test.f32": "00f4fa115fa36eb0bba378c1beb639c7b85b0d54a856219714a47eff1480b62a",
-   "test.y.i32": "f2b6d8ab72049bb59dc2206d3d43f3945e7ec9a9fb84006be4fb237d2c0185ac",
-   "train.csv": "83cdda30a0348847f6bb582de2f00f56e935dcb2ddbe54c6a69cd2547ca1f198",
+   "sorel_4m.meta.json": "3f927963b5ecc6ca083e6285eef414db058833d9728e3f3a37d650841e701bec",
    "train.f32": "81246cb0d47fed1bc58a2094caeaba0b31515f1d146814e52fe942d0d686fa6a",
-   "train.y.i32": "026167d37259b9d8af001414c0797662869456e55fed3cb9c027a258786d7c95"
+   "train.y.i32": "026167d37259b9d8af001414c0797662869456e55fed3cb9c027a258786d7c95",
+   "train.csv": "83cdda30a0348847f6bb582de2f00f56e935dcb2ddbe54c6a69cd2547ca1f198",
+   "test.f32": "00f4fa115fa36eb0bba378c1beb639c7b85b0d54a856219714a47eff1480b62a",
+   "test.y.i32": "f2b6d8ab72049bb59dc2206d3d43f3945e7ec9a9fb84006be4fb237d2c0185ac"
   }
  }
 }

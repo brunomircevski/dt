@@ -1,63 +1,9 @@
-2026-11-15 13:14:57  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mrdefault
-2026-11-15 13:17:16  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mr256 (--handoff-rows 256)
-2026-11-15 13:19:24  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mr512 (--handoff-rows 512)
-2026-11-15 13:21:37  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mr1024 (--handoff-rows 1024)
-2026-11-15 13:23:59  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mr2048 (--handoff-rows 2048)
-2026-11-15 13:26:53  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mr4096 (--handoff-rows 4096)
-2026-11-15 13:29:43  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mr8192 (--handoff-rows 8192)
-2026-11-15 13:32:19  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mr16384 (--handoff-rows 16384)
-2026-11-15 13:35:06  hybrid-vs-gpu-only/sweep/cuda-hopper-higgs-mr32768 (--handoff-rows 32768)
-2026-11-15 13:37:38  higgs: --handoff-rows 256
-2026-11-15 13:37:38  hybrid-vs-gpu-only/cuda-hopper-higgs (--handoff-rows 256)
-2026-11-15 13:47:46  hybrid-vs-gpu-only/gpuonly-hopper-higgs
-2026-11-15 13:59:00  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mrdefault
-2026-11-15 14:12:18  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr256 (--handoff-rows 256)
-2026-11-15 14:25:14  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr512 (--handoff-rows 512)
-2026-11-15 14:37:30  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr1024 (--handoff-rows 1024)
-2026-11-15 14:51:12  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr2048 (--handoff-rows 2048)
-2026-11-15 15:02:26  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr4096 (--handoff-rows 4096)
-2026-11-15 15:14:04  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr8192 (--handoff-rows 8192)
-2026-11-15 15:24:03  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr16384 (--handoff-rows 16384)
-2026-11-15 15:37:44  hybrid-vs-gpu-only/sweep/cuda-hopper-mnist8m-mr32768 (--handoff-rows 32768)
-2026-11-15 15:50:10  mnist8m: --handoff-rows 8192
-2026-11-15 15:50:10  hybrid-vs-gpu-only/cuda-hopper-mnist8m (--handoff-rows 8192)
-2026-11-15 16:42:40  hybrid-vs-gpu-only/gpuonly-hopper-mnist8m
-2026-11-15 17:40:38  hybrid-vs-gpu-only/profile/cuda-hopper-mnist8m (--handoff-rows 8192 --profile)
-2026-11-15 18:38:08  hybrid-vs-gpu-only/profile/gpuonly-hopper-mnist8m (--profile)
-2026-11-15 19:28:42  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mrdefault
-2026-11-15 20:03:35  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr256 (--handoff-rows 256)
-2026-11-15 20:31:07  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr512 (--handoff-rows 512)
-2026-11-15 20:57:05  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr1024 (--handoff-rows 1024)
-2026-11-15 21:22:03  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr2048 (--handoff-rows 2048)
-[2026-11-15T21:22:11.694] error: *** JOB 21 ON hopper CANCELLED AT 2026-11-15T21:22:11 DUE to SIGNAL Terminated ***
-2026-11-15 21:22:16  cut: SOREL 4M sweep resumed with VALUES=default 256 512 1024 4096 8192 16384 32768
-2026-11-15 21:22:17  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mrdefault kept
-2026-11-15 21:22:17  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr256 kept
-2026-11-15 21:22:17  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr512 kept
-2026-11-15 21:22:17  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr1024 kept
-2026-11-15 21:22:17  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr4096 (--handoff-rows 4096)
-  failed (exit 1): bench/results/hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr4096/run.log
-2026-11-15 21:22:18  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr8192 (--handoff-rows 8192)
-  failed (exit 1): bench/results/hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr8192/run.log
-2026-11-15 21:22:18  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr16384 (--handoff-rows 16384)
-  failed (exit 1): bench/results/hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr16384/run.log
-2026-11-15 21:22:19  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr32768 (--handoff-rows 32768)
-  failed (exit 1): bench/results/hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr32768/run.log
-2026-11-15 21:22:20  sorel_4m: --handoff-rows 1024
-2026-11-15 21:22:20  hybrid-vs-gpu-only/cuda-hopper-sorel_4m (--handoff-rows 1024)
-  failed (exit 1): bench/results/hybrid-vs-gpu-only/cuda-hopper-sorel_4m/run.log
-2026-11-15 21:22:21  hybrid-vs-gpu-only/gpuonly-hopper-sorel_4m
-  failed (exit 1): bench/results/hybrid-vs-gpu-only/gpuonly-hopper-sorel_4m/run.log
-2026-11-15 21:22:22  done, failed: cuda-hopper-sorel_4m-mr4096 cuda-hopper-sorel_4m-mr8192 cuda-hopper-sorel_4m-mr16384 cuda-hopper-sorel_4m-mr32768 cuda-hopper-sorel_4m gpuonly-hopper-sorel_4m
-2026-11-16 00:48:36  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mrdefault kept
-2026-11-16 00:48:36  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr256 kept
-2026-11-16 00:48:36  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr512 kept
-2026-11-16 00:48:36  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr1024 kept
-2026-11-16 00:48:36  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr4096 (--handoff-rows 4096)
-2026-11-16 01:17:18  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr8192 (--handoff-rows 8192)
-2026-11-16 01:44:30  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr16384 (--handoff-rows 16384)
-2026-11-16 02:13:47  hybrid-vs-gpu-only/sweep/cuda-hopper-sorel_4m-mr32768 (--handoff-rows 32768)
-2026-11-16 02:43:40  sorel_4m: --handoff-rows 16384
-2026-11-16 02:43:40  hybrid-vs-gpu-only/cuda-hopper-sorel_4m (--handoff-rows 16384)
-2026-11-16 04:05:52  hybrid-vs-gpu-only/gpuonly-hopper-sorel_4m
-2026-11-16 05:21:50  done
+2026-11-23 01:50:46  hybrid-vs-gpu-only/cuda-hopper-higgs
+2026-11-23 01:55:48  hybrid-vs-gpu-only/gpuonly-hopper-higgs
+2026-11-23 02:01:26  hybrid-vs-gpu-only/cuda-hopper-mnist8m
+2026-11-23 03:03:30  hybrid-vs-gpu-only/gpuonly-hopper-mnist8m
+2026-11-23 04:09:04  hybrid-vs-gpu-only/profile/cuda-hopper-mnist8m (--profile)
+2026-11-23 05:09:57  hybrid-vs-gpu-only/profile/gpuonly-hopper-mnist8m (--profile)
+2026-11-23 06:17:18  hybrid-vs-gpu-only/cuda-hopper-sorel_4m
+2026-11-23 07:53:51  hybrid-vs-gpu-only/gpuonly-hopper-sorel_4m
+2026-11-23 09:34:19  done

@@ -118,8 +118,8 @@ seconds of training). Three things were redone:
 ### The 2026-11-19 rerun
 
 Every result that `benchlib.out_of_date` still marked, except ampere's (the
-node was unavailable from 2026-11-19 for two weeks; its runs stay as faded
-placeholders): ./tree 81bf6e6c, built once (job 425), the same tree code as
+node was unavailable from 2026-11-19; its runs stayed faded placeholders
+until [2026-11-23](#the-2026-11-23-gpu-rerun-7f98876f)): ./tree 81bf6e6c, built once (job 425), the same tree code as
 the CPU runs of 2026-11-17. `final.sh` planned it; the runs it kept are in
 `plans/kept.txt` (153 at the end). What changed for it (81bf6e6c):
 - **`--simple` stands** (`benchlib.SIMPLE_SINCE`: its code has not changed
@@ -178,8 +178,9 @@ bench/tools/cluster/charts.sh             # --no-paper: without paper/figs
 ```
 
 A result measured before the final protocol (`FINAL_SINCE` in
-`bench/tools/benchlib.py`: GPU runs before 0cff6d1b, CPU runs before 03c4e2d2, by
-each row's commit, else its machine.json's) is drawn faded and labelled "out of
+`bench/tools/benchlib.py`, by each row's commit, else its machine.json's:
+./tree's `--gpu` and `--hybrid` before 7f98876f, other runs on the GPU nodes
+before 17d8b2f3, cuML and XGBoost before 7c39d6a3, CPU runs before 03c4e2d2) is drawn faded and labelled "out of
 date", with a banner over the chart naming how many of its marks are; once the
 rerun's results replace it, the next `charts.sh` drops the marks and the banner
 by themselves. The power charts and paper/figs carry the banner only.
@@ -212,6 +213,29 @@ unzip CTAN's `fonts/ps-type1/cm-super.zip` into a scratch `TEXMFHOME` with its
   and repeated, and prints ./tree's phase times with the CPU time, page faults
   and context switches of every run. The default settings were tuned
   with it ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md)).
+
+### The 2026-11-23 GPU rerun (7f98876f)
+
+7f98876f needs less RAM for `--hybrid` and less VRAM for `--gpu` and grows
+the same trees ([docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md#november-2026-less-memory-for---hybrid-and---gpu));
+the CPU backends did not change. So every `--gpu` and `--hybrid` result was
+measured again on both GPU nodes, from a clone built once at 7f98876f (sm_75,
+sm_80, sm_90), with the settings of the 2026-11-19 rerun and 10 runs a case:
+
+| Node | Job | What | When |
+|---|---|---|---|
+| hopper | 789 | `--hybrid` and `--gpu` on every test-set benchmark (cluster-susy … cluster-chess); cluster-gpu-vs-others (./tree, cuML and XGBoost, one tree) | 2026-11-22 23:10 – 2026-11-23 01:50 |
+| hopper | 790 | hybrid-vs-gpu-only, the depth runs and the MNIST8M profile (no sweep: `handoff_rows.json`) | 2026-11-23 01:50 – 09:34 |
+| hopper | 791 | cluster-profiling `--hybrid` and `--gpu`, profiled and plain | 2026-11-23 09:34 – 11:45 |
+| hopper | 792, 793 | cluster-power: MNIST8M no depth (all three backends), ECBDL'14 15M GPU and Hybrid (`hopper-4/`) | 2026-11-23 11:47 – 16:01 |
+| ampere | 806 | `--hybrid` and `--gpu` on every test-set benchmark | 2026-11-23 12:04 – 13:39 |
+| ampere | 807 | hybrid-vs-gpu-only, the depth runs and the MNIST8M profile | 2026-11-23 13:39 – 22:23 |
+
+Every tree hash matches the runs before. ampere was free again, so its
+`--hybrid` and `--gpu` results, out of date since 2026-11-19, are current
+again too. The old folders are in git at 2c9ff876. Speed against the build
+before: same-node A/B jobs (805 hopper, 813 ampere), in
+[docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md#november-2026-less-memory-for---hybrid-and---gpu).
 
 ## Test-set benchmarks
 

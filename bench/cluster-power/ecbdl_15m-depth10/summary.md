@@ -8,8 +8,8 @@
 | Serial-Simple | hopper | 10 × 1 | 2,550 s ± 0.1% | 540 W | 135 W | 553 W | 1.38 MJ ± 0.1% | 345 kJ | 860 kJ (-37.5%) | CPU socket 0 344 kJ, CPU socket 1 264 kJ, Memory 98.3 kJ, Unused GPUs 516 kJ, Rest of the server 154 kJ |
 | Serial-Opt | hopper | 10 × 1 | 251 s ± 0.7% | 539 W | 134 W | 556 W | 136 kJ ± 0.8% | 33.7 kJ | 84.6 kJ (-37.6%) | CPU socket 0 33.4 kJ, CPU socket 1 25.8 kJ, Memory 10.2 kJ, Unused GPUs 50.9 kJ, Rest of the server 15.2 kJ |
 | Multicore | hopper | 3 × 15 | 9.13 s ± 0.3% | 906 W | 500 W | 956 W | 8.27 kJ ± 0.2% | 4.57 kJ | 6.43 kJ (-22.3%) | CPU socket 0 2.45 kJ, CPU socket 1 2.36 kJ, Memory 1 kJ, Unused GPUs 1.85 kJ, Rest of the server 616 J |
-| GPU | hopper | 3 × 44 | 2.82 s ± 1.6% | 704 W | 298 W | 833 W | 1.99 kJ ± 1.4% | 840 J | 1.55 kJ (-21.9%) | CPU socket 0 280 J, CPU socket 1 286 J, Memory 143 J, GPU in use 672 J, Unused GPUs 435 J, Rest of the server 169 J |
-| Hybrid | hopper | 3 × 41 | 2.94 s ± 1.1% | 770 W | 363 W | 1072 W | 2.26 kJ ± 0.7% | 1.07 kJ | 1.81 kJ (-20.0%) | CPU socket 0 380 J, CPU socket 1 365 J, Memory 196 J, GPU in use 689 J, Unused GPUs 453 J, Rest of the server 181 J |
+| GPU | hopper | 3 × 45 | 2.8 s ± 1.6% | 708 W | 306 W | 845 W | 1.98 kJ ± 0.9% | 856 J | 1.55 kJ (-21.7%) | CPU socket 0 281 J, CPU socket 1 285 J, Memory 142 J, GPU in use 676 J, Unused GPUs 430 J, Rest of the server 168 J |
+| Hybrid | hopper | 3 × 42 | 2.97 s ± 0.8% | 704 W | 302 W | 812 W | 2.09 kJ ± 0.6% | 897 J | 1.63 kJ (-21.8%) | CPU socket 0 308 J, CPU socket 1 304 J, Memory 150 J, GPU in use 694 J, Unused GPUs 457 J, Rest of the server 179 J |
 
 ### C4.5 (gain ratio), ECBDL'14 15M, depth ≤ 10, no pruning
 
@@ -21,8 +21,8 @@
 | Serial-Simple | hopper | 10 × 1 | 2,785 s ± 0.1% | 540 W | 135 W | 554 W | 1.5 MJ ± 0.1% | 377 kJ | 939 kJ (-37.5%) | CPU socket 0 376 kJ, CPU socket 1 288 kJ, Memory 107 kJ, Unused GPUs 564 kJ, Rest of the server 168 kJ |
 | Serial-Opt | hopper | 10 × 1 | 259 s ± 0.9% | 540 W | 134 W | 551 W | 140 kJ ± 0.9% | 34.8 kJ | 87.3 kJ (-37.5%) | CPU socket 0 34.5 kJ, CPU socket 1 26.6 kJ, Memory 10.5 kJ, Unused GPUs 52.5 kJ, Rest of the server 15.7 kJ |
 | Multicore | hopper | 3 × 13 | 10.1 s ± 0.3% | 898 W | 491 W | 949 W | 9.1 kJ ± 0.2% | 4.98 kJ | 7.05 kJ (-22.6%) | CPU socket 0 2.69 kJ, CPU socket 1 2.57 kJ, Memory 1.11 kJ, Unused GPUs 2.05 kJ, Rest of the server 682 J |
-| GPU | hopper | 3 × 44 | 2.84 s ± 1.3% | 707 W | 301 W | 916 W | 2.01 kJ ± 0.9% | 855 J | 1.57 kJ (-21.8%) | CPU socket 0 292 J, CPU socket 1 288 J, Memory 145 J, GPU in use 673 J, Unused GPUs 438 J, Rest of the server 172 J |
-| Hybrid | hopper | 3 × 41 | 2.92 s ± 0.3% | 772 W | 366 W | 1144 W | 2.26 kJ ± 0.3% | 1.07 kJ | 1.81 kJ (-19.9%) | CPU socket 0 379 J, CPU socket 1 362 J, Memory 195 J, GPU in use 688 J, Unused GPUs 450 J, Rest of the server 181 J |
+| GPU | hopper | 3 × 44 | 2.84 s ± 1.2% | 714 W | 312 W | 856 W | 2.03 kJ ± 0.9% | 885 J | 1.59 kJ (-21.5%) | CPU socket 0 298 J, CPU socket 1 287 J, Memory 145 J, GPU in use 691 J, Unused GPUs 437 J, Rest of the server 170 J |
+| Hybrid | hopper | 3 × 42 | 2.95 s ± 0.5% | 709 W | 307 W | 853 W | 2.1 kJ ± 0.1% | 907 J | 1.64 kJ (-21.7%) | CPU socket 0 313 J, CPU socket 1 303 J, Memory 150 J, GPU in use 697 J, Unused GPUs 455 J, Rest of the server 179 J |
 
 ### The meter model
 
@@ -36,6 +36,7 @@ Each node's meter, fitted over every reading of its job: reading(t) = mean over 
 | hopper | 559 | sys_W | 1.0 s | 9782 | 0.5 s | 1 s | 57 W + 154 W + 1.02·CPU + GPU | 58 W + 154 W + 1.01·CPU + GPU | 57 W + 154 W + 1.02·CPU + GPU | 14.0 W | 406 / 404 W |
 | hopper | 562 | sys_W | 1.0 s | 9540 | 0.5 s | 1 s | 58 W + 154 W + 1.01·CPU + GPU | 57 W + 154 W + 1.01·CPU + GPU | 61 W + 154 W + 1.00·CPU + GPU | 2.6 W | 405 / 404 W |
 | hopper | 616 | sys_W | 1.0 s | 21160 | 0.5 s | 1 s | 57 W + 154 W + 1.01·CPU + GPU | 56 W + 154 W + 1.01·CPU + GPU | 57 W + 154 W + 1.01·CPU + GPU | 2.0 W | 404 / 403 W |
+| hopper | 793 | sys_W | 1.0 s | 4897 | 0.4 s | 1.25 s | 53 W + 154 W + 1.03·CPU + GPU | 51 W + 154 W + 1.04·CPU + GPU | 56 W + 154 W + 1.02·CPU + GPU | 15.2 W | 402 / 401 W |
 
 ### PSU energy: the model against the meter
 
@@ -55,10 +56,10 @@ E per tree from the model (used everywhere above) against: the model with each h
 | Serial-Opt | hopper | C4.5 | 140 kJ | -0.0% / -0.0% | +0.0% | 1797: -0.3 ± 0.1 W | 139 kJ (-0.3%) | 1367 | -1.3 ± 0.1 W (-0.2%) |
 | Multicore | hopper | CART | 8.27 kJ | -0.3% / +0.1% | -0.1% | 454: +1.9 ± 0.8 W | 8.21 kJ (-0.8%) | 339 | +1.0 ± 0.5 W (+0.1%) |
 | Multicore | hopper | C4.5 | 9.1 kJ | -0.3% / +0.1% | -0.1% | 451: +3.6 ± 0.7 W | 9.05 kJ (-0.6%) | 338 | +1.5 ± 0.5 W (+0.2%) |
-| GPU | hopper | CART | 1.99 kJ | -0.0% / +0.0% | -0.0% | 825: +2.4 ± 0.6 W | 1.97 kJ (-0.6%) | 229 | +2.8 ± 0.7 W (+0.4%) |
-| GPU | hopper | C4.5 | 2.01 kJ | -0.0% / +0.0% | -0.0% | 830: +2.2 ± 0.6 W | 2 kJ (-0.2%) | 235 | +4.5 ± 0.9 W (+0.6%) |
-| Hybrid | hopper | CART | 2.26 kJ | -0.1% / +0.1% | +0.0% | 821: -0.2 ± 0.9 W | 2.23 kJ (-1.3%) | 238 | -3.2 ± 2.4 W (-0.4%) |
-| Hybrid | hopper | C4.5 | 2.26 kJ | -0.1% / +0.1% | +0.0% | 805: +0.1 ± 0.9 W | 2.23 kJ (-1.1%) | 234 | -1.4 ± 2.3 W (-0.2%) |
+| GPU | hopper | CART | 1.98 kJ | +0.0% / -0.0% | +0.0% | 886: -0.8 ± 0.6 W | 1.96 kJ (-1.1%) | 212 | -2.2 ± 0.6 W (-0.3%) |
+| GPU | hopper | C4.5 | 2.03 kJ | +0.0% / -0.0% | -0.0% | 867: +1.2 ± 0.6 W | 2.02 kJ (-0.5%) | 220 | -0.0 ± 0.7 W (-0.0%) |
+| Hybrid | hopper | CART | 2.09 kJ | +0.0% / -0.0% | +0.0% | 860: -0.4 ± 0.6 W | 2.06 kJ (-1.3%) | 212 | +1.1 ± 0.8 W (+0.2%) |
+| Hybrid | hopper | C4.5 | 2.1 kJ | +0.0% / -0.0% | +0.0% | 861: -0.7 ± 0.6 W | 2.07 kJ (-1.2%) | 218 | +1.0 ± 0.8 W (+0.1%) |
 
 ### Time check
 
@@ -78,10 +79,10 @@ Time per tree (./tree's train time) against the first tree of each process and t
 | Serial-Opt | hopper | C4.5 | 259 s | 259 s (+0.0%) | – |
 | Multicore | hopper | CART | 9.13 s | 9.35 s (-2.4%) | – |
 | Multicore | hopper | C4.5 | 10.1 s | 10.3 s (-2.0%) | – |
-| GPU | hopper | CART | 2.82 s | 2.84 s (-0.7%) | 2.81 s (+0.1%) |
-| GPU | hopper | C4.5 | 2.84 s | 2.87 s (-1.2%) | 2.84 s (-0.0%) |
-| Hybrid | hopper | CART | 2.94 s | 2.98 s (-1.3%) | 2.94 s (+0.2%) |
-| Hybrid | hopper | C4.5 | 2.92 s | 3.01 s (-3.0%) ! | 2.98 s (-2.0%) |
+| GPU | hopper | CART | 2.8 s | 2.64 s (+6.2%) ! | 2.83 s (-1.1%) |
+| GPU | hopper | C4.5 | 2.84 s | 2.9 s (-2.2%) | 2.86 s (-0.7%) |
+| Hybrid | hopper | CART | 2.97 s | 3.02 s (-1.5%) | 2.94 s (+1.2%) |
+| Hybrid | hopper | C4.5 | 2.95 s | 3.05 s (-3.0%) ! | 2.97 s (-0.5%) |
 
 ### Warm-up check
 

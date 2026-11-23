@@ -1,6 +1,6 @@
 ## cuda-hopper-chess_1b
 
-**cuda-hopper-chess_1b**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor schedutil, turbo on, ./tree 81bf6e6c8979, CPUs in order of use 16-31,0-15, 10 run(s) per case, every run a fresh process, no warm-up
+**cuda-hopper-chess_1b**: Intel(R) Xeon(R) Gold 6444Y, 32 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor schedutil, turbo on, ./tree 7f98876f7e2a, CPUs in order of use 16-31,0-15, 10 run(s) per case, every run a fresh process, no warm-up
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 638 MiB
 
@@ -10,10 +10,10 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 638
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 840 ms | 828 ms–855 ms |  | 24.85 GiB (+ GPU 25.43 GiB) | 24.23 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree Hybrid | 838 ms | 821 ms–862 ms |  | 9.90 GiB (+ GPU 25.43 GiB) | 9.28 GiB | 17 | 9 | 4 | 100.00% |  |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 896 ms | 882 ms–902 ms |  | 24.85 GiB (+ GPU 25.43 GiB) | 24.23 GiB | 17 | 9 | 4 | 100.00% |  |
+| ./tree Hybrid | 891 ms | 878 ms–914 ms |  | 9.90 GiB (+ GPU 25.43 GiB) | 9.28 GiB | 17 | 9 | 4 | 100.00% |  |

@@ -1,0 +1,32 @@
+CART on bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend hybrid)
+  rows 15000000 train, 631 features, 2 classes
+  pruning off
+  repeat 1/2: train 2950.6 ms, unix 1795440687.261822 1795440690.213134
+  repeat 2/2: train 2952.7 ms, unix 1795440693.252492 1795440696.206080
+Tree:
+  nodes 1863, leaves 932, depth 10
+  train accuracy 97.9198%
+Timings:
+  load                 55176.0 ms
+  gpu setup             1192.9 ms
+  setup buffers          183.7 ms
+  setup allocate          12.6 ms
+  setup upload           967.8 ms
+  setup finish            28.8 ms
+  presort                  0.0 ms
+  build                 1759.8 ms
+  prune                    0.0 ms
+  train total           2952.7 ms
+  evaluate               488.0 ms
+Timeline:
+  span staging buffers: 0.224 73.833 ms
+  span hand-off buffers: 73.834 183.902 ms
+  span device memory: 183.904 196.481 ms
+  span upload: 196.483 1164.269 ms
+  span x log x table: 1164.271 1165.766 ms
+  span x log x table copy: 1165.768 1193.009 ms
+  span presort (GPU): 207.209 1165.083 ms
+  span cpu subtrees: 2325.400 2928.546 ms, busy 103.040 ms in 135 tasks
+  span build: 1193.716 2953.549 ms
+Memory:
+  peak after training 37823304 KiB

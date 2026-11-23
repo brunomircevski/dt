@@ -1,6 +1,6 @@
-job 561 on hopper, 2026-11-20T23:25:28+01:00, kind all
-commit 81bf6e6c8979
-data /home/bmircevski/datasets/mnist8m/train.f32 (copied to /dev/shm/power-bench-561/train.f32), reps 6 simple=1, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 2 s, algos cart c45, impls parallel gpuonly cuda
+job 792 on hopper, 2026-11-23T11:47:19+01:00, kind all
+commit 7f98876f7e2a
+data /home/bmircevski/datasets/mnist8m/train.f32 (copied to /dev/shm/power-bench-792/train.f32), reps 6 simple=10 serial=10, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 2 s, algos cart c45, impls parallel gpuonly cuda
 used_gpu 2 (NUMA node 1, cpus 16-31,0-15, 32 threads, first-touch memory)
 protocol -d -1
 command parallel taskset -c 0-31 ./tree_cpu --multicore --threads 32 
@@ -15,7 +15,7 @@ NUMA node(s):                            2
 governor intel_cpufreq schedutil
 cpus available 32
 power1_accuracy 97.500%
-power1_average 465000000
+power1_average 463000000
 power1_average_interval 1000
 power1_average_interval_max 3600000
 power1_average_interval_min 1000
@@ -29,19 +29,19 @@ rapl_max intel-rapl:0 package-0 262143328850
 rapl_max intel-rapl:0:0 dram 262143328850
 rapl_max intel-rapl:1 package-1 262143328850
 rapl_max intel-rapl:1:0 dram 262143328850
-psu_file 1795213528.017851049 465
+psu_file 1795430838.981431668 463
                total        used        free      shared  buff/cache   available
-Mem:            1007          38         828          26         170         968
-node 0 free: 447647 MB
-node 1 free: 401231 MB
+Mem:            1007          39         726          26         272         968
+node 0 free: 384906 MB
+node 1 free: 358962 MB
 index, name, power.limit [W], driver_version, memory.used [MiB]
 0, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
 1, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
 2, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
 3, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
-repeat parallel cart 6 (warm-up train 28207.0 ms)
-repeat gpuonly cart 11 (warm-up train 12014.3 ms)
-repeat cuda cart 17 (warm-up train 7817.3 ms)
-repeat parallel c45 5 (warm-up train 34216.9 ms)
-repeat gpuonly c45 10 (warm-up train 14949.3 ms)
-repeat cuda c45 14 (warm-up train 9641.6 ms)
+repeat parallel cart 6 (warm-up train 28302.9 ms)
+repeat gpuonly cart 12 (warm-up train 11951.9 ms)
+repeat cuda cart 16 (warm-up train 8089.7 ms)
+repeat parallel c45 5 (warm-up train 34407.4 ms)
+repeat gpuonly c45 9 (warm-up train 15015.8 ms)
+repeat cuda c45 14 (warm-up train 9690.8 ms)

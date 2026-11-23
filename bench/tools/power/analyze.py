@@ -7,7 +7,7 @@
 One measurement (a dataset and depth limit) per folder, which holds a job
 folder per node (epyc1/, hopper/) and any more jobs of the same node (epyc1-2/, hopper-2/: a top-up of some cases; each job's
 processes are measured with that job's own meter model, then the runs of a
-case are pooled), each with markers.txt, machine.txt, samples.csv.gz (pwrlog.py, every 0.1 s)
+case are pooled; a superseded.txt in a job folder lists backends, e.g. "gpuonly cuda", whose runs there a later job replaced), each with markers.txt, machine.txt, samples.csv.gz (pwrlog.py, every 0.1 s)
 and out/<run>.txt (./tree's output, with the --repeat K training windows).
 Writes into the folder: runs.csv (every process), summary.csv (mean and
 standard deviation per case), meter.csv (the meter model of each node),
@@ -1293,7 +1293,10 @@ def main():
             print(f"{name}: meter {job.psu_col} every {job.psu_period:.1f} s, D {job.D:.1f} s W {job.W:g} s, "
                   f"a, b {np.round(job.coef, 3)}, G_idle {job.g_idle:.1f} W, rms {job.fit_rms:.1f} W; idle "
                   + ", ".join(f"{k} {v:.0f} W" for k, v in job.idle.items()))
-        rows += analyse(job)
+        # superseded.txt in a job folder: its runs of these backends were measured again
+        # by a later job of the node (e.g. after a code change), so they are left out
+        gone = set((job.folder / "superseded.txt").read_text().split()) if (job.folder / "superseded.txt").exists() else set()
+        rows += [r for r in analyse(job) if r["impl"] not in gone]
     for m in meter_rows(jobs):
         METERS[m["job"]] = m
     summary = summarise(rows)

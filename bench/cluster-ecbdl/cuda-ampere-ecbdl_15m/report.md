@@ -1,8 +1,8 @@
 ## cuda-ampere-ecbdl_15m
 
-**cuda-ampere-ecbdl_15m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64, governor ondemand, turbo on, ./tree f53347a9d336, CPUs in order of use 0-23,24-47, 5 run(s) per case, warm-up 50000 rows
+**cuda-ampere-ecbdl_15m**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-43-generic #43~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Sat Oct 31 06:52:47 UTC 2 x86_64, governor ondemand, turbo on, ./tree 7f98876f7e2a, CPUs in order of use 0-23,24-47, 10 run(s) per case, every run a fresh process, no warm-up
 
-Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 632 MiB
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 633 MiB
 
 ### ecbdl_15m (15,000,000 train / 2,897,917 test rows, 631 features, 2 classes)
 
@@ -10,12 +10,12 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 632
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 4.17 s | 4.14 s–4.38 s |  | 106.49 GiB (+ GPU 73.45 GiB) | 105.88 GiB | 1,863 | 932 | 10 | 97.92% | 98.31% |
+| ./tree Hybrid | 4.45 s | 4.39 s–4.53 s |  | 35.87 GiB (+ GPU 73.45 GiB) | 35.25 GiB | 1,863 | 932 | 10 | 97.92% | 98.31% |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 48 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 4.29 s | 4.2 s–4.3 s |  | 106.48 GiB (+ GPU 73.45 GiB) | 105.86 GiB | 725 | 363 | 10 | 97.92% | 98.32% |
+| ./tree Hybrid | 4.53 s | 4.38 s–4.6 s |  | 35.87 GiB (+ GPU 73.45 GiB) | 35.25 GiB | 725 | 363 | 10 | 97.92% | 98.32% |
 
 Test accuracy is measured on 2,897,917 rows: its 95% interval is ±0.01 percentage points at most.

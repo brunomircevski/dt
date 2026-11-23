@@ -8,8 +8,7 @@
 copied to the host and its subtree grown by the CPU threads while the GPU goes
 on with the next level) against `--gpu` (every node, down to the leaves, on
 the GPU). CART and C4.5 without pruning, grown to depth 5, 10, 15, 20, 25, 30
-and without a depth limit, 10 runs a case on hopper and 5 on ampere (the
-chart's footnote gives the count), on three of the paper's datasets, chosen by a screen of five
+and without a depth limit, 10 runs a case on both nodes, on three of the paper's datasets, chosen by a screen of five
 ([below](#earlier-measurements-95b6d77)): HIGGS (10.5M rows × 28 features),
 where the hybrid's lead was the largest; SOREL-20M's 4M sample (4M × 2,381),
 where it was the smallest; and MNIST8M (8.1M × 784) in between. The trees are
@@ -26,94 +25,97 @@ ampere, A100 80 GB PCIe (GPU 0, NUMA node 0), 48 threads (CPUs 0–23, then
 The GPU's socket's CPUs come first and the memory is not bound
 ([bench/tools/cluster/README.md](../tools/cluster/README.md#settings-specific-to-the-cluster)).
 
-**When.** hopper: ./tree 81bf6e6c (the same tree code as f53347a9), 2026-11-19,
-10 runs a case, in two jobs (`hopper-higgs-sorel_4m.log`, `hopper-mnist8m.log`;
-`hybrid_vs_gpu_only.sh` with `RUNS=10`), taking the `--handoff-rows` of the
-2026-11-15/16 sweep from `bench/tools/handoff/handoff_rows.json` instead of
-sweeping again. The CUDA runs time ./tree's GPU setup (memory pool, staging
-buffers, and for `--hybrid` its page-locked hand-off buffers): only the bare
-CUDA context is untimed ([bench/tools/README.md](../tools/README.md#how-time-is-measured)).
-ampere: ./tree f53347a9 (`src/` = d2957ff2), one build, 2026-11-15/16, by
-`bench/tools/cluster/final.sh -m 5` (`hybrid_vs_gpu_only.sh` after the GPU
-node's test-set runs; `ampere.log`), with the GPU setup untimed: **out of
-date** (⚠, faded on the chart), not rerun: ampere was unavailable from
-2026-11-19 for two weeks. The sweep (both nodes) is from 2026-11-15/16; SOREL
-4M's was cut short to save time: ampere skipped 1024 and 2048, hopper 2048
-(the curve falls steadily from 512 to 16384, so they could not have won); the
-job was resubmitted with the remaining values and kept the ones already
-measured. hopper's 2026-11-15/16 runs (f53347a9, 5 runs a case) are in git at
-84b4c67e; the runs before (95b6d77, 3 runs a case, 2026-11-06/08) at 1e655067.
+**When.** ./tree 7f98876f (less host memory for `--hybrid`, less VRAM for
+`--gpu`, the same trees), 2026-11-23, 10 runs a case, one job a node: hopper
+790 (`hopper.log`), ampere 807 (`ampere.log`); `hybrid_vs_gpu_only.sh` with
+`RUNS=10`, taking the `--handoff-rows` of the 2026-11-15/16 sweep from
+`bench/tools/handoff/handoff_rows.json` instead of sweeping again. The CUDA
+runs time ./tree's GPU setup (memory pool, staging buffers, and for
+`--hybrid` its page-locked hand-off buffers): only the bare CUDA context is
+untimed ([bench/tools/README.md](../tools/README.md#how-time-is-measured)).
+The sweep (both nodes) is from 2026-11-15/16; SOREL 4M's was cut short to
+save time: ampere skipped 1024 and 2048, hopper 2048 (the curve falls
+steadily from 512 to 16384, so they could not have won); the job was
+resubmitted with the remaining values and kept the ones already measured.
+The runs before, hopper 81bf6e6c (2026-11-19) and ampere f53347a9
+(2026-11-15/16, GPU setup untimed), are in git at 2c9ff876; hopper's
+f53347a9 runs at 84b4c67e; the runs before (95b6d77, 3 runs a case,
+2026-11-06/08) at 1e655067.
 
 ## Results
 
 Mean training time of the runs (GPU setup, presort, build; not reading the
-data): 10 on hopper, 5 on ampere (out of date, GPU setup untimed). Hybrid / GPU
-only, GPU only / hybrid in brackets (above 1: the hybrid is faster).
+data), 10 a case on both nodes. Hybrid / GPU only, GPU only / hybrid in
+brackets (above 1: the hybrid is faster).
 
-### ampere (out of date: f53347a9, GPU setup untimed)
+### ampere
 
 | Depth | HIGGS CART | HIGGS C4.5 | MNIST8M CART | MNIST8M C4.5 | SOREL 4M CART | SOREL 4M C4.5 |
 |---|---|---|---|---|---|---|
-| 5 | 0.123 / 0.120 s (0.97×) | 0.135 / 0.130 s (0.96×) | 2.06 / 2.03 s (0.99×) | 2.07 / 2.04 s (0.99×) | 2.99 / 2.89 s (0.97×) | 3.27 / 3.25 s (0.99×) |
-| 10 | 0.176 / 0.167 s (0.95×) | 0.196 / 0.190 s (0.97×) | 3.27 / 3.11 s (0.95×) | 3.07 / 3.12 s (1.01×) | 4.42 / 4.18 s (0.94×) | 4.50 / 4.59 s (1.02×) |
-| 15 | 0.262 / 0.273 s (1.04×) | 0.272 / 0.285 s (1.05×) | 4.86 / 4.97 s (1.02×) | 4.33 / 4.47 s (1.03×) | 5.95 / 5.81 s (0.98×) | 5.74 / 5.81 s (1.01×) |
-| 20 | 0.438 / 0.529 s (1.21×) | 0.374 / 0.456 s (1.22×) | 5.87 / 7.26 s (1.24×) | 5.41 / 6.25 s (1.16×) | 7.27 / 7.47 s (1.03×) | 6.91 / 7.11 s (1.03×) |
-| 25 | 0.527 / 0.900 s (1.71×) | 0.462 / 0.702 s (1.52×) | 6.93 / 9.01 s (1.30×) | 6.39 / 8.18 s (1.28×) | 9.09 / 9.06 s (1.00×) | 8.13 / 8.42 s (1.03×) |
-| 30 | 0.646 / 1.21 s (1.88×) | 0.507 / 0.933 s (1.84×) | 7.69 / 10.0 s (1.31×) | 7.13 / 9.78 s (1.37×) | 11.2 / 10.6 s (0.94×) | 9.32 / 9.77 s (1.05×) |
-| none | 0.770 / 1.59 s (2.06×) | 0.651 / 1.51 s (2.32×) | 10.4 / 14.8 s (1.42×) | 12.2 / 18.0 s (1.47×) | 28.7 / 33.3 s (1.16×) | 73.5 / 79.4 s (1.08×) |
+| 5 | 0.334 / 0.192 s (0.57×) | 0.344 / 0.207 s (0.60×) | 2.29 / 2.10 s (0.92×) | 2.31 / 2.12 s (0.92×) | 3.14 / 2.94 s (0.93×) | 3.46 / 3.36 s (0.97×) |
+| 10 | 0.381 / 0.245 s (0.64×) | 0.397 / 0.268 s (0.68×) | 3.35 / 3.15 s (0.94×) | 3.38 / 3.16 s (0.94×) | 4.39 / 4.24 s (0.97×) | 4.76 / 4.65 s (0.98×) |
+| 15 | 0.478 / 0.352 s (0.73×) | 0.481 / 0.362 s (0.75×) | 4.98 / 5.05 s (1.01×) | 4.55 / 4.52 s (0.99×) | 6.08 / 5.83 s (0.96×) | 5.95 / 5.91 s (0.99×) |
+| 20 | 0.668 / 0.597 s (0.89×) | 0.577 / 0.534 s (0.92×) | 6.07 / 7.38 s (1.22×) | 5.59 / 6.35 s (1.14×) | 7.39 / 7.50 s (1.01×) | 7.17 / 7.21 s (1.01×) |
+| 25 | 0.751 / 0.960 s (1.28×) | 0.675 / 0.768 s (1.14×) | 7.11 / 9.01 s (1.27×) | 6.47 / 8.19 s (1.27×) | 9.09 / 9.17 s (1.01×) | 8.33 / 8.53 s (1.02×) |
+| 30 | 0.837 / 1.29 s (1.54×) | 0.737 / 0.997 s (1.35×) | 7.84 / 10.1 s (1.29×) | 7.24 / 9.89 s (1.37×) | 11.2 / 10.7 s (0.95×) | 9.55 / 9.82 s (1.03×) |
+| none | 0.944 / 1.65 s (1.75×) | 0.882 / 1.57 s (1.78×) | 10.5 / 14.8 s (1.41×) | 12.4 / 18.0 s (1.46×) | 28.8 / 33.3 s (1.16×) | 73.8 / 79.3 s (1.07×) |
 
 ### hopper
 
 | Depth | HIGGS CART | HIGGS C4.5 | MNIST8M CART | MNIST8M C4.5 | SOREL 4M CART | SOREL 4M C4.5 |
 |---|---|---|---|---|---|---|
-| 5 | 0.299 / 0.180 s (0.60×) | 0.309 / 0.186 s (0.60×) | 1.55 / 1.43 s (0.92×) | 1.59 / 1.47 s (0.93×) | 2.16 / 2.04 s (0.94×) | 2.48 / 2.36 s (0.95×) |
-| 10 | 0.328 / 0.209 s (0.64×) | 0.353 / 0.239 s (0.68×) | 2.38 / 2.26 s (0.95×) | 2.38 / 2.30 s (0.97×) | 3.06 / 2.94 s (0.96×) | 3.37 / 3.26 s (0.97×) |
-| 15 | 0.403 / 0.297 s (0.74×) | 0.415 / 0.301 s (0.73×) | 3.71 / 3.98 s (1.07×) | 3.28 / 3.41 s (1.04×) | 4.12 / 4.13 s (1.00×) | 4.21 / 4.20 s (1.00×) |
-| 20 | 0.575 / 0.508 s (0.88×) | 0.500 / 0.463 s (0.93×) | 4.94 / 6.09 s (1.23×) | 4.11 / 5.04 s (1.23×) | 5.07 / 5.46 s (1.08×) | 5.07 / 5.12 s (1.01×) |
-| 25 | 0.731 / 0.781 s (1.07×) | 0.595 / 0.669 s (1.12×) | 5.84 / 7.58 s (1.30×) | 4.94 / 6.91 s (1.40×) | 5.82 / 6.64 s (1.14×) | 5.90 / 6.06 s (1.03×) |
-| 30 | 0.854 / 0.951 s (1.11×) | 0.670 / 0.877 s (1.31×) | 6.45 / 8.50 s (1.32×) | 5.55 / 8.66 s (1.56×) | 6.54 / 7.75 s (1.19×) | 6.75 / 6.98 s (1.03×) |
-| none | 1.06 / 1.26 s (1.19×) | 0.837 / 1.48 s (1.77×) | 8.04 / 12.3 s (1.53×) | 9.58 / 15.3 s (1.60×) | 20.0 / 23.9 s (1.20×) | 52.4 / 56.6 s (1.08×) |
+| 5 | 0.299 / 0.188 s (0.63×) | 0.313 / 0.199 s (0.64×) | 1.54 / 1.42 s (0.92×) | 1.58 / 1.47 s (0.93×) | 2.15 / 2.01 s (0.94×) | 2.45 / 2.38 s (0.97×) |
+| 10 | 0.328 / 0.222 s (0.68×) | 0.356 / 0.247 s (0.69×) | 2.38 / 2.26 s (0.95×) | 2.36 / 2.27 s (0.96×) | 3.05 / 2.94 s (0.96×) | 3.35 / 3.26 s (0.97×) |
+| 15 | 0.412 / 0.302 s (0.73×) | 0.422 / 0.323 s (0.76×) | 3.75 / 3.96 s (1.06×) | 3.28 / 3.41 s (1.04×) | 4.20 / 4.12 s (0.98×) | 4.20 / 4.22 s (1.00×) |
+| 20 | 0.587 / 0.509 s (0.87×) | 0.505 / 0.474 s (0.94×) | 4.97 / 6.08 s (1.22×) | 4.10 / 5.04 s (1.23×) | 5.13 / 5.40 s (1.05×) | 5.04 / 5.14 s (1.02×) |
+| 25 | 0.725 / 0.774 s (1.07×) | 0.617 / 0.690 s (1.12×) | 5.87 / 7.59 s (1.29×) | 4.93 / 6.93 s (1.41×) | 5.95 / 6.67 s (1.12×) | 5.88 / 6.06 s (1.03×) |
+| 30 | 0.847 / 0.999 s (1.18×) | 0.688 / 0.879 s (1.28×) | 6.47 / 8.53 s (1.32×) | 5.54 / 8.64 s (1.56×) | 6.62 / 7.77 s (1.17×) | 6.72 / 7.03 s (1.05×) |
+| none | 0.988 / 1.26 s (1.28×) | 0.849 / 1.50 s (1.76×) | 8.11 / 12.3 s (1.52×) | 9.56 / 15.4 s (1.61×) | 20.1 / 23.8 s (1.18×) | 52.3 / 56.6 s (1.08×) |
 
-- **On hopper GPU only now wins the shallow trees.** Both modes time their GPU
-  setup now, and the hybrid's setup also makes its page-locked hand-off
-  buffers: 0.12 s more than GPU only on every dataset (HIGGS 0.27 against
-  0.15 s, MNIST8M 0.95 against 0.83 s, SOREL 4M 1.40 against 1.28 s). Up to
-  depth 10 the builds are the same, so GPU only is faster: on HIGGS, whose
-  trees take 0.2–0.4 s, by a lot (0.60–0.68×), on MNIST8M and SOREL 4M by
-  3–8% (0.92–0.97×). HIGGS's hybrid stays behind to depth 20 (0.88–0.93×) and
-  leads from depth 25 (1.07–1.12×); MNIST8M and SOREL 4M break even at depth 15.
-  Hopper's runs spread at most 6% (HIGGS up to 21%, in runs of 0.2–1 s).
-- **Deeper, the hybrid leads:** without a depth limit on hopper HIGGS 1.19×
-  (CART) and 1.77× (C4.5), MNIST8M 1.53× and 1.60×, SOREL 4M 1.20× and 1.08×.
-  On ampere (out of date, setup untimed) HIGGS 2.1–2.3×, MNIST8M 1.4–1.5×,
-  SOREL 4M 1.08–1.16×; before d2957ff2 (95b6d77) HIGGS was 4.3–4.9×.
+- **GPU only wins the shallow trees.** Both modes time their GPU setup, and
+  the hybrid's setup also makes its page-locked hand-off buffers: 0.10–0.23 s
+  more than GPU only (hopper: HIGGS 0.26–0.27 against 0.16 s, MNIST8M
+  0.94–0.97 against 0.82–0.86 s, SOREL 4M 1.39–1.68 against 1.25–1.60 s;
+  ampere: 0.29 against 0.15–0.16 s, 1.46–1.50 against 1.27–1.29 s,
+  2.02–2.41 against 1.89–2.29 s). Up to depth 10 the builds are the same, so
+  GPU only is faster: on HIGGS, whose trees take 0.2–0.4 s, by a lot
+  (0.57–0.69×), on MNIST8M and SOREL 4M by 2–8% (0.92–0.98×). HIGGS's hybrid
+  stays behind to depth 20 (there 0.87–0.94×) and leads from depth 25 (1.07–1.28×);
+  MNIST8M and SOREL 4M break even at depth 15. The runs spread at most 5% on
+  hopper and 6% on ampere (HIGGS up to 20% and 14%, in runs of 0.2–1.6 s).
+- **Deeper, the hybrid leads:** without a depth limit on hopper HIGGS 1.28×
+  (CART) and 1.76× (C4.5), MNIST8M 1.52× and 1.61×, SOREL 4M 1.18× and 1.08×;
+  on ampere HIGGS 1.75× and 1.78×, MNIST8M 1.41× and 1.46×, SOREL 4M 1.16× and
+  1.07×. Before d2957ff2 (95b6d77) HIGGS was 4.3–4.9×.
 - **Because GPU only got faster in the deep trees**, not the hybrid: GPU only
-  at no limit, HIGGS CART 3.97 → 1.59 s on ampere and 4.01 → 1.26 s on hopper
+  at no limit, HIGGS CART 3.97 → 1.65 s on ampere and 4.01 → 1.26 s on hopper
   (95b6d77 → now), MNIST8M CART 29.6 → 14.8 s and 24.5 → 12.3 s; the hybrid
-  HIGGS CART 0.82 → 0.77 s on ampere and 0.81 → 1.06 s on hopper (now with its
-  0.27 s of setup). The deep levels of a few small nodes were GPU only's
+  HIGGS CART 0.82 → 0.94 s on ampere and 0.81 → 0.99 s on hopper (now with
+  0.27–0.29 s of setup). The deep levels of a few small nodes were GPU only's
   weakness (a whole level's kernels and synchronisation for a few rows);
   d2957ff2 skips the tiles without a cut and the earlier small-node kernels
   (bc9ea314) shorten those levels. HIGGS's unlimited trees have 2.9M (CART)
   and 1.3M (C4.5) nodes over 69–71 levels; the hybrid's CPU threads still grow
   those subtrees in one go.
-- **SOREL 4M barely gains (0.94–1.20×).** Its trees are small (88k CART
+- **SOREL 4M barely gains (0.93–1.18×).** Its trees are small (88k CART
   nodes, 70k C4.5) and long and thin: no limit means depth 231 (CART) and
   572 (C4.5), the levels past 30 peeling a few rows a time off nodes that
   stay above `--handoff-rows`. Those nodes, and every level's 2,381
-  features, stay on the GPU in both modes. On ampere at depth 25–30 CART the
-  hybrid was no faster (1.00× and 0.94×).
+  features, stay on the GPU in both modes. On ampere at depth 30 CART the
+  hybrid is slower (0.95×).
 - **Past the setup, the gap is all in the build.** Build at no depth limit on
-  hopper: HIGGS CART 0.79 s hybrid, 1.11 s GPU only (C4.5 0.55 and 1.30 s);
-  MNIST8M CART 7.1 s, 11.5 s; SOREL 4M CART 18.6 s, 22.6 s. On ampere: HIGGS
-  CART 0.69 s, 1.51 s; MNIST8M CART 9.2 s, 13.6 s; SOREL 4M CART 26.9 s, 31.5 s.
+  hopper: HIGGS CART 0.72 s hybrid, 1.11 s GPU only (C4.5 0.55 and 1.30 s);
+  MNIST8M CART 7.2 s, 11.5 s; SOREL 4M CART 18.7 s, 22.6 s. On ampere: HIGGS
+  CART 0.65 s, 1.50 s; MNIST8M CART 9.1 s, 13.5 s; SOREL 4M CART 26.8 s, 31.4 s.
 - **hopper against ampere:** where the GPU does the work the H100 is
-  1.4–1.5× faster even with its setup timed (MNIST8M depth 10: 2.26–2.38
-  against 3.11–3.27 s; SOREL 4M at no limit 20.0 / 52.4 s against 28.7 /
-  73.5 s). HIGGS's hybrid at no limit is CPU bound: 0.79 s of build on hopper
-  with 32 threads, 0.69 s on ampere with 48.
-- **VRAM:** the hybrid needs a little less (HIGGS 3.4 GiB against 3.7–4.3,
-  MNIST8M 48.9 against 50.1–51.2, SOREL 4M 75.9 GiB against 76.4 of the 80 GB).
+  about 1.4× faster (MNIST8M depth 10: 2.26–2.38 against 3.15–3.38 s; SOREL 4M
+  at no limit 20.1 / 52.3 s against 28.8 / 73.8 s). HIGGS's hybrid at no
+  limit is CPU bound: 0.72 s of build on hopper with 32 threads, 0.65 s on
+  ampere with 48.
+- **VRAM** (since 7f98876f): the two modes need about the same (hybrid
+  against GPU only, both nodes: HIGGS 3.3–3.4 GiB against 2.8–3.7, MNIST8M
+  48.8–49.2 against 48.3–50.7, SOREL 4M 75.8–75.9 against 75.3–75.9 of the
+  80 GB). The hybrid's arena is host memory, not counted here.
 
 ## Who is working (MNIST8M, profiled)
 
@@ -122,9 +124,9 @@ only, GPU only / hybrid in brackets (above 1: the hybrid is faster).
 ![profile, hopper](chart-profile-hopper-mnist8m.png)
 
 The MNIST8M depth runs once more with `./tree --profile`, 10 runs a case on
-hopper (5 on ampere, out of date), in the same job as the plain runs
+both nodes, in the same job as the plain runs
 (`profile/{cuda,gpuonly}-<node>-mnist8m/`). Profiling costs little: every
-profiled mean is within 3% of the plain run's on both nodes.
+profiled mean is within 4% of the plain run's on both nodes.
 
 Each millisecond of training goes to one segment
 ([hybrid_profile_chart.py](../tools/hybrid_profile_chart.py)):
@@ -138,29 +140,29 @@ Each millisecond of training goes to one segment
 CPU subtree work is the threads sampled (every 5 ms) in sweep, partition,
 mark, build or leaves; under each bar its thread-seconds.
 
-- **Setup:** 1.2 s on ampere (setup untimed there: the same in both modes);
-  on hopper 0.98–1.02 s for the hybrid and 0.85–0.89 s for GPU only, the
-  hand-off buffers. 58–62% of a depth-5 tree, 6–12% at no limit.
-- **The CPU's subtree work grows with depth.** On ampere CART 0 → 5 → 69 →
-  139 → 188 → 222 → 299 thread-seconds (depth 5 → no limit), C4.5 0 → 2 → 21 →
-  65 → 120 → 167 → 296; on hopper CART 177 and C4.5 186 at no limit. At no limit that is
-  27–32 of ampere's 48 threads and 22–25 of hopper's 32 busy on average while
+- **Setup:** the hybrid's is 0.13–0.21 s longer, its page-locked hand-off
+  buffers: 1.44–1.50 s against 1.27–1.31 s on ampere, 0.99–1.02 s against
+  0.84–0.89 s on hopper. 58–64% of a depth-5 tree, 6–14% at no limit.
+- **The CPU's subtree work grows with depth.** On ampere CART 0 → 0 → 68 →
+  137 → 184 → 219 → 291 thread-seconds (depth 5 → no limit), C4.5 0 → 1 → 20 →
+  63 → 115 → 163 → 286; on hopper CART 177 and C4.5 187 at no limit. At no limit that is
+  26–32 of ampere's 48 threads and 22–25 of hopper's 32 busy on average while
   growing.
-- **Most of it runs alongside the GPU:** the GPU + CPU segment grows to 60%
-  (CART) and 72% (C4.5) of the hybrid's time on ampere at no limit, 62% and
-  74% on hopper. **CPU alone**, the GPU waiting for the threads, is larger
-  than before: on ampere up to 1.10 s (14%, CART depth 30), on hopper 1.14–1.75 s
-  (23–27%) for CART at depth 20–30. With the faster GPU levels the GPU now
-  waits for the CPU threads, most on hopper with its 32.
+- **Most of it runs alongside the GPU:** the GPU + CPU segment grows to 59%
+  (CART) and 71% (C4.5) of the hybrid's time on ampere at no limit, 61% and
+  74% on hopper. **CPU alone**, the GPU waiting for the threads, is up to
+  1.14 s (14%, CART depth 30) on ampere and 1.26–1.88 s (25–29%) on hopper
+  for CART at depth 20–30: with its 32 threads, hopper's GPU waits for the
+  CPU most.
 - **GPU only does that work on the GPU instead:** its GPU segment at no
-  limit is 11.6 s (CART) and 14.0 s (C4.5) on ampere, against the hybrid's
+  limit is 11.7 s (CART) and 14.0 s (C4.5) on ampere, against the hybrid's
   7.7 s and 9.8 s of GPU time (alone + with CPU). Its host time (launching and
-  synchronising many short levels) is 1.2–2.0 s (8–11%) at no limit on
-  ampere and 1.7–2.7 s (13–18%) on hopper, where the hybrid's is under 0.1 s.
-- **The hybrid pays 0.3–1.2 s of transfer** on ampere from depth 15 on (the
-  small nodes' columns copied to the host), 0.2–0.4 s on hopper, against
-  0.05–0.8 s for GPU only.
-- Up to depth 10 the two modes' bars are the same, but for the hybrid's longer setup on hopper.
+  synchronising many short levels) is 1.2–2.1 s (8–11%) at no limit on
+  ampere and 1.7–2.7 s (14–18%) on hopper, where the hybrid's is under 0.1 s.
+- **The hybrid pays 0.3–1.0 s of transfer** on ampere from depth 15 on (the
+  small nodes' columns copied to the host), 0.1–0.3 s on hopper, against
+  0.03–0.8 s for GPU only.
+- Up to depth 10 the two modes' bars are the same, but for the hybrid's longer setup.
 
 The hybrid alone on ampere, in seconds on a linear axis shared by both panels,
 and as shares of each bar:
@@ -169,72 +171,72 @@ and as shares of each bar:
 
 ![hybrid profile, percent](chart-profile-hybrid-percent-ampere-mnist8m.png)
 
-Table, ampere (out of date, GPU setup untimed; seconds, share of the training time in brackets;
+Table, ampere (seconds, share of the training time in brackets;
 `hybrid_profile_chart.py` prints it):
 
 | Algorithm | Depth | Mode | runs | train s | without --profile s | nodes | Setup (GPU init, upload, presort) s (%) | GPU working alone s (%) | GPU + CPU working at once s (%) | CPU working alone s (%) | CPU↔GPU transfer s (%) | Host: launching, waiting, finishing s (%) | CPU subtree thr·s |
 |---|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| CART | 5 | hybrid | 5 | 2.09 | 2.06 | 63 | 1.24 (59) | 0.81 (39) | 0.00 (0) | 0.00 (0) | 0.03 (1) | 0.02 (1) | 0 |
-| CART | 5 | GPU only | 5 | 2.05 | 2.03 | 63 | 1.22 (59) | 0.81 (39) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (1) | 0 |
-| CART | 10 | hybrid | 5 | 3.27 | 3.27 | 2,047 | 1.18 (36) | 1.62 (49) | 0.17 (5) | 0.02 (1) | 0.25 (8) | 0.03 (1) | 5 |
-| CART | 10 | GPU only | 5 | 3.07 | 3.11 | 2,047 | 1.18 (38) | 1.83 (60) | 0.00 (0) | 0.00 (0) | 0.01 (0) | 0.05 (2) | 0 |
-| CART | 15 | hybrid | 5 | 4.87 | 4.86 | 44,359 | 1.22 (25) | 1.56 (32) | 1.00 (21) | 0.11 (2) | 0.95 (19) | 0.03 (1) | 69 |
-| CART | 15 | GPU only | 5 | 5.01 | 4.97 | 44,359 | 1.22 (24) | 3.37 (67) | 0.00 (0) | 0.00 (0) | 0.13 (3) | 0.29 (6) | 0 |
-| CART | 20 | hybrid | 5 | 5.95 | 5.87 | 168,241 | 1.22 (20) | 1.37 (23) | 1.81 (30) | 0.45 (8) | 1.07 (18) | 0.03 (1) | 139 |
-| CART | 20 | GPU only | 5 | 7.35 | 7.26 | 168,241 | 1.23 (17) | 5.21 (71) | 0.00 (0) | 0.00 (0) | 0.41 (6) | 0.50 (7) | 0 |
-| CART | 25 | hybrid | 5 | 6.98 | 6.93 | 231,991 | 1.22 (17) | 1.37 (20) | 2.38 (34) | 0.89 (13) | 1.08 (15) | 0.03 (0) | 188 |
-| CART | 25 | GPU only | 5 | 8.89 | 9.01 | 231,991 | 1.19 (13) | 6.51 (73) | 0.00 (0) | 0.00 (0) | 0.50 (6) | 0.70 (8) | 0 |
-| CART | 30 | hybrid | 5 | 7.70 | 7.69 | 257,021 | 1.19 (15) | 1.37 (18) | 2.92 (38) | 1.10 (14) | 1.09 (14) | 0.04 (0) | 222 |
-| CART | 30 | GPU only | 5 | 10.08 | 10.03 | 257,021 | 1.21 (12) | 7.46 (74) | 0.00 (0) | 0.00 (0) | 0.55 (6) | 0.86 (9) | 0 |
-| CART | none | hybrid | 5 | 10.42 | 10.39 | 301,939 | 1.21 (12) | 1.39 (13) | 6.29 (60) | 0.31 (3) | 1.17 (11) | 0.05 (0) | 299 |
-| CART | none | GPU only | 5 | 14.69 | 14.78 | 301,939 | 1.18 (8) | 11.64 (79) | 0.00 (0) | 0.00 (0) | 0.67 (5) | 1.20 (8) | 0 |
-| C4.5 | 5 | hybrid | 5 | 2.06 | 2.07 | 61 | 1.18 (57) | 0.81 (39) | 0.01 (1) | 0.00 (0) | 0.03 (1) | 0.03 (1) | 0 |
-| C4.5 | 5 | GPU only | 5 | 2.05 | 2.04 | 61 | 1.20 (58) | 0.82 (40) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (2) | 0 |
-| C4.5 | 10 | hybrid | 5 | 3.15 | 3.07 | 1,453 | 1.25 (40) | 1.43 (45) | 0.38 (12) | 0.01 (0) | 0.05 (2) | 0.03 (1) | 2 |
-| C4.5 | 10 | GPU only | 5 | 3.12 | 3.12 | 1,453 | 1.21 (39) | 1.84 (59) | 0.00 (0) | 0.00 (0) | 0.01 (0) | 0.06 (2) | 0 |
-| C4.5 | 15 | hybrid | 5 | 4.36 | 4.33 | 12,313 | 1.21 (28) | 1.36 (31) | 1.41 (32) | 0.03 (1) | 0.32 (7) | 0.04 (1) | 21 |
-| C4.5 | 15 | GPU only | 5 | 4.47 | 4.47 | 12,313 | 1.20 (27) | 3.04 (68) | 0.00 (0) | 0.00 (0) | 0.05 (1) | 0.18 (4) | 0 |
-| C4.5 | 20 | hybrid | 5 | 5.44 | 5.41 | 42,915 | 1.23 (23) | 1.07 (20) | 2.51 (46) | 0.06 (1) | 0.54 (10) | 0.04 (1) | 65 |
-| C4.5 | 20 | GPU only | 5 | 6.30 | 6.25 | 42,915 | 1.21 (19) | 4.47 (71) | 0.00 (0) | 0.00 (0) | 0.17 (3) | 0.46 (7) | 0 |
-| C4.5 | 25 | hybrid | 5 | 6.39 | 6.39 | 84,917 | 1.22 (19) | 1.02 (16) | 3.26 (51) | 0.16 (3) | 0.70 (11) | 0.04 (1) | 120 |
-| C4.5 | 25 | GPU only | 5 | 8.14 | 8.18 | 84,917 | 1.21 (15) | 5.93 (73) | 0.00 (0) | 0.00 (0) | 0.29 (4) | 0.71 (9) | 0 |
-| C4.5 | 30 | hybrid | 5 | 7.11 | 7.13 | 123,289 | 1.19 (17) | 0.96 (14) | 3.94 (55) | 0.21 (3) | 0.77 (11) | 0.04 (1) | 167 |
-| C4.5 | 30 | GPU only | 5 | 9.81 | 9.78 | 123,289 | 1.21 (12) | 7.24 (74) | 0.00 (0) | 0.00 (0) | 0.39 (4) | 0.97 (10) | 0 |
-| C4.5 | none | hybrid | 5 | 12.29 | 12.22 | 218,325 | 1.23 (10) | 0.96 (8) | 8.83 (72) | 0.31 (2) | 0.89 (7) | 0.07 (1) | 296 |
-| C4.5 | none | GPU only | 5 | 17.97 | 17.99 | 218,325 | 1.22 (7) | 13.97 (78) | 0.00 (0) | 0.00 (0) | 0.76 (4) | 2.02 (11) | 0 |
+| CART | 5 | hybrid | 10 | 2.32 | 2.29 | 63 | 1.48 (64) | 0.81 (35) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (1) | 0 |
+| CART | 5 | GPU only | 10 | 2.11 | 2.10 | 63 | 1.27 (60) | 0.81 (38) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (1) | 0 |
+| CART | 10 | hybrid | 10 | 3.34 | 3.35 | 2,047 | 1.45 (43) | 1.81 (54) | 0.02 (1) | 0.00 (0) | 0.02 (0) | 0.05 (1) | 0 |
+| CART | 10 | GPU only | 10 | 3.17 | 3.15 | 2,047 | 1.28 (40) | 1.83 (58) | 0.00 (0) | 0.00 (0) | 0.01 (0) | 0.05 (2) | 0 |
+| CART | 15 | hybrid | 10 | 5.00 | 4.98 | 44,359 | 1.46 (29) | 1.54 (31) | 1.03 (21) | 0.08 (2) | 0.86 (17) | 0.03 (1) | 68 |
+| CART | 15 | GPU only | 10 | 5.08 | 5.05 | 44,359 | 1.30 (26) | 3.37 (66) | 0.00 (0) | 0.00 (0) | 0.13 (2) | 0.29 (6) | 0 |
+| CART | 20 | hybrid | 10 | 6.14 | 6.07 | 168,241 | 1.49 (24) | 1.37 (22) | 1.82 (30) | 0.49 (8) | 0.93 (15) | 0.04 (1) | 137 |
+| CART | 20 | GPU only | 10 | 7.42 | 7.38 | 168,241 | 1.30 (18) | 5.21 (70) | 0.00 (0) | 0.00 (0) | 0.41 (6) | 0.51 (7) | 0 |
+| CART | 25 | hybrid | 10 | 7.10 | 7.11 | 231,991 | 1.46 (21) | 1.37 (19) | 2.39 (34) | 0.91 (13) | 0.93 (13) | 0.04 (1) | 184 |
+| CART | 25 | GPU only | 10 | 9.04 | 9.01 | 231,991 | 1.30 (14) | 6.51 (72) | 0.00 (0) | 0.00 (0) | 0.55 (6) | 0.69 (8) | 0 |
+| CART | 30 | hybrid | 10 | 7.90 | 7.84 | 257,021 | 1.47 (19) | 1.37 (17) | 2.94 (37) | 1.14 (14) | 0.94 (12) | 0.04 (1) | 219 |
+| CART | 30 | GPU only | 10 | 10.25 | 10.14 | 257,021 | 1.31 (13) | 7.46 (73) | 0.00 (0) | 0.00 (0) | 0.61 (6) | 0.87 (8) | 0 |
+| CART | none | hybrid | 10 | 10.65 | 10.55 | 301,939 | 1.48 (14) | 1.43 (13) | 6.27 (59) | 0.39 (4) | 1.03 (10) | 0.06 (1) | 291 |
+| CART | none | GPU only | 10 | 14.93 | 14.83 | 301,939 | 1.29 (9) | 11.65 (78) | 0.00 (0) | 0.00 (0) | 0.80 (5) | 1.18 (8) | 0 |
+| C4.5 | 5 | hybrid | 10 | 2.34 | 2.31 | 61 | 1.48 (63) | 0.82 (35) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.04 (2) | 0 |
+| C4.5 | 5 | GPU only | 10 | 2.14 | 2.12 | 61 | 1.29 (60) | 0.82 (38) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (2) | 0 |
+| C4.5 | 10 | hybrid | 10 | 3.38 | 3.38 | 1,453 | 1.48 (44) | 1.76 (52) | 0.08 (2) | 0.00 (0) | 0.01 (0) | 0.05 (1) | 1 |
+| C4.5 | 10 | GPU only | 10 | 3.20 | 3.16 | 1,453 | 1.29 (40) | 1.84 (58) | 0.00 (0) | 0.00 (0) | 0.01 (0) | 0.06 (2) | 0 |
+| C4.5 | 15 | hybrid | 10 | 4.59 | 4.55 | 12,313 | 1.49 (32) | 1.39 (30) | 1.39 (30) | 0.03 (1) | 0.26 (6) | 0.04 (1) | 20 |
+| C4.5 | 15 | GPU only | 10 | 4.56 | 4.52 | 12,313 | 1.28 (28) | 3.04 (67) | 0.00 (0) | 0.00 (0) | 0.05 (1) | 0.18 (4) | 0 |
+| C4.5 | 20 | hybrid | 10 | 5.62 | 5.59 | 42,915 | 1.47 (26) | 1.08 (19) | 2.51 (45) | 0.05 (1) | 0.47 (8) | 0.04 (1) | 63 |
+| C4.5 | 20 | GPU only | 10 | 6.37 | 6.35 | 42,915 | 1.29 (20) | 4.47 (70) | 0.00 (0) | 0.00 (0) | 0.15 (2) | 0.46 (7) | 0 |
+| C4.5 | 25 | hybrid | 10 | 6.56 | 6.47 | 84,917 | 1.50 (23) | 1.03 (16) | 3.26 (50) | 0.12 (2) | 0.62 (9) | 0.05 (1) | 115 |
+| C4.5 | 25 | GPU only | 10 | 8.21 | 8.19 | 84,917 | 1.29 (16) | 5.93 (72) | 0.00 (0) | 0.00 (0) | 0.27 (3) | 0.72 (9) | 0 |
+| C4.5 | 30 | hybrid | 10 | 7.28 | 7.24 | 123,289 | 1.48 (20) | 0.96 (13) | 3.95 (54) | 0.18 (2) | 0.67 (9) | 0.04 (1) | 163 |
+| C4.5 | 30 | GPU only | 10 | 9.92 | 9.89 | 123,289 | 1.30 (13) | 7.24 (73) | 0.00 (0) | 0.00 (0) | 0.41 (4) | 0.96 (10) | 0 |
+| C4.5 | none | hybrid | 10 | 12.42 | 12.36 | 218,325 | 1.44 (12) | 0.96 (8) | 8.85 (71) | 0.34 (3) | 0.75 (6) | 0.08 (1) | 286 |
+| C4.5 | none | GPU only | 10 | 18.10 | 18.01 | 218,325 | 1.29 (7) | 13.97 (77) | 0.00 (0) | 0.00 (0) | 0.78 (4) | 2.06 (11) | 0 |
 
 Table, hopper:
 
 | Algorithm | Depth | Mode | runs | train s | without --profile s | nodes | Setup (GPU init, upload, presort) s (%) | GPU working alone s (%) | GPU + CPU working at once s (%) | CPU working alone s (%) | CPU↔GPU transfer s (%) | Host: launching, waiting, finishing s (%) | CPU subtree thr·s |
 |---|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| CART | 5 | hybrid | 10 | 1.59 | 1.55 | 63 | 0.98 (62) | 0.58 (37) | 0.00 (0) | 0.00 (0) | 0.01 (1) | 0.02 (1) | 0 |
-| CART | 5 | GPU only | 10 | 1.45 | 1.43 | 63 | 0.85 (58) | 0.58 (40) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.02 (2) | 0 |
-| CART | 10 | hybrid | 10 | 2.42 | 2.38 | 2,047 | 0.99 (41) | 1.33 (55) | 0.05 (2) | 0.00 (0) | 0.03 (1) | 0.04 (1) | 1 |
-| CART | 10 | GPU only | 10 | 2.30 | 2.26 | 2,047 | 0.86 (37) | 1.39 (60) | 0.00 (0) | 0.00 (0) | 0.01 (0) | 0.05 (2) | 0 |
-| CART | 15 | hybrid | 10 | 3.77 | 3.71 | 44,359 | 0.99 (26) | 1.08 (29) | 0.88 (23) | 0.42 (11) | 0.37 (10) | 0.02 (1) | 46 |
-| CART | 15 | GPU only | 10 | 3.99 | 3.98 | 44,359 | 0.85 (21) | 2.68 (67) | 0.00 (0) | 0.00 (0) | 0.07 (2) | 0.39 (10) | 0 |
-| CART | 20 | hybrid | 10 | 4.99 | 4.94 | 168,241 | 0.99 (20) | 1.00 (20) | 1.45 (29) | 1.14 (23) | 0.38 (8) | 0.03 (1) | 89 |
-| CART | 20 | GPU only | 10 | 6.15 | 6.09 | 168,241 | 0.86 (14) | 4.20 (68) | 0.00 (0) | 0.00 (0) | 0.22 (4) | 0.87 (14) | 0 |
-| CART | 25 | hybrid | 10 | 5.90 | 5.84 | 231,991 | 0.98 (17) | 0.99 (17) | 1.93 (33) | 1.58 (27) | 0.39 (7) | 0.03 (0) | 117 |
-| CART | 25 | GPU only | 10 | 7.64 | 7.58 | 231,991 | 0.86 (11) | 5.29 (69) | 0.00 (0) | 0.00 (0) | 0.26 (3) | 1.23 (16) | 0 |
-| CART | 30 | hybrid | 10 | 6.49 | 6.45 | 257,021 | 0.98 (15) | 0.99 (15) | 2.37 (36) | 1.75 (27) | 0.38 (6) | 0.03 (0) | 136 |
-| CART | 30 | GPU only | 10 | 8.59 | 8.50 | 257,021 | 0.85 (10) | 6.09 (71) | 0.00 (0) | 0.00 (0) | 0.29 (3) | 1.36 (16) | 0 |
-| CART | none | hybrid | 10 | 8.09 | 8.04 | 301,939 | 0.99 (12) | 1.00 (12) | 5.03 (62) | 0.63 (8) | 0.41 (5) | 0.04 (0) | 177 |
-| CART | none | GPU only | 10 | 12.30 | 12.30 | 301,939 | 0.85 (7) | 9.47 (77) | 0.00 (0) | 0.00 (0) | 0.34 (3) | 1.65 (13) | 0 |
-| C4.5 | 5 | hybrid | 10 | 1.64 | 1.59 | 61 | 1.01 (62) | 0.60 (36) | 0.00 (0) | 0.00 (0) | 0.01 (1) | 0.02 (1) | 0 |
-| C4.5 | 5 | GPU only | 10 | 1.51 | 1.47 | 61 | 0.89 (58) | 0.60 (39) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (2) | 0 |
-| C4.5 | 10 | hybrid | 10 | 2.43 | 2.38 | 1,453 | 1.01 (41) | 1.28 (53) | 0.10 (4) | 0.00 (0) | 0.02 (1) | 0.03 (1) | 1 |
-| C4.5 | 10 | GPU only | 10 | 2.31 | 2.30 | 1,453 | 0.86 (37) | 1.39 (60) | 0.00 (0) | 0.00 (0) | 0.01 (0) | 0.05 (2) | 0 |
-| C4.5 | 15 | hybrid | 10 | 3.35 | 3.28 | 12,313 | 1.01 (30) | 1.12 (33) | 1.00 (30) | 0.02 (1) | 0.16 (5) | 0.03 (1) | 15 |
-| C4.5 | 15 | GPU only | 10 | 3.45 | 3.41 | 12,313 | 0.88 (26) | 2.37 (69) | 0.00 (0) | 0.00 (0) | 0.03 (1) | 0.17 (5) | 0 |
-| C4.5 | 20 | hybrid | 10 | 4.17 | 4.11 | 42,915 | 1.01 (24) | 0.83 (20) | 1.95 (47) | 0.12 (3) | 0.24 (6) | 0.03 (1) | 43 |
-| C4.5 | 20 | GPU only | 10 | 5.10 | 5.04 | 42,915 | 0.89 (17) | 3.56 (70) | 0.00 (0) | 0.00 (0) | 0.09 (2) | 0.56 (11) | 0 |
-| C4.5 | 25 | hybrid | 10 | 5.02 | 4.94 | 84,917 | 1.01 (20) | 0.77 (15) | 2.57 (51) | 0.37 (7) | 0.26 (5) | 0.04 (1) | 76 |
-| C4.5 | 25 | GPU only | 10 | 6.96 | 6.91 | 84,917 | 0.88 (13) | 4.80 (69) | 0.00 (0) | 0.00 (0) | 0.16 (2) | 1.13 (16) | 0 |
-| C4.5 | 30 | hybrid | 10 | 5.60 | 5.55 | 123,289 | 1.01 (18) | 0.58 (10) | 3.27 (58) | 0.43 (8) | 0.28 (5) | 0.03 (1) | 104 |
-| C4.5 | 30 | GPU only | 10 | 8.72 | 8.66 | 123,289 | 0.89 (10) | 5.91 (68) | 0.00 (0) | 0.00 (0) | 0.25 (3) | 1.68 (19) | 0 |
-| C4.5 | none | hybrid | 10 | 9.67 | 9.58 | 218,325 | 1.02 (11) | 0.65 (7) | 7.13 (74) | 0.51 (5) | 0.31 (3) | 0.06 (1) | 186 |
-| C4.5 | none | GPU only | 10 | 15.46 | 15.33 | 218,325 | 0.88 (6) | 11.44 (74) | 0.00 (0) | 0.00 (0) | 0.41 (3) | 2.72 (18) | 0 |
+| CART | 5 | hybrid | 10 | 1.60 | 1.54 | 63 | 0.99 (62) | 0.58 (36) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (2) | 0 |
+| CART | 5 | GPU only | 10 | 1.45 | 1.42 | 63 | 0.84 (58) | 0.58 (40) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.02 (2) | 0 |
+| CART | 10 | hybrid | 10 | 2.43 | 2.38 | 2,047 | 0.99 (41) | 1.22 (50) | 0.15 (6) | 0.00 (0) | 0.02 (1) | 0.04 (2) | 2 |
+| CART | 10 | GPU only | 10 | 2.29 | 2.26 | 2,047 | 0.85 (37) | 1.39 (60) | 0.00 (0) | 0.00 (0) | 0.01 (0) | 0.05 (2) | 0 |
+| CART | 15 | hybrid | 10 | 3.80 | 3.75 | 44,359 | 0.99 (26) | 1.06 (28) | 0.91 (24) | 0.52 (14) | 0.30 (8) | 0.03 (1) | 47 |
+| CART | 15 | GPU only | 10 | 3.98 | 3.96 | 44,359 | 0.86 (21) | 2.68 (67) | 0.00 (0) | 0.00 (0) | 0.07 (2) | 0.39 (10) | 0 |
+| CART | 20 | hybrid | 10 | 5.03 | 4.97 | 168,241 | 0.99 (20) | 0.99 (20) | 1.46 (29) | 1.26 (25) | 0.30 (6) | 0.03 (1) | 90 |
+| CART | 20 | GPU only | 10 | 6.14 | 6.08 | 168,241 | 0.86 (14) | 4.20 (68) | 0.00 (0) | 0.00 (0) | 0.22 (4) | 0.87 (14) | 0 |
+| CART | 25 | hybrid | 10 | 5.92 | 5.87 | 231,991 | 0.99 (17) | 0.99 (17) | 1.92 (32) | 1.69 (28) | 0.30 (5) | 0.04 (1) | 118 |
+| CART | 25 | GPU only | 10 | 7.64 | 7.59 | 231,991 | 0.85 (11) | 5.29 (69) | 0.00 (0) | 0.00 (0) | 0.26 (3) | 1.24 (16) | 0 |
+| CART | 30 | hybrid | 10 | 6.56 | 6.47 | 257,021 | 0.99 (15) | 0.99 (15) | 2.36 (36) | 1.88 (29) | 0.30 (5) | 0.04 (1) | 137 |
+| CART | 30 | GPU only | 10 | 8.58 | 8.53 | 257,021 | 0.85 (10) | 6.09 (71) | 0.00 (0) | 0.00 (0) | 0.28 (3) | 1.36 (16) | 0 |
+| CART | none | hybrid | 10 | 8.20 | 8.11 | 301,939 | 0.99 (12) | 1.00 (12) | 5.04 (61) | 0.81 (10) | 0.33 (4) | 0.05 (1) | 177 |
+| CART | none | GPU only | 10 | 12.39 | 12.30 | 301,939 | 0.86 (7) | 9.47 (76) | 0.00 (0) | 0.00 (0) | 0.39 (3) | 1.68 (14) | 0 |
+| C4.5 | 5 | hybrid | 10 | 1.64 | 1.58 | 61 | 1.01 (62) | 0.60 (36) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (2) | 0 |
+| C4.5 | 5 | GPU only | 10 | 1.51 | 1.47 | 61 | 0.88 (58) | 0.60 (39) | 0.00 (0) | 0.00 (0) | 0.00 (0) | 0.03 (2) | 0 |
+| C4.5 | 10 | hybrid | 10 | 2.43 | 2.36 | 1,453 | 1.02 (42) | 1.10 (45) | 0.28 (11) | 0.00 (0) | 0.01 (0) | 0.03 (1) | 2 |
+| C4.5 | 10 | GPU only | 10 | 2.32 | 2.27 | 1,453 | 0.88 (38) | 1.39 (60) | 0.00 (0) | 0.00 (0) | 0.01 (0) | 0.05 (2) | 0 |
+| C4.5 | 15 | hybrid | 10 | 3.33 | 3.28 | 12,313 | 1.01 (30) | 0.92 (28) | 1.20 (36) | 0.02 (1) | 0.14 (4) | 0.04 (1) | 17 |
+| C4.5 | 15 | GPU only | 10 | 3.45 | 3.41 | 12,313 | 0.88 (25) | 2.37 (69) | 0.00 (0) | 0.00 (0) | 0.03 (1) | 0.17 (5) | 0 |
+| C4.5 | 20 | hybrid | 10 | 4.16 | 4.10 | 42,915 | 1.01 (24) | 0.81 (19) | 1.97 (47) | 0.14 (3) | 0.20 (5) | 0.04 (1) | 44 |
+| C4.5 | 20 | GPU only | 10 | 5.10 | 5.04 | 42,915 | 0.89 (17) | 3.57 (70) | 0.00 (0) | 0.00 (0) | 0.09 (2) | 0.56 (11) | 0 |
+| C4.5 | 25 | hybrid | 10 | 5.00 | 4.93 | 84,917 | 1.01 (20) | 0.76 (15) | 2.58 (52) | 0.39 (8) | 0.21 (4) | 0.04 (1) | 77 |
+| C4.5 | 25 | GPU only | 10 | 6.96 | 6.93 | 84,917 | 0.88 (13) | 4.80 (69) | 0.00 (0) | 0.00 (0) | 0.16 (2) | 1.13 (16) | 0 |
+| C4.5 | 30 | hybrid | 10 | 5.59 | 5.54 | 123,289 | 1.01 (18) | 0.60 (11) | 3.25 (58) | 0.47 (8) | 0.22 (4) | 0.04 (1) | 105 |
+| C4.5 | 30 | GPU only | 10 | 8.70 | 8.64 | 123,289 | 0.89 (10) | 5.91 (68) | 0.00 (0) | 0.00 (0) | 0.23 (3) | 1.68 (19) | 0 |
+| C4.5 | none | hybrid | 10 | 9.68 | 9.56 | 218,325 | 1.01 (10) | 0.66 (7) | 7.12 (74) | 0.57 (6) | 0.25 (3) | 0.07 (1) | 187 |
+| C4.5 | none | GPU only | 10 | 15.48 | 15.38 | 218,325 | 0.89 (6) | 11.44 (74) | 0.00 (0) | 0.00 (0) | 0.41 (3) | 2.74 (18) | 0 |
 
 ## --handoff-rows: the sweep
 

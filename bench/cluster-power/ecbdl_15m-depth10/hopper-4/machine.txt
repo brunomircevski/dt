@@ -1,0 +1,44 @@
+job 793 on hopper, 2026-11-23T14:29:20+01:00, kind all
+commit 7f98876f7e2a
+data bench/tools/data/ecbdl/train.f32 (first 15000000 rows), reps 3 simple=10 serial=10, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 2 s, algos cart c45, impls gpuonly cuda
+used_gpu 2 (NUMA node 1, cpus 16-31,0-15, 32 threads, first-touch memory)
+protocol -d 10
+command gpuonly env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --gpu --threads 32 --repeat-warmup 2
+command cuda env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --hybrid --threads 32 --repeat-warmup 2
+kernel 7.0.0-42-generic
+dmi Supermicro SYS-741GE-TNRT
+Model name:                              Intel(R) Xeon(R) Gold 6444Y
+Core(s) per socket:                      16
+Socket(s):                               2
+NUMA node(s):                            2
+governor intel_cpufreq schedutil
+cpus available 32
+power1_accuracy 97.500%
+power1_average 463000000
+power1_average_interval 1000
+power1_average_interval_max 3600000
+power1_average_interval_min 1000
+power1_average_max unknown
+power1_average_min unknown
+power1_is_battery 0
+power1_model_number Intel(R) Node Manager
+power1_oem_info Meter measures total domain
+power1_serial_number 
+rapl_max intel-rapl:0 package-0 262143328850
+rapl_max intel-rapl:0:0 dram 262143328850
+rapl_max intel-rapl:1 package-1 262143328850
+rapl_max intel-rapl:1:0 dram 262143328850
+psu_file 1795440560.563500770 461
+               total        used        free      shared  buff/cache   available
+Mem:            1007          15         750           2         248         992
+node 0 free: 409113 MB
+node 1 free: 359278 MB
+index, name, power.limit [W], driver_version, memory.used [MiB]
+0, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+1, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+2, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+3, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+repeat gpuonly cart 45 (warm-up train 2753.5 ms)
+repeat cuda cart 42 (warm-up train 2952.7 ms)
+repeat gpuonly c45 44 (warm-up train 2801.2 ms)
+repeat cuda c45 42 (warm-up train 2966.2 ms)

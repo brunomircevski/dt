@@ -114,8 +114,10 @@ first by those threads, all of them would be on the GPU's node, and the CPU
 subtrees on the other socket would read them remotely (SOREL 4M CART at depth
 30 15-20% slower on the H100 node). Until 2026-11-21 the whole arena's pages
 were touched on all threads in the background during the presort, so the
-copies did not fault them in; without that the hybrid is as fast (within 3% on
-every benchmark case on the H100 node) and needs 35-66% less RAM (see Memory).
+copies did not fault them in; without that the hybrid is as fast (within about
+3% on every benchmark case on the H100 node; the most, HIGGS C4.5 at depth
+25-30, +2.6-2.7%) and needs up to 67% less RAM (3% on chess 1M, 57-59% on
+HIGGS, 66-67% on MNIST8M, ECBDL'14 15M and SOREL 4M; see Memory).
 Page-locking the arena instead took the CUDA driver's lock for 1.2-1.9 s
 (sometimes 4-6 s on the H100 node) and stalled the level loop's CUDA calls.
 

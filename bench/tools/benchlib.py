@@ -570,10 +570,15 @@ def hardware_line(machine, gpu_used):
 # ampere): one GPU timing rule, an 80 GB GPU, hand-off buffers only for
 # --hybrid, and ./tree without --gpu-startup (only the CUDA context untimed,
 # 17d8b2f3; cuML and XGBoost on the GPU nodes: 0cff6d1b, as 17d8b2f3 changed
-# only ./tree); every other run: the final harness (03c4e2d2). A run on
+# only ./tree); ./tree's --gpu and --hybrid since 7f98876f (less RAM and VRAM:
+# their memory figures changed, and every case was measured again); every
+# other run (the CPU backends on the GPU nodes too): the final harness
+# (03c4e2d2; on the GPU nodes 17d8b2f3). A run on
 # dell1 is out of date too: the paper's dell is a 512 GB node (dell2-4, 8 of 16
 # memory channels); dell1 has 1 TB and every channel, 1.8x the bandwidth.
-FINAL_SINCE = {"cpu": "03c4e2d2", "gpu": "17d8b2f3", "gpulibs": "7c39d6a3"}
+FINAL_SINCE = {"cpu": "03c4e2d2", "gpuhost": "17d8b2f3", "gpu": "7f98876f", "gpulibs": "7c39d6a3"}
+# ./tree's GPU backends, as results (run.py) and power jobs (analyze.py) name them
+GPU_TREE_IMPLS = ("tree_cuda", "tree_gpu_only", "cuda", "gpuonly")
 GPU_LIBRARIES = ("cuml", "xgboost")
 FIXED_GPU = {"hopper": "2", "ampere": "0"}  # each GPU node's GPU (job.sh); another one is out of date
 GPU_HOSTS = ("hopper", "ampere")
@@ -581,7 +586,7 @@ RETIRED_HOSTS = ("dell1",)
 # --simple's code (simple_grower.cpp, split_rules) has not changed since 2026-11-02:
 # its runs from then on (some recorded without a commit) are current, except on dell1.
 SIMPLE_SINCE = "2026-11-02"
-OUT_OF_DATE_NOTE = (f"faded, ⚠ out of date: measured before the final protocol (./tree's GPU runs before {FINAL_SINCE['gpu']}, cuML/XGBoost before {FINAL_SINCE['gpulibs']}, "
+OUT_OF_DATE_NOTE = (f"faded, ⚠ out of date: measured before the final protocol (./tree's --gpu/--hybrid runs before {FINAL_SINCE['gpu']}, other runs on the GPU nodes before {FINAL_SINCE['gpuhost']}, cuML/XGBoost before {FINAL_SINCE['gpulibs']}, "
                     f"CPU runs before {FINAL_SINCE['cpu']}, --simple's code unchanged since {SIMPLE_SINCE}) or on dell1 (1 TB; the final dell is a 512 GB node); "
                     "a placeholder until the rerun")
 
@@ -607,7 +612,8 @@ def out_of_date(commit, host, impl=None, gpu_index=None):
         return True
     if impl == "tree_simple":  # its code is unchanged since SIMPLE_SINCE: older runs stand
         return False
-    kind = "cpu" if node not in GPU_HOSTS else "gpulibs" if impl in GPU_LIBRARIES else "gpu"
+    kind = ("cpu" if node not in GPU_HOSTS else "gpulibs" if impl in GPU_LIBRARIES
+            else "gpu" if impl in GPU_TREE_IMPLS else "gpuhost")  # impl unknown: the older rule
     return not commit or not _built_on(commit, FINAL_SINCE[kind])
 
 

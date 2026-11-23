@@ -1,20 +1,20 @@
-C4.5 on /dev/shm/power-bench-561/train.f32 (backend multicore)
+C4.5 on /dev/shm/power-bench-792/train.f32 (backend multicore)
   rows 8100000 train, 784 features, 10 classes
   pruning off
-  repeat 1/5: train 34453.9 ms, unix 1795218865.209009 1795218899.664341
-  repeat 2/5: train 34348.3 ms, unix 1795218899.866234 1795218934.216336
-  repeat 3/5: train 34028.4 ms, unix 1795218934.434764 1795218968.465179
-  repeat 4/5: train 34263.1 ms, unix 1795218968.669830 1795219002.935401
-  repeat 5/5: train 34547.1 ms, unix 1795219003.136912 1795219037.686145
+  repeat 1/5: train 34191.8 ms, unix 1795436157.346011 1795436191.541672
+  repeat 2/5: train 34377.3 ms, unix 1795436191.742031 1795436226.122161
+  repeat 3/5: train 34251.1 ms, unix 1795436226.322337 1795436260.574876
+  repeat 4/5: train 34221.9 ms, unix 1795436260.737648 1795436294.962504
+  repeat 5/5: train 34171.3 ms, unix 1795436295.130177 1795436329.303071
 Tree:
   nodes 218325, leaves 109163, depth 147
   train accuracy 99.6117%
 Timings:
-  load                   930.3 ms
-  presort               1959.5 ms
-  build                32578.5 ms
-  prune                    9.1 ms
-  train total          34547.1 ms
-  evaluate               398.5 ms
+  load                   987.3 ms
+  presort               1984.4 ms
+  build                32177.5 ms
+  prune                    9.5 ms
+  train total          34171.3 ms
+  evaluate               387.2 ms
 Memory:
-  peak after training 76629476 KiB
+  peak after training 76627496 KiB

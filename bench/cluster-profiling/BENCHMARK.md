@@ -1,8 +1,8 @@
 # Profiling: where CART and C4.5 spend their growing time
 
-**Status:** rerun on 2026-11-19/20 at 81bf6e6c (the same tree code as the final runs of 2026-11-17; the hash in `machine.json` and on the chart), by `bench/tools/cluster/final.sh`, 10 runs a case. The CUDA runs time ./tree's GPU setup (memory pool, staging buffers, and for `--hybrid` its hand-off buffers): only the bare CUDA context is untimed ([bench/tools/README.md](../tools/README.md#how-time-is-measured)). The runs before (f53347a9, 2026-11-15/16, 5 runs a case, on epyc1, dell1 and hopper, with Airline, whose data is gone) are in git at 84b4c67e; the ones before them (ec77727, 2026-10-29/30, 30 or 10 runs) at 1e655067.
+**Status:** the CPU runs on 2026-11-19/20 at 81bf6e6c (the same tree code as the final runs of 2026-11-17), the CUDA runs again on 2026-11-23 at 7f98876f (less RAM for `--hybrid` and less VRAM for `--gpu`, the same trees; hopper job 791); the hash is in `machine.json` and on the chart. All by `bench/tools/cluster/final.sh`, 10 runs a case. The CUDA runs time ./tree's GPU setup (memory pool, staging buffers, and for `--hybrid` its hand-off buffers): only the bare CUDA context is untimed ([bench/tools/README.md](../tools/README.md#how-time-is-measured)). hopper's 81bf6e6c runs are in git at 2c9ff876. The runs before (f53347a9, 2026-11-15/16, 5 runs a case, on epyc1, dell1 and hopper, with Airline, whose data is gone) are in git at 84b4c67e; the ones before them (ec77727, 2026-10-29/30, 30 or 10 runs) at 1e655067.
 - **Machines:**
-  - CUDA: hopper: H100 PCIe (GPU 2) and every CPU of the node (32 threads, the GPU's socket first, memory first-touch), as in the test-set benchmarks.
+  - CUDA: hopper: H100 PCIe (GPU 2) and every CPU of the node (32 threads, the GPU's socket first, memory first-touch but for the hybrid's hand-off buffer, interleaved over both sockets), as in the test-set benchmarks.
   - Multicore: epyc2 and dell2 (a 512 GB node), 48 threads each (2× EPYC 9255, 2× Xeon Gold 6542Y).
 - **Repetition:** every case ran 10 times profiled (`./tree --profile FILE`) and 10 times without (`plain/`), in two jobs on the same node, one after the other. The chart and table use the average of the profiled runs (the time and every step); `without --profile s` is the average of the plain runs. The chart's footnote gives the runs.
 - **Chess only:** `chart-chess.png` is the same chart with the chess sets alone.
@@ -29,7 +29,7 @@ bench/tools/.venv/bin/python bench/tools/profile_share_chart.py $d --chess --out
 - `higgs`: 10.5M rows × 28.
 - `ecbdl_15m`: the 15M-row ECBDL'14 sample, 631 features.
 
-**Memory:** chess 2000M fits everywhere. On hopper it uses about 54 GB of the H100's 80 GB and about 53 GB of RAM. On epyc it uses about 87 GB of 512 GB.
+**Memory:** chess 2000M fits everywhere. On hopper it uses about 53–54 GB of the H100's 80 GB and about 21 GB of RAM in both modes (the hybrid took 53 GB of RAM before 7f98876f). On epyc it uses about 87 GB of 512 GB.
 
 **Protocols:**
 - **CART** = `cart_depth10`: `--cart -d 10` (Gini).
@@ -90,44 +90,44 @@ In hybrid mode, CPU subtree growth that hides behind the GPU is therefore not co
 | Multicore (CPU only), dell | C4.5 | chess 2000M | 10 | 10.26 | 10.36 | 100.00 | 17 | 4 | 34.6 | 13.2 | 42.9 | 0.0 | 9.3 | 0.0 |
 | Multicore (CPU only), dell | C4.5 | HIGGS | 10 | 0.75 | 0.78 | 63.76 | 935 | 10 | 31.0 | 18.9 | 48.0 | 0.0 | 2.0 | 0.0 |
 | Multicore (CPU only), dell | C4.5 | ECBDL'14 15M | 10 | 13.18 | 13.14 | 97.92 | 725 | 10 | 32.6 | 9.9 | 57.3 | 0.0 | 0.2 | 0.0 |
-| Hybrid (--hybrid) | CART | chess 10M | 10 | 0.23 | 0.23 | 100.00 | 17 | 4 | 0.5 | 0.8 | 0.6 | 5.0 | 93.1 | 1.9 |
-| Hybrid (--hybrid) | CART | chess 50M | 10 | 0.26 | 0.25 | 100.00 | 17 | 4 | 2.0 | 0.9 | 2.2 | 8.8 | 86.0 | 5.2 |
-| Hybrid (--hybrid) | CART | chess 100M | 10 | 0.27 | 0.27 | 100.00 | 17 | 4 | 3.8 | 1.4 | 4.3 | 12.1 | 78.4 | 9.4 |
-| Hybrid (--hybrid) | CART | chess 500M | 10 | 0.50 | 0.50 | 100.00 | 17 | 4 | 10.2 | 3.2 | 24.4 | 22.3 | 39.9 | 37.8 |
-| Hybrid (--hybrid) | CART | chess 1000M | 10 | 0.86 | 0.84 | 100.00 | 17 | 4 | 12.0 | 3.6 | 36.6 | 25.0 | 22.8 | 52.2 |
-| Hybrid (--hybrid) | CART | chess 2000M | 10 | 1.62 | 1.62 | 100.00 | 17 | 4 | 12.7 | 3.9 | 44.3 | 27.4 | 11.7 | 60.9 |
-| Hybrid (--hybrid) | CART | HIGGS | 10 | 0.33 | 0.33 | 70.63 | 2,029 | 10 | 5.7 | 2.9 | 14.9 | 9.7 | 66.7 | 23.5 |
-| Hybrid (--hybrid) | CART | ECBDL'14 15M | 10 | 2.99 | 2.94 | 97.92 | 1,863 | 10 | 18.9 | 6.9 | 48.5 | 16.9 | 8.9 | 74.3 |
-| Hybrid (--hybrid) | C4.5 | chess 10M | 10 | 0.24 | 0.23 | 100.00 | 17 | 4 | 0.6 | 0.8 | 0.6 | 5.7 | 92.4 | 1.9 |
-| Hybrid (--hybrid) | C4.5 | chess 50M | 10 | 0.25 | 0.26 | 100.00 | 17 | 4 | 2.3 | 1.1 | 2.2 | 8.9 | 85.4 | 5.7 |
-| Hybrid (--hybrid) | C4.5 | chess 100M | 10 | 0.28 | 0.27 | 100.00 | 17 | 4 | 4.1 | 1.5 | 4.1 | 12.9 | 77.4 | 9.7 |
-| Hybrid (--hybrid) | C4.5 | chess 500M | 10 | 0.53 | 0.52 | 100.00 | 17 | 4 | 10.9 | 3.3 | 23.1 | 25.1 | 37.7 | 37.3 |
-| Hybrid (--hybrid) | C4.5 | chess 1000M | 10 | 0.91 | 0.89 | 100.00 | 17 | 4 | 12.7 | 3.5 | 34.4 | 27.4 | 22.0 | 50.6 |
-| Hybrid (--hybrid) | C4.5 | chess 2000M | 10 | 1.72 | 1.71 | 100.00 | 17 | 4 | 13.5 | 3.8 | 41.8 | 30.1 | 10.8 | 59.1 |
-| Hybrid (--hybrid) | C4.5 | HIGGS | 10 | 0.36 | 0.35 | 63.76 | 935 | 10 | 6.1 | 7.1 | 14.1 | 9.5 | 63.2 | 27.2 |
-| Hybrid (--hybrid) | C4.5 | ECBDL'14 15M | 10 | 3.05 | 2.98 | 97.92 | 725 | 10 | 21.5 | 6.6 | 48.5 | 14.6 | 8.8 | 76.6 |
-| GPU (--gpu) | CART | chess 10M | 10 | 0.13 | 0.12 | 100.00 | 17 | 4 | 1.0 | 1.1 | 1.0 | 7.2 | 89.7 | 3.1 |
-| GPU (--gpu) | CART | chess 50M | 10 | 0.15 | 0.14 | 100.00 | 17 | 4 | 3.4 | 1.5 | 3.7 | 13.2 | 78.2 | 8.6 |
-| GPU (--gpu) | CART | chess 100M | 10 | 0.17 | 0.17 | 100.00 | 17 | 4 | 5.9 | 2.1 | 6.7 | 16.7 | 68.5 | 14.8 |
-| GPU (--gpu) | CART | chess 500M | 10 | 0.38 | 0.37 | 100.00 | 17 | 4 | 13.5 | 4.2 | 32.1 | 26.2 | 24.0 | 49.8 |
-| GPU (--gpu) | CART | chess 1000M | 10 | 0.75 | 0.71 | 100.00 | 17 | 4 | 13.6 | 4.1 | 41.7 | 28.1 | 12.5 | 59.4 |
-| GPU (--gpu) | CART | chess 2000M | 10 | 1.54 | 1.45 | 100.00 | 17 | 4 | 13.4 | 4.1 | 46.7 | 29.9 | 5.9 | 64.2 |
-| GPU (--gpu) | CART | HIGGS | 10 | 0.23 | 0.20 | 70.63 | 2,029 | 10 | 8.1 | 4.3 | 21.9 | 13.4 | 52.4 | 34.2 |
-| GPU (--gpu) | CART | ECBDL'14 15M | 10 | 2.89 | 2.85 | 97.92 | 1,863 | 10 | 19.5 | 7.3 | 50.4 | 16.9 | 5.9 | 77.2 |
-| GPU (--gpu) | C4.5 | chess 10M | 10 | 0.13 | 0.12 | 100.00 | 17 | 4 | 1.1 | 1.3 | 1.0 | 7.7 | 88.9 | 3.4 |
-| GPU (--gpu) | C4.5 | chess 50M | 10 | 0.15 | 0.15 | 100.00 | 17 | 4 | 3.9 | 1.8 | 3.7 | 13.4 | 77.1 | 9.5 |
-| GPU (--gpu) | C4.5 | chess 100M | 10 | 0.18 | 0.17 | 100.00 | 17 | 4 | 6.5 | 2.3 | 6.5 | 19.1 | 65.6 | 15.3 |
-| GPU (--gpu) | C4.5 | chess 500M | 10 | 0.40 | 0.40 | 100.00 | 17 | 4 | 14.3 | 4.3 | 30.3 | 28.9 | 22.1 | 48.9 |
-| GPU (--gpu) | C4.5 | chess 1000M | 10 | 0.80 | 0.76 | 100.00 | 17 | 4 | 14.5 | 3.9 | 39.3 | 30.6 | 11.7 | 57.7 |
-| GPU (--gpu) | C4.5 | chess 2000M | 10 | 1.62 | 1.58 | 100.00 | 17 | 4 | 14.4 | 4.0 | 44.3 | 31.8 | 5.6 | 62.7 |
-| GPU (--gpu) | C4.5 | HIGGS | 10 | 0.25 | 0.23 | 63.76 | 935 | 10 | 8.7 | 10.2 | 20.3 | 12.1 | 48.6 | 39.3 |
-| GPU (--gpu) | C4.5 | ECBDL'14 15M | 10 | 2.93 | 2.87 | 97.92 | 725 | 10 | 22.4 | 7.0 | 50.7 | 14.1 | 5.8 | 80.0 |
+| Hybrid (--hybrid) | CART | chess 10M | 10 | 0.23 | 0.23 | 100.00 | 17 | 4 | 0.5 | 0.7 | 0.6 | 3.7 | 94.4 | 1.8 |
+| Hybrid (--hybrid) | CART | chess 50M | 10 | 0.25 | 0.25 | 100.00 | 17 | 4 | 2.1 | 0.9 | 2.3 | 7.2 | 87.6 | 5.2 |
+| Hybrid (--hybrid) | CART | chess 100M | 10 | 0.28 | 0.27 | 100.00 | 17 | 4 | 3.7 | 1.3 | 4.2 | 10.6 | 80.3 | 9.2 |
+| Hybrid (--hybrid) | CART | chess 500M | 10 | 0.51 | 0.50 | 100.00 | 17 | 4 | 10.1 | 3.1 | 24.1 | 21.6 | 41.0 | 37.4 |
+| Hybrid (--hybrid) | CART | chess 1000M | 10 | 0.86 | 0.84 | 100.00 | 17 | 4 | 12.0 | 3.6 | 36.7 | 24.0 | 23.7 | 52.3 |
+| Hybrid (--hybrid) | CART | chess 2000M | 10 | 1.61 | 1.58 | 100.00 | 17 | 4 | 12.8 | 3.9 | 44.5 | 26.8 | 12.0 | 61.2 |
+| Hybrid (--hybrid) | CART | HIGGS | 10 | 0.34 | 0.32 | 70.63 | 2,029 | 10 | 5.6 | 2.9 | 14.8 | 8.6 | 68.0 | 23.3 |
+| Hybrid (--hybrid) | CART | ECBDL'14 15M | 10 | 2.99 | 2.94 | 97.92 | 1,863 | 10 | 19.0 | 7.0 | 48.5 | 16.4 | 9.1 | 74.3 |
+| Hybrid (--hybrid) | C4.5 | chess 10M | 10 | 0.23 | 0.22 | 100.00 | 17 | 4 | 0.6 | 0.8 | 0.6 | 4.4 | 93.7 | 1.9 |
+| Hybrid (--hybrid) | C4.5 | chess 50M | 10 | 0.25 | 0.25 | 100.00 | 17 | 4 | 2.3 | 1.1 | 2.3 | 7.7 | 86.6 | 5.7 |
+| Hybrid (--hybrid) | C4.5 | chess 100M | 10 | 0.28 | 0.27 | 100.00 | 17 | 4 | 4.1 | 1.5 | 4.1 | 10.9 | 79.5 | 9.6 |
+| Hybrid (--hybrid) | C4.5 | chess 500M | 10 | 0.53 | 0.52 | 100.00 | 17 | 4 | 10.9 | 3.3 | 23.0 | 24.6 | 38.3 | 37.1 |
+| Hybrid (--hybrid) | C4.5 | chess 1000M | 10 | 0.91 | 0.89 | 100.00 | 17 | 4 | 12.7 | 3.5 | 34.5 | 26.6 | 22.7 | 50.7 |
+| Hybrid (--hybrid) | C4.5 | chess 2000M | 10 | 1.69 | 1.69 | 100.00 | 17 | 4 | 13.7 | 3.8 | 42.4 | 28.7 | 11.4 | 59.9 |
+| Hybrid (--hybrid) | C4.5 | HIGGS | 10 | 0.36 | 0.35 | 63.76 | 935 | 10 | 6.1 | 7.0 | 14.0 | 8.6 | 64.3 | 27.1 |
+| Hybrid (--hybrid) | C4.5 | ECBDL'14 15M | 10 | 3.04 | 2.97 | 97.92 | 725 | 10 | 21.6 | 6.6 | 48.6 | 14.1 | 9.1 | 76.8 |
+| GPU (--gpu) | CART | chess 10M | 10 | 0.13 | 0.12 | 100.00 | 17 | 4 | 0.9 | 1.2 | 1.0 | 8.4 | 88.5 | 3.1 |
+| GPU (--gpu) | CART | chess 50M | 10 | 0.15 | 0.14 | 100.00 | 17 | 4 | 3.5 | 1.5 | 3.8 | 12.4 | 78.8 | 8.8 |
+| GPU (--gpu) | CART | chess 100M | 10 | 0.17 | 0.17 | 100.00 | 17 | 4 | 6.1 | 2.2 | 6.8 | 16.6 | 68.4 | 15.1 |
+| GPU (--gpu) | CART | chess 500M | 10 | 0.40 | 0.39 | 100.00 | 17 | 4 | 12.9 | 4.0 | 30.7 | 27.5 | 24.9 | 47.6 |
+| GPU (--gpu) | CART | chess 1000M | 10 | 0.72 | 0.71 | 100.00 | 17 | 4 | 14.2 | 4.3 | 43.5 | 25.2 | 12.8 | 62.0 |
+| GPU (--gpu) | CART | chess 2000M | 10 | 1.55 | 1.52 | 100.00 | 17 | 4 | 13.3 | 4.0 | 46.3 | 30.2 | 6.1 | 63.7 |
+| GPU (--gpu) | CART | HIGGS | 10 | 0.22 | 0.21 | 70.63 | 2,029 | 10 | 8.2 | 4.3 | 22.0 | 13.1 | 52.4 | 34.5 |
+| GPU (--gpu) | CART | ECBDL'14 15M | 10 | 2.90 | 2.83 | 97.92 | 1,863 | 10 | 19.5 | 7.3 | 50.3 | 16.9 | 6.0 | 77.1 |
+| GPU (--gpu) | C4.5 | chess 10M | 10 | 0.13 | 0.12 | 100.00 | 17 | 4 | 1.0 | 1.3 | 1.0 | 8.9 | 87.7 | 3.4 |
+| GPU (--gpu) | C4.5 | chess 50M | 10 | 0.16 | 0.14 | 100.00 | 17 | 4 | 3.7 | 1.8 | 3.5 | 12.2 | 78.8 | 9.0 |
+| GPU (--gpu) | C4.5 | chess 100M | 10 | 0.17 | 0.17 | 100.00 | 17 | 4 | 6.6 | 2.4 | 6.5 | 18.1 | 66.4 | 15.5 |
+| GPU (--gpu) | C4.5 | chess 500M | 10 | 0.42 | 0.42 | 100.00 | 17 | 4 | 13.7 | 4.1 | 28.9 | 30.7 | 22.6 | 46.6 |
+| GPU (--gpu) | C4.5 | chess 1000M | 10 | 0.77 | 0.77 | 100.00 | 17 | 4 | 15.0 | 4.1 | 40.8 | 28.3 | 11.8 | 59.9 |
+| GPU (--gpu) | C4.5 | chess 2000M | 10 | 1.60 | 1.61 | 100.00 | 17 | 4 | 14.5 | 4.0 | 44.8 | 30.6 | 6.1 | 63.3 |
+| GPU (--gpu) | C4.5 | HIGGS | 10 | 0.25 | 0.23 | 63.76 | 935 | 10 | 8.5 | 10.0 | 19.9 | 12.5 | 49.1 | 38.4 |
+| GPU (--gpu) | C4.5 | ECBDL'14 15M | 10 | 2.94 | 2.86 | 97.92 | 725 | 10 | 22.4 | 7.0 | 50.5 | 14.0 | 6.0 | 79.9 |
 
 `runs` is the number of profiled runs; each row shows their average. `without --profile s` is the average of the plain runs (`plain/`). GPU share is the share of segments that ran on the GPU.
 
 **Run-to-run noise and profiling overhead.**
 - **The CPU runs above 0.5 s:** profiled and plain averages agree within ±5%; C4.5 on chess 500M–2000M has two speeds from run to run, in profiled and plain runs alike ([below](#c45-on-big-chess-two-speeds)).
-- **hopper:** within ±3%, except GPU only on chess 1000M–2000M, where the profiled runs take 5–6% longer (1.54 against 1.45 s for CART at 2000M; the trace costs more there).
+- **hopper:** within ±3%.
 - **Small runs (≤ 0.4 s):** they differ by up to 0.05 s.
 
 ## Findings
@@ -136,16 +136,16 @@ In hybrid mode, CPU subtree growth that hides behind the GPU is therefore not co
   - Split search takes 10–25% on epyc, the most on HIGGS (25%); 10–24% on dell.
   - Presort is 29–37% on epyc's chess sets, 29–31% on HIGGS; on dell's chess sets up to 100M it is the largest step (37–46%), from 500M on partition (36–49%).
   - Other stays under 16%, under 3% outside chess; the most is C4.5 on chess on epyc (10–15%), with its two-speed build.
-- **The GPU's work is mostly partition and transfer, once the set is big.** On hopper, chess 500M–2000M and the non-chess sets spend 14–51% on partition and 10–32% on transfer. The GPU's share of the time grows with size: 2–3% at chess 10M, 37–50% at 500M, 59–64% at 2000M, and 74–80% on ECBDL.
-- **Small runs are fixed cost.** CUDA chess 10M–100M take 0.13–0.18 s with `--gpu` and 0.23–0.28 s with `--hybrid`: 66–93% of that is other (the timed GPU setup: memory pool, staging and hand-off buffers; launches) and 5–19% transfer.
+- **The GPU's work is mostly partition and transfer, once the set is big.** On hopper, chess 500M–2000M and the non-chess sets spend 14–51% on partition and 9–31% on transfer. The GPU's share of the time grows with size: 2–3% at chess 10M, 37–48% at 500M, 60–64% at 2000M, and 74–80% on ECBDL.
+- **Small runs are fixed cost.** CUDA chess 10M–100M take 0.13–0.17 s with `--gpu` and 0.23–0.28 s with `--hybrid`: 66–94% of that is other (the timed GPU setup: memory pool, staging and hand-off buffers; launches) and 4–18% transfer.
 - **Time scales linearly with chess size.**
   - CART on epyc: 0.86 s at 500M, 1.65 s at 1000M, 3.44 s at 2000M (f53347a9: 0.80, 1.54, 3.25 s; ec77727: 2.20, 4.44, 9.10 s).
-  - CART on hopper, GPU only: 0.38, 0.75 and 1.54 s; hybrid 0.50, 0.86 and 1.62 s (f53347a9, setup untimed: hybrid 0.28, 0.62 and 1.31 s).
+  - CART on hopper, GPU only: 0.40, 0.72 and 1.55 s; hybrid 0.51, 0.86 and 1.61 s (f53347a9, setup untimed: hybrid 0.28, 0.62 and 1.31 s).
   - So the H100 is 2.2× faster than epyc for CART on chess 2000M (GPU only; hybrid 2.1×) and 2.4× for C4.5 (hybrid 2.3×). Before the timing rule it was 2.5× and 2.9×.
-  - On HIGGS GPU only is 1.4× faster than epyc and hybrid as fast; on ECBDL both 1.5–1.6×.
+  - On HIGGS GPU only is 1.4–1.5× faster than epyc and hybrid as fast; on ECBDL both 1.5–1.6×.
 - **dell2 takes 2.3–2.8× epyc's time** at 48 threads from chess 500M on and on ECBDL (chess 2000M CART 9.05 s against 3.44 s, C4.5 10.26 s against 3.91 s; ECBDL 11.11 s against 4.45 s), 1.9–2.1× on HIGGS and 1.1–1.8× on chess 10M–100M. dell1, with twice the memory channels, took 1.6–2.5×.
-- **`--gpu` is faster than hybrid on these trees,** most where the run is short: 1.6–1.9× on chess 10M–100M and 1.4× on HIGGS, 1.05–1.06× on chess 2000M, 1.03–1.04× on ECBDL. Hybrid's setup also makes its page-locked hand-off buffers, about 0.1 s, which these trees barely use. Before the timing rule the two took the same time (within 3%).
-- **C4.5 costs about the same as CART on the GPU** (within 9%, the most on HIGGS). On epyc, C4.5 is 13–21% slower on chess 100M–2000M, 9% on HIGGS and 6% on ECBDL.
+- **`--gpu` is faster than hybrid on these trees,** most where the run is short: 1.6–1.8× on chess 10M–100M and 1.4–1.5× on HIGGS, 1.04–1.06× on chess 2000M, 1.03× on ECBDL. Hybrid's setup also makes its page-locked hand-off buffers, about 0.1 s, which these trees barely use. Before the timing rule the two took the same time (within 3%).
+- **C4.5 costs about the same as CART on the GPU** (within 11%, the most on HIGGS). On epyc, C4.5 is 13–21% slower on chess 100M–2000M, 9% on HIGGS and 6% on ECBDL.
 - **The trees differ by algorithm.**
   - On chess, both reach 100% at depth 4 (17 nodes), well before depth 10.
   - On the other sets, C4.5's trees are half the size or smaller: HIGGS 935 nodes against 2,029, ECBDL 725 against 1,863. Its training accuracy is lower on HIGGS (63.8% against 70.6%) and equal on ECBDL (97.92%).
