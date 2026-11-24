@@ -3,7 +3,7 @@
 dataset, ./tree on every node, trained on the training set and scored on the
 test set. One panel per algorithm (CART, C4.5; depth <= 10, no pruning), one
 bar per run (node and backend), on a log scale, the bars grouped by backend (--simple,
---serial, parallel on one socket, on both, CUDA hybrid, GPU only), the nodes under each. Tall panels go
+--serial, parallel on both sockets, CUDA hybrid, GPU only), the nodes under each. Tall panels go
 side by side, sharing the bars' labels. A bar is the mean training time
 of its runs, a whisker from the fastest to the slowest. Next to each bar:
 the mean time, the number of runs, and peak RAM (and VRAM
@@ -54,11 +54,11 @@ PROTOCOLS = list(PANELS)
 COLORS = {**COLORS, "simple": "#d14f8e"}
 # Run directories are <backend>-<machine>-<dataset>.
 BACKENDS = {"cuda": ("cuda", "CUDA hybrid"), "gpuonly": ("gpu_only", "CUDA, GPU only"),
-            "cpu": ("parallel", "Parallel, both sockets"), "socket": ("socket", "Parallel, one socket"),
+            "cpu": ("parallel", "Parallel, both sockets"),
             "serial": ("serial", "--serial, one thread"),
             "simple": ("simple", "--simple, one thread")}
 WARN = "#c0392b"
-GROUPS = ["simple", "serial", "socket", "cpu", "cuda", "gpuonly"]  # the backends, top to bottom
+GROUPS = ["simple", "serial", "cpu", "cuda", "gpuonly"]  # the backends, top to bottom
 NODES = ["epyc", "dell", "dell512", "hopper", "ampere"]  # the nodes in each
 GAP = 0.6  # the room of a backend's heading, in bars
 BAR = 0.42  # inches a bar takes (its slot)

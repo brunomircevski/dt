@@ -1,3 +1,0 @@
-{
-  "socket-epyc-sorel": "not run: one socket's 256 GB is too little (needs 340-370 GiB)"
-}
