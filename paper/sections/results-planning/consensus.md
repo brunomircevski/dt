@@ -1,7 +1,7 @@
 # Section 5 (Results) — panel consensus after Round 2
 
 Panel: GPT-5.6 Sol (`round2-gptsol.md`), Gemini 4 Neon (`round2-gemini.md`), Claude Opus 5.5 (`round2-opus.md`). Round 1 plans: `plan-*.md`.
-Status: **awaiting author decisions D1–D10 below**, then approval; no prose written.
+Status: **final layout (v2, 2026-11-24) at the end of this file, awaiting approval**; no prose written. The panel sections below are history.
 
 Page estimates: gptsol 5.5, opus 5.6, gemini 5.8 LNCS pages (≈ 3.9–4.0 pages of floats).
 
@@ -79,15 +79,60 @@ Smaller open questions raised by panelists:
 
 ## Author decisions (2026-11-24)
 
-- Missing data: placeholders, visibly marked (`\tbd` in tables, a "PLACEHOLDER" watermark/hatch on chart elements).
-- Text fixes done (uncommitted): abstract "scales up to 40× across 48 CPU cores" → Multicore up to 40× faster than Serial Optimized; intro library ratios from one job: scikit-learn 8.8–27×, J48 103–147× (abstract 147×); energy 662 → 661 W.
-- Accuracy (pruned and binned-vs-exact) goes to a separate accuracy part, prepared in another session; Section 5 timing parts carry no accuracy columns.
-- D1: Fig. 5 shows only our implementations (no library bars). Dell/A100 ticks + step braces stay.
+- Missing data: placeholders, visibly marked (`\tbd` in tables; a "PLACEHOLDER" hatch/watermark on chart elements).
+- Text fixes committed (5fafbd5c): Multicore up to 40× faster than Serial Optimized; library ratios from one job (scikit-learn 8.8–27×, J48 103–147×); 661 W.
+- Units: GiB everywhere (Table 1, hardware table, §3, captions; 5fafbd5c). §4.1 now says the GPU code needs about twice the training set in VRAM, which is why full ECBDL'14/SOREL-20M are CPU-only.
+- GPU libraries (cuML, XGBoost) on **hopper only**; §4.2 says so (5fafbd5c). No ampere library runs.
+- D1: Fig. 5 shows only our implementations; **per-bar numbers kept; no dell/A100 ticks, no step braces; chess 1B added**.
 - D2: no hardware ratio row.
-- D3: GPU-library timeline must be flat (little vertical space).
+- D3: GPU-library timeline flat (little vertical space).
 - D4: HIGGS depth-30 library numbers in no table; at most on a chart.
+- D5: accuracy is its own subsection: comparison with the libraries at depths 5, 10, 15, 20 on a few datasets; benchmark designed in another session; placeholder until then. Timing parts carry no accuracy.
 - D6: orchestrator decides, compact.
 - D7: chess drawn like the existing profiling chart (`test-profile.pdf`: horizontal 100 % bars, totals at right, ▼ GPU-busy).
 - D8: merge scaling + chess only if it fits better.
-- D9: units must match Sections 1–4 and no value may exceed the GPU's 80 → proposal pending.
-- D10: re-sweep needed; prompt for the mordor agent in `MORDOR-PROMPT-HANDOFF-RESWEEP.md`.
+- D10: hand-off re-sweep for depths 15–30 on the final build; prompt `MORDOR-PROMPT-HANDOFF-RESWEEP.md` (pushed 5fafbd5c). Depth-30 / no-limit Hybrid numbers are placeholders until it reports.
+- RAM/VRAM on a chart: thin bars next to time bars, one dataset is enough.
+- Figures that appear only in the paper: scripts in `paper/tools/`, output in `paper/figs/`.
+
+---
+
+## Final layout v2 (for approval)
+
+Sources: one per figure/table block. Library comparisons use the co-scheduled jobs `cluster-cpu-vs-others/vs-epyc-*` and `cluster-gpu-vs-others/one-tree/vs-hopper-*` (their ./tree rows included); everything else as in the panel section. Each new figure: one function in `paper/tools/charts.py` (or a new script there) → `paper/figs/*.pdf`.
+
+### 5.1 Training Time (≈0.8 p)
+- **Fig. 5 (`fig:test-bars`)**: our five implementations, CART row and C4.5 row, log seconds, per-bar numbers, epyc (CPU) / H100 (GPU). Groups: SUSY, HIGGS, ECBDL'14, ECBDL 15M, MNIST8M, SOREL-20M, SOREL 4M, **Chess 1B** (`cluster-chess/{cpu-epyc,cuda-hopper,gpuonly-hopper}-chess_1b`). Sole home of these numbers.
+- Text: the three steps (Simple → Optimized ×16–35, → Multicore ×14–40, → GPU ×1.1–1.7) with reasons; Hybrid slower than GPU-Based at depth 10 (hand-off buffer set-up) → lead into 5.4; one short hardware paragraph with dell/A100 ranges (no figure).
+
+### 5.2 Comparison with Existing Libraries (≈1.2 p)
+- **`tab:time-cart`, `tab:time-c45`** in the current style, but rows **HIGGS and MNIST8M only** (the other datasets are in Fig. 5): columns our implementations + scikit-learn, rpart, (cuML, XGBoost) / J48, YaDT 1t, YaDT 48t. Exact means from the co-scheduled jobs. Could merge into one table with a CART block and a C4.5 block (saves a caption).
+- **GPU-library timeline, flat** (≈3 cm): three side-by-side panels HIGGS d10 | MNIST8M d10 | HIGGS d30, four lanes each (GPU-Based, Hybrid, cuML, XGBoost), segments set-up / upload / presort-or-binning / build / Hybrid CPU work; total at lane end only for HIGGS d30 (its only home, D4). H100. Source `cluster-gpu-vs-others/one-tree/*/results.jsonl`. HIGGS d30 Hybrid = placeholder until the re-sweep.
+- **NEW: Time and memory, MNIST8M** (≈4 cm, full width): one group per tool (our five + scikit-learn, rpart, J48, YaDT 1t/48t, cuML, XGBoost), CART and C4.5 where the tool grows them. Thick bar = training time (log, left axis, no labels: the table has the numbers); two thin bars beside it = peak RAM and peak VRAM (GiB, linear, right axis, labelled), dashed lines at 80 GiB (GPU) and 512 GiB (epyc RAM). rpart: "cannot allocate" marker. Shows the memory price of presorting (Multicore 74 GiB RAM vs scikit-learn 24 GiB), VRAM ≈ 2.1× data, Hybrid host RAM ≈ data size. Source: the same vs-others jobs (`peak_rss`, `gpu_peak`); Serial Simple from `cluster-mnist8m` (caption note).
+- Text: ratios one thread vs one thread, 48 vs 48 (YaDT), GPU 2.4–2.7× cuML, 2.4–3.3× XGBoost; why (exact thresholds vs bins, presort hidden in upload).
+
+### 5.3 Accuracy (≈0.5 p, PLACEHOLDER)
+- Placed right after 5.2: same libraries, same colours/markers. Merge at the figure level: if both fit, the accuracy figure sits beside the MNIST8M time/memory figure in one figure row.
+- **PLACEHOLDER figure** `fig:accuracy`: one flat row of small panels, one per dataset (datasets \tbd), x = depth limit 5, 10, 15, 20; y = test accuracy; lines our CART, our C4.5, scikit-learn, rpart, J48, YaDT, cuML, XGBoost. Pruned/unpruned and protocol \tbd (other session). Alternative if it reads better: a small table dataset × depth.
+- Text placeholder: exact vs binned thresholds, C4.5 vs CART, effect of depth.
+
+### 5.4 Deep Trees: Where Hybrid Beats GPU-Based (≈0.8 p)
+- **`fig:depth`** (replaces `test-depth`), one flat row: three panels HIGGS, MNIST8M, SOREL 4M; x = depth limit 5, 10, 15, 20, 25, 30, ∞; y = GPU-Based ÷ Hybrid time (break-even line at 1; above = Hybrid faster); CART solid / C4.5 dashed; H100 filled / A100 hollow; absolute seconds labelled only at ∞. Fourth narrow panel: "who is working" strip for MNIST8M CART, no depth limit, H100, Hybrid vs GPU-Based (style of `test-profile`: set-up, GPU alone, GPU+CPU overlap, CPU alone, transfer). Sources `hybrid-vs-gpu-only/{cuda,gpuonly}-{hopper,ampere}-*`, `profile/*-hopper-mnist8m`. Depths 15–30 (and ∞ if `nodepth` picks change) = placeholders until the re-sweep.
+- Text: crossover depths, no-limit speed-ups on both GPUs, overlap share, SOREL's thin trees as the limit, how m was tuned (one sentence).
+
+### 5.5 Scaling in Threads and Samples (≈0.9 p)
+- **Thread scaling** (current `test-scaling`): HIGGS/MNIST8M, epyc and dell, CART solid / C4.5 dashed, ideal line, socket line, 48-thread labels.
+- **Chess profile** like `test-profile`: horizontal 100 % step-share bars per implementation × size (10M, 100M, 1B, 2B; CART), totals in seconds and ns/sample at the right, ▼ GPU-busy. Source `cluster-profiling` only.
+- Merged into one figure (scaling left, chess right) if it fits at full width without shrinking text; otherwise two figures. Decide when drawn.
+- Text: thread speed-ups (epyc 22.8/34.9×, dell 19.1/25.9×), CPU/GPU crossover ≈10⁸ rows, 2B ratios, RAM/VRAM linear in rows (one clause).
+
+### 5.6 Energy (≈0.9 p)
+- `tab:energy` kept, + block MNIST8M no depth limit (Multicore, GPU-Based, Hybrid; hopper) + E − idle column. Sole home of exact t/P/E.
+- **Fig. 6 (`fig:energy`)**, both panels, bar-end labels removed (idle share and CPU/GPU split only).
+
+Total ≈ 5.1 pages (floats ≈ 3.5 pages). Dropped/moved: as in the panel section; the "Trees, accuracy and memory" table is gone (memory → 5.2 chart, accuracy → 5.3, node counts in text).
+
+### Open points for the author
+1. Fig. 5 keeps its numbers, so the time tables keeping all seven datasets would print every number twice. v2 shrinks the tables to HIGGS/MNIST8M + libraries. OK?
+2. Memory chart on **MNIST8M** (largest set every library except rpart runs on; rpart's failure is itself a memory result) or HIGGS?
+3. Accuracy (5.3) as its own subsection after the libraries (v2), or merged into 5.2 as "Comparison with Existing Libraries: Time, Memory and Accuracy"?
