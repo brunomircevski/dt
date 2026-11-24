@@ -1,52 +1,12 @@
 %% ------------------------------------------------------------------------
 %% TEMPORARY: chart-style test section. Remove before submission.
-%% Figures: paper/figs/test-*.pdf, made by paper/tools/charts.py from bench;
+%% Figures:
 %% paper/figs/diagram-*.pdf, made by paper/tools/diagrams/*.py (schematic).
 %% ------------------------------------------------------------------------
 \newpage
 
 \section{TEMPORARY: Chart Style Tests}
 \label{sec:chart-tests}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-ladder.pdf}
-\caption{Training time of one tree (depth $\le$ 10, unpruned) through the steps of this work: \ImplSerialBase{}, \ImplSerialOpt{} and \ImplParallel{} on epyc1, then \ImplGpu{} and \ImplHybrid{} on the H100 (grey). Boxes: range of the step's speed-up over the five datasets.}
-\label{fig:test-ladder}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-scaling.pdf}
-\caption{Speed-up of \ImplParallel{} over one thread on epyc1 (left) and dell (right), depth $\le$ 10, unpruned. Labels: speed-up and parallel efficiency at 48 threads; dotted line: the second socket starts at 25 threads.}
-\label{fig:test-scaling}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-profile.pdf}
-\caption{Where the training time goes (percent of the training time; mean of the profiled runs, depth $\le$ 10, unpruned). EPYC, Xeon: \ImplParallel{} with 48 threads on epyc1 and dell; \ImplGpu{} and \ImplHybrid{} on the H100. Triangle: share of the time the GPU is busy. Chess: 3$\times$3 board, $10^9$ samples.}
-\label{fig:test-profile}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-depth.pdf}
-\caption{\ImplHybrid{} against \ImplGpu{} by depth limit on the H100 for HIGGS, MNIST8M and the SOREL-20M 4M subsample (unpruned, mean of 10 runs, all 32 CPU threads of the server; \ImplHybrid{}'s handoff threshold $m$ from the sweep: the depth-10 value up to depth 10, the value without a depth limit deeper). Numbers above the bars: how many times slower \ImplGpu{} is. Both modes grow the same trees.}
-\label{fig:test-depth}
-\end{figure}
-
-\begin{figure}
-\includegraphics[width=\textwidth]{test-bars.pdf}
-\caption{Training time of one tree (depth $\le$ 10, unpruned), log scale: mean over the runs. \ImplSerialBase{}, \ImplSerialOpt{} and \ImplParallel{} on epyc, \ImplGpu{} and \ImplHybrid{} on the H100 with all 32 CPUs of its server. No bar: no run (the full ECBDL'14 and SOREL-20M do not fit in the 80\,GiB of VRAM).}
-\label{fig:test-bars}
-\end{figure}
-
-\begin{figure}
-{\small\textbf{(a)} ECBDL'14 15M subsample, depth $\le$ 10}\par\smallskip
-\includegraphics[width=\textwidth]{test-energy.pdf}\par\bigskip
-{\small\textbf{(b)} MNIST8M, no depth limit}\par\smallskip
-\includegraphics[width=\textwidth]{test-energy-mnist8m.pdf}
-\caption{Time, power and energy to train one C4.5 tree (unpruned, mean over the runs). (a)~CPU implementations on epyc, GPU ones on the H100 server; time and energy on log scales. (b)~All on the H100 server; linear scales. Lighter shade: the idle server's share; hatched: the CPU packages.}
-\label{fig:energy}
-\label{fig:energy-deep}
-\end{figure}
 
 \begin{figure}
 \includegraphics[width=\textwidth]{diagram-task-parallel.pdf}
