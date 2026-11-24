@@ -175,7 +175,7 @@ def sec(v, _=None):
         return f"{v / 1000:g}k"
     if v >= 1:
         return f"{v:g}"
-    return f"{v:g}".lstrip("0") if v >= 0.01 else f"{v:g}"
+    return f"{v:g}"
 
 
 def tsec(v):
@@ -188,7 +188,7 @@ def tsec(v):
         return f"{v:.1f}" if v < 20 else f"{v:.0f}"
     if v >= 1:
         return f"{v:.2f}"
-    return f"{v:.3f}".lstrip("0")
+    return f"{v:.3f}"
 
 
 def log_axis(ax, axis="y", lo=None, hi=None):

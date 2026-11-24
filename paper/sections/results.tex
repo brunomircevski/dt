@@ -22,7 +22,7 @@
 \subsection{Training Time at Depth 10}
 \label{sec:time}
 
-Most of the speed-up comes from the algorithmic optimizations and from multicore parallelism; the GPU adds a smaller factor on top. Tables~\ref{tab:time-cart} and~\ref{tab:time-c45} and Fig.~\ref{fig:bars} give the training times at depth 10. On epyc, \ImplSerialOpt{} is 16--35$\times$ faster than \ImplSerialBase{}, because it sorts each attribute only once and skips thresholds that provably cannot win (Section~\ref{sec:impl-serial}). \ImplParallel{} gains another 14--40$\times$ on 48 cores, most on the wide datasets, and trains a tree on the full ECBDL'14 and SOREL-20M, which do not fit in the GPU, in 9--16\,s. \ImplGpu{} on the H100 is a further 1.1--1.7$\times$ faster on the real-world datasets and 2.2--2.5$\times$ faster on Chess $10^9$; on SUSY, a fixed set-up of about 0.13\,s leaves little room for a gain. At depth 10, \ImplHybrid{} is slower than \ImplGpu{} on every dataset. Its handoff buffers add about 0.1\,s of set-up, which shallow trees do not recover (Section~\ref{sec:deep}): it is 2--6\,\% slower on the large real-world datasets, 13\,\% on Chess $10^9$ and up to 70\,\% on SUSY and HIGGS.
+Most of the speed-up comes from the algorithmic optimizations and from multicore parallelism; the GPU adds a smaller factor on top. Table~\ref{tab:time} and Fig.~\ref{fig:bars} give the training times at depth 10. On epyc, \ImplSerialOpt{} is 16--35$\times$ faster than \ImplSerialBase{}, because it sorts each attribute only once and skips thresholds that provably cannot win (Section~\ref{sec:impl-serial}). \ImplParallel{} gains another 14--40$\times$ on 48 cores, most on the wide datasets, and trains a tree on the full ECBDL'14 and SOREL-20M, which do not fit in the GPU, in 9--16\,s. \ImplGpu{} on the H100 is a further 1.1--1.7$\times$ faster on the real-world datasets and 2.2--2.5$\times$ faster on Chess $10^9$; on SUSY, a fixed set-up of about 0.13\,s leaves little room for a gain. At depth 10, \ImplHybrid{} is slower than \ImplGpu{} on every dataset. Its handoff buffers add about 0.1\,s of set-up, which shallow trees do not recover (Section~\ref{sec:deep}): it is 2--6\,\% slower on the large real-world datasets, 13\,\% on Chess $10^9$ and up to 70\,\% on SUSY and HIGGS.
 
 Our implementations are also faster than the existing libraries. Fig.~\ref{fig:libs} compares all implementations on HIGGS and MNIST8M; each ratio below comes from runs in the same job. On one thread, \ImplSerialOpt{} grows the same CART trees as scikit-learn 27$\times$ faster on HIGGS and 8.8$\times$ faster on MNIST8M, and C4.5 trees 103--147$\times$ faster than Weka J48. On 48 threads, \ImplParallel{} is 2.8$\times$ (MNIST8M) to 49$\times$ (HIGGS) faster than YaDT on the same number of threads. rpart fails on MNIST8M, whose 6.3 billion values exceed $2^{31}-1$. On the H100, \ImplGpu{} is 2.4--3.3$\times$ faster than cuML and XGBoost, even though it evaluates every threshold while they use 128 and 256 histogram bins. The price of presorting is memory: on the large datasets, \ImplSerialOpt{} and \ImplParallel{} hold about three times the training set in RAM and \ImplGpu{} about twice in VRAM, which is why the full ECBDL'14 and SOREL-20M do not fit in the H100's 80\,GiB.
 
@@ -36,43 +36,26 @@ Memory bandwidth accounts for most of the gap between the CPU servers. \ImplSeri
 % (7f98876f, job 789, 2026-11-23, GPU setup timed).
 % Chess 10^9: bench/cluster-chess/{simple,serial,cpu}-epyc-chess_1b, {gpuonly,cuda}-hopper-chess_1b (10 runs).
 \begin{table}
-\caption{Mean training time (s) of one CART tree, depth $\le$ 10. CPU runs on epyc, GPU runs on the H100, set-up included. --: does not fit in the GPU's 80\,GiB. 10 runs per cell (\ImplSerialBase{} on full ECBDL'14 and SOREL-20M: 3).}
-\label{tab:time-cart}
+\caption{Mean training time (s) of one tree, depth $\le$ 10, no pruning. CPU runs on epyc, GPU runs on the H100, set-up included. --: does not fit in the GPU's 80\,GiB. 10 runs per cell (\ImplSerialBase{} on full ECBDL'14 and SOREL-20M: 3).}
+\label{tab:time}
 \centering
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lrrrrr@{}}
+\small
+\setlength{\tabcolsep}{2.4pt}
+\newcommand{\impl}[1]{\multicolumn{2}{c}{\parbox[b]{17mm}{\centering\hyphenpenalty=10000 #1}}}
+\begin{tabular}{@{}l*{10}{r}@{}}
 \toprule
-Dataset & \colhead{\ImplSerialBase} & \colhead{\ImplSerialOpt} & \colhead{\ImplParallel} & \colhead{\ImplGpu} & \colhead{\ImplHybrid} \\
+ & \impl{\ImplSerialBase} & \impl{\ImplSerialOpt} & \impl{\ImplParallel} & \impl{\ImplGpu} & \impl{\ImplHybrid} \\
+\cmidrule(l{2pt}r{2pt}){2-3}\cmidrule(l{2pt}r{2pt}){4-5}\cmidrule(l{2pt}r{2pt}){6-7}\cmidrule(l{2pt}r{2pt}){8-9}\cmidrule(l{2pt}){10-11}
+Dataset & CART & C4.5 & CART & C4.5 & CART & C4.5 & CART & C4.5 & CART & C4.5 \\
 \midrule
-SUSY & 70.3 & 2.61 & 0.179 & 0.154 & 0.262 \\
-HIGGS & 237 & 7.89 & 0.348 & 0.221 & 0.329 \\
-ECBDL'14 & 5\,970 & 316 & 9.21 & -- & -- \\
-\quad 15M subsample & 2\,316 & 148 & 4.47 & 2.83 & 2.94 \\
-MNIST8M & 1\,896 & 115 & 3.26 & 2.25 & 2.38 \\
-SOREL-20M & 12\,538 & 608 & 15.1 & -- & -- \\
-\quad 4M subsample & 2\,939 & 177 & 5.00 & 2.95 & 3.05 \\
-Chess, $10^9$ samples & 922 & 39.0 & 1.63 & 0.741 & 0.841 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}
-\caption{Mean training time (s) of one C4.5 tree, depth $\le$ 10, no pruning; as Table~\ref{tab:time-cart}.}
-\label{tab:time-c45}
-\centering
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lrrrrr@{}}
-\toprule
-Dataset & \colhead{\ImplSerialBase} & \colhead{\ImplSerialOpt} & \colhead{\ImplParallel} & \colhead{\ImplGpu} & \colhead{\ImplHybrid} \\
-\midrule
-SUSY & 76.9 & 2.49 & 0.184 & 0.172 & 0.272 \\
-HIGGS & 259 & 7.42 & 0.366 & 0.243 & 0.349 \\
-ECBDL'14 & 7\,035 & 323 & 9.73 & -- & -- \\
-\quad 15M subsample & 2\,628 & 149 & 4.73 & 2.86 & 2.97 \\
-MNIST8M & 1\,980 & 114 & 3.39 & 2.25 & 2.36 \\
-SOREL-20M & 12\,906 & 591 & 15.5 & -- & -- \\
-\quad 4M subsample & 3\,127 & 173 & 5.04 & 3.29 & 3.35 \\
-Chess, $10^9$ samples & 1\,039 & 42.2 & 1.98 & 0.792 & 0.893 \\
+SUSY          & 70.3     & 76.9     & 2.61 & 2.49 & 0.179 & 0.184 & 0.154 & 0.172 & 0.262 & 0.272 \\
+HIGGS         & 237      & 259      & 7.89 & 7.42 & 0.348 & 0.366 & 0.221 & 0.243 & 0.329 & 0.349 \\
+ECBDL'14      & 5\,970   & 7\,035   & 316  & 323  & 9.21  & 9.73  & --    & --    & --    & --    \\
+\quad 15M     & 2\,316   & 2\,628   & 148  & 149  & 4.47  & 4.73  & 2.83  & 2.86  & 2.94  & 2.97  \\
+MNIST8M       & 1\,896   & 1\,980   & 115  & 114  & 3.26  & 3.39  & 2.25  & 2.25  & 2.38  & 2.36  \\
+SOREL-20M     & 12\,538  & 12\,906  & 608  & 591  & 15.1  & 15.5  & --    & --    & --    & --    \\
+\quad 4M      & 2\,939   & 3\,127   & 177  & 173  & 5.00  & 5.04  & 2.95  & 3.29  & 3.05  & 3.35  \\
+Chess $10^9$  & 922      & 1\,039   & 39.0 & 42.2 & 1.63  & 1.98  & 0.741 & 0.792 & 0.841 & 0.893 \\
 \bottomrule
 \end{tabular}
 \end{table}
