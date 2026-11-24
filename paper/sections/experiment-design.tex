@@ -38,7 +38,7 @@ The experiments run on four servers (Table~\ref{tab:hardware}). The CPU implemen
 Every job has exclusive use of its server. \ImplParallel{} uses all 48 cores across both sockets. Each GPU run uses one GPU and can use all CPU cores on the server. Memory follows the default first-touch policy without explicit NUMA binding, with two exceptions. Host--device transfers use buffers and threads on the GPU's NUMA node (Section~\ref{sec:impl-gpu}), and \ImplHybrid{}'s host buffer for handed-off subtrees is interleaved across both sockets (Section~\ref{sec:impl-hybrid}). Our code is compiled with g++ 13.3 (\texttt{-O3}) and CUDA 12.9 on Ubuntu 24.04.
 
 \begin{table}
-\caption{Hardware. Every server has two sockets with SMT disabled. CPU, cores, and clock (base/max turbo, GHz) are per socket, RAM per server. One GPU is used per run.}
+\caption{Hardware. Every server has two sockets with SMT disabled. CPU, cores, and clock (base/max turbo, GHz) are per socket, RAM per server; \texttt{dell} has 8 of its 16 memory channels populated. One GPU is used per run.}
 \label{tab:hardware}
 \centering
 \begin{tabular}{@{}llrrll@{}}

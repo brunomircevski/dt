@@ -826,7 +826,8 @@ def energy_deep():
         ax_p.text(p + 15, yi, rf"{p:.0f}\,W", va="center", fontsize=fs)
         cpu = r["P_cpu0"] + r["P_cpu1"]
         gpu = r["P_gpu"] if impl != "parallel" else 0.0  # Multicore: no GPU in use (all four idle)
-        ax_c.barh(yi, cpu, height=hgt, fc=c, ec=STRIPE[k], lw=0, hatch=HATCH)
+        # stripes mark the CPU part of a GPU run, as in energy(); the Multicore bar is all CPU
+        ax_c.barh(yi, cpu, height=hgt, fc=c, ec=STRIPE[k], lw=0, hatch=HATCH if gpu else None)
         ax_c.barh(yi, gpu, left=cpu, height=hgt, color=c, lw=0)
         ax_c.text(cpu + gpu + 12, yi, rf"{cpu + gpu:.0f}\,W", va="center", fontsize=fs)
         e_idle = r["psu_idle_J"]
@@ -857,8 +858,7 @@ def energy_deep():
                 ax.axhline(y[i] + 0.5, color=MUTED, lw=0.5)
     h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="idle server"),
          plt.Rectangle((0, 0), 1, 1, fc=STYLE["gpuonly"][1], ec=STRIPE["gpuonly"], lw=0, hatch=HATCH,
-                       label="CPU packages"),
-         plt.Rectangle((0, 0), 1, 1, color=STYLE["gpuonly"][1], label="GPU")]
+                       label="CPU part of a GPU run")]
     legend_below(fig, h, handlelength=2.4, handleheight=1.0)
     save(fig, "results-energy-mnist8m", final=True, copy=POWER_DEEP.parent / "paper-fig-energy-mnist8m")
 
