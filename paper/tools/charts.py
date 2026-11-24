@@ -1131,43 +1131,42 @@ def depth_ratio():
 
 
 def chess():
-    """Chess 10^7 to 2*10^9 samples, CART, depth <= 10: four small panels, two stacked bars each
-    (Multicore CPU on epyc, GPU-Based on the H100), seconds by step, the total above.
+    """Chess 10^7 to 2*10^9 samples, CART, depth <= 10: two panels (Multicore CPU on epyc,
+    GPU-Based on the H100), a 100 % bar per sample count split by step, the total time above.
     Source cluster-profiling."""
     import profile_share_chart as P
     datasets = ["chess_10m", "chess_100m", "chess_1b", "chess_2b"]
-    labels = {"chess_10m": r"$10^7$ samples", "chess_100m": r"$10^8$ samples",
-              "chess_1b": r"$10^9$ samples", "chess_2b": r"$2 \cdot 10^9$ samples"}
-    modes = [("cpu-epyc", "Multi-\ncore"), ("gpuonly-hopper", "GPU-\nBased")]
+    labels = [r"$10^7$", r"$10^8$", r"$10^9$", r"$2 \cdot 10^9$"]
+    modes = [("cpu-epyc", "Multicore CPU (epyc)"), ("gpuonly-hopper", "GPU-Based (H100)")]
     steps = [("presort", "presort", "#7f4fc9"), ("search", "split search", "#eb6834"),
              ("partition", "partition", "#8c6d31"), ("transfer", r"CPU$\leftrightarrow$GPU transfer", "#eda100"),
              ("other", "other", "#cfcec9")]
     cases = P.load(RES / "cluster-profiling", datasets)
     USED.extend(c["stale"] for c in cases.values())
-    fig, axes = plt.subplots(1, 4, figsize=(FULL, 1.45), gridspec_kw={"wspace": 0.45})
-    for ax, ds in zip(axes, datasets):
-        top = 0
-        for x, (mode, _) in enumerate(modes):
+    fig, axes = plt.subplots(1, 2, figsize=(FULL, 1.75), sharey=True, gridspec_kw={"wspace": 0.08})
+    for ax, (mode, title) in zip(axes, modes):
+        for x, ds in enumerate(datasets):
             case = cases[(mode, ds, "cart_depth10")]
             parts = case["parts"]
-            t = case["row"]["train_seconds"]
             total = sum(parts.values())
             bottom = 0.0
             for step, _, c in steps:
-                v = t * sum(val for (s, _), val in parts.items() if s == step) / total
-                ax.bar(x, v, 0.62, bottom=bottom, color=c, lw=0, zorder=2)
+                v = 100 * sum(val for (s, _), val in parts.items() if s == step) / total
+                ax.bar(x, v, 0.66, bottom=bottom, color=c, lw=0, zorder=2)
+                if v >= 8:
+                    ax.text(x, bottom + v / 2, f"{v:.0f}", ha="center", va="center", fontsize=FS_ANN - 0.5,
+                            color=P.text_color(c))
                 bottom += v
-            ax.text(x, t, rf"{tsec(t)}\,s", ha="center", va="bottom", fontsize=FS_ANN)
-            top = max(top, t)
-        ax.set_ylim(0, top * 1.2)
-        ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(3))
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
-        ax.set_xticks(range(len(modes)), [m for _, m in modes], linespacing=0.9)
-        ax.set_xlim(-0.6, len(modes) - 0.4)
-        ax.tick_params(axis="x", length=0, labelsize=FS_ANN)
-        ax.grid(axis="y", color=GRID, lw=0.4, zorder=0)
-        ax.set_title(rf"\textbf{{{labels[ds]}}}", pad=3, loc="center")
-    axes[0].set_ylabel("time (s)")
+            ax.text(x, 101.5, rf"{tsec(case['row']['train_seconds'])}\,s", ha="center", va="bottom",
+                    fontsize=FS_ANN)
+        ax.set_xticks(range(len(datasets)), labels)
+        ax.set_xlim(-0.55, len(datasets) - 0.45)
+        ax.set_ylim(0, 100)
+        ax.set_yticks([0, 25, 50, 75, 100])
+        ax.tick_params(axis="x", length=0)
+        ax.set_xlabel("samples")
+        ax.set_title(rf"\textbf{{{title}}}", pad=9)
+    axes[0].set_ylabel(r"share of training time (\%)")
     h = [plt.Rectangle((0, 0), 1, 1, color=c, label=n) for _, n, c in steps]
     legend_below(fig, h, handlelength=1.0, gap=0.02)
     save(fig, "results-chess", final=True)
