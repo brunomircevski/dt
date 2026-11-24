@@ -9,7 +9,7 @@ higgs,10,./tree --gpu · exact,NVIDIA H100 PCIe,x log x table copy,prepare,0.118
 higgs,10,./tree --gpu · exact,NVIDIA H100 PCIe,build,build,0.14880,0.21409,0.06528,,,10,0.2134,0.0091,0.1977,0.2245,3041918976,0.705172,2029,7f98876f7e2a
 higgs,10,./tree --hybrid · exact,NVIDIA H100 PCIe,total,,0.00000,0.32853,0.32853,,,10,0.3285,0.0186,0.2771,0.3404,3578789888,0.705172,2029,7f98876f7e2a
 higgs,10,./tree --hybrid · exact,NVIDIA H100 PCIe,staging buffers,set-up,0.00010,0.06162,0.06152,,,10,0.3285,0.0186,0.2771,0.3404,3578789888,0.705172,2029,7f98876f7e2a
-higgs,10,./tree --hybrid · exact,NVIDIA H100 PCIe,hand-off buffers,hand-off buffers,0.06162,0.16650,0.10487,,,10,0.3285,0.0186,0.2771,0.3404,3578789888,0.705172,2029,7f98876f7e2a
+higgs,10,./tree --hybrid · exact,NVIDIA H100 PCIe,hand-off buffers,set-up,0.06162,0.16650,0.10487,,,10,0.3285,0.0186,0.2771,0.3404,3578789888,0.705172,2029,7f98876f7e2a
 higgs,10,./tree --hybrid · exact,NVIDIA H100 PCIe,device memory,set-up,0.16650,0.18116,0.01466,,,10,0.3285,0.0186,0.2771,0.3404,3578789888,0.705172,2029,7f98876f7e2a
 higgs,10,./tree --hybrid · exact,NVIDIA H100 PCIe,upload,upload,0.18116,0.22756,0.04639,,,10,0.3285,0.0186,0.2771,0.3404,3578789888,0.705172,2029,7f98876f7e2a
 higgs,10,./tree --hybrid · exact,NVIDIA H100 PCIe,presort (GPU),prepare,0.19062,0.22819,0.03757,,,10,0.3285,0.0186,0.2771,0.3404,3578789888,0.705172,2029,7f98876f7e2a
@@ -39,7 +39,7 @@ mnist8m,10,./tree --gpu · exact,NVIDIA H100 PCIe,x log x table copy,prepare,0.7
 mnist8m,10,./tree --gpu · exact,NVIDIA H100 PCIe,build,build,0.82275,2.24863,1.42588,,,10,2.2479,0.0240,2.1877,2.2738,52314505216,0.8451,2047,7f98876f7e2a
 mnist8m,10,./tree --hybrid · exact,NVIDIA H100 PCIe,total,,0.00000,2.37396,2.37396,,,10,2.3740,0.0121,2.3564,2.3953,52482277376,0.8451,2047,7f98876f7e2a
 mnist8m,10,./tree --hybrid · exact,NVIDIA H100 PCIe,staging buffers,set-up,0.00010,0.06438,0.06428,,,10,2.3740,0.0121,2.3564,2.3953,52482277376,0.8451,2047,7f98876f7e2a
-mnist8m,10,./tree --hybrid · exact,NVIDIA H100 PCIe,hand-off buffers,hand-off buffers,0.06439,0.17331,0.10893,,,10,2.3740,0.0121,2.3564,2.3953,52482277376,0.8451,2047,7f98876f7e2a
+mnist8m,10,./tree --hybrid · exact,NVIDIA H100 PCIe,hand-off buffers,set-up,0.06439,0.17331,0.10893,,,10,2.3740,0.0121,2.3564,2.3953,52482277376,0.8451,2047,7f98876f7e2a
 mnist8m,10,./tree --hybrid · exact,NVIDIA H100 PCIe,device memory,set-up,0.17332,0.19848,0.02517,,,10,2.3740,0.0121,2.3564,2.3953,52482277376,0.8451,2047,7f98876f7e2a
 mnist8m,10,./tree --hybrid · exact,NVIDIA H100 PCIe,upload,upload,0.19849,0.92172,0.72323,,,10,2.3740,0.0121,2.3564,2.3953,52482277376,0.8451,2047,7f98876f7e2a
 mnist8m,10,./tree --hybrid · exact,NVIDIA H100 PCIe,presort (GPU),prepare,0.20541,0.92263,0.71722,,,10,2.3740,0.0121,2.3564,2.3953,52482277376,0.8451,2047,7f98876f7e2a
@@ -69,7 +69,7 @@ higgs,30,./tree --gpu · exact,NVIDIA H100 PCIe,x log x table copy,prepare,0.123
 higgs,30,./tree --gpu · exact,NVIDIA H100 PCIe,build,build,0.15601,0.99524,0.83923,,,10,0.9944,0.0406,0.9430,1.0485,4008286617.6,0.687716,2158499,7f98876f7e2a
 higgs,30,./tree --hybrid · exact,NVIDIA H100 PCIe,total,,0.00000,0.82045,0.82045,,,10,0.8205,0.0385,0.7394,0.8721,3612344320,0.687716,2158499,7f98876f7e2a
 higgs,30,./tree --hybrid · exact,NVIDIA H100 PCIe,staging buffers,set-up,0.00009,0.06003,0.05993,,,10,0.8205,0.0385,0.7394,0.8721,3612344320,0.687716,2158499,7f98876f7e2a
-higgs,30,./tree --hybrid · exact,NVIDIA H100 PCIe,hand-off buffers,hand-off buffers,0.06003,0.16531,0.10528,,,10,0.8205,0.0385,0.7394,0.8721,3612344320,0.687716,2158499,7f98876f7e2a
+higgs,30,./tree --hybrid · exact,NVIDIA H100 PCIe,hand-off buffers,set-up,0.06003,0.16531,0.10528,,,10,0.8205,0.0385,0.7394,0.8721,3612344320,0.687716,2158499,7f98876f7e2a
 higgs,30,./tree --hybrid · exact,NVIDIA H100 PCIe,device memory,set-up,0.16531,0.17955,0.01424,,,10,0.8205,0.0385,0.7394,0.8721,3612344320,0.687716,2158499,7f98876f7e2a
 higgs,30,./tree --hybrid · exact,NVIDIA H100 PCIe,upload,upload,0.17955,0.22375,0.04420,,,10,0.8205,0.0385,0.7394,0.8721,3612344320,0.687716,2158499,7f98876f7e2a
 higgs,30,./tree --hybrid · exact,NVIDIA H100 PCIe,presort (GPU),prepare,0.18885,0.22439,0.03554,,,10,0.8205,0.0385,0.7394,0.8721,3612344320,0.687716,2158499,7f98876f7e2a

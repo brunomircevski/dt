@@ -48,7 +48,7 @@ bench/tools/cluster/charts.sh             # among them gpu_steps_chart.py: chart
 | build | 823–2,249 | 951–2,375 | 817–5,375 | 2,960–7,463 |
 | CPU build (subtrees) | | 1,941–2,359 | | |
 
-**The chart** draws the same phase names for every tool, each with that tool's boundaries: set-up, upload, prepare, build; `--hybrid` also its hand-off buffers (the whole difference between `--hybrid` and `--gpu`) and its CPU build. ./tree's sections are merged into them: set-up = staging buffers + device memory; prepare = the presort + the x·log x table and its copy. A phase in pieces that do not touch (`--hybrid`'s set-up, before and after its hand-off buffers) is drawn in pieces, labelled with their sum. The depth ≤ 30 panel's axis skips the stretches where nothing ends (// on the axis, ··· in the bars that cross them): 0–1.1 s at full scale, then short windows around cuML's end (4.5 s) and XGBoost's (23.8 s).
+**The chart** draws the same phase names for every tool, each with that tool's boundaries: set-up, upload, prepare, build; `--hybrid` also its CPU build. ./tree's sections are merged into them: set-up = staging buffers + device memory (`--hybrid`: + its hand-off buffers, the whole difference between its set-up and `--gpu`'s); prepare = the presort + the x·log x table and its copy. A phase in pieces that do not touch would be drawn in pieces, labelled with their sum. The depth ≤ 30 panel's axis skips the stretches where nothing ends (// on the axis, ··· in the bars that cross them): 0–1.1 s at full scale, then short windows around cuML's end (4.5 s) and XGBoost's (23.8 s).
 
 - **Totals:** `./tree --gpu` trains its exact tree 2.4–2.7× faster than cuML and 2.4–3.3× faster than XGBoost, from the same host data through the same upload. The libraries' upload reaches 46 GB/s on MNIST8M (HIGGS's 1.2 GB is too short a copy for full speed).
 - **Where the time goes:** most of the libraries' time is in their build (cuML 302 ms and 4.56 s, XGBoost 253 ms and 4.50 s, against ./tree's 65 ms and 1.43 s) and in XGBoost's binning. These phases are not like for like: cuML's build also allocates its working memory, and ./tree's build starts from columns already presorted.
@@ -143,7 +143,7 @@ cuML needs its own venv (`GPU_PYTHON`, default `~/gpu-dt-bench/venv/bin/python`;
 
 | File | Content |
 |---|---|
-| `chart.png` | HIGGS and MNIST8M at depth ≤ 10, HIGGS at depth ≤ 30: each tool's phases (set-up, hand-off buffers, upload, prepare, build, CPU build) on a timeline, with total, test accuracy, nodes, VRAM and spread (`bench/tools/gpu_steps_chart.py`) |
+| `chart.png` | HIGGS and MNIST8M at depth ≤ 10, HIGGS at depth ≤ 30: each tool's phases (set-up, upload, prepare, build, CPU build) on a timeline, with total, test accuracy, nodes, VRAM and spread (`bench/tools/gpu_steps_chart.py`) |
 | `summary.csv` | one row per dataset, depth limit, tool and recorded section (with the bar it is drawn in): mean start, end and length and the tool's total (mean, standard deviation, min, max), VRAM, test accuracy, nodes, commit |
 | `one-tree/vs-hopper-<dataset>[-depth30]/` | the run folders: `results.jsonl` (every run of every tool, each step's time), `plan.json`, `machine.json`, `run.log`, and `report.md`, `runs.csv`, `summary.csv` from `bench/tools/report.py` |
 

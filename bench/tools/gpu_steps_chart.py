@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """cluster-gpu-vs-others: one CART tree (depth <= 10; HIGGS also <= 30) per tool on one GPU, as a
 timeline with the same bars for every tool (set-up, upload, prepare, build;
---hybrid also its hand-off buffers and CPU build), each a thin bar on its own lane from the
+--hybrid also its CPU build; its hand-off buffers are part of its set-up), each a thin bar on its own lane from the
 moment it started to the moment it ended, so bars that ran at the same time
 (./tree's presort during its upload) overlap. ./tree --gpu and --hybrid, cuML,
 XGBoost; every run a fresh process with no warm-up, all uploading through
@@ -36,11 +36,10 @@ SPLITS = {"tree_gpu_only": "exact", "tree_cuda": "exact", "cuml": "128 bins", "x
 INK, MUTED, GRID, WHITE = "#0b0b0b", "#52514e", "#e4e3df", "#ffffff"
 # The same sections for every tool; each run's detailed timeline (results.jsonl,
 # summary.csv) is merged into them. category -> (colour, legend); the reference
-# palette's slots 1-4; hand-off buffers and CPU build lighter steps of set-up's and build's
+# palette's slots 1-4; CPU build a lighter step of build's
 CATEGORIES = {
-    "set-up": ("#2a78d6", "Set-up: staging buffers, copy threads; ./tree also all its device memory at once "
-                          "(the libraries allocate theirs inside their other bars)"),
-    "hand-off buffers": ("#86b6ef", "Hand-off buffers: ./tree --hybrid's 256 MB page-locked buffers for handing nodes to the CPUs"),
+    "set-up": ("#2a78d6", "Set-up: staging buffers, copy threads; ./tree also all its device memory at once, "
+                          "--hybrid its 256 MB page-locked hand-off buffers (the libraries allocate inside later bars)"),
     "upload": ("#eb6834", "Upload to the GPU: the same code for every tool"),
     "prepare": ("#1baf7a", "Prepare: ./tree's presort (during the upload) and x·log x table · cuML's input checks · "
                            "XGBoost's quantile binning"),
@@ -50,7 +49,7 @@ CATEGORIES = {
 }
 # a recorded section -> the bar it is drawn in
 BAR_OF = {
-    "staging buffers": "set-up", "device memory": "set-up", "hand-off buffers": "hand-off buffers",
+    "staging buffers": "set-up", "device memory": "set-up", "hand-off buffers": "set-up",
     "upload": "upload",
     "presort (GPU)": "prepare", "x log x table": "prepare", "x log x table copy": "prepare",
     "input checks": "prepare", "quantile binning": "prepare", "free raw copy": "prepare",
