@@ -2,6 +2,15 @@
 
 What changed `./tree`'s speed and why, newest first: the numbers are from the commit each section names, so they are not current results. Those are in [bench/](../bench/README.md).
 
+## November 2026: `--hybrid`'s default `--handoff-rows` from every sweep
+
+The default was `max(512, min(10 × features, 2^D, 16384))` (D: the depth limit). Against the fastest value of every hand-off sweep in `bench/tools/handoff/` (40 cases: all five GPU datasets at depth 10; HIGGS, MNIST8M and SOREL 4M at depths 15-30 and without a limit; H100 and A100; 5 runs of CART and C4.5 a value) it was 3.6% slower on average, more than 3% in 21 cases and up to 20.8% (HIGGS, depth 20, A100: 512 against 2048). Two parts were off:
+
+* **512 is too small.** The narrow datasets were fastest at 1024 in most cases: 512 made SUSY (18 features) 3-5% and HIGGS on the A100 up to 21% slower; HIGGS on the H100 prefers 512, but by 0.7-1.9%.
+* **The depth cap only acted at depth 10.** At depths 15-30 the cap 2^D no longer applied, so MNIST8M and SOREL 4M got 7840 and 16384, their no-limit values, while their fastest was 2048-8192: 2-15% slower. With a limit, the GPU stops at level D anyway, so an early hand-off saves it few levels and mostly moves work to the CPU.
+
+Now: 10 × features between 1024 and 16384, and with a depth limit at most 2^D and 4096. On the same 40 cases it is 0.3% slower on average and 4.2% at most (the same HIGGS case, 1024 against 2048), more than 3% only there. The rule is fitted to these sweeps; depths 11-13 are between measurements. The trees do not change, and no benchmark result depends on the default: every `--hybrid` benchmark run takes its measured value from `handoff_rows.json`, except chess, which hands nothing off at depth 10.
+
 ## November 2026: less memory for `--hybrid` and `--gpu`
 
 Measured against 1f55adb2 on 2026-11-21/22: hopper (H100 PCIe, GPU 2, NUMA node 1, 32 threads, node 1's CPUs first), the whole node, the old and new binaries interleaved, every hopper benchmark case (`--gpu` and `--hybrid`, the same flags and `--handoff-rows` as the benchmarks): the 48 depth-10 cases (SUSY, HIGGS, chess 1M-2B, MNIST8M, ECBDL'14 15M, SOREL 4M) 6 times each, the 72 cases of the depth sweep (HIGGS, MNIST8M, SOREL 4M, depth 5-30 and none) 3 times, the closest ones again 10 times. Peak RAM and the GPU's memory are sampled the way `run.py` does (one `nvidia-smi -lms 10`). Every tree's sha256 equals the old one's in every run and `tests/check.sh` passes. The CPU backends (`--serial`, `--multicore`, `--simple`) are unchanged.

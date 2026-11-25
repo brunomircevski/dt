@@ -1,0 +1,36 @@
+1795627947.834914 job_start
+1795627947.841301 start warmup-cuda-cart impl=cuda algo=cart repeat=2
+1795628017.989844 end warmup-cuda-cart rc=0
+1795628018.012807 start warmup-cuda-c45 impl=cuda algo=c45 repeat=2
+1795628084.153688 end warmup-cuda-c45 rc=0
+1795628104.182496 idle_start
+1795628404.195346 idle_end
+1795628404.200767 cal_start n=1
+1795628464.211447 cal_end n=1
+1795628464.216463 cal_start n=2
+1795628524.224157 cal_end n=2
+1795628524.230161 cal_start n=4
+1795628584.237574 cal_end n=4
+1795628584.241364 cal_start n=8
+1795628644.252492 cal_end n=8
+1795628644.257139 cal_start n=16
+1795628704.268952 cal_end n=16
+1795628704.272227 cal_start n=32
+1795628764.291823 cal_end n=32
+1795628764.294141 step_end
+1795629064.299468 step_idle_end
+1795629084.314085 start rep1-cuda-cart impl=cuda algo=cart repeat=41
+1795629361.883399 end rep1-cuda-cart rc=0
+1795629381.892196 start rep1-cuda-c45 impl=cuda algo=c45 repeat=41
+1795629659.493498 end rep1-cuda-c45 rc=0
+1795629679.502959 start rep2-cuda-cart impl=cuda algo=cart repeat=41
+1795629955.691749 end rep2-cuda-cart rc=0
+1795629975.699443 start rep2-cuda-c45 impl=cuda algo=c45 repeat=41
+1795630277.080205 end rep2-cuda-c45 rc=0
+1795630297.087886 start rep3-cuda-cart impl=cuda algo=cart repeat=41
+1795630598.080695 end rep3-cuda-cart rc=0
+1795630618.088912 start rep3-cuda-c45 impl=cuda algo=c45 repeat=41
+1795630911.614764 end rep3-cuda-c45 rc=0
+1795630931.624037 idle2_start
+1795631231.632775 idle2_end
+1795631231.637533 job_end

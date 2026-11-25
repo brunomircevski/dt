@@ -55,8 +55,12 @@ std::size_t handoffRows(const Options &options, std::size_t features) {
   }
   std::size_t rows = std::min(features * GpuOptions::kHandoffRowsPerFeature,
                               GpuOptions::kMaxHandoffRows);
-  if (options.maxDepth >= 0 && options.maxDepth < 63) {
-    rows = std::min(rows, std::size_t{1} << options.maxDepth); // 2^depth limit
+  if (options.maxDepth >= 0) { // a depth limit: at most 2^D, and at most kMaxLimitedHandoffRows
+    std::size_t cap = GpuOptions::kMaxLimitedHandoffRows;
+    if (options.maxDepth < 63) {
+      cap = std::min(cap, std::size_t{1} << options.maxDepth);
+    }
+    rows = std::min(rows, cap);
   }
   return std::max(rows, GpuOptions::kMinHandoffRows);
 }
@@ -105,9 +109,10 @@ void printUsage(const char *program) {
       << "                           gpu, hybrid) training (0 = every CPU it may run on)\n"
       << "  --handoff-rows N         --hybrid: smaller nodes go to the CPU threads\n"
       << "                           (default: " << GpuOptions::kHandoffRowsPerFeature
-      << " x features, at most 2^depth limit,\n"
-      << "                           between " << GpuOptions::kMinHandoffRows << " and "
-      << GpuOptions::kMaxHandoffRows << ")\n"
+      << " x features, at least " << GpuOptions::kMinHandoffRows << ", at most "
+      << GpuOptions::kMaxHandoffRows << ";\n"
+      << "                           with a depth limit D at most 2^D and "
+      << GpuOptions::kMaxLimitedHandoffRows << ")\n"
       << "\n"
       << "Output:\n"
       << "  --dump FILE              write the tree as text\n"

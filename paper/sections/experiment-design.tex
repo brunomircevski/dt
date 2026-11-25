@@ -56,7 +56,7 @@ Node & CPU & Cores & Clock & RAM & GPU \\
 \subsection{Compared Implementations}
 \label{sec:compared}
 
-We evaluate our five implementations described in Section~\ref{sec:impl}, each for CART and C4.5. Rather than using the default rule of Section~\ref{sec:impl-hybrid}, we set the handoff threshold $m$ of \ImplHybrid{} to the fastest value found in a preliminary sweep for each combination of dataset, GPU server, and depth limit, showing \ImplHybrid{} at its best.
+We evaluate our five implementations described in Section~\ref{sec:impl}, each for CART and C4.5. Rather than using the default rule of Section~\ref{sec:impl-hybrid}, we set the handoff threshold $m$ of \ImplHybrid{} to the fastest value found in a preliminary sweep for each combination of dataset, GPU server, and depth limit from 10 up, showing \ImplHybrid{} at its best. At depth 5 and on the chess datasets, almost no node falls below $m$ (at most three handed-off subtrees per tree at depth 5, none on chess), so $m$ cannot change their times; they use the depth-10 value and the default rule, respectively.
 
 We also compare our implementations with existing libraries (Table~\ref{tab:compared}) on HIGGS and MNIST8M. On the CPU, scikit-learn~\cite{pedregosa2011sklearn} and rpart~\cite{therneau2023rpart} grow CART trees, and Weka J48~\cite{hall2009weka} and YaDT~\cite{ruggieri2004yadt} (single-core and multicore) grow C4.5 trees. Aside from disabling pruning and setting the depth limit to 10 with the same minimum leaf size as ours, all libraries keep their default settings. For rpart, we also disable surrogate splits, competing splits, and cross-validation, which do not affect the resulting tree. Because J48 provides no depth-limit option, we modified its tree builder to stop at depth 10.
 

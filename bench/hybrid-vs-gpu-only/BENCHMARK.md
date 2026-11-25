@@ -16,7 +16,7 @@ the same in both modes (node counts under each group). The hybrid runs at the
 fastest `--handoff-rows` of a sweep on the same node, dataset and depth
 limit, stored in `bench/tools/handoff/handoff_rows.json`: depths 5 and 10
 take the depth-10 sweep's value, depths 15–30 and no limit their own
-([the 2026-11-24 re-sweep](../tools/handoff/RESWEEP-2026-11.md); before it,
+([the 2026-11-24 re-sweep](../tools/handoff/RESWEEP-2026-11.md), SOREL 4M below 4096 on 2026-11-25; before it,
 depths 15–30 ran at the no-limit value, see [the sweep](#--handoff-rows-the-sweep))
 ([bench/tools/README.md](../tools/README.md#the-hybrids-hand-off-size)).
 
@@ -37,7 +37,9 @@ same trees): depths 15–30 of all three datasets, HIGGS without a limit and
 the MNIST8M profile at depths 15–30, hopper job 939, ampere job 940
 (`hybrid_vs_gpu_only.sh` with `KINDS=cuda`, merged with
 `merge_runs.py --replace`; the rows replaced are in each folder's
-`logs/*-replaced.jsonl`). GPU only, depths 5 and 10 and MNIST8M and SOREL 4M
+`logs/*-replaced.jsonl`). SOREL 4M's depth 15 again on 2026-11-25, after a
+sweep below 4096 moved its value to 2048 (hopper job 968, ampere 967, ./tree
+cfd18321, `src/` as 7f98876f; the same trees). GPU only, depths 5 and 10 and MNIST8M and SOREL 4M
 without a limit (their value did not change) are from 2026-11-23. The CUDA
 runs time ./tree's GPU setup (memory pool, staging buffers, and for
 `--hybrid` its page-locked hand-off buffers): only the bare CUDA context is
@@ -63,7 +65,7 @@ brackets (above 1: the hybrid is faster).
 |---|---|---|---|---|---|---|
 | 5 | 0.334 / 0.192 s (0.57×) | 0.344 / 0.207 s (0.60×) | 2.29 / 2.10 s (0.92×) | 2.31 / 2.12 s (0.92×) | 3.14 / 2.94 s (0.93×) | 3.46 / 3.36 s (0.97×) |
 | 10 | 0.381 / 0.245 s (0.64×) | 0.397 / 0.268 s (0.68×) | 3.35 / 3.15 s (0.94×) | 3.38 / 3.16 s (0.94×) | 4.39 / 4.24 s (0.97×) | 4.76 / 4.65 s (0.98×) |
-| 15 | 0.471 / 0.352 s (0.75×) | 0.476 / 0.362 s (0.76×) | 4.82 / 5.05 s (1.05×) | 4.49 / 4.52 s (1.01×) | 5.75 / 5.83 s (1.01×) | 6.02 / 5.91 s (0.98×) |
+| 15 | 0.471 / 0.352 s (0.75×) | 0.476 / 0.362 s (0.76×) | 4.82 / 5.05 s (1.05×) | 4.49 / 4.52 s (1.01×) | 5.71 / 5.83 s (1.02×) | 6.06 / 5.91 s (0.98×) |
 | 20 | 0.590 / 0.597 s (1.01×) | 0.553 / 0.534 s (0.96×) | 5.78 / 7.38 s (1.28×) | 5.58 / 6.35 s (1.14×) | 6.94 / 7.50 s (1.08×) | 7.25 / 7.21 s (0.99×) |
 | 25 | 0.732 / 0.960 s (1.31×) | 0.640 / 0.768 s (1.20×) | 6.53 / 9.01 s (1.38×) | 6.49 / 8.19 s (1.26×) | 8.00 / 9.17 s (1.15×) | 8.50 / 8.53 s (1.00×) |
 | 30 | 0.853 / 1.29 s (1.51×) | 0.700 / 0.997 s (1.42×) | 7.20 / 10.1 s (1.41×) | 7.30 / 9.89 s (1.35×) | 9.03 / 10.7 s (1.18×) | 9.73 / 9.82 s (1.01×) |
@@ -75,7 +77,7 @@ brackets (above 1: the hybrid is faster).
 |---|---|---|---|---|---|---|
 | 5 | 0.299 / 0.188 s (0.63×) | 0.313 / 0.199 s (0.64×) | 1.54 / 1.42 s (0.92×) | 1.58 / 1.47 s (0.93×) | 2.15 / 2.01 s (0.94×) | 2.45 / 2.38 s (0.97×) |
 | 10 | 0.328 / 0.222 s (0.68×) | 0.356 / 0.247 s (0.69×) | 2.38 / 2.26 s (0.95×) | 2.36 / 2.27 s (0.96×) | 3.05 / 2.94 s (0.96×) | 3.35 / 3.26 s (0.97×) |
-| 15 | 0.409 / 0.302 s (0.74×) | 0.414 / 0.323 s (0.78×) | 3.51 / 3.96 s (1.13×) | 3.30 / 3.41 s (1.03×) | 3.99 / 4.12 s (1.03×) | 4.27 / 4.22 s (0.99×) |
+| 15 | 0.409 / 0.302 s (0.74×) | 0.414 / 0.323 s (0.78×) | 3.51 / 3.96 s (1.13×) | 3.30 / 3.41 s (1.03×) | 3.95 / 4.12 s (1.04×) | 4.25 / 4.22 s (0.99×) |
 | 20 | 0.555 / 0.509 s (0.92×) | 0.498 / 0.474 s (0.95×) | 4.44 / 6.08 s (1.37×) | 4.12 / 5.04 s (1.22×) | 4.81 / 5.40 s (1.12×) | 5.16 / 5.14 s (1.00×) |
 | 25 | 0.746 / 0.774 s (1.04×) | 0.593 / 0.690 s (1.16×) | 5.10 / 7.59 s (1.49×) | 4.87 / 6.93 s (1.42×) | 5.58 / 6.67 s (1.20×) | 5.99 / 6.06 s (1.01×) |
 | 30 | 0.859 / 0.999 s (1.16×) | 0.680 / 0.879 s (1.29×) | 5.54 / 8.53 s (1.54×) | 5.56 / 8.64 s (1.55×) | 6.35 / 7.77 s (1.22×) | 6.83 / 7.03 s (1.03×) |
@@ -86,12 +88,13 @@ brackets (above 1: the hybrid is faster).
   more than GPU only (hopper: HIGGS 0.26–0.27 against 0.16 s, MNIST8M
   0.94–0.97 against 0.82–0.86 s, SOREL 4M 1.39–1.70 against 1.25–1.61 s;
   ampere: 0.29–0.30 against 0.15–0.16 s, 1.46–1.50 against 1.27–1.30 s,
-  2.02–2.43 against 1.87–2.29 s). Up to depth 10 the builds are the same, so
+  2.02–2.44 against 1.87–2.29 s). Up to depth 10 the builds are the same, so
   GPU only is faster: on HIGGS, whose trees take 0.2–0.4 s, by a lot
   (0.57–0.69×), on MNIST8M and SOREL 4M by 2–8% (0.92–0.98×). HIGGS's hybrid
   breaks even at depth 20 (there 0.92–1.01×) and leads from depth 25 (1.04–1.31×);
-  MNIST8M and SOREL 4M break even at depth 15 (MNIST8M 1.01–1.13×, SOREL 4M
-  0.98–1.03×). The runs spread at most 5% on
+  MNIST8M breaks even at depth 15 (1.01–1.13×), SOREL 4M's CART too
+  (1.02–1.04×), while its C4.5 stays within 3% of GPU only up to depth 30
+  (0.98–1.03×). The runs spread at most 5% on
   hopper and 6% on ampere (HIGGS up to 20% and 11%, in runs of 0.2–1.6 s).
 - **Deeper, the hybrid leads:** without a depth limit on hopper HIGGS 1.32×
   (CART) and 1.78× (C4.5), MNIST8M 1.52× and 1.61×, SOREL 4M 1.18× and 1.08×;
@@ -112,7 +115,7 @@ brackets (above 1: the hybrid is faster).
   572 (C4.5), the levels past 30 peeling a few rows a time off nodes that
   stay above `--handoff-rows`. Those nodes, and every level's 2,381
   features, stay on the GPU in both modes. C4.5 stays at 0.98–1.03× from
-  depth 15 to 30; CART gains more (1.01–1.22×).
+  depth 15 to 30; CART gains more (1.02–1.22×).
 - **Past the setup, the gap is all in the build.** Build at no depth limit on
   hopper: HIGGS CART 0.69 s hybrid, 1.10 s GPU only (C4.5 0.55 and 1.30 s);
   MNIST8M CART 7.2 s, 11.5 s; SOREL 4M CART 18.7 s, 22.6 s. On ampere: HIGGS

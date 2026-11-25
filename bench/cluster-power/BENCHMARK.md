@@ -10,7 +10,7 @@ The GPU set-up is timed in both.
 
 | Measurement | Folder | What | Servers | Jobs |
 |---|---|---|---|---|
-| [ECBDL'14 15M, depth ≤ 10](#ecbdl14-15m-depth--10-all-five-backends) | [`ecbdl_15m-depth10/`](ecbdl_15m-depth10/summary.md) | all five backends, CART and C4.5 | epyc1, hopper | 528 + 560 + 657 (epyc1), 559 + 562 + 616 + 793 (hopper), 549 (warm-up check) |
+| [ECBDL'14 15M, depth ≤ 10](#ecbdl14-15m-depth--10-all-five-backends) | [`ecbdl_15m-depth10/`](ecbdl_15m-depth10/summary.md) | all five backends, CART and C4.5 | epyc1, hopper | 528 + 560 + 657 (epyc1), 559 + 562 + 616 + 793 + 954 (hopper), 549 (warm-up check) |
 | [MNIST8M, no depth limit](#mnist8m-no-depth-limit-where---hybrid-gains) | [`mnist8m-nodepth/`](mnist8m-nodepth/summary.md) | Multicore, GPU and Hybrid, CART and C4.5 | hopper | 792 |
 
 **The paper's figures**, the same files as `paper/figs/` (drawn by
@@ -45,7 +45,12 @@ The trees grow to depth ≤ 10 with no pruning, CART and C4.5.
   (2026-11-23 14:29–16:01, `hopper-4/`) for GPU and Hybrid again on 7f98876f
   (`submit.sh -s 4 hopper "IMPLS=gpuonly cuda" REPS=3`, a 2 s warm-up).
   559's GPU and Hybrid processes are listed in `hopper/superseded.txt`, which
-  `analyze.py` leaves out; they are in git at 2c9ff876.
+  `analyze.py` leaves out; they are in git at 2c9ff876. Job 954 (2026-11-25,
+  `hopper-5/`, ./tree cfd18321 with `src/` as 7f98876f) measured Hybrid again
+  at its swept `--handoff-rows`, 4096 (`submit.sh -s 5 hopper IMPLS=cuda
+  REPS=3 HANDOFF=4096`); 793 had run ./tree's default, 1024, so its Hybrid
+  processes are listed in `hopper-4/superseded.txt` (in git at cfd18321:
+  2.97 and 2.95 s, 2.09 and 2.10 kJ).
 - **epyc1:** job 528 (2026-11-20 11:03–13:29).
 - **Top-ups:** each node got a second job with more Serial-Opt and Serial-Simple
   trees: 562 on hopper (2026-11-21 02:09–06:55, `hopper-2/`) and 560 on epyc1
@@ -75,7 +80,7 @@ Energy per tree (± one standard deviation over the processes):
 | Multicore | epyc1 | 4.56 s | 2.73 kJ ± 0.3% | 2.16 kJ | 4.79 s | 2.87 kJ ± 0.6% | 2.27 kJ |
 | Multicore | hopper | 9.13 s | 8.27 kJ ± 0.2% | 4.57 kJ | 10.1 s | 9.10 kJ ± 0.2% | 4.98 kJ |
 | GPU | hopper (H100) | 2.80 s | **1.98 kJ** ± 0.9% | 856 J | 2.84 s | **2.03 kJ** ± 0.9% | 885 J |
-| Hybrid | hopper (H100) | 2.97 s | 2.09 kJ ± 0.6% | 897 J | 2.95 s | 2.10 kJ ± 0.1% | 907 J |
+| Hybrid | hopper (H100) | 2.92 s | 2.09 kJ ± 0.3% | 899 J | 2.93 s | 2.10 kJ ± 0.3% | 906 J |
 
 Runs × trees:
 - **Serial-Simple:** 10 × 1, each tree its own process, as in the time
@@ -91,10 +96,10 @@ What it shows:
   (GPU). That is 27% (CART) and 29% (C4.5) less than Multicore on epyc1 (2.73
   and 2.87 kJ). Above idle the gap is wider: 0.86–0.89 kJ against 2.16–2.27 kJ
   (2.5–2.6×).
-- **Hybrid costs 3–5% more energy than GPU** (2.09 against 1.98 kJ, 2.10
-  against 2.03 kJ) at the same power (704–709 against 708–714 W), because it
-  is 4–6% slower: its page-locked hand-off buffers cost about 0.1 s per tree.
-  Its CPU packages + DRAM use 0.76–0.77 kJ against GPU's 0.71–0.73 kJ.
+- **Hybrid costs 3–6% more energy than GPU** (2.09 against 1.98 kJ, 2.10
+  against 2.03 kJ) at about the same power (714–716 against 708–714 W),
+  because it is 3–4% slower: its page-locked hand-off buffers cost about 0.1 s
+  per tree. Its CPU packages + DRAM use 0.78 kJ against GPU's 0.71–0.73 kJ.
   - Before 7f98876f (job 559) it cost 12–14% more: it wrote its whole host
     buffer for hand-offs before growing (CPU packages + DRAM 0.94 kJ, 2.26 kJ
     a tree), at about the same time (2.92–2.94 s). GPU is within 1% of job 559
@@ -261,6 +266,7 @@ meter against the model over the whole job).
 | hopper (job 562) | 1.0 s | 9,540 | 0.5 s, 1 s | 58 + 154 + 1.01·CPU + GPU | 3 W |
 | hopper (job 616) | 1.0 s | 21,160 | 0.5 s, 1 s | 57 + 154 + 1.01·CPU + GPU | 2 W |
 | hopper (job 793) | 1.0 s | 4,897 | 0.4 s, 1.25 s | 53 + 154 + 1.03·CPU + GPU | 15 W |
+| hopper (job 954) | 1.0 s | 2,926 | 0.3 s, 1.25 s | 58 + 154 + 1.01·CPU + GPU | 15 W |
 | hopper (job 792, MNIST8M) | 1.0 s | 8,838 | 0.4 s, 1.25 s | 55 + 154 + 1.03·CPU + GPU | 17 W |
 
 Each job's processes are measured with that job's own model. The top-up jobs
@@ -304,8 +310,8 @@ same build); `analyze.py` flags any gap above 3%.
 - **ECBDL'14** ([../cluster-ecbdl](../cluster-ecbdl), 10 runs a case):
   - **epyc1: within 2.2%** on every backend (Multicore 4.56 s against 4.47 s).
   - **hopper's GPU and Hybrid: within 1.2%** (job 793 on 7f98876f: GPU 2.80
-    and 2.84 s against 2.83 and 2.86 s; Hybrid 2.97 and 2.95 s against 2.94
-    and 2.97 s). The measured
+    and 2.84 s against 2.83 and 2.86 s; job 954: Hybrid 2.92 and 2.93 s
+    against 2.94 and 2.97 s). The measured
     trees spin their CPU threads for 2 s before the timer, which leaves them as
     warm as a time benchmark run's input load does
     ([Warm-up check](#warm-up-check)).
@@ -347,9 +353,10 @@ MNIST8M job's own check (0, 2 and 15 s) is in
 
 ## Notes
 
-- Hybrid on ECBDL'14 uses the default `--handoff-rows` of the final build
-  (max(512, min(10 × features, 2^depth, 16384)) = 1024 at depth 10), like the
-  time benchmark.
+- Hybrid on ECBDL'14 uses its swept `--handoff-rows`, 4096 (hopper's
+  `depth10` value in `bench/tools/handoff/handoff_rows.json`), like the time
+  benchmark, since job 954; job 793 ran ./tree's default (1024 at depth 10),
+  within 0.2% of it in the sweep.
 - Serial-Simple: ten processes per case (38–47 min each); Serial-Opt: ten
   (2.5–4.4 min).
 - epyc1 has no DRAM sensor (AMD): its memory is in "rest of the server".
@@ -581,6 +588,7 @@ old processes are then listed in that node's first folder's `superseded.txt`
 (implementation names, here `gpuonly cuda`), which `analyze.py` leaves out:
 
     bench/tools/power/submit.sh -s 4 hopper "IMPLS=gpuonly cuda" REPS=3
+    bench/tools/power/submit.sh -s 5 hopper IMPLS=cuda REPS=3 HANDOFF=4096   # Hybrid at its swept value
 
 **MNIST8M**, about 2.7 h on hopper:
 
@@ -596,7 +604,7 @@ figures (with their copies here).
 ## Files
 
 - `ecbdl_15m-depth10/`, `mnist8m-nodepth/`: one measurement each.
-  - **The jobs:** `epyc1/`, `epyc1-2/`, `epyc1-3/`, `hopper/` (with `superseded.txt`), `hopper-2/`, `hopper-3/`, `hopper-4/`, `check-hopper/`,
+  - **The jobs:** `epyc1/`, `epyc1-2/`, `epyc1-3/`, `hopper/` (with `superseded.txt`), `hopper-2/`, `hopper-3/`, `hopper-4/` (with `superseded.txt`), `hopper-5/`, `check-hopper/`,
     each with machine.txt, markers.txt, samples.csv.gz and out/ (./tree's
     output of every process).
   - **analyze.py's output:** `summary.md`, `summary.csv`, `runs.csv`,
@@ -621,6 +629,7 @@ figures (with their copies here).
     hopper);
   - job 519 (hopper, the final build with a 15 s warm-up);
   - MNIST8M job 415 (15 s warm-up) and job 561 (81bf6e6c, at 2c9ff876);
-  - job 559's GPU and Hybrid processes (81bf6e6c), superseded by job 793.
+  - job 559's GPU and Hybrid processes (81bf6e6c), superseded by job 793;
+    job 793's Hybrid processes (./tree's default `--handoff-rows`), superseded by job 954.
 - The 2026-11-16 run on four servers (with ampere and dell4) is in
   [ampere-dell-2026-11-16](ampere-dell-2026-11-16/BENCHMARK.md).

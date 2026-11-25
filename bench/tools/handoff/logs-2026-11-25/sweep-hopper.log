@@ -1,0 +1,24 @@
+2026-11-25 15:35:13  bench/tools/handoff/depth15/cuda-hopper-sorel_4m-mr1024
+2026-11-25 15:54:18  bench/tools/handoff/depth15/cuda-hopper-sorel_4m-mr2048
+2026-11-25 16:04:33  bench/tools/handoff/depth15/cuda-hopper-sorel_4m-mr4096
+2026-11-25 16:14:55  bench/tools/handoff/depth15/cuda-hopper-sorel_4m-mr8192
+2026-11-25 16:25:11  sorel_4m (depth15): --handoff-rows 2048
+2026-11-25 16:25:11  done
+2026-11-25 16:25:41  bench/tools/handoff/depth20/cuda-hopper-sorel_4m-mr1024
+2026-11-25 16:35:35  bench/tools/handoff/depth20/cuda-hopper-sorel_4m-mr2048
+2026-11-25 16:46:04  bench/tools/handoff/depth20/cuda-hopper-sorel_4m-mr4096
+2026-11-25 16:57:59  bench/tools/handoff/depth20/cuda-hopper-sorel_4m-mr8192
+2026-11-25 17:08:23  sorel_4m (depth20): --handoff-rows 4096
+2026-11-25 17:08:23  done
+2026-11-25 17:08:53  bench/tools/handoff/depth25/cuda-hopper-sorel_4m-mr1024
+2026-11-25 17:19:02  bench/tools/handoff/depth25/cuda-hopper-sorel_4m-mr2048
+2026-11-25 17:29:35  bench/tools/handoff/depth25/cuda-hopper-sorel_4m-mr4096
+2026-11-25 17:39:48  bench/tools/handoff/depth25/cuda-hopper-sorel_4m-mr8192
+2026-11-25 17:50:20  sorel_4m (depth25): --handoff-rows 8192
+2026-11-25 17:50:20  done
+2026-11-25 17:50:50  bench/tools/handoff/depth30/cuda-hopper-sorel_4m-mr1024
+2026-11-25 18:01:07  bench/tools/handoff/depth30/cuda-hopper-sorel_4m-mr2048
+2026-11-25 18:11:41  bench/tools/handoff/depth30/cuda-hopper-sorel_4m-mr4096
+2026-11-25 18:22:00  bench/tools/handoff/depth30/cuda-hopper-sorel_4m-mr8192
+2026-11-25 18:32:26  sorel_4m (depth30): --handoff-rows 8192
+2026-11-25 18:32:26  done

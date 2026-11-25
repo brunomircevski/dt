@@ -1,0 +1,41 @@
+job 954 on hopper, 2026-11-25T18:32:27+01:00, kind all
+commit cfd18321d9d3
+data bench/tools/data/ecbdl/train.f32 (first 15000000 rows), reps 3 simple=10 serial=10, target 120 s, idle 300 s, cal 60 s, pre 20 s, warm-up 2 s, algos cart c45, impls cuda
+used_gpu 2 (NUMA node 1, cpus 16-31,0-15, 32 threads, first-touch memory)
+protocol -d 10
+command cuda env CUDA_VISIBLE_DEVICES=2 taskset -c 16-31,0-15 ./tree --hybrid --threads 32 --handoff-rows 4096 --repeat-warmup 2
+kernel 7.0.0-42-generic
+dmi Supermicro SYS-741GE-TNRT
+Model name:                              Intel(R) Xeon(R) Gold 6444Y
+Core(s) per socket:                      16
+Socket(s):                               2
+NUMA node(s):                            2
+governor intel_cpufreq schedutil
+cpus available 32
+power1_accuracy 97.500%
+power1_average 500000000
+power1_average_interval 1000
+power1_average_interval_max 3600000
+power1_average_interval_min 1000
+power1_average_max unknown
+power1_average_min unknown
+power1_is_battery 0
+power1_model_number Intel(R) Node Manager
+power1_oem_info Meter measures total domain
+power1_serial_number 
+rapl_max intel-rapl:0 package-0 262143328850
+rapl_max intel-rapl:0:0 dram 262143328850
+rapl_max intel-rapl:1 package-1 262143328850
+rapl_max intel-rapl:1:0 dram 262143328850
+psu_file 1795627947.348984933 500
+               total        used        free      shared  buff/cache   available
+Mem:            1007          16         816           2         182         991
+node 0 free: 432780 MB
+node 1 free: 403258 MB
+index, name, power.limit [W], driver_version, memory.used [MiB]
+0, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+1, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+2, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+3, NVIDIA H100 PCIe, 350.00 W, 620.70.06, 0 MiB
+repeat cuda cart 41 (warm-up train 3028.9 ms)
+repeat cuda c45 41 (warm-up train 3060.5 ms)

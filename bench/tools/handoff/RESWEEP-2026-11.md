@@ -28,6 +28,9 @@ NFS refused ampere's HIGGS (`mkdir: File exists`); job 910 measured it.
 
 ## The picks
 
+SOREL 4M's depths 15–30 were swept again below 4096 on 2026-11-25 (below):
+depth 15 now takes 2048 on both nodes; the other picks stand.
+
 Each value's score is its mean over CART and C4.5 of the time over that
 protocol's fastest; the columns give how much slower than the pick the
 runner-up, the value the results had used, and ./tree's default scored.
@@ -100,3 +103,51 @@ on hopper, HIGGS CART without a limit on ampere), the C4.5 run of the same
 value faster. The GPU-only / hybrid ratios that changed most: SOREL 4M CART
 depth 30 on ampere 0.95 → 1.18×, MNIST8M CART depth 30 on hopper 1.32 → 1.54×,
 HIGGS CART depth 20 on ampere 0.89 → 1.01×.
+
+## SOREL 4M below 4096 (2026-11-25)
+
+The sweep above started SOREL 4M at 4096, and 4096 came out fastest in 6 of
+its 8 depth-limited cases, so a smaller value could have been faster still
+(its depth-10 pick is 1024). Swept again on 2026-11-25, depths 15–30 on both
+nodes: 1024, 2048, 4096 and 8192, 4096 and 8192 measured again in the same job
+(the 2026-11-24 runs of those two moved to `depth<N>/old-2026-11-24/`; 16,384
+and up and `default` are the 2026-11-24 runs). ./tree cfd18321 (`src/` as
+7f98876f), clone `~/dt-r25` built by job 951, `--exclusive`: hopper job 952,
+ampere job 953, 15:35–18:40 (`logs-2026-11-25/`).
+
+| Node | Depth | 1024 | 2048 | 4096 | 8192 | Pick |
+|---|---|---|---|---|---|---|
+| hopper | 15 | +0.5% | **pick** | +0.6% | +1.3% | 2048 (was 4096) |
+| hopper | 20 | +1.7% | +0.4% | **pick** | +0.1% | 4096 |
+| hopper | 25 | +3.2% | +1.1% | +0.4% | **pick** | 8192 |
+| hopper | 30 | +3.7% | +1.5% | +0.2% | **pick** | 8192 |
+| ampere | 15 | +0.3% | **pick** | +0.1% | +1.0% | 2048 (was 4096) |
+| ampere | 20 | +1.4% | +0.4% | **pick** | +0.3% | 4096 |
+| ampere | 25 | +2.8% | +1.1% | **pick** | +0.3% | 4096 |
+| ampere | 30 | +3.6% | +1.7% | **pick** | +0.5% | 4096 |
+
+Below 4096 the curve rises again from depth 20 on, so those picks were the
+fastest after all; only depth 15 moves, to 2048, by 0.1–0.6% (within the
+sweep's noise, but the pick is the pick).
+
+Measured again: hybrid-vs-gpu-only's SOREL 4M `--hybrid` at depth 15, 10 runs
+of CART and C4.5 a node (`logs-2026-11-25/rerun.sh`, hopper job 968, ampere
+967, 2026-11-25 19:03–19:40, merged with `merge_runs.py --replace`). The same
+trees; hybrid time, old → new: hopper CART 3.99 → 3.95 s, C4.5 4.27 → 4.25 s;
+ampere CART 5.75 → 5.71 s, C4.5 6.02 → 6.06 s (GPU-only / hybrid: hopper 1.03
+→ 1.04× and 0.99×, ampere 1.01 → 1.02× and 0.98×).
+
+## Also on 2026-11-25
+
+- **cluster-power, ECBDL'14 on hopper:** its Hybrid had run ./tree's default
+  (1024 at depth 10) instead of the stored 4096; job 954 measured it again at
+  4096 (2.97 → 2.92 s CART, 2.95 → 2.93 s C4.5, the energy unchanged at 2.09
+  and 2.10 kJ; `bench/cluster-power/BENCHMARK.md`).
+- **./tree's default `--handoff-rows`** is now 10 × features between 1024 and
+  16,384, with a depth limit D at most 2^D and 4096 (`docs/PERFORMANCE.md`),
+  fitted to these sweeps: 0.3% slower than the fastest on average and 4.2% at
+  most, against 3.6% and 20.8% for the earlier
+  `max(512, min(10 × features, 2^D, 16384))`. The `./tree default` column
+  above is the earlier rule. No benchmark result depends on the default: chess
+  runs it, but hands nothing off at depth 10, and cluster-gpu-vs-others' HIGGS depth-30 line ran `HANDOFF=default` (512 then,
+  also its sweep value) and now takes the stored 512 (`final.sh`).

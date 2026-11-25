@@ -230,10 +230,10 @@ if want gpulibs; then
       tree_gpu_only,tree_cuda,cuml,xgboost "$(runs gpulibs "$d")" cart_depth10 all 14400 "$EXTRA"
   done
   # and a deep tree, where --hybrid's CPU subtrees pay off: HIGGS, depth <= 30,
-  # --hybrid at ./tree's default --handoff-rows, 512: also the fastest of the depth-30 sweep (2026-11-24)
+  # --hybrid at the depth-30 sweep's value (handoff_rows.json, 512 on hopper; job 789 ran
+  # it as HANDOFF=default, which was 512 then too)
   line hopper "${OUT:-cluster-gpu-vs-others}/one-tree" vs-hopper-higgs-depth30 higgs \
-    tree_gpu_only,tree_cuda,cuml,xgboost "$(runs gpulibs higgs)" cart_depth30 all 14400 \
-    "$EXTRA,HANDOFF=default"
+    tree_gpu_only,tree_cuda,cuml,xgboost "$(runs gpulibs higgs)" cart_depth30 all 14400 "$EXTRA"
 fi
 if want profiling; then profile hopper-2 cuda hopper; profile hopper-2 gpuonly hopper; fi
 for node in epyc dell; do

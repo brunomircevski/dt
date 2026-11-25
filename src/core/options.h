@@ -60,28 +60,28 @@ struct GpuOptions {
   // --hybrid: nodes with fewer rows are handed off (copied back and finished by
   // the CPU pool) while the GPU keeps working on the large nodes of the next
   // level. 0 = auto (handoffRows()): kHandoffRowsPerFeature × the features,
-  // at most 2^D for a depth limit D, between kMinHandoffRows and
-  // kMaxHandoffRows, for CART and C4.5 alike.
+  // between kMinHandoffRows and kMaxHandoffRows; with a depth limit D at most
+  // 2^D and kMaxLimitedHandoffRows. The same for CART and C4.5.
   // A node's CPU subtree costs about rows × features, a GPU level little more
-  // for a few wide nodes than for one, so wide data hands off later. Without a
-  // depth limit (f53347a9, A100 + 48 threads and H100 + 32 threads,
-  // bench/hybrid-vs-gpu-only/) the fastest value was 256-512 on HIGGS
-  // (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M (2381), and
-  // 10 × features is within 3.4% of the fastest on all three.
-  // A shallow tree reaches its depth limit almost everywhere, so the GPU runs
-  // all D levels anyway: a hand-off saves no GPU level and only moves the
-  // last levels' work to the slower CPU. At depth 10 (291a736f,
-  // bench/tools/handoff/depth10/) the fastest was 512-2048 on every
-  // dataset (ECBDL 4096, but 1024 within 0.6%), and 10 × features alone made
-  // CART 4-11% slower on MNIST8M and SOREL 4M; with the 2^D cap (1024) the
-  // CART runs are within 0.6% of the fastest, C4.5 (flat) within 1.6%. The cap
-  // stops mattering from D = 14; hybrid-vs-gpu-only shows hand-offs of the
-  // no-limit size break even at depth 15 and win from 20. D = 11-13 is
-  // between measurements.
+  // for a few wide nodes than for one, so wide data hands off later: without a
+  // depth limit the fastest value is 512-1024 on HIGGS (28 features), 8192 on
+  // MNIST8M (784) and 16384 on SOREL 4M (2381). A depth limit favours smaller
+  // values: the GPU stops at level D anyway, so a large hand-off saves it few
+  // levels and mostly moves work to the slower CPU. At depths 15-30 the
+  // fastest was 512-2048 on HIGGS, 2048-4096 on MNIST8M and 2048-8192 on
+  // SOREL 4M; at depth 10 1024 is within 0.7% of the fastest everywhere.
+  // A threshold below 1024 rows lost on the narrow data: 512 made SUSY
+  // (18 features) 3-5% and HIGGS on the A100 up to 21% slower. Against the
+  // fastest of every sweep (bench/tools/handoff/, 5 datasets, depths 10-30 and
+  // no limit, H100 + 32 threads and A100 + 48 threads) this rule is
+  // 0.3% slower on average and 4.2% at most (HIGGS, depth 20, A100); the
+  // earlier max(512, min(10F, 2^D, 16384)) was 3.6% and 20.8%.
+  // D = 11-13 is between measurements.
   std::size_t handoffRows = 0;
   static constexpr std::size_t kHandoffRowsPerFeature = 10;
-  static constexpr std::size_t kMinHandoffRows = 512;
+  static constexpr std::size_t kMinHandoffRows = 1024;
   static constexpr std::size_t kMaxHandoffRows = 16384;
+  static constexpr std::size_t kMaxLimitedHandoffRows = 4096;
   // --gpu grows every node on the GPU: no hand-offs to the CPU, and no host
   // arena for them (C4.5's pruning allocates it when it needs it). With
   // --threads 1 the CPU side is one thread (the staged copies too).

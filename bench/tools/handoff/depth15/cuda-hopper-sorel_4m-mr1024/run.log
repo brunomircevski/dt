@@ -1,0 +1,61 @@
+log: bench/tools/handoff/depth15/cuda-hopper-sorel_4m-mr1024/run.log, job 952 on hopper, started 2026-11-25 15:35:13
+
+=== 15:35:13  1/3 machine check
+CPUs allocated: 32 (16-31,0-15), SLURM_JOB_CPUS_PER_NODE=32
+CPU governor: schedutil 
+load average: 13.10 3.33 1.12
+free memory per NUMA node: node 0 398 GiB, node 1 394 GiB
+GPU 2 on NUMA node 1; CPUs 16-31,0-15 (both sockets), memory first-touch
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:1/1/16 17:1/1/17 18:1/1/18 19:1/1/19 20:1/1/20 21:1/1/21 22:1/1/22 23:1/1/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31
+GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+code: cfd18321d9d3 (from submit.sh: hopper has no git)
+runs per case: 5
+
+=== 15:35:13  2/3 benchmark: sorel_4m, cart_depth15,c45_depth15_unpruned, tree_cuda, threads all (of 32), 5 run(s) per case
+2 cases, 15 processes:
+  sorel_4m | cart_depth15 | tree_cuda | 32
+  sorel_4m | c45_depth15_unpruned | tree_cuda | 32
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  sorel_4m: identical in every format (581 s)
+every CPU busy for 10 s before the first run (untimed)
+2 cases x 5 run(s), then 1 footprint run(s) x 5: 15 processes. Time left is shown once every case has run once.
+[1/15] 15:45:06 run 1/5: CART ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 3.977 s, peak 36,943 MiB, GPU 77,723 MiB, 9,175 nodes, depth 15, train acc 95.86% | process 0m35s, elapsed 0m46s
+[2/15] 15:45:42 run 1/5: C4.5 ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 4.239 s, peak 36,943 MiB, GPU 77,659 MiB, 799 nodes, depth 15, train acc 83.14% | process 0m37s, elapsed 1m23s, about 4m52s left
+[3/15] 15:46:20 run 2/5: CART ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 3.968 s, peak 36,943 MiB, GPU 77,723 MiB, 9,175 nodes, depth 15, train acc 95.86% | process 0m36s, elapsed 2m00s, about 4m18s left
+[4/15] 15:46:57 run 2/5: C4.5 ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 4.288 s, peak 36,943 MiB, GPU 77,659 MiB, 799 nodes, depth 15, train acc 83.14% | process 1m05s, elapsed 3m06s, about 4m22s left
+[5/15] 15:48:03 run 3/5: C4.5 ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 4.265 s, peak 36,943 MiB, GPU 77,659 MiB, 799 nodes, depth 15, train acc 83.14% | process 1m04s, elapsed 4m11s, about 3m56s left
+[6/15] 15:49:07 run 3/5: CART ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 4.003 s, peak 36,943 MiB, GPU 77,723 MiB, 9,175 nodes, depth 15, train acc 95.86% | process 1m02s, elapsed 5m13s, about 3m21s left
+[7/15] 15:50:10 run 4/5: CART ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 3.994 s, peak 36,942 MiB, GPU 77,723 MiB, 9,175 nodes, depth 15, train acc 95.86% | process 1m01s, elapsed 6m15s, about 2m57s left
+[8/15] 15:51:11 run 4/5: C4.5 ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 4.23 s, peak 36,943 MiB, GPU 77,659 MiB, 799 nodes, depth 15, train acc 83.14% | process 0m59s, elapsed 7m15s, about 1m50s left
+[9/15] 15:52:11 run 5/5: CART ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 3.991 s, peak 36,943 MiB, GPU 77,723 MiB, 9,175 nodes, depth 15, train acc 95.86% | process 0m59s, elapsed 8m14s, about 1m02s left
+[10/15] 15:53:11 run 5/5: C4.5 ./tree Hybrid, 32 threads, sorel_4m ...
+    ok: train 4.277 s, peak 36,943 MiB, GPU 77,659 MiB, 799 nodes, depth 15, train acc 83.14% | process 1m00s, elapsed 9m15s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[11/15] 15:54:11 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1871 s, peak 638 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 9m16s, about 0m00s left
+[12/15] 15:54:13 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1803 s, peak 638 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 9m17s, about 0m00s left
+[13/15] 15:54:14 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1771 s, peak 638 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 9m18s, about 0m00s left
+[14/15] 15:54:15 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1798 s, peak 639 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 9m20s, about 0m00s left
+[15/15] 15:54:16 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1772 s, peak 639 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 9m21s, about 0m00s left
+results: /home/bmircevski/dt-r25/bench/tools/handoff/depth15/cuda-hopper-sorel_4m-mr1024/results.jsonl
+
+=== 15:54:17  3/3 tables and CSV files
+done 2026-11-25 15:54:18

@@ -120,7 +120,8 @@ cost or MinSplit), so the libraries run CART only.
   (the H100 runs FP64 at half the FP32 rate). Consumer GPUs (FP64 about 64×
   slower) are not a target.
 * **./tree --hybrid is a CPU + GPU hybrid:** nodes below `--handoff-rows`
-  (10 × features, at most 2^depth limit, within [512, 16384]) go to the CPU.
+  (10 × features within [1024, 16384], with a depth limit D at most 2^D and
+  4096) go to the CPU.
   At depth 10 on these datasets its build is the same as `--gpu`'s and its
   set-up 0.1 s longer; at depth 30 on HIGGS its build is 0.22 s shorter, 1.14×
   faster in all.

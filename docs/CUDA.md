@@ -270,28 +270,29 @@ the H100 node and -1.5..+0.6% on the A100 node, and GPU-only HIGGS and SUSY
 
 ## Tuning
 
-* `--handoff-rows N` (default: 10 × features, at most 2^D for a depth limit
-  D, between 512 and 16384, CART and C4.5 alike): nodes smaller than this are
-  finished on the CPU. Lower values keep more of the tree on the GPU (more,
-  smaller levels); higher values hand over earlier and keep the CPU pool
+* `--handoff-rows N` (default: 10 × features, between 1024 and 16384; with a
+  depth limit D at most 2^D and 4096; CART and C4.5 alike): nodes smaller than
+  this are finished on the CPU. Lower values keep more of the tree on the GPU
+  (more, smaller levels); higher values hand over earlier and keep the CPU pool
   busier. A node's CPU subtree costs about rows × features, while a GPU level
   costs little more for a few wide nodes than for one, so the best value grows
-  with the features. On f53347a9 (A100 + 48 threads, H100 + 32, no depth
-  limit; bench/hybrid-vs-gpu-only/BENCHMARK.md) the fastest was
-  256-512 on HIGGS (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M
-  (2381); 10 × features is within 3.4% of that on all three, where the earlier
-  rows-based default (rows / 8192 or / 4096, 1024-4096) was 6-12% slower.
-  With a shallow depth limit the tree reaches the limit almost everywhere, so
-  the GPU runs all D levels anyway and a hand-off only moves the last levels'
-  work to the slower CPU. At depth 10 (291a736f, bench/tools/handoff/)
-  the fastest was 512-2048 on every dataset (ECBDL 4096, with 1024 within
-  0.6%), and 10 × features alone made CART 4-11% slower on MNIST8M and SOREL
-  4M; the 2^D cap (1024 at depth 10) brings CART within 0.6% of the fastest
-  and leaves C4.5, whose curve is flat, within 1.6%. From depth 14 the cap no
-  longer applies; with no-limit sizes the hybrid breaks even with `--gpu` at
-  depth 15 and leads from depth 20 (hybrid-vs-gpu-only). Depths 11-13 are
-  between measurements. Datasets with few features (SUSY, chess, HIGGS) get
-  512 at any depth.
+  with the features: without a depth limit the fastest was 512-1024 on HIGGS
+  (28 features), 8192 on MNIST8M (784) and 16384 on SOREL 4M (2381). A depth
+  limit favours smaller values, because the GPU stops at level D anyway: a
+  large hand-off saves it few levels and mostly moves work to the slower CPU.
+  At depths 15-30 the fastest was 512-2048 on HIGGS, 2048-4096 on MNIST8M and
+  2048-8192 on SOREL 4M, at depth 10 1024 within 0.7% everywhere. Below 1024
+  rows the narrow datasets lost: 512 made SUSY 3-5% and HIGGS on the A100 up
+  to 21% slower. Scored against the fastest value of every sweep in
+  `bench/tools/handoff/` (all five GPU datasets at depth 10; HIGGS, MNIST8M
+  and SOREL 4M also at depths 15-30 and without a limit; H100 + 32 threads and
+  A100 + 48), this default is 0.3% slower on average and 4.2% at
+  most (HIGGS, depth 20, A100; 1024 against 2048); the rule before 2026-11-25,
+  max(512, min(10 × features, 2^D, 16384)), was 3.6% on average and 20.8% at
+  most, more than 3% in 21 of the 40 cases. Depths 11-13 are between
+  measurements. The benchmarks take the value measured fastest for their
+  node, dataset and depth limit (`bench/tools/handoff/handoff_rows.json`);
+  only chess, which hands nothing off at depth 10, runs the default.
 * `--gpu`: no node goes to the CPU; the GPU grows every level down to
   the leaves, and the host arena for the hand-offs (8 bytes per value) is not
   allocated. Everything else stays as without it: the CPU threads
