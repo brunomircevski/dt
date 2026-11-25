@@ -1050,7 +1050,7 @@ def depth_ratio():
     """Hybrid against GPU-Based by depth limit: GPU-Based time / Hybrid time (above 1: Hybrid
     faster), HIGGS, MNIST8M, SOREL 4M, H100 (filled) and A100 (hollow), CART solid, C4.5 dashed;
     below, who works during MNIST8M CART without a depth limit on the H100 (hybrid_profile_chart).
-    Depths 15 and deeper: hand-off threshold not swept yet -> marked as a placeholder."""
+    Each depth limit at its own swept hand-off threshold (bench/tools/handoff/RESWEEP-2026-11.md)."""
     import hybrid_profile_chart as HP
     PARTS = [(k, n, {"gpu": GPU_C, "both": GPU_C, "cpu": CPU_C}.get(k, c)) for k, n, c in HP.PARTS]  # GPU green, CPU blue
     root = RES / "hybrid-vs-gpu-only"
@@ -1064,7 +1064,6 @@ def depth_ratio():
     x = np.arange(len(depths))
     c_node = {"hopper": STYLE["cuda"][1], "ampere": "#7fcf9f"}  # both GPUs green: H100 dark, A100 light
     for ax, (ds, name) in zip(axes, sets):
-        ax.axvspan(1.5, len(depths) - 0.5, color="#fde7e9", lw=0, zorder=0)
         ax.axhline(1, color=INK, lw=0.6, zorder=1)
         for node in ("hopper", "ampere"):
             hy, go = summary(root / f"cuda-{node}-{ds}"), summary(root / f"gpuonly-{node}-{ds}")
@@ -1081,8 +1080,6 @@ def depth_ratio():
         ax.set_yticks([0.5, 1, 1.5, 2])
         ax.grid(axis="y", color=GRID, lw=0.3, zorder=0)
         ax.set_title(rf"\textbf{{{name}}}", pad=2)
-        ax.text(len(depths) - 0.55, 0.5, r"\textsf{PLACEHOLDER}: $m$ re-sweep", fontsize=FS_ANN - 0.5,
-                color="#b3261e", ha="right", va="bottom")
         if ax is not axes[0]:
             ax.tick_params(labelleft=False)
         ax.set_xlabel("depth limit", labelpad=1)

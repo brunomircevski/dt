@@ -1,0 +1,80 @@
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-hopper-higgs-mrdefault
+2026-11-24 17:20:06  bench/tools/handoff/depth15/cuda-hopper-higgs-mr128
+2026-11-24 17:20:48  bench/tools/handoff/depth15/cuda-hopper-higgs-mr256
+2026-11-24 17:21:24  bench/tools/handoff/depth15/cuda-hopper-higgs-mr512
+2026-11-24 17:22:01  bench/tools/handoff/depth15/cuda-hopper-higgs-mr1024
+2026-11-24 17:22:37  bench/tools/handoff/depth15/cuda-hopper-higgs-mr2048
+2026-11-24 17:23:14  bench/tools/handoff/depth15/cuda-hopper-higgs-mr4096
+2026-11-24 17:23:50  bench/tools/handoff/depth15/cuda-hopper-higgs-mr8192
+2026-11-24 17:24:26  higgs (depth15): --handoff-rows 512
+2026-11-24 17:24:26  done
+2026-11-24 17:24:56  bench/tools/handoff/depth15/cuda-hopper-mnist8m-mrdefault
+2026-11-24 17:39:36  bench/tools/handoff/depth15/cuda-hopper-mnist8m-mr512
+2026-11-24 17:46:44  bench/tools/handoff/depth15/cuda-hopper-mnist8m-mr1024
+2026-11-24 17:55:29  bench/tools/handoff/depth15/cuda-hopper-mnist8m-mr2048
+2026-11-24 18:07:18  bench/tools/handoff/depth15/cuda-hopper-mnist8m-mr4096
+2026-11-24 18:19:26  bench/tools/handoff/depth15/cuda-hopper-mnist8m-mr8192
+2026-11-24 18:34:05  bench/tools/handoff/depth15/cuda-hopper-mnist8m-mr16384
+2026-11-24 18:47:27  bench/tools/handoff/depth15/cuda-hopper-mnist8m-mr32768
+2026-11-24 18:59:02  mnist8m (depth15): --handoff-rows 2048
+2026-11-24 18:59:02  done
+2026-11-24 18:59:32  bench/tools/handoff/depth20/cuda-hopper-higgs-mrdefault
+2026-11-24 19:00:17  bench/tools/handoff/depth20/cuda-hopper-higgs-mr128
+2026-11-24 19:01:02  bench/tools/handoff/depth20/cuda-hopper-higgs-mr256
+2026-11-24 19:01:50  bench/tools/handoff/depth20/cuda-hopper-higgs-mr512
+2026-11-24 19:02:34  bench/tools/handoff/depth20/cuda-hopper-higgs-mr1024
+2026-11-24 19:03:21  bench/tools/handoff/depth20/cuda-hopper-higgs-mr2048
+2026-11-24 19:04:05  bench/tools/handoff/depth20/cuda-hopper-higgs-mr4096
+2026-11-24 19:04:52  bench/tools/handoff/depth20/cuda-hopper-higgs-mr8192
+2026-11-24 19:05:38  higgs (depth20): --handoff-rows 1024
+2026-11-24 19:05:38  done
+2026-11-24 19:06:08  bench/tools/handoff/depth20/cuda-hopper-mnist8m-mrdefault
+2026-11-24 19:13:30  bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr512
+2026-11-24 19:20:36  bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr1024
+2026-11-24 19:27:32  bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr2048
+2026-11-24 19:34:48  bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr4096
+2026-11-24 19:43:16  bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr8192
+2026-11-24 19:52:09  bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr16384
+2026-11-24 19:59:32  bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr32768
+2026-11-24 20:08:36  mnist8m (depth20): --handoff-rows 4096
+2026-11-24 20:08:36  done
+2026-11-24 20:09:07  bench/tools/handoff/depth25/cuda-hopper-higgs-mrdefault
+2026-11-24 20:09:55  bench/tools/handoff/depth25/cuda-hopper-higgs-mr128
+2026-11-24 20:10:55  bench/tools/handoff/depth25/cuda-hopper-higgs-mr256
+2026-11-24 20:11:42  bench/tools/handoff/depth25/cuda-hopper-higgs-mr512
+2026-11-24 20:12:28  bench/tools/handoff/depth25/cuda-hopper-higgs-mr1024
+2026-11-24 20:13:13  bench/tools/handoff/depth25/cuda-hopper-higgs-mr2048
+2026-11-24 20:14:01  bench/tools/handoff/depth25/cuda-hopper-higgs-mr4096
+2026-11-24 20:14:48  bench/tools/handoff/depth25/cuda-hopper-higgs-mr8192
+2026-11-24 20:15:37  higgs (depth25): --handoff-rows 1024
+2026-11-24 20:15:37  done
+2026-11-24 20:16:07  bench/tools/handoff/depth25/cuda-hopper-mnist8m-mrdefault
+2026-11-24 20:23:02  bench/tools/handoff/depth25/cuda-hopper-mnist8m-mr512
+2026-11-24 20:30:53  bench/tools/handoff/depth25/cuda-hopper-mnist8m-mr1024
+2026-11-24 20:38:17  bench/tools/handoff/depth25/cuda-hopper-mnist8m-mr2048
+2026-11-24 20:45:08  bench/tools/handoff/depth25/cuda-hopper-mnist8m-mr4096
+2026-11-24 20:52:11  bench/tools/handoff/depth25/cuda-hopper-mnist8m-mr8192
+2026-11-24 20:58:42  bench/tools/handoff/depth25/cuda-hopper-mnist8m-mr16384
+2026-11-24 21:04:21  bench/tools/handoff/depth25/cuda-hopper-mnist8m-mr32768
+2026-11-24 21:11:25  mnist8m (depth25): --handoff-rows 4096
+2026-11-24 21:11:25  done
+2026-11-24 21:11:55  bench/tools/handoff/depth30/cuda-hopper-higgs-mrdefault
+2026-11-24 21:12:41  bench/tools/handoff/depth30/cuda-hopper-higgs-mr128
+2026-11-24 21:13:31  bench/tools/handoff/depth30/cuda-hopper-higgs-mr256
+2026-11-24 21:14:18  bench/tools/handoff/depth30/cuda-hopper-higgs-mr512
+2026-11-24 21:15:04  bench/tools/handoff/depth30/cuda-hopper-higgs-mr1024
+2026-11-24 21:15:54  bench/tools/handoff/depth30/cuda-hopper-higgs-mr2048
+2026-11-24 21:16:41  bench/tools/handoff/depth30/cuda-hopper-higgs-mr4096
+2026-11-24 21:17:22  bench/tools/handoff/depth30/cuda-hopper-higgs-mr8192
+2026-11-24 21:18:10  higgs (depth30): --handoff-rows 512
+2026-11-24 21:18:10  done
+2026-11-24 21:18:40  bench/tools/handoff/depth30/cuda-hopper-mnist8m-mrdefault
+2026-11-24 21:26:27  bench/tools/handoff/depth30/cuda-hopper-mnist8m-mr512
+2026-11-24 21:33:32  bench/tools/handoff/depth30/cuda-hopper-mnist8m-mr1024
+2026-11-24 21:40:32  bench/tools/handoff/depth30/cuda-hopper-mnist8m-mr2048
+2026-11-24 21:47:57  bench/tools/handoff/depth30/cuda-hopper-mnist8m-mr4096
+2026-11-24 21:54:54  bench/tools/handoff/depth30/cuda-hopper-mnist8m-mr8192
+2026-11-24 22:01:49  bench/tools/handoff/depth30/cuda-hopper-mnist8m-mr16384
+2026-11-24 22:08:00  bench/tools/handoff/depth30/cuda-hopper-mnist8m-mr32768
+2026-11-24 22:13:16  mnist8m (depth30): --handoff-rows 4096
+2026-11-24 22:13:16  done

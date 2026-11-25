@@ -1,0 +1,61 @@
+log: bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr1024/run.log, job 902 on hopper, started 2026-11-24 19:20:36
+
+=== 19:20:36  1/3 machine check
+CPUs allocated: 32 (16-31,0-15), SLURM_JOB_CPUS_PER_NODE=32
+CPU governor: schedutil 
+load average: 25.44 27.87 28.51
+free memory per NUMA node: node 0 423 GiB, node 1 349 GiB
+GPU 2 on NUMA node 1; CPUs 16-31,0-15 (both sockets), memory first-touch
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:1/1/16 17:1/1/17 18:1/1/18 19:1/1/19 20:1/1/20 21:1/1/21 22:1/1/22 23:1/1/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31
+GPU 0, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 1, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 2, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+GPU 3, NVIDIA H100 PCIe, 0 MiB, 81559 MiB, 0 %, 350.00 W, P0
+code: 0b6ff5094490 (from submit.sh: hopper has no git)
+runs per case: 5
+
+=== 19:20:37  2/3 benchmark: mnist8m, cart_depth20,c45_depth20_unpruned, tree_cuda, threads all (of 32), 5 run(s) per case
+2 cases, 15 processes:
+  mnist8m | cart_depth20 | tree_cuda | 32
+  mnist8m | c45_depth20_unpruned | tree_cuda | 32
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
+2 cases x 5 run(s), then 1 footprint run(s) x 5: 15 processes. Time left is shown once every case has run once.
+[1/15] 19:20:49 run 1/5: CART ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.476 s, peak 24,845 MiB, GPU 50,403 MiB, 168,241 nodes, depth 20, train acc 97.59% | process 0m40s, elapsed 0m50s
+[2/15] 19:21:29 run 1/5: C4.5 ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.339 s, peak 24,845 MiB, GPU 50,147 MiB, 42,915 nodes, depth 20, train acc 89.16% | process 0m40s, elapsed 1m30s, about 5m20s left
+[3/15] 19:22:09 run 2/5: CART ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.473 s, peak 24,845 MiB, GPU 50,403 MiB, 168,241 nodes, depth 20, train acc 97.59% | process 0m39s, elapsed 2m10s, about 4m40s left
+[4/15] 19:22:49 run 2/5: C4.5 ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.324 s, peak 24,845 MiB, GPU 50,147 MiB, 42,915 nodes, depth 20, train acc 89.16% | process 0m39s, elapsed 2m50s, about 3m59s left
+[5/15] 19:23:29 run 3/5: C4.5 ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.367 s, peak 24,845 MiB, GPU 50,147 MiB, 42,915 nodes, depth 20, train acc 89.16% | process 0m40s, elapsed 3m31s, about 3m20s left
+[6/15] 19:24:10 run 3/5: CART ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.465 s, peak 24,845 MiB, GPU 50,403 MiB, 168,241 nodes, depth 20, train acc 97.59% | process 0m39s, elapsed 4m11s, about 2m40s left
+[7/15] 19:24:50 run 4/5: CART ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.532 s, peak 24,845 MiB, GPU 50,403 MiB, 168,241 nodes, depth 20, train acc 97.59% | process 0m39s, elapsed 4m50s, about 2m00s left
+[8/15] 19:25:30 run 4/5: C4.5 ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.37 s, peak 24,845 MiB, GPU 50,147 MiB, 42,915 nodes, depth 20, train acc 89.16% | process 0m35s, elapsed 5m26s, about 1m19s left
+[9/15] 19:26:05 run 5/5: CART ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.502 s, peak 24,845 MiB, GPU 50,403 MiB, 168,241 nodes, depth 20, train acc 97.59% | process 0m39s, elapsed 6m06s, about 0m39s left
+[10/15] 19:26:45 run 5/5: C4.5 ./tree Hybrid, 32 threads, mnist8m ...
+    ok: train 4.355 s, peak 24,845 MiB, GPU 50,147 MiB, 42,915 nodes, depth 20, train acc 89.16% | process 0m39s, elapsed 6m46s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[11/15] 19:27:25 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1856 s, peak 638 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 6m47s, about 0m00s left
+[12/15] 19:27:27 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.178 s, peak 638 MiB, GPU 507 MiB, 53 nodes, depth 7 | process 0m01s, elapsed 6m49s, about 0m00s left
+[13/15] 19:27:28 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1756 s, peak 638 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 6m50s, about 0m00s left
+[14/15] 19:27:29 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1773 s, peak 639 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 6m51s, about 0m00s left
+[15/15] 19:27:30 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1754 s, peak 638 MiB, GPU 495 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 6m52s, about 0m00s left
+results: /home/bmircevski/dt-r24/bench/tools/handoff/depth20/cuda-hopper-mnist8m-mr1024/results.jsonl
+
+=== 19:27:31  3/3 tables and CSV files
+done 2026-11-24 19:27:32

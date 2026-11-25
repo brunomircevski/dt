@@ -1,0 +1,105 @@
+mkdir: cannot create directory ‘bench/tools/handoff/depth15’: File exists
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-ampere-higgs-mrdefault
+bench/tools/handoff/handoff_sweep.sh: line 43: bench/tools/handoff/depth15/cuda-ampere-higgs-mrdefault/run.log: No such file or directory
+  failed (exit 1): bench/tools/handoff/depth15/cuda-ampere-higgs-mrdefault/run.log
+mkdir: cannot create directory ‘bench/tools/handoff/depth15’: File exists
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-ampere-higgs-mr128
+bench/tools/handoff/handoff_sweep.sh: line 43: bench/tools/handoff/depth15/cuda-ampere-higgs-mr128/run.log: No such file or directory
+  failed (exit 1): bench/tools/handoff/depth15/cuda-ampere-higgs-mr128/run.log
+mkdir: cannot create directory ‘bench/tools/handoff/depth15’: File exists
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-ampere-higgs-mr256
+bench/tools/handoff/handoff_sweep.sh: line 43: bench/tools/handoff/depth15/cuda-ampere-higgs-mr256/run.log: No such file or directory
+  failed (exit 1): bench/tools/handoff/depth15/cuda-ampere-higgs-mr256/run.log
+mkdir: cannot create directory ‘bench/tools/handoff/depth15’: File exists
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-ampere-higgs-mr512
+bench/tools/handoff/handoff_sweep.sh: line 43: bench/tools/handoff/depth15/cuda-ampere-higgs-mr512/run.log: No such file or directory
+  failed (exit 1): bench/tools/handoff/depth15/cuda-ampere-higgs-mr512/run.log
+mkdir: cannot create directory ‘bench/tools/handoff/depth15’: File exists
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-ampere-higgs-mr1024
+bench/tools/handoff/handoff_sweep.sh: line 43: bench/tools/handoff/depth15/cuda-ampere-higgs-mr1024/run.log: No such file or directory
+  failed (exit 1): bench/tools/handoff/depth15/cuda-ampere-higgs-mr1024/run.log
+mkdir: cannot create directory ‘bench/tools/handoff/depth15’: File exists
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-ampere-higgs-mr2048
+bench/tools/handoff/handoff_sweep.sh: line 43: bench/tools/handoff/depth15/cuda-ampere-higgs-mr2048/run.log: No such file or directory
+  failed (exit 1): bench/tools/handoff/depth15/cuda-ampere-higgs-mr2048/run.log
+mkdir: cannot create directory ‘bench/tools/handoff/depth15’: File exists
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-ampere-higgs-mr4096
+bench/tools/handoff/handoff_sweep.sh: line 43: bench/tools/handoff/depth15/cuda-ampere-higgs-mr4096/run.log: No such file or directory
+  failed (exit 1): bench/tools/handoff/depth15/cuda-ampere-higgs-mr4096/run.log
+mkdir: cannot create directory ‘bench/tools/handoff/depth15’: File exists
+2026-11-24 17:18:40  bench/tools/handoff/depth15/cuda-ampere-higgs-mr8192
+bench/tools/handoff/handoff_sweep.sh: line 43: bench/tools/handoff/depth15/cuda-ampere-higgs-mr8192/run.log: No such file or directory
+  failed (exit 1): bench/tools/handoff/depth15/cuda-ampere-higgs-mr8192/run.log
+no complete sweep value for ampere higgs
+  no sweep result for higgs
+2026-11-24 17:18:40  done, failed: cuda-ampere-higgs-mrdefault cuda-ampere-higgs-mr128 cuda-ampere-higgs-mr256 cuda-ampere-higgs-mr512 cuda-ampere-higgs-mr1024 cuda-ampere-higgs-mr2048 cuda-ampere-higgs-mr4096 cuda-ampere-higgs-mr8192 higgs
+2026-11-24 17:19:10  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mrdefault
+2026-11-24 17:34:16  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr512
+2026-11-24 17:41:24  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr1024
+2026-11-24 17:48:46  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr2048
+2026-11-24 17:59:47  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr4096
+2026-11-24 18:09:05  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr8192
+2026-11-24 18:18:07  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr16384
+2026-11-24 18:28:30  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr32768
+2026-11-24 18:39:13  mnist8m (depth15): --handoff-rows 2048
+2026-11-24 18:39:13  done
+2026-11-24 18:39:43  bench/tools/handoff/depth20/cuda-ampere-higgs-mrdefault
+2026-11-24 18:40:32  bench/tools/handoff/depth20/cuda-ampere-higgs-mr128
+2026-11-24 18:41:30  bench/tools/handoff/depth20/cuda-ampere-higgs-mr256
+2026-11-24 18:42:26  bench/tools/handoff/depth20/cuda-ampere-higgs-mr512
+2026-11-24 18:43:16  bench/tools/handoff/depth20/cuda-ampere-higgs-mr1024
+2026-11-24 18:44:10  bench/tools/handoff/depth20/cuda-ampere-higgs-mr2048
+2026-11-24 18:45:02  bench/tools/handoff/depth20/cuda-ampere-higgs-mr4096
+2026-11-24 18:45:57  bench/tools/handoff/depth20/cuda-ampere-higgs-mr8192
+2026-11-24 18:46:52  higgs (depth20): --handoff-rows 2048
+2026-11-24 18:46:52  done
+2026-11-24 18:47:22  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mrdefault
+2026-11-24 18:58:16  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr512
+2026-11-24 19:04:02  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr1024
+2026-11-24 19:10:56  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr2048
+2026-11-24 19:18:12  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr4096
+2026-11-24 19:25:28  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr8192
+2026-11-24 19:32:59  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr16384
+2026-11-24 19:40:17  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr32768
+2026-11-24 19:50:31  mnist8m (depth20): --handoff-rows 4096
+2026-11-24 19:50:31  done
+2026-11-24 19:51:01  bench/tools/handoff/depth25/cuda-ampere-higgs-mrdefault
+2026-11-24 19:51:45  bench/tools/handoff/depth25/cuda-ampere-higgs-mr128
+2026-11-24 19:52:34  bench/tools/handoff/depth25/cuda-ampere-higgs-mr256
+2026-11-24 19:53:19  bench/tools/handoff/depth25/cuda-ampere-higgs-mr512
+2026-11-24 19:54:07  bench/tools/handoff/depth25/cuda-ampere-higgs-mr1024
+2026-11-24 19:54:59  bench/tools/handoff/depth25/cuda-ampere-higgs-mr2048
+2026-11-24 19:55:44  bench/tools/handoff/depth25/cuda-ampere-higgs-mr4096
+2026-11-24 19:56:33  bench/tools/handoff/depth25/cuda-ampere-higgs-mr8192
+2026-11-24 19:57:18  higgs (depth25): --handoff-rows 1024
+2026-11-24 19:57:18  done
+2026-11-24 19:57:48  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mrdefault
+2026-11-24 20:05:40  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr512
+2026-11-24 20:12:38  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr1024
+2026-11-24 20:18:58  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr2048
+2026-11-24 20:26:35  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr4096
+2026-11-24 20:34:17  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr8192
+2026-11-24 20:41:33  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr16384
+2026-11-24 20:49:11  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr32768
+2026-11-24 20:57:08  mnist8m (depth25): --handoff-rows 4096
+2026-11-24 20:57:08  done
+2026-11-24 20:57:38  bench/tools/handoff/depth30/cuda-ampere-higgs-mrdefault
+2026-11-24 20:58:22  bench/tools/handoff/depth30/cuda-ampere-higgs-mr128
+2026-11-24 20:59:06  bench/tools/handoff/depth30/cuda-ampere-higgs-mr256
+2026-11-24 20:59:52  bench/tools/handoff/depth30/cuda-ampere-higgs-mr512
+2026-11-24 21:00:36  bench/tools/handoff/depth30/cuda-ampere-higgs-mr1024
+2026-11-24 21:01:20  bench/tools/handoff/depth30/cuda-ampere-higgs-mr2048
+2026-11-24 21:02:06  bench/tools/handoff/depth30/cuda-ampere-higgs-mr4096
+2026-11-24 21:02:51  bench/tools/handoff/depth30/cuda-ampere-higgs-mr8192
+2026-11-24 21:03:36  higgs (depth30): --handoff-rows 1024
+2026-11-24 21:03:36  done
+2026-11-24 21:04:07  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mrdefault
+2026-11-24 21:11:09  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr512
+2026-11-24 21:17:03  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr1024
+2026-11-24 21:24:33  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr2048
+2026-11-24 21:31:49  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr4096
+2026-11-24 21:39:06  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr8192
+2026-11-24 21:46:51  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr16384
+2026-11-24 21:54:34  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr32768
+2026-11-24 22:02:17  mnist8m (depth30): --handoff-rows 4096
+2026-11-24 22:02:17  done

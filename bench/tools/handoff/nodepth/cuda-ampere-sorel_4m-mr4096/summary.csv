@@ -1,0 +1,3 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+cuda-ampere-sorel_4m-mr4096,sorel_4m,cart_full_nodepth,tree_cuda,48,ok,True,29.7303,29.6421,29.7926,29.71986,0.06321275978787896,5,,75.03510915202787,38728097792,38727036928,38729445376,38064365568,87729,43865,231,1.0,,,81422974976,0.0
+cuda-ampere-sorel_4m-mr4096,sorel_4m,c45_unpruned,tree_cuda,48,ok,True,75.325,75.2162,75.46010000000001,75.34428,0.09587870983696407,5,,116.01546367601259,38727868416,38727204864,38728777728,38064136192,69637,34819,572,0.9980549999999999,,,81389420544,0.013

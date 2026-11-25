@@ -1,0 +1,61 @@
+log: bench/tools/handoff/nodepth/cuda-ampere-higgs-mr1024/run.log, job 907 on ampere, started 2026-11-25 02:41:34
+
+=== 02:41:34  1/3 machine check
+CPUs allocated: 48 (0-23,24-47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: ondemand 
+load average: 28.39 36.55 40.76
+free memory per NUMA node: node 0 474 GiB, node 1 493 GiB
+GPU 0 on NUMA node 0; CPUs 0-23,24-47 (both sockets), memory first-touch
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+GPU 0, NVIDIA A100 80GB PCIe, 0 MiB, 81920 MiB, 0 %, 300.00 W, P0
+GPU 1, NVIDIA A100 80GB PCIe, 0 MiB, 81920 MiB, 0 %, 300.00 W, P0
+GPU 2, NVIDIA A100-PCIE-40GB, 0 MiB, 40960 MiB, 0 %, 250.00 W, P0
+GPU 3, NVIDIA A100-PCIE-40GB, 0 MiB, 40960 MiB, 0 %, 250.00 W, P0
+code: 0b6ff5094490 (from submit.sh: hopper has no git)
+runs per case: 5
+
+=== 02:41:35  2/3 benchmark: higgs, cart_full_nodepth,c45_unpruned, tree_cuda, threads all (of 48), 5 run(s) per case
+2 cases, 15 processes:
+  higgs | cart_full_nodepth | tree_cuda | 48
+  higgs | c45_unpruned | tree_cuda | 48
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  higgs: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
+2 cases x 5 run(s), then 1 footprint run(s) x 5: 15 processes. Time left is shown once every case has run once.
+[1/15] 02:41:46 run 1/5: CART ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.9355 s, peak 2,181 MiB, GPU 3,407 MiB, 2,864,695 nodes, depth 69, train acc 100.00% | process 0m02s, elapsed 0m12s
+[2/15] 02:41:48 run 1/5: C4.5 ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.8514 s, peak 1,739 MiB, GPU 3,375 MiB, 1,317,065 nodes, depth 71, train acc 88.46% | process 0m02s, elapsed 0m14s, about 0m17s left
+[3/15] 02:41:51 run 2/5: CART ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.9475 s, peak 2,129 MiB, GPU 3,407 MiB, 2,864,695 nodes, depth 69, train acc 100.00% | process 0m02s, elapsed 0m16s, about 0m15s left
+[4/15] 02:41:53 run 2/5: C4.5 ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.8583 s, peak 1,740 MiB, GPU 3,375 MiB, 1,317,065 nodes, depth 71, train acc 88.46% | process 0m02s, elapsed 0m18s, about 0m13s left
+[5/15] 02:41:55 run 3/5: C4.5 ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.8441 s, peak 1,738 MiB, GPU 3,375 MiB, 1,317,065 nodes, depth 71, train acc 88.46% | process 0m02s, elapsed 0m21s, about 0m10s left
+[6/15] 02:41:57 run 3/5: CART ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.981 s, peak 2,265 MiB, GPU 3,407 MiB, 2,864,695 nodes, depth 69, train acc 100.00% | process 0m02s, elapsed 0m23s, about 0m08s left
+[7/15] 02:42:00 run 4/5: CART ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.9682 s, peak 2,220 MiB, GPU 3,407 MiB, 2,864,695 nodes, depth 69, train acc 100.00% | process 0m02s, elapsed 0m25s, about 0m06s left
+[8/15] 02:42:02 run 4/5: C4.5 ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.8445 s, peak 1,738 MiB, GPU 3,375 MiB, 1,317,065 nodes, depth 71, train acc 88.46% | process 0m02s, elapsed 0m28s, about 0m04s left
+[9/15] 02:42:04 run 5/5: CART ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.9501 s, peak 2,098 MiB, GPU 3,407 MiB, 2,864,695 nodes, depth 69, train acc 100.00% | process 0m02s, elapsed 0m30s, about 0m02s left
+[10/15] 02:42:06 run 5/5: C4.5 ./tree Hybrid, 48 threads, higgs ...
+    ok: train 0.854 s, peak 1,739 MiB, GPU 3,375 MiB, 1,317,065 nodes, depth 71, train acc 88.46% | process 0m02s, elapsed 0m32s, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[11/15] 02:42:09 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.179 s, peak 633 MiB, GPU 457 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m33s, about 0m00s left
+[12/15] 02:42:09 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1875 s, peak 633 MiB, GPU 469 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m33s, about 0m00s left
+[13/15] 02:42:10 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1742 s, peak 633 MiB, GPU 469 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m34s, about 0m00s left
+[14/15] 02:42:10 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1874 s, peak 633 MiB, GPU 469 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m34s, about 0m00s left
+[15/15] 02:42:11 footprint: CART ./tree Hybrid, 1 thread, _baseline ...
+    ok: train 0.1772 s, peak 633 MiB, GPU 457 MiB, 53 nodes, depth 7 | process 0m00s, elapsed 0m35s, about 0m00s left
+results: /home/bmircevski/dt-r24/bench/tools/handoff/nodepth/cuda-ampere-higgs-mr1024/results.jsonl
+
+=== 02:42:12  3/3 tables and CSV files
+done 2026-11-25 02:42:12

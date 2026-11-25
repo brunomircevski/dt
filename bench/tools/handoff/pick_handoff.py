@@ -10,7 +10,7 @@ what the hand-off acts on) over that protocol's fastest. The setup (allocation
 and upload) does not depend on the value, and on the H100 it takes one of two
 speeds from run to run (docs/PERFORMANCE.md), enough to decide a close sweep. "default" is measured for reference only. The
 value is also stored in bench/tools/handoff/handoff_rows.json under node, dataset and <key>
-("depth10", "nodepth"), where bench/tools/run.py takes it for every --hybrid run.
+("depth10" … "depth30", "nodepth"), where bench/tools/run.py takes it for every --hybrid run.
 """
 
 import fcntl

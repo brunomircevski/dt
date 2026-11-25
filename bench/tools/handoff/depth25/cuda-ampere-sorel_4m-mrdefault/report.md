@@ -1,0 +1,19 @@
+## cuda-ampere-sorel_4m-mrdefault
+
+**cuda-ampere-sorel_4m-mrdefault**: AMD EPYC 7402 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 1008 GiB, Linux 7.0.0-43-generic #43~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Sat Oct 31 06:52:47 UTC 2 x86_64, governor ondemand, turbo on, ./tree 0b6ff5094490, CPUs in order of use 0-23,24-47, 5 run(s) per case, every run a fresh process, no warm-up
+
+Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 633 MiB
+
+### sorel_4m (4,000,000 train / 4,195,042 test rows, 2381 features, 2 classes)
+
+**CART, grown to depth 25, no pruning** (`cart_depth25`), 48 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree Hybrid | 9.1 s | 8.95 s–9.34 s |  | 36.07 GiB (+ GPU 75.83 GiB) | 35.45 GiB | 34,045 | 17,023 | 25 | 98.64% |  |
+
+**C4.5, grown to depth 25, unpruned (only C4.5's collapse of useless splits)** (`c45_depth25_unpruned`), 48 threads
+
+| Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| ./tree Hybrid | 8.42 s | 8.3 s–8.47 s |  | 36.07 GiB (+ GPU 75.80 GiB) | 35.45 GiB | 2,701 | 1,351 | 25 | 87.11% |  |

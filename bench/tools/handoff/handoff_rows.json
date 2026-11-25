@@ -5,14 +5,26 @@
   },
   "higgs": {
    "depth10": 1024,
-   "nodepth": 512
+   "depth15": 1024,
+   "depth20": 2048,
+   "depth25": 1024,
+   "depth30": 1024,
+   "nodepth": 1024
   },
   "mnist8m": {
    "depth10": 1024,
+   "depth15": 2048,
+   "depth20": 4096,
+   "depth25": 4096,
+   "depth30": 4096,
    "nodepth": 8192
   },
   "sorel_4m": {
    "depth10": 1024,
+   "depth15": 4096,
+   "depth20": 4096,
+   "depth25": 4096,
+   "depth30": 4096,
    "nodepth": 16384
   },
   "susy": {
@@ -25,14 +37,26 @@
   },
   "higgs": {
    "depth10": 512,
-   "nodepth": 256
+   "depth15": 512,
+   "depth20": 1024,
+   "depth25": 1024,
+   "depth30": 512,
+   "nodepth": 512
   },
   "mnist8m": {
    "depth10": 2048,
+   "depth15": 2048,
+   "depth20": 4096,
+   "depth25": 4096,
+   "depth30": 4096,
    "nodepth": 8192
   },
   "sorel_4m": {
    "depth10": 1024,
+   "depth15": 4096,
+   "depth20": 4096,
+   "depth25": 8192,
+   "depth30": 8192,
    "nodepth": 16384
   },
   "susy": {

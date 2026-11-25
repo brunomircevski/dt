@@ -1,0 +1,112 @@
+2026-11-25 04:59:28  bench/tools/handoff/depth15/cuda-ampere-higgs-mrdefault
+2026-11-25 05:00:12  bench/tools/handoff/depth15/cuda-ampere-higgs-mr128
+2026-11-25 05:00:55  bench/tools/handoff/depth15/cuda-ampere-higgs-mr256
+2026-11-25 05:01:39  bench/tools/handoff/depth15/cuda-ampere-higgs-mr512
+2026-11-25 05:02:21  bench/tools/handoff/depth15/cuda-ampere-higgs-mr1024
+2026-11-25 05:03:05  bench/tools/handoff/depth15/cuda-ampere-higgs-mr2048
+2026-11-25 05:03:48  bench/tools/handoff/depth15/cuda-ampere-higgs-mr4096
+2026-11-25 05:04:31  bench/tools/handoff/depth15/cuda-ampere-higgs-mr8192
+2026-11-25 05:05:15  higgs (depth15): --handoff-rows 1024
+2026-11-25 05:05:15  done
+2026-11-25 05:05:45  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mrdefault kept
+2026-11-25 05:05:45  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr512 kept
+2026-11-25 05:05:45  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr1024 kept
+2026-11-25 05:05:45  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr2048 kept
+2026-11-25 05:05:45  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr4096 kept
+2026-11-25 05:05:45  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr8192 kept
+2026-11-25 05:05:45  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr16384 kept
+2026-11-25 05:05:45  bench/tools/handoff/depth15/cuda-ampere-mnist8m-mr32768 kept
+2026-11-25 05:05:45  mnist8m (depth15): --handoff-rows 2048
+2026-11-25 05:05:45  done
+2026-11-25 05:06:15  bench/tools/handoff/depth15/cuda-ampere-sorel_4m-mrdefault kept
+2026-11-25 05:06:15  bench/tools/handoff/depth15/cuda-ampere-sorel_4m-mr4096 kept
+2026-11-25 05:06:15  bench/tools/handoff/depth15/cuda-ampere-sorel_4m-mr8192 kept
+2026-11-25 05:06:15  bench/tools/handoff/depth15/cuda-ampere-sorel_4m-mr16384 kept
+2026-11-25 05:06:15  bench/tools/handoff/depth15/cuda-ampere-sorel_4m-mr32768 kept
+2026-11-25 05:06:15  bench/tools/handoff/depth15/cuda-ampere-sorel_4m-mr65536 kept
+2026-11-25 05:06:15  sorel_4m (depth15): --handoff-rows 4096
+2026-11-25 05:06:15  done
+2026-11-25 05:06:45  bench/tools/handoff/depth20/cuda-ampere-higgs-mrdefault kept
+2026-11-25 05:06:45  bench/tools/handoff/depth20/cuda-ampere-higgs-mr128 kept
+2026-11-25 05:06:45  bench/tools/handoff/depth20/cuda-ampere-higgs-mr256 kept
+2026-11-25 05:06:45  bench/tools/handoff/depth20/cuda-ampere-higgs-mr512 kept
+2026-11-25 05:06:45  bench/tools/handoff/depth20/cuda-ampere-higgs-mr1024 kept
+2026-11-25 05:06:45  bench/tools/handoff/depth20/cuda-ampere-higgs-mr2048 kept
+2026-11-25 05:06:45  bench/tools/handoff/depth20/cuda-ampere-higgs-mr4096 kept
+2026-11-25 05:06:45  bench/tools/handoff/depth20/cuda-ampere-higgs-mr8192 kept
+2026-11-25 05:06:45  higgs (depth20): --handoff-rows 2048
+2026-11-25 05:06:45  done
+2026-11-25 05:07:15  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mrdefault kept
+2026-11-25 05:07:15  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr512 kept
+2026-11-25 05:07:15  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr1024 kept
+2026-11-25 05:07:15  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr2048 kept
+2026-11-25 05:07:15  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr4096 kept
+2026-11-25 05:07:15  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr8192 kept
+2026-11-25 05:07:15  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr16384 kept
+2026-11-25 05:07:15  bench/tools/handoff/depth20/cuda-ampere-mnist8m-mr32768 kept
+2026-11-25 05:07:15  mnist8m (depth20): --handoff-rows 4096
+2026-11-25 05:07:15  done
+2026-11-25 05:07:45  bench/tools/handoff/depth20/cuda-ampere-sorel_4m-mrdefault kept
+2026-11-25 05:07:45  bench/tools/handoff/depth20/cuda-ampere-sorel_4m-mr4096 kept
+2026-11-25 05:07:45  bench/tools/handoff/depth20/cuda-ampere-sorel_4m-mr8192 kept
+2026-11-25 05:07:45  bench/tools/handoff/depth20/cuda-ampere-sorel_4m-mr16384 kept
+2026-11-25 05:07:45  bench/tools/handoff/depth20/cuda-ampere-sorel_4m-mr32768 kept
+2026-11-25 05:07:45  bench/tools/handoff/depth20/cuda-ampere-sorel_4m-mr65536 kept
+2026-11-25 05:07:45  sorel_4m (depth20): --handoff-rows 4096
+2026-11-25 05:07:45  done
+2026-11-25 05:08:15  bench/tools/handoff/depth25/cuda-ampere-higgs-mrdefault kept
+2026-11-25 05:08:15  bench/tools/handoff/depth25/cuda-ampere-higgs-mr128 kept
+2026-11-25 05:08:15  bench/tools/handoff/depth25/cuda-ampere-higgs-mr256 kept
+2026-11-25 05:08:15  bench/tools/handoff/depth25/cuda-ampere-higgs-mr512 kept
+2026-11-25 05:08:15  bench/tools/handoff/depth25/cuda-ampere-higgs-mr1024 kept
+2026-11-25 05:08:15  bench/tools/handoff/depth25/cuda-ampere-higgs-mr2048 kept
+2026-11-25 05:08:15  bench/tools/handoff/depth25/cuda-ampere-higgs-mr4096 kept
+2026-11-25 05:08:15  bench/tools/handoff/depth25/cuda-ampere-higgs-mr8192 kept
+2026-11-25 05:08:15  higgs (depth25): --handoff-rows 1024
+2026-11-25 05:08:15  done
+2026-11-25 05:08:45  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mrdefault kept
+2026-11-25 05:08:45  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr512 kept
+2026-11-25 05:08:45  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr1024 kept
+2026-11-25 05:08:45  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr2048 kept
+2026-11-25 05:08:45  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr4096 kept
+2026-11-25 05:08:45  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr8192 kept
+2026-11-25 05:08:45  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr16384 kept
+2026-11-25 05:08:45  bench/tools/handoff/depth25/cuda-ampere-mnist8m-mr32768 kept
+2026-11-25 05:08:45  mnist8m (depth25): --handoff-rows 4096
+2026-11-25 05:08:45  done
+2026-11-25 05:09:15  bench/tools/handoff/depth25/cuda-ampere-sorel_4m-mrdefault kept
+2026-11-25 05:09:15  bench/tools/handoff/depth25/cuda-ampere-sorel_4m-mr4096 kept
+2026-11-25 05:09:15  bench/tools/handoff/depth25/cuda-ampere-sorel_4m-mr8192 kept
+2026-11-25 05:09:15  bench/tools/handoff/depth25/cuda-ampere-sorel_4m-mr16384 kept
+2026-11-25 05:09:15  bench/tools/handoff/depth25/cuda-ampere-sorel_4m-mr32768 kept
+2026-11-25 05:09:15  bench/tools/handoff/depth25/cuda-ampere-sorel_4m-mr65536 kept
+2026-11-25 05:09:15  sorel_4m (depth25): --handoff-rows 4096
+2026-11-25 05:09:15  done
+2026-11-25 05:09:46  bench/tools/handoff/depth30/cuda-ampere-higgs-mrdefault kept
+2026-11-25 05:09:46  bench/tools/handoff/depth30/cuda-ampere-higgs-mr128 kept
+2026-11-25 05:09:46  bench/tools/handoff/depth30/cuda-ampere-higgs-mr256 kept
+2026-11-25 05:09:46  bench/tools/handoff/depth30/cuda-ampere-higgs-mr512 kept
+2026-11-25 05:09:46  bench/tools/handoff/depth30/cuda-ampere-higgs-mr1024 kept
+2026-11-25 05:09:46  bench/tools/handoff/depth30/cuda-ampere-higgs-mr2048 kept
+2026-11-25 05:09:46  bench/tools/handoff/depth30/cuda-ampere-higgs-mr4096 kept
+2026-11-25 05:09:46  bench/tools/handoff/depth30/cuda-ampere-higgs-mr8192 kept
+2026-11-25 05:09:46  higgs (depth30): --handoff-rows 1024
+2026-11-25 05:09:46  done
+2026-11-25 05:10:16  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mrdefault kept
+2026-11-25 05:10:16  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr512 kept
+2026-11-25 05:10:16  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr1024 kept
+2026-11-25 05:10:16  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr2048 kept
+2026-11-25 05:10:16  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr4096 kept
+2026-11-25 05:10:16  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr8192 kept
+2026-11-25 05:10:16  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr16384 kept
+2026-11-25 05:10:16  bench/tools/handoff/depth30/cuda-ampere-mnist8m-mr32768 kept
+2026-11-25 05:10:16  mnist8m (depth30): --handoff-rows 4096
+2026-11-25 05:10:16  done
+2026-11-25 05:10:46  bench/tools/handoff/depth30/cuda-ampere-sorel_4m-mrdefault kept
+2026-11-25 05:10:46  bench/tools/handoff/depth30/cuda-ampere-sorel_4m-mr4096 kept
+2026-11-25 05:10:46  bench/tools/handoff/depth30/cuda-ampere-sorel_4m-mr8192 kept
+2026-11-25 05:10:46  bench/tools/handoff/depth30/cuda-ampere-sorel_4m-mr16384 kept
+2026-11-25 05:10:46  bench/tools/handoff/depth30/cuda-ampere-sorel_4m-mr32768 kept
+2026-11-25 05:10:46  bench/tools/handoff/depth30/cuda-ampere-sorel_4m-mr65536 kept
+2026-11-25 05:10:46  sorel_4m (depth30): --handoff-rows 4096
+2026-11-25 05:10:46  done

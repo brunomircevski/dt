@@ -46,46 +46,46 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree Hybrid 638
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 3.8 s | 3.73 s–3.84 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 44,359 | 22,180 | 15 | 92.45% |  |
+| ./tree Hybrid | 3.55 s | 3.51 s–3.6 s |  | 24.27 GiB (+ GPU 48.94 GiB) | 23.64 GiB | 44,359 | 22,180 | 15 | 92.45% |  |
 
 **C4.5, grown to depth 15, unpruned (only C4.5's collapse of useless splits)** (`c45_depth15_unpruned`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 3.32 s | 3.31 s–3.37 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 12,313 | 6,157 | 15 | 82.42% |  |
+| ./tree Hybrid | 3.36 s | 3.34 s–3.39 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 12,313 | 6,157 | 15 | 82.42% |  |
 
 **CART, grown to depth 20, no pruning** (`cart_depth20`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 5.03 s | 5.01 s–5.06 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 168,241 | 84,121 | 20 | 97.59% |  |
+| ./tree Hybrid | 4.51 s | 4.46 s–4.56 s |  | 24.27 GiB (+ GPU 48.91 GiB) | 23.64 GiB | 168,241 | 84,121 | 20 | 97.59% |  |
 
 **C4.5, grown to depth 20, unpruned (only C4.5's collapse of useless splits)** (`c45_depth20_unpruned`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 4.17 s | 4.14 s–4.18 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 42,915 | 21,458 | 20 | 89.16% |  |
+| ./tree Hybrid | 4.19 s | 4.17 s–4.21 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 42,915 | 21,458 | 20 | 89.16% |  |
 
 **CART, grown to depth 25, no pruning** (`cart_depth25`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 5.92 s | 5.9 s–5.94 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 231,991 | 115,996 | 25 | 98.95% |  |
+| ./tree Hybrid | 5.15 s | 5.1 s–5.21 s |  | 24.27 GiB (+ GPU 48.91 GiB) | 23.64 GiB | 231,991 | 115,996 | 25 | 98.95% |  |
 
 **C4.5, grown to depth 25, unpruned (only C4.5's collapse of useless splits)** (`c45_depth25_unpruned`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 5 s | 4.98 s–5.03 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 84,917 | 42,459 | 25 | 93.54% |  |
+| ./tree Hybrid | 4.94 s | 4.92 s–4.96 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 84,917 | 42,459 | 25 | 93.54% |  |
 
 **CART, grown to depth 30, no pruning** (`cart_depth30`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 6.56 s | 6.53 s–6.59 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 257,021 | 128,511 | 30 | 99.42% |  |
+| ./tree Hybrid | 5.61 s | 5.56 s–5.67 s |  | 24.27 GiB (+ GPU 48.91 GiB) | 23.64 GiB | 257,021 | 128,511 | 30 | 99.42% |  |
 
 **C4.5, grown to depth 30, unpruned (only C4.5's collapse of useless splits)** (`c45_depth30_unpruned`), 32 threads
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree Hybrid | 5.59 s | 5.57 s–5.63 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 123,289 | 61,645 | 30 | 96.11% |  |
+| ./tree Hybrid | 5.65 s | 5.62 s–5.67 s |  | 24.27 GiB (+ GPU 48.88 GiB) | 23.64 GiB | 123,289 | 61,645 | 30 | 96.11% |  |

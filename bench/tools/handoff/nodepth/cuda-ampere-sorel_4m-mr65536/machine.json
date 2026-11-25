@@ -1,0 +1,114 @@
+{
+ "host": "ampere",
+ "started": "2026-11-25T04:41:25+01:00",
+ "command": "/home/bmircevski/dt-r24/bench/tools/.venv/bin/python bench/tools/run.py sorel_4m --protocols cart_full_nodepth,c45_unpruned --impls tree_cuda --threads all --cpus 0-23,24-47 --drop-cache --reps 5 --timeout 14400 --run-id tools/handoff/nodepth/cuda-ampere-sorel_4m-mr65536 --train-accuracy-only --spin 10 --long-runs 0 --long-seconds 3600 --handoff-rows 65536",
+ "lscpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           43 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  48\nOn-line CPU(s) list:                     0-47\nVendor ID:                               AuthenticAMD\nModel name:                              AMD EPYC 7402 24-Core Processor\nCPU family:                              23\nModel:                                   49\nThread(s) per core:                      1\nCore(s) per socket:                      24\nSocket(s):                               2\nStepping:                                0\nFrequency boost:                         enabled\nCPU(s) scaling MHz:                      64%\nCPU max MHz:                             3349.6089\nCPU min MHz:                             1500.0000\nBogoMIPS:                                5600.17\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local clzero irperf xsaveerptr rdpru wbnoinvd amd_ppin arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip rdpid overflow_recov succor smca sev sev_es\nL1d cache:                               1.5 MiB (48 instances)\nL1i cache:                               1.5 MiB (48 instances)\nL2 cache:                                24 MiB (48 instances)\nL3 cache:                                256 MiB (16 instances)\nNUMA node(s):                            2\nNUMA node0 CPU(s):                       0-23\nNUMA node1 CPU(s):                       24-47\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Mitigation; untrained return thunk; SMT disabled\nVulnerability Spec rstack overflow:      Mitigation; SMT disabled\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace",
+ "logical_cpus": 48,
+ "p_cores": null,
+ "e_cores": null,
+ "smt_active": "0",
+ "governors": [
+  "ondemand"
+ ],
+ "energy_performance_preference": [],
+ "intel_no_turbo": null,
+ "cpufreq_boost": "1",
+ "loadavg_at_start": "14.17 26.70 28.93 1/1036 1250966",
+ "ram_modules": [
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  },
+  {
+   "type": "DDR4",
+   "mts": 3200,
+   "bytes": 68719476736
+  }
+ ],
+ "mem_total_kb": 1056687536,
+ "kernel": "Linux 7.0.0-43-generic #43~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Sat Oct 31 06:52:47 UTC 2 x86_64",
+ "os": "Ubuntu 24.04.5 LTS",
+ "versions": {
+  "tree_git": "0b6ff5094490",
+  "tree_binary": "/home/bmircevski/dt-r24/tree_cpu",
+  "tree_cuda_binary": "/home/bmircevski/dt-r24/tree",
+  "tree_binary_sha256": "1546d7b6f25c4c6064db62cdfd816471509d1edfca3dc6e8cb5e9be88802cc63",
+  "tree_cuda_binary_sha256": "f2201e7e4a6ed83dbd15d07f31130977d6ca8c8f65da42b20dc27e4bc0d16aad",
+  "tree_build_commit": "0b6ff5094490",
+  "nvcc": "Build cuda_12.9.r12.9/compiler.36037853_0",
+  "gpu": "NVIDIA A100 80GB PCIe, 81920 MiB, 620.70.06, 300.00 W, 1410 MHz, P0\nNVIDIA A100 80GB PCIe, 81920 MiB, 620.70.06, 300.00 W, 1410 MHz, P0\nNVIDIA A100-PCIE-40GB, 40960 MiB, 620.70.06, 250.00 W, 1410 MHz, P0\nNVIDIA A100-PCIE-40GB, 40960 MiB, 620.70.06, 250.00 W, 1410 MHz, P0",
+  "cxx": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "cxxflags": "CXXFLAGS  := -std=c++20 -O3 -falign-functions=64 -falign-loops=32 -pthread -Wall -Wextra -Isrc -MMD -MP",
+  "python": "3.12.3",
+  "numpy": "2.5.3",
+  "scikit-learn": "1.9.1",
+  "R": "R version 4.6.1 (2026-06-24)",
+  "rpart": "4.1.27",
+  "java": "openjdk version \"17.0.18-internal\" 2026-01-20",
+  "weka": "",
+  "yadt": null
+ },
+ "numa_mem_free_kb": {
+  "node0": 498571076,
+  "node1": 518307320
+ },
+ "gpu_index": "0",
+ "settings": {
+  "alpha": 1e-05,
+  "long_runs": 0,
+  "long_seconds": 3600.0,
+  "java_heap": "503g",
+  "cpus": "0-23,24-47",
+  "membind": null,
+  "drop_cache": true,
+  "reps": 5,
+  "timeout": 14400.0,
+  "cooldown": 0
+ }
+}

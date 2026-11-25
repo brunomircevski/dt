@@ -1,0 +1,3 @@
+run,dataset,protocol,impl,threads,status,consistent,time_median,time_min,time_max,time_mean,time_stdev,time_reps,ratio_to_tree,wall_median,peak_rss,peak_rss_min,peak_rss_max,peak_rss_above_baseline,nodes,leaves,depth,train_accuracy,test_accuracy,test_accuracy_ci95,gpu_peak,prune_median
+cuda-ampere-higgs-mr1024,higgs,cart_depth15,tree_cuda,48,ok,True,0.4741,0.4581,0.4774,0.47038,0.008419441786721963,5,,2.704908985993825,1821974528,1821700096,1823055872,1158250496,48051,24026,15,0.733939,,,3572498432,0.0
+cuda-ampere-higgs-mr1024,higgs,c45_depth15_unpruned,tree_cuda,48,ok,True,0.4823,0.4761,0.4844,0.48056,0.00409792630485224,5,,2.718178042967338,1820954624,1820741632,1821388800,1157230592,16029,8015,15,0.677123,,,3538944000,0.0019

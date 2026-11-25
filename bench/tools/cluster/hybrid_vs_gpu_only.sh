@@ -16,7 +16,10 @@
 # (results.jsonl + profiles/*.json; chart: bench/tools/hybrid_profile_chart.py).
 # $DIR/sweep/ holds the no-limit --handoff-rows sweep of f53347a9 (the
 # "nodepth" values in bench/tools/handoff/handoff_rows.json, and ./tree's default). Environment (for a quick check of the script): DIR,
-# DATASETS, RUNS, PROTOCOLS, PROFILE_DATASETS ("" for none).
+# DATASETS, RUNS, PROTOCOLS, PROFILE_DATASETS ("" for none), KINDS (default
+# "cuda gpuonly"; "cuda": the hybrid only). A rerun of some cases goes to a new
+# DIR, then into the results with bench/tools/merge_runs.py --replace, e.g.
+#   DIR=hybrid-vs-gpu-only-new KINDS=cuda DATASETS=higgs PROTOCOLS=cart_depth30 PROFILE_DATASETS= ...
 
 set -uo pipefail
 NODE="$1"
@@ -26,6 +29,7 @@ DATASETS="${DATASETS:-higgs mnist8m sorel_4m}"
 RUNS="${RUNS:-3}"
 PROTOCOLS="${PROTOCOLS:-cart_depth5,cart_depth10,cart_depth15,cart_depth20,cart_depth25,cart_depth30,cart_full_nodepth,c45_depth5_unpruned,c45_depth10_unpruned,c45_depth15_unpruned,c45_depth20_unpruned,c45_depth25_unpruned,c45_depth30_unpruned,c45_unpruned}"
 PROFILE_DATASETS="${PROFILE_DATASETS-mnist8m}"
+KINDS="${KINDS:-cuda gpuonly}"
 failed=()
 run() {  # <dir> <name> <dataset> <impls> <runs> <protocols> [RUN_EXTRA]
   mkdir -p "bench/$1/$2"
@@ -35,11 +39,15 @@ run() {  # <dir> <name> <dataset> <impls> <runs> <protocols> [RUN_EXTRA]
     { echo "  failed (exit $?): bench/$1/$2/run.log"; failed+=("$2"); }
 }
 for dataset in $DATASETS; do
-  run "$DIR" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS"
-  run "$DIR" "gpuonly-$NODE-$dataset" "$dataset" tree_gpu_only "$RUNS" "$PROTOCOLS"
+  for kind in $KINDS; do
+    case "$kind" in cuda) impl=tree_cuda ;; gpuonly) impl=tree_gpu_only ;; *) echo "unknown kind $kind" >&2; exit 2 ;; esac
+    run "$DIR" "$kind-$NODE-$dataset" "$dataset" "$impl" "$RUNS" "$PROTOCOLS"
+  done
   if [[ " $PROFILE_DATASETS " == *" $dataset "* ]]; then
-    run "$DIR/profile" "cuda-$NODE-$dataset" "$dataset" tree_cuda "$RUNS" "$PROTOCOLS" "--profile"
-    run "$DIR/profile" "gpuonly-$NODE-$dataset" "$dataset" tree_gpu_only "$RUNS" "$PROTOCOLS" "--profile"
+    for kind in $KINDS; do
+      case "$kind" in cuda) impl=tree_cuda ;; gpuonly) impl=tree_gpu_only ;; esac
+      run "$DIR/profile" "$kind-$NODE-$dataset" "$dataset" "$impl" "$RUNS" "$PROTOCOLS" "--profile"
+    done
   fi
 done
 echo "$(date '+%F %T')  done${failed[*]:+, failed: ${failed[*]}}"

@@ -237,9 +237,9 @@ def handoff_rows(requested, dataset, flags):
     None: the value measured best for this node, dataset and depth limit in
     bench/tools/handoff/handoff_rows.json (written by bench/tools/handoff/handoff_sweep.sh): the
     entry of the shallowest measured depth limit at least as deep as this
-    run's ("depth<N>" for -d N, "nodepth" for no limit; -d 5 takes depth10,
-    -d 20 nodepth: the hand-off acts on the small nodes of the deep levels,
-    so a deeper limit is the closer measurement), else ./tree's default."""
+    run's ("depth<N>" for -d N, "nodepth" for no limit; -d 5 takes depth10:
+    the hand-off acts on the small nodes of the deep levels, so a deeper limit
+    is the closer measurement), else ./tree's default."""
     if requested == "default":
         return None
     if requested:
