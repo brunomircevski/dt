@@ -1,0 +1,32 @@
+/home/bmircevski/dt/tree --gpu --threads 8 --c45 --prune 0.25 -d 15 --dump bench/cluster-accuracy-pruned/runs/higgs/trees/c45-tree_gpu-d15-pruned.dump /home/bmircevski/dt/bench/tools/data/higgs/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/higgs/train.f32 (backend gpu)
+  rows 10500000 train, 28 features, 2 classes
+  pruning CF 0.250000 + raising
+  unpruned: 16029 nodes
+Tree:
+  nodes 11897, leaves 5949, depth 15
+  train accuracy 67.6844%
+Timings:
+  load                 11093.3 ms
+  gpu startup            232.9 ms
+  gpu startup wait         0.0 ms
+  gpu setup              323.2 ms
+  setup buffers          101.4 ms
+  setup allocate          10.7 ms
+  setup upload           187.0 ms
+  setup finish            24.1 ms
+  presort                  0.0 ms
+  build                 1161.5 ms
+  prune                  924.4 ms
+  train total           2409.1 ms
+  evaluate               235.3 ms
+Timeline:
+  span staging buffers: 0.078 101.482 ms
+  span device memory: 101.484 112.156 ms
+  span upload: 112.157 299.191 ms
+  span x log x table: 299.195 299.909 ms
+  span x log x table copy: 299.909 310.790 ms
+  span presort (GPU): 129.165 302.080 ms
+  span build: 324.351 1485.880 ms
+Memory:
+  peak after training 2948352 KiB

@@ -1,0 +1,42 @@
+[
+ {
+  "dataset": "higgs",
+  "algo": "c45",
+  "tool": "j48",
+  "version": "Weka J48",
+  "depth_limit": 10,
+  "prune": "none (-U: the same tree before prune())",
+  "pruned": false,
+  "fit_seconds": 1063.937,
+  "nodes": 923,
+  "leaves": 462,
+  "depth": 10,
+  "train_accuracy": 0.637688952,
+  "test_accuracy": 0.637458,
+  "pred": "bench/cluster-accuracy-pruned/runs/higgs/pred/c45-j48-d10-unpruned.i16",
+  "n_train": 10500000,
+  "n_test": 500000,
+  "host": "epyc2",
+  "case": "c45-j48-d10"
+ },
+ {
+  "dataset": "higgs",
+  "algo": "c45",
+  "tool": "j48",
+  "version": "Weka J48",
+  "depth_limit": 10,
+  "prune": "-C 0.25 -M 2",
+  "pruned": true,
+  "fit_seconds": 1162.113,
+  "nodes": 789,
+  "leaves": 395,
+  "depth": 10,
+  "train_accuracy": 0.637677143,
+  "test_accuracy": 0.637468,
+  "pred": "bench/cluster-accuracy-pruned/runs/higgs/pred/c45-j48-d10-pruned.i16",
+  "n_train": 10500000,
+  "n_test": 500000,
+  "host": "epyc2",
+  "case": "c45-j48-d10"
+ }
+]

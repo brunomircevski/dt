@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "sorel_4m",
+  "algo": "c45",
+  "tool": "tree",
+  "backend": "gpu",
+  "depth_limit": 15,
+  "pruned": true,
+  "prune": "--prune 0.25",
+  "nodes": 761,
+  "leaves": 381,
+  "depth": 15,
+  "train_accuracy": 0.831423,
+  "test_accuracy": 0.7957035948626975,
+  "n_train": 4000000,
+  "n_test": 4195042,
+  "tree_sha256": "378d5b8ca2a53a4333a5a97274105ce034310b8d50fdde9563af0988288e0574",
+  "fit_seconds": 98.67783665657043,
+  "pred": "bench/cluster-accuracy-pruned/runs/sorel_4m/pred/c45-tree_gpu-d15-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "hopper",
+  "case": "c45-tree_gpu-d15-pruned"
+ }
+]

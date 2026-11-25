@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --serial --cart --prune 1e-05 -d 10 --dump bench/cluster-accuracy-pruned/runs/mnist8m/trees/cart-tree_serial-d10-pruned.dump /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32 (backend serial)
+  rows 8100000 train, 784 features, 10 classes
+  pruning alpha 0.000010
+  unpruned: 1991 nodes
+Tree:
+  nodes 1615, leaves 808, depth 10
+  train accuracy 80.6950%
+Timings:
+  load                 71424.5 ms
+  presort              55934.9 ms
+  build               160627.3 ms
+  prune                    0.1 ms
+  train total         216562.3 ms
+  evaluate               552.9 ms
+Memory:
+  peak after training 74577928 KiB

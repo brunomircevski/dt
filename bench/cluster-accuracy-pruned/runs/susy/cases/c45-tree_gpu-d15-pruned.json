@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "susy",
+  "algo": "c45",
+  "tool": "tree",
+  "backend": "gpu",
+  "depth_limit": 15,
+  "pruned": true,
+  "prune": "--prune 0.25",
+  "nodes": 3977,
+  "leaves": 1989,
+  "depth": 15,
+  "train_accuracy": 0.796143,
+  "test_accuracy": 0.792234,
+  "n_train": 4500000,
+  "n_test": 500000,
+  "tree_sha256": "9ba724b9b4419e15d182332d8bb11b8713d948c1db8ea5ec5b94b9cbbdcb223e",
+  "fit_seconds": 2.2233150005340576,
+  "pred": "bench/cluster-accuracy-pruned/runs/susy/pred/c45-tree_gpu-d15-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "hopper",
+  "case": "c45-tree_gpu-d15-pruned"
+ }
+]

@@ -1,0 +1,34 @@
+/home/bmircevski/dt/tree --hybrid --threads 8 --c45 --prune 0.25 -d 20 --dump bench/cluster-accuracy-pruned/runs/sorel_4m/trees/c45-tree_hybrid-d20-pruned.dump --rows 4000000 /home/bmircevski/dt/bench/tools/data/sorel/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/sorel/train.f32 (first 4000000 rows) (backend hybrid)
+  rows 4000000 train, 2381 features, 2 classes
+  pruning CF 0.250000 + raising
+  unpruned: 1577 nodes
+Tree:
+  nodes 1415, leaves 708, depth 20
+  train accuracy 85.6979%
+Timings:
+  load                105613.9 ms
+  gpu startup            811.5 ms
+  gpu startup wait         0.0 ms
+  gpu setup             2191.0 ms
+  setup buffers          134.8 ms
+  setup allocate          28.4 ms
+  setup upload          1647.6 ms
+  setup finish           380.2 ms
+  presort                  0.0 ms
+  build                 3414.7 ms
+  prune                   67.1 ms
+  train total           5672.8 ms
+  evaluate              3161.4 ms
+Timeline:
+  span staging buffers: 0.070 47.815 ms
+  span hand-off buffers: 47.819 134.893 ms
+  span device memory: 134.897 163.253 ms
+  span upload: 163.255 1810.852 ms
+  span x log x table: 1810.854 1812.191 ms
+  span x log x table copy: 1812.194 1837.783 ms
+  span presort (GPU): 166.846 1811.479 ms
+  span cpu subtrees: 2810.836 5604.214 ms, busy 2566.397 ms in 84 tasks
+  span build: 2193.865 5608.588 ms
+Memory:
+  peak after training 43905416 KiB

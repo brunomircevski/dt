@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --c45 --prune 0.25 -d 10 --dump bench/cluster-accuracy-pruned/runs/ecbdl_15m/trees/c45-tree-d10-pruned.dump --rows 15000000 /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend multicore)
+  rows 15000000 train, 631 features, 2 classes
+  pruning CF 0.250000 + raising
+  unpruned: 725 nodes
+Tree:
+  nodes 161, leaves 81, depth 10
+  train accuracy 97.9120%
+Timings:
+  load                651884.3 ms
+  presort              10722.4 ms
+  build                24961.0 ms
+  prune                  117.0 ms
+  train total          35800.4 ms
+  evaluate              1744.5 ms
+Memory:
+  peak after training 112364748 KiB

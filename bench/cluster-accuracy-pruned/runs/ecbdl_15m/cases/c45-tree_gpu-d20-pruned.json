@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "ecbdl_15m",
+  "algo": "c45",
+  "tool": "tree",
+  "backend": "gpu",
+  "depth_limit": 20,
+  "pruned": true,
+  "prune": "--prune 0.25",
+  "nodes": 6937,
+  "leaves": 3469,
+  "depth": 20,
+  "train_accuracy": 0.979691,
+  "test_accuracy": 0.9810622595471161,
+  "n_train": 15000000,
+  "n_test": 2897917,
+  "tree_sha256": "ab7d5045a54b04cdd97f51cd3161acb242538d91444ad61823bedba20b5edef8",
+  "fit_seconds": 52.94391846656799,
+  "pred": "bench/cluster-accuracy-pruned/runs/ecbdl_15m/pred/c45-tree_gpu-d20-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "hopper",
+  "case": "c45-tree_gpu-d20-pruned"
+ }
+]

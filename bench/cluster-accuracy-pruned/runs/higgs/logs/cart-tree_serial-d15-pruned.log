@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --serial --cart --prune 1e-05 -d 15 --dump bench/cluster-accuracy-pruned/runs/higgs/trees/cart-tree_serial-d15-pruned.dump /home/bmircevski/dt/bench/tools/data/higgs/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/higgs/train.f32 (backend serial)
+  rows 10500000 train, 28 features, 2 classes
+  pruning alpha 0.000010
+  unpruned: 23287 nodes
+Tree:
+  nodes 1545, leaves 773, depth 15
+  train accuracy 71.7388%
+Timings:
+  load                  7694.8 ms
+  presort               4342.0 ms
+  build                17173.1 ms
+  prune                    0.1 ms
+  train total          21515.3 ms
+  evaluate                60.5 ms
+Memory:
+  peak after training 3655156 KiB

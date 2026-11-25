@@ -1,0 +1,33 @@
+/home/bmircevski/dt/tree --hybrid --threads 8 --c45 --prune 0.25 -d 5 --dump bench/cluster-accuracy-pruned/runs/susy/trees/c45-tree_hybrid-d5-pruned.dump /home/bmircevski/dt/bench/tools/data/susy/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/susy/train.f32 (backend hybrid)
+  rows 4500000 train, 18 features, 2 classes
+  pruning CF 0.250000 + raising
+  unpruned: 33 nodes
+Tree:
+  nodes 33, leaves 17, depth 5
+  train accuracy 77.1469%
+Timings:
+  load                   284.8 ms
+  gpu startup           1118.3 ms
+  gpu startup wait       832.0 ms
+  gpu setup              327.8 ms
+  setup buffers          218.4 ms
+  setup allocate          37.9 ms
+  setup upload            29.1 ms
+  setup finish            42.3 ms
+  presort                  0.0 ms
+  build                   23.1 ms
+  prune                   69.5 ms
+  train total            420.3 ms
+  evaluate                45.2 ms
+Timeline:
+  span staging buffers: 0.113 115.115 ms
+  span hand-off buffers: 115.121 218.542 ms
+  span device memory: 218.548 256.433 ms
+  span upload: 256.436 285.554 ms
+  span x log x table: 285.556 287.420 ms
+  span x log x table copy: 287.423 321.513 ms
+  span presort (GPU): 260.794 286.237 ms
+  span build: 329.825 352.921 ms
+Memory:
+  peak after training 1409396 KiB

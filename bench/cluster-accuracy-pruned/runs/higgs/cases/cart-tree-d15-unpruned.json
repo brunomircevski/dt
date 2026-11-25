@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "higgs",
+  "algo": "cart",
+  "tool": "tree",
+  "backend": "multicore",
+  "depth_limit": 15,
+  "pruned": false,
+  "prune": "none",
+  "nodes": 48051,
+  "leaves": 24026,
+  "depth": 15,
+  "train_accuracy": 0.733939,
+  "test_accuracy": 0.719862,
+  "n_train": 10500000,
+  "n_test": 500000,
+  "tree_sha256": "d9e6ba5a47c7531a762adb02c8e2f5d3025b31c61a3e2688cd20fa51d99fcceb",
+  "fit_seconds": 13.391571283340454,
+  "pred": "bench/cluster-accuracy-pruned/runs/higgs/pred/cart-tree-d15-unpruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "dell4",
+  "case": "cart-tree-d15-unpruned"
+ }
+]

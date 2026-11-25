@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "ecbdl_15m",
+  "algo": "cart",
+  "tool": "tree",
+  "backend": "multicore",
+  "depth_limit": 15,
+  "pruned": true,
+  "prune": "--prune 1e-05",
+  "nodes": 1,
+  "leaves": 1,
+  "depth": 0,
+  "train_accuracy": 0.979075,
+  "test_accuracy": 0.9832165655538099,
+  "n_train": 15000000,
+  "n_test": 2897917,
+  "tree_sha256": "9388961c3db5975f3da6797031014b7556ba283c450cf208b23ce673b7d31357",
+  "fit_seconds": 244.601069688797,
+  "pred": "bench/cluster-accuracy-pruned/runs/ecbdl_15m/pred/cart-tree-d15-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "dell1",
+  "case": "cart-tree-d15-pruned"
+ }
+]

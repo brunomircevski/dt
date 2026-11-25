@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "sorel_4m",
+  "algo": "cart",
+  "tool": "tree",
+  "backend": "hybrid",
+  "depth_limit": 10,
+  "pruned": true,
+  "prune": "--prune 1e-05",
+  "nodes": 659,
+  "leaves": 330,
+  "depth": 10,
+  "train_accuracy": 0.917983,
+  "test_accuracy": 0.9254202937658312,
+  "n_train": 4000000,
+  "n_test": 4195042,
+  "tree_sha256": "30701928e1f71af2ed9e37e0aaec1f910b08332b064bff67aa6b4e2e77d9c298",
+  "fit_seconds": 156.63336968421936,
+  "pred": "bench/cluster-accuracy-pruned/runs/sorel_4m/pred/cart-tree_hybrid-d10-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "hopper",
+  "case": "cart-tree_hybrid-d10-pruned"
+ }
+]

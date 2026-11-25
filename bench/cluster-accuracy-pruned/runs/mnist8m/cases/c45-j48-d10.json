@@ -1,0 +1,42 @@
+[
+ {
+  "dataset": "mnist8m",
+  "algo": "c45",
+  "tool": "j48",
+  "version": "Weka J48",
+  "depth_limit": 10,
+  "prune": "none (-U: the same tree before prune())",
+  "pruned": false,
+  "fit_seconds": 19919.165,
+  "nodes": 1453,
+  "leaves": 727,
+  "depth": 10,
+  "train_accuracy": 0.70963321,
+  "test_accuracy": 0.7465,
+  "pred": "bench/cluster-accuracy-pruned/runs/mnist8m/pred/c45-j48-d10-unpruned.i16",
+  "n_train": 8100000,
+  "n_test": 10000,
+  "host": "epyc2",
+  "case": "c45-j48-d10"
+ },
+ {
+  "dataset": "mnist8m",
+  "algo": "c45",
+  "tool": "j48",
+  "version": "Weka J48",
+  "depth_limit": 10,
+  "prune": "-C 0.25 -M 2",
+  "pruned": true,
+  "fit_seconds": 20022.886,
+  "nodes": 1447,
+  "leaves": 724,
+  "depth": 10,
+  "train_accuracy": 0.709632716,
+  "test_accuracy": 0.7465,
+  "pred": "bench/cluster-accuracy-pruned/runs/mnist8m/pred/c45-j48-d10-pruned.i16",
+  "n_train": 8100000,
+  "n_test": 10000,
+  "host": "epyc2",
+  "case": "c45-j48-d10"
+ }
+]

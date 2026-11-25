@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --c45 --prune 0.25 -d 5 --dump bench/cluster-accuracy-pruned/runs/higgs/trees/c45-tree-d5-pruned.dump /home/bmircevski/dt/bench/tools/data/higgs/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/higgs/train.f32 (backend multicore)
+  rows 10500000 train, 28 features, 2 classes
+  pruning CF 0.250000 + raising
+  unpruned: 33 nodes
+Tree:
+  nodes 27, leaves 14, depth 5
+  train accuracy 61.0470%
+Timings:
+  load                  8824.4 ms
+  presort                732.6 ms
+  build                  748.7 ms
+  prune                  267.2 ms
+  train total           1748.4 ms
+  evaluate                44.2 ms
+Memory:
+  peak after training 4475296 KiB

@@ -1,0 +1,5 @@
+/home/bmircevski/dt-final/bench/tools/.tools/yadt/dTcmd -bt bench/cluster-accuracy-pruned/runs/mnist8m/tmp/c45-yadt-d5-unpruned.yadt -fs /home/bmircevski/dt/bench/tools/data/mnist8m/test.yadt.csv -s bench/cluster-accuracy-pruned/runs/mnist8m/tmp/c45-yadt-d5-unpruned.test.score
+YaDT version 2.3.0 (c) S. Ruggieri 2002-2020
+Tree loaded
+Scoring data
+ + rows: 10000 time: 0.575395 secs (17.37 K rows/s)

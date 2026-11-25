@@ -1,0 +1,5 @@
+/home/bmircevski/dt-final/bench/tools/.tools/yadt/dTcmd -bt bench/cluster-accuracy-pruned/runs/higgs/tmp/c45-yadt-d10-pruned.yadt -fs /home/bmircevski/dt/bench/tools/data/higgs/test.yadt.csv -s bench/cluster-accuracy-pruned/runs/higgs/tmp/c45-yadt-d10-pruned.test.score
+YaDT version 2.3.0 (c) S. Ruggieri 2002-2020
+Tree loaded
+Scoring data
+ + rows: 500000 time: 4.45835 secs (112.14 K rows/s)

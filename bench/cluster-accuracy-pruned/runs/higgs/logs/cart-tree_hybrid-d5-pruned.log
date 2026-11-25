@@ -1,0 +1,33 @@
+/home/bmircevski/dt/tree --hybrid --threads 8 --cart --prune 1e-05 -d 5 --dump bench/cluster-accuracy-pruned/runs/higgs/trees/cart-tree_hybrid-d5-pruned.dump /home/bmircevski/dt/bench/tools/data/higgs/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/higgs/train.f32 (backend hybrid)
+  rows 10500000 train, 28 features, 2 classes
+  pruning alpha 0.000010
+  unpruned: 63 nodes
+Tree:
+  nodes 35, leaves 18, depth 5
+  train accuracy 66.4111%
+Timings:
+  load                  9605.3 ms
+  gpu startup            280.7 ms
+  gpu startup wait         0.0 ms
+  gpu setup              696.6 ms
+  setup buffers          384.6 ms
+  setup allocate          12.9 ms
+  setup upload           232.8 ms
+  setup finish            66.4 ms
+  presort                  0.0 ms
+  build                   67.5 ms
+  prune                    0.0 ms
+  train total            764.2 ms
+  evaluate                 0.0 ms
+Timeline:
+  span staging buffers: 0.105 105.543 ms
+  span hand-off buffers: 105.544 384.681 ms
+  span device memory: 384.684 397.549 ms
+  span upload: 397.552 630.324 ms
+  span x log x table: 630.371 631.071 ms
+  span x log x table copy: 631.072 696.667 ms
+  span presort (GPU): 431.867 632.391 ms
+  span build: 697.149 764.697 ms
+Memory:
+  peak after training 1682956 KiB

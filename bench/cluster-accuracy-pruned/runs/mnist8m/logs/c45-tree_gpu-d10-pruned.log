@@ -1,0 +1,32 @@
+/home/bmircevski/dt/tree --gpu --threads 8 --c45 --prune 0.25 -d 10 --dump bench/cluster-accuracy-pruned/runs/mnist8m/trees/c45-tree_gpu-d10-pruned.dump /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32 (backend gpu)
+  rows 8100000 train, 784 features, 10 classes
+  pruning CF 0.250000 + raising
+  unpruned: 1453 nodes
+Tree:
+  nodes 1447, leaves 724, depth 10
+  train accuracy 70.9633%
+Timings:
+  load                 59010.0 ms
+  gpu startup            666.3 ms
+  gpu startup wait         0.0 ms
+  gpu setup             1279.9 ms
+  setup buffers           67.4 ms
+  setup allocate          26.2 ms
+  setup upload          1159.0 ms
+  setup finish            27.3 ms
+  presort                  0.0 ms
+  build                 1469.9 ms
+  prune                  222.7 ms
+  train total           2972.5 ms
+  evaluate               876.6 ms
+Timeline:
+  span staging buffers: 0.085 67.480 ms
+  span device memory: 67.484 93.689 ms
+  span upload: 93.692 1252.678 ms
+  span x log x table: 1252.681 1253.928 ms
+  span x log x table copy: 1253.929 1279.053 ms
+  span presort (GPU): 100.877 1253.761 ms
+  span build: 1281.291 2751.231 ms
+Memory:
+  peak after training 25410248 KiB

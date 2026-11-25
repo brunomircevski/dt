@@ -1,0 +1,21 @@
+[
+ {
+  "dataset": "susy",
+  "algo": "c45",
+  "tool": "yadt",
+  "version": "YaDT 2.3.0",
+  "depth_limit": 20,
+  "pruned": false,
+  "prune": "-np -m 2",
+  "nodes": 17703,
+  "leaves": 8852,
+  "depth": 20,
+  "train_accuracy": 0.8059168888888889,
+  "test_accuracy": 0.795202,
+  "n_train": 4500000,
+  "n_test": 500000,
+  "pred": "bench/cluster-accuracy-pruned/runs/susy/pred/c45-yadt-d20-unpruned.npy",
+  "host": "epyc2",
+  "case": "c45-yadt-d20-unpruned"
+ }
+]

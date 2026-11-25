@@ -1,0 +1,16 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --cart -d 5 --dump bench/cluster-accuracy-pruned/runs/sorel_4m/trees/cart-tree-d5-unpruned.dump --rows 4000000 /home/bmircevski/dt/bench/tools/data/sorel/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/sorel/train.f32 (first 4000000 rows) (backend multicore)
+  rows 4000000 train, 2381 features, 2 classes
+  pruning off
+Tree:
+  nodes 63, leaves 32, depth 5
+  train accuracy 85.3827%
+Timings:
+  load                 91820.9 ms
+  presort              12711.7 ms
+  build                12198.9 ms
+  prune                    0.0 ms
+  train total          24910.7 ms
+  evaluate              1803.5 ms
+Memory:
+  peak after training 112153436 KiB

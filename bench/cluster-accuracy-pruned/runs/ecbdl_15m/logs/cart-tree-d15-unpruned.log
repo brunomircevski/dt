@@ -1,0 +1,16 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --cart -d 15 --dump bench/cluster-accuracy-pruned/runs/ecbdl_15m/trees/cart-tree-d15-unpruned.dump --rows 15000000 /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend multicore)
+  rows 15000000 train, 631 features, 2 classes
+  pruning off
+Tree:
+  nodes 20457, leaves 10229, depth 15
+  train accuracy 98.0553%
+Timings:
+  load                367492.7 ms
+  presort               8076.1 ms
+  build                41196.2 ms
+  prune                    0.0 ms
+  train total          49272.3 ms
+  evaluate              1762.9 ms
+Memory:
+  peak after training 112040380 KiB

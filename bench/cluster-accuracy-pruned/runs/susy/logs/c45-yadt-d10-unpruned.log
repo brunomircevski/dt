@@ -1,0 +1,54 @@
+/home/bmircevski/dt-final/bench/tools/.tools/yadt/dTcmd -fm /home/bmircevski/dt/bench/tools/data/susy/yadt.names -fd /home/bmircevski/dt/bench/tools/data/susy/train.yadt.csv -tt 4 -np -m 2 -depth 10 -tb bench/cluster-accuracy-pruned/runs/susy/tmp/c45-yadt-d10-unpruned.yadt
+YaDT version 2.3.0 (c) S. Ruggieri 2002-2020
+Reading text data
+  100000
+  200000
+  300000
+  400000
+  500000
+  600000
+  700000
+  800000
+  900000
+  1000000
+  1100000
+  1200000
+  1300000
+  1400000
+  1500000
+  1600000
+  1700000
+  1800000
+  1900000
+  2000000
+  2100000
+  2200000
+  2300000
+  2400000
+  2500000
+  2600000
+  2700000
+  2800000
+  2900000
+  3000000
+  3100000
+  3200000
+  3300000
+  3400000
+  3500000
+  3600000
+  3700000
+  3800000
+  3900000
+  4000000
+  4100000
+  4200000
+  4300000
+ + pred. atts: 18 classes: 2 weight col: - rows: 4500000
+ + load time: 27.3381 secs (29.53 MiB/s, 164.6 K rows/s)
+ + indexing ... done
+ + total time: 30.2438 secs (26.69 MiB/s, 148.79 K rows/s)
+Building 1 tree(s) on 4500000 cases
+ + tree(s) built
+ + size: 707 depth: 10 nf: 18 time: 68.3422 secs
+Tree saved

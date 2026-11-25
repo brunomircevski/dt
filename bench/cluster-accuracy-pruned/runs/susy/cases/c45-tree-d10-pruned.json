@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "susy",
+  "algo": "c45",
+  "tool": "tree",
+  "backend": "multicore",
+  "depth_limit": 10,
+  "pruned": true,
+  "prune": "--prune 0.25",
+  "nodes": 573,
+  "leaves": 287,
+  "depth": 10,
+  "train_accuracy": 0.787397,
+  "test_accuracy": 0.786404,
+  "n_train": 4500000,
+  "n_test": 500000,
+  "tree_sha256": "1868d6c479e532aae7d8a5ec8e85aa54df5eda94a1125ef7f784fee5565450d2",
+  "fit_seconds": 1.1984505653381348,
+  "pred": "bench/cluster-accuracy-pruned/runs/susy/pred/c45-tree-d10-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "epyc2",
+  "case": "c45-tree-d10-pruned"
+ }
+]

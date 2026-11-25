@@ -1,0 +1,16 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --cart -d 10 --dump bench/cluster-accuracy-pruned/runs/higgs/trees/cart-tree-d10-unpruned.dump /home/bmircevski/dt/bench/tools/data/higgs/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/higgs/train.f32 (backend multicore)
+  rows 10500000 train, 28 features, 2 classes
+  pruning off
+Tree:
+  nodes 2029, leaves 1015, depth 10
+  train accuracy 70.6345%
+Timings:
+  load                  8735.7 ms
+  presort                859.6 ms
+  build                 1462.7 ms
+  prune                    0.0 ms
+  train total           2322.4 ms
+  evaluate               110.9 ms
+Memory:
+  peak after training 4248892 KiB

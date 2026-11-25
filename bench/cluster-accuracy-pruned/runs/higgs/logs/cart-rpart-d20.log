@@ -1,0 +1,1 @@
+Rscript --vanilla /home/bmircevski/dt/bench/tools/accuracy/fit_rpart.R /home/bmircevski/dt/bench/tools/data/higgs/train /home/bmircevski/dt/bench/tools/data/higgs/test 10500000 500000 28 20 1e-05 bench/cluster-accuracy-pruned/runs/higgs/tmp/cart-rpart-d20.json bench/cluster-accuracy-pruned/runs/higgs/pred/cart-rpart-d20

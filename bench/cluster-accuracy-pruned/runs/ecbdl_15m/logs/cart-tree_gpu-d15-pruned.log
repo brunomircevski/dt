@@ -1,0 +1,32 @@
+/home/bmircevski/dt/tree --gpu --threads 8 --cart --prune 1e-05 -d 15 --dump bench/cluster-accuracy-pruned/runs/ecbdl_15m/trees/cart-tree_gpu-d15-pruned.dump --rows 15000000 /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend gpu)
+  rows 15000000 train, 631 features, 2 classes
+  pruning alpha 0.000010
+  unpruned: 5645 nodes
+Tree:
+  nodes 1, leaves 1, depth 0
+  train accuracy 97.9075%
+Timings:
+  load                106973.3 ms
+  gpu startup            925.3 ms
+  gpu startup wait         0.0 ms
+  gpu setup             1939.3 ms
+  setup buffers           73.6 ms
+  setup allocate          30.8 ms
+  setup upload          1802.8 ms
+  setup finish            32.2 ms
+  presort                  0.0 ms
+  build                 2686.2 ms
+  prune                    0.0 ms
+  train total           4625.6 ms
+  evaluate              2092.5 ms
+Timeline:
+  span staging buffers: 0.089 73.635 ms
+  span device memory: 73.641 104.400 ms
+  span upload: 104.403 1907.190 ms
+  span x log x table: 1907.195 1909.012 ms
+  span x log x table copy: 1909.013 1939.390 ms
+  span presort (GPU): 117.149 1907.998 ms
+  span build: 1940.116 4626.291 ms
+Memory:
+  peak after training 37476888 KiB

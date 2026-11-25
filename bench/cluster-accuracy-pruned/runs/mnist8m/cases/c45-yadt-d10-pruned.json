@@ -1,0 +1,21 @@
+[
+ {
+  "dataset": "mnist8m",
+  "algo": "c45",
+  "tool": "yadt",
+  "version": "YaDT 2.3.0",
+  "depth_limit": 10,
+  "pruned": true,
+  "prune": "-ebpg -c 0.25 -m 2",
+  "nodes": 1447,
+  "leaves": 724,
+  "depth": 10,
+  "train_accuracy": 0.7096327160493827,
+  "test_accuracy": 0.7465,
+  "n_train": 8100000,
+  "n_test": 10000,
+  "pred": "bench/cluster-accuracy-pruned/runs/mnist8m/pred/c45-yadt-d10-pruned.npy",
+  "host": "dell4",
+  "case": "c45-yadt-d10-pruned"
+ }
+]

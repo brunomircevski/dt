@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --cart --prune 1e-05 -d 5 --dump bench/cluster-accuracy-pruned/runs/mnist8m/trees/cart-tree-d5-pruned.dump /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32 (backend multicore)
+  rows 8100000 train, 784 features, 10 classes
+  pruning alpha 0.000010
+  unpruned: 63 nodes
+Tree:
+  nodes 61, leaves 31, depth 5
+  train accuracy 57.2804%
+Timings:
+  load                 70464.8 ms
+  presort               6117.9 ms
+  build                 9968.9 ms
+  prune                    0.0 ms
+  train total          16086.8 ms
+  evaluate              1089.4 ms
+Memory:
+  peak after training 75019552 KiB

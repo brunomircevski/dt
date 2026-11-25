@@ -1,0 +1,34 @@
+/home/bmircevski/dt/tree --hybrid --threads 8 --c45 --prune 0.25 -d 15 --dump bench/cluster-accuracy-pruned/runs/ecbdl_15m/trees/c45-tree_hybrid-d15-pruned.dump --rows 15000000 /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend hybrid)
+  rows 15000000 train, 631 features, 2 classes
+  pruning CF 0.250000 + raising
+  unpruned: 4017 nodes
+Tree:
+  nodes 1115, leaves 558, depth 15
+  train accuracy 97.9217%
+Timings:
+  load                109438.7 ms
+  gpu startup            661.8 ms
+  gpu startup wait         0.0 ms
+  gpu setup             2123.3 ms
+  setup buffers          285.4 ms
+  setup allocate          30.4 ms
+  setup upload          1776.1 ms
+  setup finish            31.4 ms
+  presort                  0.0 ms
+  build                 2903.6 ms
+  prune                  345.7 ms
+  train total           5372.6 ms
+  evaluate              1688.8 ms
+Timeline:
+  span staging buffers: 0.082 172.111 ms
+  span hand-off buffers: 172.118 285.463 ms
+  span device memory: 285.471 315.877 ms
+  span upload: 315.880 2092.002 ms
+  span x log x table: 2092.005 2093.815 ms
+  span x log x table copy: 2093.822 2123.084 ms
+  span presort (GPU): 329.090 2092.930 ms
+  span cpu subtrees: 2894.097 5019.440 ms, busy 2386.196 ms in 324 tasks
+  span build: 2124.992 5028.578 ms
+Memory:
+  peak after training 38701872 KiB

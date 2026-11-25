@@ -1,0 +1,32 @@
+/home/bmircevski/dt/tree --gpu --threads 8 --cart --prune 1e-05 -d 20 --dump bench/cluster-accuracy-pruned/runs/higgs/trees/cart-tree_gpu-d20-pruned.dump /home/bmircevski/dt/bench/tools/data/higgs/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/higgs/train.f32 (backend gpu)
+  rows 10500000 train, 28 features, 2 classes
+  pruning alpha 0.000010
+  unpruned: 74625 nodes
+Tree:
+  nodes 1611, leaves 806, depth 19
+  train accuracy 71.7907%
+Timings:
+  load                   394.0 ms
+  gpu startup            471.2 ms
+  gpu startup wait        75.4 ms
+  gpu setup              375.3 ms
+  setup buffers          107.1 ms
+  setup allocate          69.6 ms
+  setup upload           186.9 ms
+  setup finish            11.7 ms
+  presort                  0.0 ms
+  build                  924.2 ms
+  prune                    0.6 ms
+  train total           1300.1 ms
+  evaluate               200.5 ms
+Timeline:
+  span staging buffers: 1.965 109.107 ms
+  span device memory: 109.112 178.683 ms
+  span upload: 178.685 365.552 ms
+  span x log x table: 365.573 366.268 ms
+  span x log x table copy: 366.269 377.169 ms
+  span presort (GPU): 198.129 367.748 ms
+  span build: 377.652 1301.847 ms
+Memory:
+  peak after training 1469016 KiB

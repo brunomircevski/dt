@@ -1,0 +1,42 @@
+[
+ {
+  "dataset": "susy",
+  "algo": "c45",
+  "tool": "j48",
+  "version": "Weka J48",
+  "depth_limit": 20,
+  "prune": "none (-U: the same tree before prune())",
+  "pruned": false,
+  "fit_seconds": 882.608,
+  "nodes": 13799,
+  "leaves": 6900,
+  "depth": 20,
+  "train_accuracy": 0.802555111,
+  "test_accuracy": 0.793934,
+  "pred": "bench/cluster-accuracy-pruned/runs/susy/pred/c45-j48-d20-unpruned.i16",
+  "n_train": 4500000,
+  "n_test": 500000,
+  "host": "dell4",
+  "case": "c45-j48-d20"
+ },
+ {
+  "dataset": "susy",
+  "algo": "c45",
+  "tool": "j48",
+  "version": "Weka J48",
+  "depth_limit": 20,
+  "prune": "-C 0.25 -M 2",
+  "pruned": true,
+  "fit_seconds": 954.362,
+  "nodes": 9105,
+  "leaves": 4553,
+  "depth": 20,
+  "train_accuracy": 0.801769556,
+  "test_accuracy": 0.794538,
+  "pred": "bench/cluster-accuracy-pruned/runs/susy/pred/c45-j48-d20-pruned.i16",
+  "n_train": 4500000,
+  "n_test": 500000,
+  "host": "dell4",
+  "case": "c45-j48-d20"
+ }
+]

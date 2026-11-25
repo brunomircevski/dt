@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --serial --c45 --prune 0.25 -d 10 --dump bench/cluster-accuracy-pruned/runs/susy/trees/c45-tree_serial-d10-pruned.dump /home/bmircevski/dt/bench/tools/data/susy/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/susy/train.f32 (backend serial)
+  rows 4500000 train, 18 features, 2 classes
+  pruning CF 0.250000 + raising
+  unpruned: 743 nodes
+Tree:
+  nodes 573, leaves 287, depth 10
+  train accuracy 78.7397%
+Timings:
+  load                   286.6 ms
+  presort                761.6 ms
+  build                 1981.5 ms
+  prune                  160.7 ms
+  train total           2903.8 ms
+  evaluate                24.0 ms
+Memory:
+  peak after training 1213624 KiB

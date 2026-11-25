@@ -1,0 +1,16 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --c45 -d 5 --dump bench/cluster-accuracy-pruned/runs/susy/trees/c45-tree-d5-unpruned.dump /home/bmircevski/dt/bench/tools/data/susy/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/susy/train.f32 (backend multicore)
+  rows 4500000 train, 18 features, 2 classes
+  pruning off
+Tree:
+  nodes 33, leaves 17, depth 5
+  train accuracy 77.1469%
+Timings:
+  load                   280.9 ms
+  presort                171.7 ms
+  build                  163.6 ms
+  prune                    0.1 ms
+  train total            335.4 ms
+  evaluate                23.8 ms
+Memory:
+  peak after training 1383732 KiB

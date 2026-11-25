@@ -1,0 +1,34 @@
+/home/bmircevski/dt/tree --hybrid --threads 8 --cart --prune 1e-05 -d 20 --dump bench/cluster-accuracy-pruned/runs/mnist8m/trees/cart-tree_hybrid-d20-pruned.dump /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32 (backend hybrid)
+  rows 8100000 train, 784 features, 10 classes
+  pruning alpha 0.000010
+  unpruned: 24463 nodes
+Tree:
+  nodes 7059, leaves 3530, depth 20
+  train accuracy 89.7933%
+Timings:
+  load                 48068.1 ms
+  gpu startup           1455.9 ms
+  gpu startup wait         0.0 ms
+  gpu setup             1345.0 ms
+  setup buffers          143.0 ms
+  setup allocate          23.2 ms
+  setup upload          1149.5 ms
+  setup finish            29.3 ms
+  presort                  0.0 ms
+  build                 7521.4 ms
+  prune                    0.3 ms
+  train total           8866.7 ms
+  evaluate                 0.1 ms
+Timeline:
+  span staging buffers: 0.091 53.592 ms
+  span hand-off buffers: 53.596 143.132 ms
+  span device memory: 143.137 166.300 ms
+  span upload: 166.303 1315.786 ms
+  span x log x table: 1315.852 1317.329 ms
+  span x log x table copy: 1317.331 1345.063 ms
+  span presort (GPU): 171.871 1316.703 ms
+  span cpu subtrees: 2366.041 7709.173 ms, busy 26805.854 ms in 1148 tasks
+  span build: 1345.813 8867.196 ms
+Memory:
+  peak after training 25440412 KiB

@@ -1,0 +1,16 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --c45 -d 20 --dump bench/cluster-accuracy-pruned/runs/mnist8m/trees/c45-tree-d20-unpruned.dump /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32 (backend multicore)
+  rows 8100000 train, 784 features, 10 classes
+  pruning off
+Tree:
+  nodes 42915, leaves 21458, depth 20
+  train accuracy 89.1632%
+Timings:
+  load                 86265.7 ms
+  presort               8331.5 ms
+  build                41254.5 ms
+  prune                    2.2 ms
+  train total          49588.3 ms
+  evaluate              1215.3 ms
+Memory:
+  peak after training 75037208 KiB

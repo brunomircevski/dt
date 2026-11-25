@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "mnist8m",
+  "algo": "cart",
+  "tool": "tree",
+  "backend": "multicore",
+  "depth_limit": 15,
+  "pruned": false,
+  "prune": "none",
+  "nodes": 44359,
+  "leaves": 22180,
+  "depth": 15,
+  "train_accuracy": 0.924529,
+  "test_accuracy": 0.9111,
+  "n_train": 8100000,
+  "n_test": 10000,
+  "tree_sha256": "cad76ee54735c142c59d09e853e047373c603539f4ceffd919da42521df30975",
+  "fit_seconds": 118.86527729034424,
+  "pred": "bench/cluster-accuracy-pruned/runs/mnist8m/pred/cart-tree-d15-unpruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "dell4",
+  "case": "cart-tree-d15-unpruned"
+ }
+]

@@ -1,0 +1,42 @@
+[
+ {
+  "tool": "rpart",
+  "algo": "cart",
+  "version": "rpart 4.1.27",
+  "depth_limit": 15,
+  "pruned": false,
+  "prune": "none",
+  "nodes": 29145,
+  "leaves": 14573,
+  "depth": 15,
+  "train_accuracy": 0.808267778,
+  "test_accuracy": 0.792958,
+  "n_train": 4500000,
+  "n_test": 500000,
+  "fit_seconds": 98.179,
+  "pred": "bench/cluster-accuracy-pruned/runs/susy/pred/cart-rpart-d15-unpruned.i16",
+  "dataset": "susy",
+  "host": "epyc2",
+  "case": "cart-rpart-d15"
+ },
+ {
+  "tool": "rpart",
+  "algo": "cart",
+  "version": "rpart 4.1.27",
+  "depth_limit": 15,
+  "pruned": true,
+  "prune": "prune(cp = 2.18617e-05) = alpha 1e-05 (misclassification)",
+  "nodes": 671,
+  "leaves": 336,
+  "depth": 15,
+  "train_accuracy": 0.796540667,
+  "test_accuracy": 0.794976,
+  "n_train": 4500000,
+  "n_test": 500000,
+  "fit_seconds": 98.179,
+  "pred": "bench/cluster-accuracy-pruned/runs/susy/pred/cart-rpart-d15-pruned.i16",
+  "dataset": "susy",
+  "host": "epyc2",
+  "case": "cart-rpart-d15"
+ }
+]

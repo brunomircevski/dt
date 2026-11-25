@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "higgs",
+  "algo": "c45",
+  "tool": "tree",
+  "backend": "multicore",
+  "depth_limit": 10,
+  "pruned": false,
+  "prune": "none",
+  "nodes": 935,
+  "leaves": 468,
+  "depth": 10,
+  "train_accuracy": 0.637616,
+  "test_accuracy": 0.637296,
+  "n_train": 10500000,
+  "n_test": 500000,
+  "tree_sha256": "0978d478e2f50bb7935519f243935f0fbbb48a802b907135b923d959a9994e42",
+  "fit_seconds": 14.328607082366943,
+  "pred": "bench/cluster-accuracy-pruned/runs/higgs/pred/c45-tree-d10-unpruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "dell4",
+  "case": "c45-tree-d10-unpruned"
+ }
+]

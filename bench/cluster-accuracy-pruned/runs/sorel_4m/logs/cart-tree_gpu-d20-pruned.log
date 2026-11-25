@@ -1,0 +1,32 @@
+/home/bmircevski/dt/tree --gpu --threads 8 --cart --prune 1e-05 -d 20 --dump bench/cluster-accuracy-pruned/runs/sorel_4m/trees/cart-tree_gpu-d20-pruned.dump --rows 4000000 /home/bmircevski/dt/bench/tools/data/sorel/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/sorel/train.f32 (first 4000000 rows) (backend gpu)
+  rows 4000000 train, 2381 features, 2 classes
+  pruning alpha 0.000010
+  unpruned: 5671 nodes
+Tree:
+  nodes 2125, leaves 1063, depth 20
+  train accuracy 96.4048%
+Timings:
+  load                  3078.2 ms
+  gpu startup            972.1 ms
+  gpu startup wait         0.0 ms
+  gpu setup             1038.9 ms
+  setup buffers           44.9 ms
+  setup allocate          10.1 ms
+  setup upload           971.3 ms
+  setup finish            12.7 ms
+  presort                  0.0 ms
+  build                 3457.6 ms
+  prune                    0.1 ms
+  train total           4496.6 ms
+  evaluate              2592.7 ms
+Timeline:
+  span staging buffers: 0.041 44.908 ms
+  span device memory: 44.909 54.975 ms
+  span upload: 54.975 1026.284 ms
+  span x log x table: 1026.286 1026.760 ms
+  span x log x table copy: 1026.761 1038.916 ms
+  span presort (GPU): 57.294 1026.880 ms
+  span build: 1039.252 4496.824 ms
+Memory:
+  peak after training 37717284 KiB

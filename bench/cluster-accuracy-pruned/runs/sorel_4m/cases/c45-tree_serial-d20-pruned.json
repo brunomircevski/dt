@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "sorel_4m",
+  "algo": "c45",
+  "tool": "tree",
+  "backend": "serial",
+  "depth_limit": 20,
+  "pruned": true,
+  "prune": "--prune 0.25",
+  "nodes": 1415,
+  "leaves": 708,
+  "depth": 20,
+  "train_accuracy": 0.856979,
+  "test_accuracy": 0.8316650941754576,
+  "n_train": 4000000,
+  "n_test": 4195042,
+  "tree_sha256": "f1306b4331945b8af0f44937bce98c18803356b919678751128d98284abf11d0",
+  "fit_seconds": 691.8139152526855,
+  "pred": "bench/cluster-accuracy-pruned/runs/sorel_4m/pred/c45-tree_serial-d20-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "dell1",
+  "case": "c45-tree_serial-d20-pruned"
+ }
+]

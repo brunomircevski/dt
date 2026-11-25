@@ -37,12 +37,13 @@ Times are ./tree's training time (presort, build; not reading the data). Trees a
 | [`cluster-profiling`](cluster-profiling/BENCHMARK.md) | where the growing time goes (`--profile`), chess 10M–2000M, HIGGS and ECBDL'14 15M, epyc, dell and hopper | Partition is 35–69% on epyc; the GPU's share grows from 2–3% at chess 10M to 60–64% at 2000M and 74–80% on ECBDL. C4.5 on big chess runs at two speeds (open). |
 | [`hybrid-vs-gpu-only`](hybrid-vs-gpu-only/BENCHMARK.md) | CUDA `--hybrid` against `--gpu`, depth 5–30 and no limit, HIGGS, MNIST8M and SOREL 4M, ampere and hopper, `--handoff-rows` swept per dataset and node | With the GPU setup timed (the hybrid's 0.1–0.2 s more for its hand-off buffers), GPU only is faster to depth 10 (HIGGS 0.57–0.69×, MNIST8M and SOREL 4M 0.92–0.98×). Deeper the hybrid leads, on HIGGS from depth 25: with no limit on hopper HIGGS 1.3–1.8×, MNIST8M 1.5–1.6×, SOREL 4M 1.08–1.18× (ampere 1.75–1.78×, 1.41–1.46×, 1.07–1.16×). |
 
-**Against other implementations** (HIGGS and MNIST8M):
+**Against other implementations** (timing on HIGGS and MNIST8M; accuracy on every dataset):
 
 | Directory | What | Main result |
 |---|---|---|
 | [`cluster-cpu-vs-others`](cluster-cpu-vs-others/BENCHMARK.md) | ./tree `--simple`, `--serial`, `--multicore` on epyc against scikit-learn and rpart (CART) and Weka J48 and YaDT (C4.5), one thread (YaDT also 48), in one `run.py` | HIGGS: `--multicore` 620× scikit-learn and 2,000× J48, `--serial` 27× and 103×; the same trees (J48's C4.5 on HIGGS 923 against 935 nodes). MNIST8M: `--serial` 8.8× scikit-learn and 147× J48. |
 | [`cluster-gpu-vs-others`](cluster-gpu-vs-others/BENCHMARK.md) | ./tree `--gpu` and `--hybrid` against cuML (Gini) and XGBoost (Gini-equivalent), CART only (no GPU library grows C4.5 trees), one tree on hopper's H100, every tool uploading through the same code, a timeline of each run's phases; one tree per fresh process | One CART tree (10 runs): ./tree `--gpu` (exact) 2.4–2.7× faster than cuML (128 bins) and 2.4–3.3× than XGBoost (256 bins), on comparable trees; HIGGS at depth ≤ 30: 4.2× and 24.0×, `--hybrid` 1.21× faster than `--gpu`. |
+| [`cluster-accuracy-pruned`](cluster-accuracy-pruned/BENCHMARK.md) | Test accuracy, not time: one pruned tree per tool (CART cost-complexity α = 1e-5, C4.5 CF 0.25) at depth 5–20 on SUSY, HIGGS, MNIST8M, ECBDL'14 15M and SOREL 4M, against scikit-learn, rpart, cuML, XGBoost, Weka J48 and YaDT | scikit-learn pruned by the same rule grows ./tree's CART tree node for node (except SOREL, where its 1e-7 `FEATURE_THRESHOLD` misses ./tree's better splits); J48 and YaDT grow ./tree's C4.5 tree on MNIST8M, J48 also on SOREL; binned cuML/XGBoost within ±0.1 pp outside SOREL. Every ./tree backend grows the same tree. |
 
 **Energy** (not timed; the whole server at the PSU, from a meter model fitted per node):
 

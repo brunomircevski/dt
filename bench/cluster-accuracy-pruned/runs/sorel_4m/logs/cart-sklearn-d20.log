@@ -1,0 +1,1 @@
+/home/bmircevski/dt/bench/tools/.venv/bin/python /home/bmircevski/dt/bench/tools/accuracy/fit_lib.py sklearn sorel_4m 20 1e-05 bench/cluster-accuracy-pruned/runs/sorel_4m/tmp/cart-sklearn-d20.json bench/cluster-accuracy-pruned/runs/sorel_4m/pred/cart-sklearn-d20

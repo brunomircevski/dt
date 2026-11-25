@@ -1,0 +1,16 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --cart -d 20 --dump bench/cluster-accuracy-pruned/runs/susy/trees/cart-tree-d20-unpruned.dump /home/bmircevski/dt/bench/tools/data/susy/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/susy/train.f32 (backend multicore)
+  rows 4500000 train, 18 features, 2 classes
+  pruning off
+Tree:
+  nodes 193943, leaves 96972, depth 20
+  train accuracy 84.5609%
+Timings:
+  load                   284.3 ms
+  presort                209.3 ms
+  build                 1027.2 ms
+  prune                    0.0 ms
+  train total           1236.5 ms
+  evaluate               138.9 ms
+Memory:
+  peak after training 1308156 KiB

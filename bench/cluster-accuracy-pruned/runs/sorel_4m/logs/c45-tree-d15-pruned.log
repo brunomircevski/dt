@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --multicore --threads 8 --c45 --prune 0.25 -d 15 --dump bench/cluster-accuracy-pruned/runs/sorel_4m/trees/c45-tree-d15-pruned.dump --rows 4000000 /home/bmircevski/dt/bench/tools/data/sorel/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/sorel/train.f32 (first 4000000 rows) (backend multicore)
+  rows 4000000 train, 2381 features, 2 classes
+  pruning CF 0.250000 + raising
+  unpruned: 799 nodes
+Tree:
+  nodes 761, leaves 381, depth 15
+  train accuracy 83.1423%
+Timings:
+  load                695963.6 ms
+  presort              14615.1 ms
+  build                38749.1 ms
+  prune                   65.3 ms
+  train total          53429.5 ms
+  evaluate              2979.7 ms
+Memory:
+  peak after training 116268644 KiB

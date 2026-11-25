@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "susy",
+  "algo": "cart",
+  "tool": "tree",
+  "backend": "hybrid",
+  "depth_limit": 10,
+  "pruned": true,
+  "prune": "--prune 1e-05",
+  "nodes": 339,
+  "leaves": 170,
+  "depth": 10,
+  "train_accuracy": 0.7907989999999999,
+  "test_accuracy": 0.789926,
+  "n_train": 4500000,
+  "n_test": 500000,
+  "tree_sha256": "e80b05b9ba78723441e41e31914e8468978e91bff1c665ecd4c985c03f50ba95",
+  "fit_seconds": 2.1863369941711426,
+  "pred": "bench/cluster-accuracy-pruned/runs/susy/pred/cart-tree_hybrid-d10-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "hopper",
+  "case": "cart-tree_hybrid-d10-pruned"
+ }
+]

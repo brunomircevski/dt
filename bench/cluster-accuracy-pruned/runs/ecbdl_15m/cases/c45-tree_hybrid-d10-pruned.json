@@ -1,0 +1,24 @@
+[
+ {
+  "dataset": "ecbdl_15m",
+  "algo": "c45",
+  "tool": "tree",
+  "backend": "hybrid",
+  "depth_limit": 10,
+  "pruned": true,
+  "prune": "--prune 0.25",
+  "nodes": 161,
+  "leaves": 81,
+  "depth": 10,
+  "train_accuracy": 0.9791200000000001,
+  "test_accuracy": 0.9832158754029188,
+  "n_train": 15000000,
+  "n_test": 2897917,
+  "tree_sha256": "897363cb50edcc55cee5496980807dd120d1d0e5e47a6e4df52762f50e1f6f37",
+  "fit_seconds": 91.09411883354187,
+  "pred": "bench/cluster-accuracy-pruned/runs/ecbdl_15m/pred/c45-tree_hybrid-d10-pruned.npy",
+  "version": "./tree dt 4de42544967b",
+  "host": "hopper",
+  "case": "c45-tree_hybrid-d10-pruned"
+ }
+]

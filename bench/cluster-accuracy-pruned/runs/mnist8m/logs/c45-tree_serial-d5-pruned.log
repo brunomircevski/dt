@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --serial --c45 --prune 0.25 -d 5 --dump bench/cluster-accuracy-pruned/runs/mnist8m/trees/c45-tree_serial-d5-pruned.dump /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32
+C4.5 on /home/bmircevski/dt/bench/tools/data/mnist8m/train.f32 (backend serial)
+  rows 8100000 train, 784 features, 10 classes
+  pruning CF 0.250000 + raising
+  unpruned: 61 nodes
+Tree:
+  nodes 61, leaves 31, depth 5
+  train accuracy 44.8000%
+Timings:
+  load                 89559.7 ms
+  presort              59837.8 ms
+  build                69035.4 ms
+  prune                  242.8 ms
+  train total         129115.9 ms
+  evaluate               631.0 ms
+Memory:
+  peak after training 74710788 KiB

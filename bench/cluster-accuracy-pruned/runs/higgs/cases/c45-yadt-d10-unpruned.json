@@ -1,0 +1,21 @@
+[
+ {
+  "dataset": "higgs",
+  "algo": "c45",
+  "tool": "yadt",
+  "version": "YaDT 2.3.0",
+  "depth_limit": 10,
+  "pruned": false,
+  "prune": "-np -m 2",
+  "nodes": 1045,
+  "leaves": 523,
+  "depth": 10,
+  "train_accuracy": 0.7022131428571429,
+  "test_accuracy": 0.700924,
+  "n_train": 10500000,
+  "n_test": 500000,
+  "pred": "bench/cluster-accuracy-pruned/runs/higgs/pred/c45-yadt-d10-unpruned.npy",
+  "host": "dell4",
+  "case": "c45-yadt-d10-unpruned"
+ }
+]

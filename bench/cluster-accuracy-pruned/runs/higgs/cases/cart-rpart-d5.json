@@ -1,0 +1,42 @@
+[
+ {
+  "tool": "rpart",
+  "algo": "cart",
+  "version": "rpart 4.1.27",
+  "depth_limit": 5,
+  "pruned": false,
+  "prune": "none",
+  "nodes": 35,
+  "leaves": 18,
+  "depth": 5,
+  "train_accuracy": 0.664110857,
+  "test_accuracy": 0.664192,
+  "n_train": 10500000,
+  "n_test": 500000,
+  "fit_seconds": 102.985,
+  "pred": "bench/cluster-accuracy-pruned/runs/higgs/pred/cart-rpart-d5-unpruned.i16",
+  "dataset": "higgs",
+  "host": "epyc2",
+  "case": "cart-rpart-d5"
+ },
+ {
+  "tool": "rpart",
+  "algo": "cart",
+  "version": "rpart 4.1.27",
+  "depth_limit": 5,
+  "pruned": true,
+  "prune": "prune(cp = 2.12749e-05) = alpha 1e-05 (misclassification)",
+  "nodes": 35,
+  "leaves": 18,
+  "depth": 5,
+  "train_accuracy": 0.664110857,
+  "test_accuracy": 0.664192,
+  "n_train": 10500000,
+  "n_test": 500000,
+  "fit_seconds": 102.985,
+  "pred": "bench/cluster-accuracy-pruned/runs/higgs/pred/cart-rpart-d5-pruned.i16",
+  "dataset": "higgs",
+  "host": "epyc2",
+  "case": "cart-rpart-d5"
+ }
+]

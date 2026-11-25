@@ -1,0 +1,17 @@
+/home/bmircevski/dt/tree_cpu --serial --cart --prune 1e-05 -d 15 --dump bench/cluster-accuracy-pruned/runs/susy/trees/cart-tree_serial-d15-pruned.dump /home/bmircevski/dt/bench/tools/data/susy/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/susy/train.f32 (backend serial)
+  rows 4500000 train, 18 features, 2 classes
+  pruning alpha 0.000010
+  unpruned: 15889 nodes
+Tree:
+  nodes 687, leaves 344, depth 15
+  train accuracy 79.6628%
+Timings:
+  load                   294.0 ms
+  presort                568.4 ms
+  build                 3058.3 ms
+  prune                    0.1 ms
+  train total           3626.8 ms
+  evaluate                38.5 ms
+Memory:
+  peak after training 1048024 KiB

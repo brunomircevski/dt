@@ -1,0 +1,7 @@
+# kept on mordor3 only: test predictions, tree dumps, converted inputs
+runs/*/pred/
+runs/*/trees/
+runs/*/tmp/
+cache-check/*/pred/
+cache-check/*/trees/
+cache-check/*/tmp/

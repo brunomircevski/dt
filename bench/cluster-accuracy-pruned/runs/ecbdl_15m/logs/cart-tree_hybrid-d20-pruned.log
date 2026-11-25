@@ -1,0 +1,34 @@
+/home/bmircevski/dt/tree --hybrid --threads 8 --cart --prune 1e-05 -d 20 --dump bench/cluster-accuracy-pruned/runs/ecbdl_15m/trees/cart-tree_hybrid-d20-pruned.dump --rows 15000000 /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/ecbdl/train.f32 (first 15000000 rows) (backend hybrid)
+  rows 15000000 train, 631 features, 2 classes
+  pruning alpha 0.000010
+  unpruned: 10969 nodes
+Tree:
+  nodes 1, leaves 1, depth 0
+  train accuracy 97.9075%
+Timings:
+  load                 30340.4 ms
+  gpu startup           4443.2 ms
+  gpu startup wait         0.0 ms
+  gpu setup             1387.0 ms
+  setup buffers          139.6 ms
+  setup allocate          25.6 ms
+  setup upload          1207.8 ms
+  setup finish            13.9 ms
+  presort                  0.0 ms
+  build                 3538.1 ms
+  prune                    0.1 ms
+  train total           4925.1 ms
+  evaluate                 0.0 ms
+Timeline:
+  span staging buffers: 0.070 50.204 ms
+  span hand-off buffers: 50.208 139.699 ms
+  span device memory: 139.704 165.318 ms
+  span upload: 165.321 1373.122 ms
+  span x log x table: 1373.179 1373.657 ms
+  span x log x table copy: 1373.660 1386.976 ms
+  span presort (GPU): 173.388 1373.941 ms
+  span cpu subtrees: 2325.595 4925.109 ms, busy 5596.883 ms in 397 tasks
+  span build: 1387.358 4925.426 ms
+Memory:
+  peak after training 37621768 KiB

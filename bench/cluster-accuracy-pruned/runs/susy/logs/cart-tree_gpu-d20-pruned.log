@@ -1,0 +1,32 @@
+/home/bmircevski/dt/tree --gpu --threads 8 --cart --prune 1e-05 -d 20 --dump bench/cluster-accuracy-pruned/runs/susy/trees/cart-tree_gpu-d20-pruned.dump /home/bmircevski/dt/bench/tools/data/susy/train.f32
+CART on /home/bmircevski/dt/bench/tools/data/susy/train.f32 (backend gpu)
+  rows 4500000 train, 18 features, 2 classes
+  pruning alpha 0.000010
+  unpruned: 46609 nodes
+Tree:
+  nodes 775, leaves 388, depth 20
+  train accuracy 79.7430%
+Timings:
+  load                    29.5 ms
+  gpu startup           1092.2 ms
+  gpu startup wait      1059.9 ms
+  gpu setup              531.9 ms
+  setup buffers          256.3 ms
+  setup allocate          30.9 ms
+  setup upload            15.7 ms
+  setup finish           229.0 ms
+  presort                  0.0 ms
+  build                  324.2 ms
+  prune                    0.9 ms
+  train total            857.0 ms
+  evaluate                90.3 ms
+Timeline:
+  span staging buffers: 0.079 256.416 ms
+  span device memory: 256.418 287.333 ms
+  span upload: 287.336 303.003 ms
+  span x log x table: 303.006 304.786 ms
+  span x log x table copy: 304.787 531.956 ms
+  span presort (GPU): 290.958 303.611 ms
+  span build: 533.006 857.186 ms
+Memory:
+  peak after training 709828 KiB
