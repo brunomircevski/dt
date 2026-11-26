@@ -1,6 +1,6 @@
 ## simple-epyc-sorel
 
-**simple-epyc-sorel**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor performance, turbo on, ./tree 81bf6e6c8979, CPUs in order of use 0-47, 1 run(s) per case, every run a fresh process, no warm-up
+**simple-epyc-sorel**: AMD EPYC 9255 24-Core Processor, 48 logical CPUs (P-cores None, E-cores None), 503 GiB, Linux 7.0.0-42-generic #42~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Mon Oct 19 14:43:01 UTC 2 x86_64, governor performance, turbo on, ./tree 81bf6e6c8979, CPUs in order of use 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47, 1 run(s) per case, every run a fresh process, no warm-up
 
 Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree simple 5 MiB
 
@@ -10,12 +10,12 @@ Runtime footprint (peak RSS on the 200-row _baseline dataset): ./tree simple 5 M
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree simple | 1.25e+04 s | 1.25e+04 s–1.26e+04 s |  | 112.94 GiB | 112.93 GiB | 1,767 | 884 | 10 | 91.98% | 92.65% |
+| ./tree simple | 1.25e+04 s | 1.25e+04 s–1.26e+04 s |  | 112.93 GiB | 112.93 GiB | 1,767 | 884 | 10 | 91.98% | 92.65% |
 
 **C4.5, grown to depth 10, unpruned (only C4.5's collapse of useless splits)** (`c45_depth10_unpruned`), 1 thread
 
 | Implementation | Train time (median) | min–max | × ./tree | Peak RSS | RSS − footprint | Nodes | Leaves | Depth | Train acc. | Test acc. |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| ./tree simple | 1.29e+04 s | 1.29e+04 s–1.29e+04 s |  | 123.04 GiB | 123.03 GiB | 379 | 190 | 10 | 81.73% | 78.11% |
+| ./tree simple | 1.29e+04 s | 1.28e+04 s–1.3e+04 s |  | 123.04 GiB | 123.03 GiB | 379 | 190 | 10 | 81.73% | 78.11% |
 
 Test accuracy is measured on 4,195,042 rows: its 95% interval is ±0.04 percentage points at most.

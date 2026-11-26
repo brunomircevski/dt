@@ -32,11 +32,12 @@ Memory bandwidth accounts for most of the gap between the CPU servers. \ImplSeri
 
 % Cells of this work: the final runs, means of bench/cluster-<data>/
 % {simple,serial,cpu}-epyc-<data> (epyc; 8fe0c73d/82745fb5 2026-11-17, long
-% one-thread runs 81bf6e6c 2026-11-19/20) and {gpuonly,cuda}-hopper-<data>
+% one-thread runs 81bf6e6c 2026-11-19/20, --simple full ECBDL/SOREL topped up to
+% 10 runs 2026-11-21/26) and {gpuonly,cuda}-hopper-<data>
 % (7f98876f, job 789, 2026-11-23, GPU setup timed).
 % Chess 10^9: bench/cluster-chess/{simple,serial,cpu}-epyc-chess_1b, {gpuonly,cuda}-hopper-chess_1b (10 runs).
 \begin{table}
-\caption{Mean training time (s) of one tree, depth $\le$ 10, no pruning. CPU runs on epyc, GPU runs on the H100, set-up included. --: does not fit in the GPU's 80\,GiB. 10 runs per cell (\ImplSerialBase{} on full ECBDL'14 and SOREL-20M: 3).}
+\caption{Mean training time (s) of one tree, depth $\le$ 10, no pruning. CPU runs on epyc, GPU runs on the H100, set-up included. --: does not fit in the GPU's 80\,GiB. 10 runs per cell.}
 \label{tab:time}
 \centering
 \small
@@ -50,10 +51,10 @@ Dataset & CART & C4.5 & CART & C4.5 & CART & C4.5 & CART & C4.5 & CART & C4.5 \\
 \midrule
 SUSY          & 70.3     & 76.9     & 2.61 & 2.49 & 0.179 & 0.184 & 0.154 & 0.172 & 0.262 & 0.272 \\
 HIGGS         & 237      & 259      & 7.89 & 7.42 & 0.348 & 0.366 & 0.221 & 0.243 & 0.329 & 0.349 \\
-ECBDL'14      & 5\,970   & 7\,035   & 316  & 323  & 9.21  & 9.73  & --    & --    & --    & --    \\
+ECBDL'14      & 5\,914   & 6\,969   & 316  & 323  & 9.21  & 9.73  & --    & --    & --    & --    \\
 \quad 15M     & 2\,316   & 2\,628   & 148  & 149  & 4.47  & 4.73  & 2.83  & 2.86  & 2.94  & 2.97  \\
 MNIST8M       & 1\,896   & 1\,980   & 115  & 114  & 3.26  & 3.39  & 2.25  & 2.25  & 2.38  & 2.36  \\
-SOREL-20M     & 12\,538  & 12\,906  & 608  & 591  & 15.1  & 15.5  & --    & --    & --    & --    \\
+SOREL-20M     & 12\,527  & 12\,903  & 608  & 591  & 15.1  & 15.5  & --    & --    & --    & --    \\
 \quad 4M      & 2\,939   & 3\,127   & 177  & 173  & 5.00  & 5.04  & 2.95  & 3.29  & 3.05  & 3.35  \\
 Chess $10^9$  & 922      & 1\,039   & 39.0 & 42.2 & 1.63  & 1.98  & 0.741 & 0.792 & 0.841 & 0.893 \\
 \bottomrule

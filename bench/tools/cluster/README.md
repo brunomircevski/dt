@@ -47,7 +47,7 @@ the runs per case, `-k` the kinds of runs (`gpu`, `cpu`, `scaling`, `serial`,
 `simple`, `vs`, `gpulibs`, `profiling`, `hybrid`; default all), `-N`
 the nodes whose chains are submitted (default all seven). Every run is one
 fresh process that trains one tree, no warm-up (`bench/tools/README.md`, "How time
-is measured"); 10 runs a case, 3 where one run takes over an hour. The
+is measured"); 10 runs a case (until 2026-11-21: 3 where one run took over an hour). The
 libraries of `vs` share one `run.py` per dataset, and so do ./tree's GPU
 backends, cuML and XGBoost on hopper (`gpulibs`; the libraries in
 `~/gpu-dt-bench/venv`), so their runs interleave. It runs from `~/dt-final`, a fresh clone with its own build
@@ -127,6 +127,7 @@ the CPU runs of 2026-11-17. `final.sh` planned it; the runs it kept are in
   3 runs a case on epyc and dell.
 - **3 runs** where one process trains for over an hour, or for over 30 min
   on one thread (`--serial`, `--simple`: `LONG_SECONDS=1800`); 10 otherwise.
+  Since [2026-11-21](#the-2026-11-21-top-up-to-10-runs) every case has 10.
 - **Parts:** a run longer than about 4 h is split into SLURM jobs of under
   4 h (`run.py --run-id <dir>/<name>/parts/pN`, explicit repetitions), merged
   with `merge_parts.py <dir>/<name>` (rows in the order measured, repetitions
@@ -164,7 +165,7 @@ gone; the chart has left it out since b9395c7f).
 To add runs later (e.g. 5 more, to 10), run the same command into a fresh
 clone's empty bench and append its folders with `bench/tools/merge_runs.py`.
 
-Runs per case: `-m`, by default 10, and 3 where one process takes over an hour. Parallel runs
+Runs per case: `-m`, by default 10 (`-l` for the cases where one process takes over an hour, by default the same). Parallel runs
 use every CPU (both sockets), one-thread runs the first CPU, memory
 first-touch; CUDA runs one GPU and every CPU, the GPU's socket first. Every
 run records its test accuracy and the SHA-256 of its tree. The datasets the
@@ -237,6 +238,38 @@ again too. The old folders are in git at 2c9ff876. Speed against the build
 before: same-node A/B jobs (805 hopper, 813 ampere), in
 [docs/PERFORMANCE.md](../../../docs/PERFORMANCE.md#november-2026-less-memory-for---hybrid-and---gpu).
 
+### The 2026-11-21 top-up to 10 runs
+
+Until 2026-11-21 a case where one process trains for over an hour (or over
+30 min on one thread) had 3 runs. Since then every case has 10: the short
+cases had them already, so only these got 7 more, from `~/dt-final` (./tree
+81bf6e6c, the build of the 2026-11-19 rerun; `--simple`'s code unchanged since
+2026-11-02), one SLURM job a run, fed one after the other by a small feeder
+(at most one epyc node and two dells at a time), each run its own part
+(`parts/pN`) merged with `merge_parts.py`:
+
+| Node | Jobs | What | When |
+|---|---|---|---|
+| epyc1 | 617–970 (14) | `--simple` on full ECBDL'14 (`simple-epyc-ecbdl`), 7 runs a case | 2026-11-21 – 2026-11-26 |
+| epyc1 | 696–972 (14) | `--simple` on full SOREL-20M (`simple-epyc-sorel`), 7 runs a case | 2026-11-22 – 2026-11-26 |
+| epyc1 | 674–823 (7) | Weka J48 on MNIST8M (`vs-epyc-mnist8m`), 4.7 h a run | 2026-11-21 – 2026-11-24 |
+| epyc1 | 657 | cluster-power ECBDL'14 15M: Serial-Simple, 7 trees a protocol (`epyc1-3/`) | 2026-11-21 – 2026-11-22 |
+| dell2 | 619–726 (14) | `--simple` on full ECBDL'14 (`simple-dell-ecbdl`) | 2026-11-21 – 2026-11-22 |
+| dell4 | 621–785 (11) | `--simple` on full SOREL-20M (`simple-dell-sorel`, parts p7–p17) | 2026-11-21 – 2026-11-23 |
+| dell2 | 768–782 (3) | the same, parts p18–p20 | 2026-11-22 – 2026-11-23 |
+| hopper | 616 | cluster-power ECBDL'14 15M: Serial-Simple (`hopper-3/`) | 2026-11-21 – 2026-11-22 |
+
+Every new run grew the same tree as the first 3. Times against them:
+`--simple` ECBDL'14 −0.6 to −1.7% on epyc and −0.2 to −0.7% on dell (the first runs read the CSV, these
+`train.f32`; reading is outside the timed part), J48 −0.3 to +0.2%, SOREL
+−0.5 to +0.4% on epyc and −2.2 to +0.7% on dell. On dell, SOREL's node shows: dell2 is 1.9–2.6% faster than dell4
+(CART 13,054 against 13,401 s, C4.5 13,185 against 13,453 s) and the old dell3
+runs about 0.6%; under 5%, so the dells are pooled as for every other dell
+result. Each folder's `machine.json` lists its parts with host and job. Not
+topped up: the hand-off sweeps (`hybrid-vs-gpu-only/sweep*`, 5 and 3 runs,
+tuning only) and the power benchmark's GPU, Hybrid and Multicore cases (3 jobs
+of 13–45 trees each).
+
 ## Test-set benchmarks
 
 Since 2026-10-23 every dataset has a fixed training and test set, and these
@@ -259,8 +292,8 @@ runs CUDA hybrid (`cuda-*`) and GPU only (`gpuonly-*`) on hopper and ampere, and
 on epyc and dell `--multicore` with 48 threads on both sockets (`cpu-*`),
 `--serial` (`serial-*`) and `--simple` (`simple-*`); the chess sets too. Not
 run: the GPUs on full SOREL and full ECBDL (they do not fit in 80 GB of VRAM;
-the GPUs get `sorel_4m` and `ecbdl_15m`). Runs per case: 10, and 3 where one
-process takes over an hour (final.sh). Until 2026-11-09 there were also
+the GPUs get `sorel_4m` and `ecbdl_15m`). Runs per case: 10 (final.sh; until
+2026-11-21 3 where one process took over an hour). Until 2026-11-09 there were also
 one-socket runs (`socket-*`), dell2 (`cpu-dell512-*`, chess) and airline; they
 are in git at 3354a8a. `testset_chart.py` groups the bars
 by backend, the nodes under each, and draws the means on a log scale with
