@@ -390,3 +390,220 @@ results: /home/bmircevski/dt-final/bench/cluster-cpu-vs-others/vs-epyc-mnist8m/p
 
 === 07:31:28  3/3 tables and CSV files
 done 2026-11-20 07:31:28
+
+##### part p7 (epyc1)
+log: bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p7/run.log, job 674 on epyc1, started 2026-11-22 01:10:57
+
+=== 01:10:57  1/3 machine check
+CPUs allocated: 48 (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: performance 
+load average: 18.91 4.89 2.20
+free memory per NUMA node: node 0 246 GiB, node 1 227 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
+runs per case: 1
+
+=== 01:10:57  2/3 benchmark: mnist8m, cart_depth10,c45_depth10_unpruned, j48, threads 1 (of 48), 1 run(s) per case
+1 cases, 2 processes:
+  mnist8m | c45_depth10_unpruned | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
+1 cases x 1 run(s), then 1 footprint run(s) x 1: 2 processes. Time left is shown once every case has run once.
+[1/2] 01:11:08 run 1/1: C4.5 Weka J48, 1 thread, mnist8m ...
+    ok: train 1.684e+04 s, peak 83,509 MiB, 1,453 nodes, depth 10, test acc 74.65% | process 4h41m, elapsed 4h41m, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[2/2] 05:52:42 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.03864 s, peak 98 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 4h41m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p7/results.jsonl
+
+=== 05:52:42  3/3 tables and CSV files
+done 2026-11-22 05:52:42
+
+##### part p8 (epyc1)
+log: bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p8/run.log, job 704 on epyc1, started 2026-11-22 11:07:28
+
+=== 11:07:28  1/3 machine check
+CPUs allocated: 48 (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: performance 
+load average: 19.52 5.49 2.50
+free memory per NUMA node: node 0 247 GiB, node 1 227 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
+runs per case: 1
+
+=== 11:07:28  2/3 benchmark: mnist8m, cart_depth10,c45_depth10_unpruned, j48, threads 1 (of 48), 1 run(s) per case
+1 cases, 2 processes:
+  mnist8m | c45_depth10_unpruned | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
+1 cases x 1 run(s), then 1 footprint run(s) x 1: 2 processes. Time left is shown once every case has run once.
+[1/2] 11:07:39 run 1/1: C4.5 Weka J48, 1 thread, mnist8m ...
+    ok: train 1.684e+04 s, peak 83,512 MiB, 1,453 nodes, depth 10, test acc 74.65% | process 4h41m, elapsed 4h41m, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[2/2] 15:49:22 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.03575 s, peak 98 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 4h41m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p8/results.jsonl
+
+=== 15:49:22  3/3 tables and CSV files
+done 2026-11-22 15:49:23
+
+##### part p9 (epyc1)
+log: bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p9/run.log, job 783 on epyc1, started 2026-11-22 21:28:32
+
+=== 21:28:32  1/3 machine check
+CPUs allocated: 48 (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: performance 
+load average: 19.52 5.49 2.50
+free memory per NUMA node: node 0 247 GiB, node 1 227 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
+runs per case: 1
+
+=== 21:28:32  2/3 benchmark: mnist8m, cart_depth10,c45_depth10_unpruned, j48, threads 1 (of 48), 1 run(s) per case
+1 cases, 2 processes:
+  mnist8m | c45_depth10_unpruned | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
+1 cases x 1 run(s), then 1 footprint run(s) x 1: 2 processes. Time left is shown once every case has run once.
+[1/2] 21:28:43 run 1/1: C4.5 Weka J48, 1 thread, mnist8m ...
+    ok: train 1.683e+04 s, peak 83,514 MiB, 1,453 nodes, depth 10, test acc 74.65% | process 4h41m, elapsed 4h41m, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[2/2] 02:10:04 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.03816 s, peak 97 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 4h41m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p9/results.jsonl
+
+=== 02:10:05  3/3 tables and CSV files
+done 2026-11-23 02:10:05
+
+##### part p10 (epyc1)
+log: bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p10/run.log, job 795 on epyc1, started 2026-11-23 07:25:17
+
+=== 07:25:17  1/3 machine check
+CPUs allocated: 48 (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: performance 
+load average: 19.52 5.49 2.50
+free memory per NUMA node: node 0 247 GiB, node 1 227 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
+runs per case: 1
+
+=== 07:25:17  2/3 benchmark: mnist8m, cart_depth10,c45_depth10_unpruned, j48, threads 1 (of 48), 1 run(s) per case
+1 cases, 2 processes:
+  mnist8m | c45_depth10_unpruned | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (331 s)
+every CPU busy for 10 s before the first run (untimed)
+1 cases x 1 run(s), then 1 footprint run(s) x 1: 2 processes. Time left is shown once every case has run once.
+[1/2] 07:30:59 run 1/1: C4.5 Weka J48, 1 thread, mnist8m ...
+    ok: train 1.683e+04 s, peak 83,421 MiB, 1,453 nodes, depth 10, test acc 74.65% | process 4h41m, elapsed 4h41m, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[2/2] 12:12:32 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.03909 s, peak 98 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 4h41m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p10/results.jsonl
+
+=== 12:12:32  3/3 tables and CSV files
+done 2026-11-23 12:12:32
+
+##### part p11 (epyc1)
+log: bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p11/run.log, job 811 on epyc1, started 2026-11-23 17:50:37
+
+=== 17:50:37  1/3 machine check
+CPUs allocated: 48 (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: performance 
+load average: 19.52 5.49 2.50
+free memory per NUMA node: node 0 247 GiB, node 1 227 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
+runs per case: 1
+
+=== 17:50:37  2/3 benchmark: mnist8m, cart_depth10,c45_depth10_unpruned, j48, threads 1 (of 48), 1 run(s) per case
+1 cases, 2 processes:
+  mnist8m | c45_depth10_unpruned | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (354 s)
+every CPU busy for 10 s before the first run (untimed)
+1 cases x 1 run(s), then 1 footprint run(s) x 1: 2 processes. Time left is shown once every case has run once.
+[1/2] 17:56:42 run 1/1: C4.5 Weka J48, 1 thread, mnist8m ...
+    ok: train 1.684e+04 s, peak 83,420 MiB, 1,453 nodes, depth 10, test acc 74.65% | process 4h42m, elapsed 4h42m, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[2/2] 22:38:53 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.03887 s, peak 97 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 4h42m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p11/results.jsonl
+
+=== 22:38:54  3/3 tables and CSV files
+done 2026-11-23 22:38:54
+
+##### part p12 (epyc1)
+log: bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p12/run.log, job 820 on epyc1, started 2026-11-24 03:52:56
+
+=== 03:52:56  1/3 machine check
+CPUs allocated: 48 (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: performance 
+load average: 19.47 5.48 2.49
+free memory per NUMA node: node 0 247 GiB, node 1 227 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
+runs per case: 1
+
+=== 03:52:56  2/3 benchmark: mnist8m, cart_depth10,c45_depth10_unpruned, j48, threads 1 (of 48), 1 run(s) per case
+1 cases, 2 processes:
+  mnist8m | c45_depth10_unpruned | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
+1 cases x 1 run(s), then 1 footprint run(s) x 1: 2 processes. Time left is shown once every case has run once.
+[1/2] 03:53:07 run 1/1: C4.5 Weka J48, 1 thread, mnist8m ...
+    ok: train 1.683e+04 s, peak 83,508 MiB, 1,453 nodes, depth 10, test acc 74.65% | process 4h41m, elapsed 4h41m, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[2/2] 08:34:31 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.03351 s, peak 98 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 4h41m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p12/results.jsonl
+
+=== 08:34:31  3/3 tables and CSV files
+done 2026-11-24 08:34:31
+
+##### part p13 (epyc1)
+log: bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p13/run.log, job 823 on epyc1, started 2026-11-24 14:11:11
+
+=== 14:11:11  1/3 machine check
+CPUs allocated: 48 (0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47), SLURM_JOB_CPUS_PER_NODE=48
+CPU governor: performance 
+load average: 19.57 5.51 2.50
+free memory per NUMA node: node 0 247 GiB, node 1 227 GiB
+CPU order (the threads take them from the first): CPU, NUMA node, socket, core
+0:0/0/0 1:0/0/1 2:0/0/2 3:0/0/3 4:0/0/4 5:0/0/5 6:0/0/6 7:0/0/7 8:0/0/8 9:0/0/9 10:0/0/10 11:0/0/11 12:0/0/12 13:0/0/13 14:0/0/14 15:0/0/15 16:0/0/16 17:0/0/17 18:0/0/18 19:0/0/19 20:0/0/20 21:0/0/21 22:0/0/22 23:0/0/23 24:1/1/24 25:1/1/25 26:1/1/26 27:1/1/27 28:1/1/28 29:1/1/29 30:1/1/30 31:1/1/31 32:1/1/32 33:1/1/33 34:1/1/34 35:1/1/35 36:1/1/36 37:1/1/37 38:1/1/38 39:1/1/39 40:1/1/40 41:1/1/41 42:1/1/42 43:1/1/43 44:1/1/44 45:1/1/45 46:1/1/46 47:1/1/47
+code: 81bf6e6c8979 (from submit.sh: hopper has no git)
+runs per case: 1
+
+=== 14:11:11  2/3 benchmark: mnist8m, cart_depth10,c45_depth10_unpruned, j48, threads 1 (of 48), 1 run(s) per case
+1 cases, 2 processes:
+  mnist8m | c45_depth10_unpruned | j48 | 1
+checking the data (SHA-256 of every file, every CSV row against the binary files):
+  _baseline: identical in every format (0 s)
+  mnist8m: identical in every format (0 s)
+every CPU busy for 10 s before the first run (untimed)
+1 cases x 1 run(s), then 1 footprint run(s) x 1: 2 processes. Time left is shown once every case has run once.
+[1/2] 14:11:22 run 1/1: C4.5 Weka J48, 1 thread, mnist8m ...
+    ok: train 1.677e+04 s, peak 83,513 MiB, 1,453 nodes, depth 10, test acc 74.65% | process 4h40m, elapsed 4h40m, about 0m00s left
+runtime footprint of each tool (200-row _baseline dataset):
+[2/2] 18:51:46 footprint: C4.5 Weka J48, 1 thread, _baseline ...
+    ok: train 0.03865 s, peak 98 MiB, 3 nodes, depth 1 | process 0m00s, elapsed 4h40m, about 0m00s left
+results: /home/bmircevski/dt-final/bench/cluster-cpu-vs-others/vs-epyc-mnist8m/parts/p13/results.jsonl
+
+=== 18:51:47  3/3 tables and CSV files
+done 2026-11-24 18:51:47
