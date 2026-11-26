@@ -54,7 +54,6 @@ S.title(0,r'\textbf{(a)} the tree')
 def colour(p,n,d): return 'ink' if own[p]=='all' else cols[own[p]]
 def lab(p,n,d,a,b,y,H): return [txt((a+b)/2,y-H/2,letters[p],extra=',text=white')] if b-a>1.6 else []
 S.add(icicle(0,0,S.PW,H,colour,lab))
-S.note(0,r'Box width $\propto$ samples. Dark: large enough for all threads to split it by attribute; others: grown by one thread.',y=-13.0)
 # (b) timeline
 X0=S.PW+12; TW=122-X0-1; K=TW/end; LH=2.2
 S.add(rf'\node[font=\scriptsize,anchor=south west,inner sep=0] at ({X0-8}mm,3.2mm) {{\textbf{{(b)}} four threads over time}};')
@@ -73,7 +72,6 @@ for p,l,t in spawns:
     if th=='all' or tl=='all': continue
     st=[a for q,_,a,_ in blocks if q==l][0]
     y1=-th*(LH+0.5)-LH/2; y2=-tl*(LH+0.5)-LH/2
-    if th!=tl: S.add(rf'\draw[-{{Latex[length=0.9mm]}},ink!70,line width=0.35pt] ({X0+t*K:.2f}mm,{y1:.2f}mm) to[bend left=10] ({X0+st*K+0.2:.2f}mm,{y2:.2f}mm);')
+    if th!=tl: S.add(rf'\draw[-{{Latex[length=1.4mm,width=1.1mm]}},ink,line width=0.6pt] ({X0+t*K:.2f}mm,{y1:.2f}mm) to[bend left=10] ({X0+st*K+0.2:.2f}mm,{y2:.2f}mm);')
 S.add(rf'\draw[-{{Latex[length=1.1mm]}},muted] ({X0}mm,{-4*(LH+0.5)-0.4}mm) -- ({X0+TW}mm,{-4*(LH+0.5)-0.4}mm) node[pos=0,anchor=east,font=\tiny,inner sep=0.8mm] {{time}};')
-S.add(rf'\node[font=\tiny,anchor=north west,inner sep=0,text width={TW+8}mm,align=flush left] at ({X0-8}mm,-13.0mm) {{After splitting a node of at least 4{{,}}096 samples, a thread passes one child to the pool (arrows) and continues with the other; an idle thread takes it. Nobody waits for a task.}};')
 S.write('diagram-task-parallel')

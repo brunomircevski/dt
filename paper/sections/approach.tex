@@ -48,7 +48,7 @@ Because large nodes are limited by memory bandwidth, the implementation minimize
 % paper/tools/diagrams/task_parallel.py (schematic)
 \begin{figure}
 \includegraphics[width=\textwidth]{diagram-task-parallel.pdf}
-\caption{Task parallelism in \ImplParallel{} (schematic): (a)~a small tree; (b)~four threads growing it over time.}
+\caption{Task parallelism in \ImplParallel{} (schematic). Box width is proportional to the number of samples. All threads split the dark node together; arrows mark children passed to an idle thread.}
 \label{fig:task-parallel}
 \end{figure}
 
@@ -71,7 +71,7 @@ Handoffs are asynchronous. At each level, the GPU gathers the remaining attribut
 % paper/tools/diagrams/small_nodes.py (HIGGS level statistics; panel c schematic)
 \begin{figure}
 \includegraphics[width=\textwidth]{diagram-small-nodes.pdf}
-\caption{Small nodes in a deep tree (HIGGS, CART, depth $\le$ 30): (a)~samples per level by node size; (b)~share that \ImplHybrid{} grows on the CPU ($m = 512$); (c)~\ImplHybrid{} over time (schematic).}
+\caption{Small nodes in a deep tree (HIGGS, CART, depth $\le$ 30, $m = 512$); (c)~is schematic.}
 \label{fig:small-nodes}
 \end{figure}
 

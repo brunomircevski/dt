@@ -412,11 +412,11 @@ def heatmap():
 # ---------------------------------------------------------------- 4. scaling
 def scaling():
     sets = [("higgs", "o", "HIGGS", "#2a78d6"), ("mnist8m", "s", "MNIST8M", "#eb6834")]
-    fig, axes = plt.subplots(1, 2, figsize=(FULL, 1.6), sharey=True, gridspec_kw={"wspace": 0.06})
+    fig, axes = plt.subplots(1, 2, figsize=(FULL, 1.42), sharey=True, gridspec_kw={"wspace": 0.06})
     for ax, (node, title) in zip(axes, [("epyc", r"\textbf{epyc}: 2 $\times$ EPYC 9255"),
                                         ("dell", r"\textbf{dell}: 2 $\times$ Xeon Gold 6542Y")]):
         ax.plot([1, 48], [1, 48], color=GRID, lw=0.8, zorder=0)
-        ax.text(12, 15.5, "ideal", fontsize=FS_ANN, color=MUTED, rotation=33, ha="center")
+        ax.text(12, 15.5, "ideal", fontsize=FS_ANN, color=MUTED, rotation=30, ha="center")
         ax.axvline(24, color=MUTED, lw=0.5, ls=(0, (1, 2)), zorder=1)
         ax.text(25, 1.5, "2nd socket $\\rightarrow$", fontsize=FS_ANN, color=MUTED, va="bottom")
         labels = []  # [speed-up at 48 threads, text, colour]: placed together below, apart
@@ -432,21 +432,21 @@ def scaling():
                 labels.append([sp[-1], rf"{sp[-1]:.0f}$\times$ ({100 * sp[-1] / 48:.0f}\%)", c])
         labels.sort()
         for i in range(1, len(labels)):  # at least one label's height apart
-            labels[i][0] = max(labels[i][0], labels[i - 1][0] + 3.2)
+            labels[i][0] = max(labels[i][0], labels[i - 1][0] + 3.6)
         for y, text, c in labels:
             ax.annotate(text, (49.5, y), fontsize=FS_ANN, color=c, va="center")
         ax.set_xlim(0, 62)
         ax.set_ylim(0, 48)
         ax.set_xticks([1, 8, 16, 24, 32, 40, 48])
         ax.set_yticks([0, 10, 20, 30, 40])
-        ax.set_xlabel("threads")
         ax.set_title(title)
         ax.grid(color=GRID, lw=0.3, zorder=0)
-    axes[0].set_ylabel("speed-up over 1 thread")
+    axes[0].set_ylabel("speedup over 1 thread")
+    fig.supxlabel("threads", fontsize=FS_TEXT, y=-0.04)
     h = [Line2D([], [], color=c, lw=0.9, marker=m, ms=2.5, label=dl) for _, m, dl, c in sets]
     h += [Line2D([], [], color=MUTED, lw=0.9, ls="-", label="CART"),
           Line2D([], [], color=MUTED, lw=0.9, ls="--", label="C4.5")]
-    legend_below(fig, h, handlelength=1.8)
+    legend_below(fig, h, handlelength=1.8, gap=0.03)
     save(fig, "scaling")
 
 
@@ -607,7 +607,7 @@ def profile():
 # ---------------------------------------------------------------- 8. bars
 def bars():
     """Grouped bars, log scale: this work's five implementations on every dataset (CPU on
-    epyc1, GPU on the H100), value above each bar, no bar where there is no run."""
+    epyc, GPU on the H100), no bar where there is no run. Exact values are in Table 6."""
     datasets = ["susy", "higgs", "ecbdl", "ecbdl_15m", "mnist8m", "sorel", "sorel_4m", "chess_1b"]
     impls = [("simple", "epyc"), ("serial", "epyc"), ("cpu", "epyc"), ("gpuonly", "hopper"),
              ("cuda", "hopper")]
@@ -616,7 +616,7 @@ def bars():
     n = len(impls)
     w = 0.72 / n
     x = np.arange(len(datasets))
-    fig, axes = plt.subplots(2, 1, figsize=(FULL, 2.9), sharex=True, gridspec_kw={"hspace": 0.1})
+    fig, axes = plt.subplots(2, 1, figsize=(FULL, 1.95), sharex=True, gridspec_kw={"hspace": 0.24})
     for ax, algo in zip(axes, ["cart", "c45"]):
         for j, (mode, node) in enumerate(impls):
             _, c, _ = STYLE[mode]
@@ -628,22 +628,20 @@ def bars():
                 t = r["time_mean"]
                 ax.bar(xi, t, w * 0.9, color=c, ec=INK, lw=0.3, zorder=2,
                        label=labels[mode] if i == 0 else None)
-                ax.text(xi, t * 1.15, tsec(t), rotation=90, ha="center", va="bottom", fontsize=FS_ANN - 0.5,
-                        color=INK)
         log_axis(ax, "y")
-        ax.set_ylim(0.03, 1.5e5)
+        ax.set_ylim(0.05, 3e4)
         ax.set_yticks([0.1, 1, 10, 100, 1000, 10000])
         ax.grid(axis="y", color=GRID, lw=0.4, zorder=0)
-        ax.set_ylabel(rf"\textbf{{{ALGO[algo]}}}: time (s)")
+        ax.set_title(rf"\textbf{{{ALGO[algo]}}}", pad=2)
         ax.tick_params(axis="x", length=0)
         for i in range(1, len(datasets)):
             ax.axvline(i - 0.5, color=GRID, lw=0.4, zorder=0)
-    names = {"ecbdl_15m": "ECBDL'14\n15M samples", "sorel_4m": "SOREL\n4M samples",
-             "chess_1b": "Chess\n1B samples"}
-    axes[1].set_xticks(x, [tex(names.get(d, DATA[d][0])) for d in datasets], linespacing=0.95)
+    fig.supylabel("training time (s)", fontsize=FS_TEXT, x=0.01)
+    names = {"ecbdl_15m": "ECBDL'14\n15M", "sorel": "SOREL-\n20M", "sorel_4m": "SOREL\n4M", "chess_1b": "Chess\n$10^9$"}
+    axes[1].set_xticks(x, [names[d] if d in names else tex(DATA[d][0]) for d in datasets], linespacing=0.95)
     axes[1].set_xlim(-0.5, len(datasets) - 0.5)
     h, _ = axes[0].get_legend_handles_labels()
-    legend_below(fig, h, handlelength=1.0)
+    legend_below(fig, h, handlelength=1.0, gap=0.03)
     save(fig, "results-bars", final=True)
 
 
@@ -709,79 +707,118 @@ def joule_axis(ax, axis="y"):
 
 
 def energy(algo="c45", cpu_nodes=("epyc",), gpu_nodes=("hopper",)):
-    """Time, power and total energy of one tree, one row per implementation x node (CPU
-    implementations on the CPU nodes, GPU ones on the GPU nodes), four aligned panels: time
-    per tree (log); mean power of the whole server (linear; the lighter part is the idle
-    server's power); mean power of the CPU packages + the GPU in use (on GPU runs the CPU
-    part is striped) while
-    training (linear; no idle split); total energy per tree at the PSU (log;
-    idle included). The number at the end of each bar is its total."""
+    """Unified energy figure: (a) ECBDL'14 15M depth <= 10 (5 implementations) and
+    (b) MNIST8M no depth limit (3 implementations on hopper), sharing four aligned panels:
+    time (log), server power (linear with idle tint), CPU+GPU power (linear with CPU hatch
+    on GPU runs), and energy (log), plus one legend."""
     from matplotlib.colors import to_rgba
-    rows = power_rows()
-    cases = [(k, n) for k, n in p_cases(rows)
-             if n in (gpu_nodes if k in ("gpuonly", "cuda") else cpu_nodes)]
-    fig, axes = plt.subplots(1, 4, figsize=(FULL, 1.35), sharey=True,
-                             gridspec_kw={"wspace": 0.14})
+    from matplotlib.transforms import offset_copy
+
+    rows_ec = power_rows()
+    cases_ec = [(k, n) for k, n in p_cases(rows_ec)
+                if n in (gpu_nodes if k in ("gpuonly", "cuda") else cpu_nodes)]
+
+    rows_mn = {}
+    for r in csv.DictReader(open(POWER_DEEP / "summary.csv")):
+        rows_mn[(r["impl"], r["algo"])] = {k: (float(v) if re.fullmatch(r"[-+0-9.eE]+|nan", v or "") else v)
+                                           for k, v in r.items()}
+    for machine in sorted(POWER_DEEP.glob("*/machine.txt")):
+        commit = re.search(r"^commit (\S+)", machine.read_text(), re.M)
+        USED.append(B.out_of_date(commit and commit.group(1), machine.parent.name.rstrip("0123456789")))
+    cases_mn = [("cpu", "parallel"), ("gpuonly", "gpuonly"), ("cuda", "cuda")]
+
+    # Build top-to-bottom y positions (ECBDL top, thin gap, MNIST8M bottom)
+    entries = []
+    y = 0.0
+    for k, node in cases_ec:
+        entries.append((y, k, rows_ec[(k, node, algo)]))
+        y += 1.0
+    ec_end = y - 1.0
+    gap_y = y - 0.15
+    y += 0.7
+    mn_start = y
+    for k, impl in cases_mn:
+        entries.append((y, k, rows_mn[(impl, algo)]))
+        y += 1.0
+    mn_end = y - 1.0
+
+    fig, axes = plt.subplots(1, 4, figsize=(FULL, 1.78), sharey=True, gridspec_kw={"wspace": 0.14})
     ax_t, ax_p, ax_c, ax_e = axes
-    # CPU+GPU panel: bars in the implementation's colour; on the GPU runs the CPU packages'
-    # part (the start of the bar) carries blue stripes
-    # stripes as wide as the gaps between them (about half the area), a blue that stands
-    # out from each green: dark on the light green, light on the dark green
     STRIPE = {"gpuonly": "#1a4d99", "cuda": "#8cc4ff"}
-    HATCH = "/////"  # about 5 pt apart along the bar in the PDF
-    plt.rcParams["hatch.linewidth"] = 1.8  # about half the gap; read when the bars are made
-    y = np.arange(len(cases))[::-1].astype(float)
-    hgt, fs = 0.7, FS_ANN
-    for yi, (k, node) in zip(y, cases):
-        r = rows[(k, node, algo)]
+    HATCH = "/////"
+    plt.rcParams["hatch.linewidth"] = 1.8
+    hgt, fs = 0.68, FS_ANN
+
+    for yi, k, r in entries:
         c, lc = STYLE[k][1], to_rgba(STYLE[k][1], 0.35)
         t, p, e = r["train_s"], r["power_W"], r["psu_J"]
-        ax_t.barh(yi, t - 1, left=1, height=hgt, color=c, lw=0)
-        ax_t.text(t * 1.2, yi, (f"{t:,.0f}".replace(",", "{,}") if t >= 100 else tsec(t)) + r"\,s",
-                  va="center", fontsize=fs)
+        ax_t.barh(yi, t - 1, left=1, height=hgt, color=c, lw=0, zorder=2)
+        t_txt = f"{t:,.0f}".replace(",", "{,}") if t >= 100 else (f"{t:.1f}" if t >= 10 else f"{t:.2f}")
+        ax_t.text(t * 1.25, yi, t_txt + r"\,s", va="center", fontsize=fs)
+
         idle_w = r["idle_W"]
-        ax_p.barh(yi, idle_w, height=hgt, color=lc, lw=0)
-        ax_p.barh(yi, p - idle_w, left=idle_w, height=hgt, color=c, lw=0)
-        ax_p.text(p + 15, yi, rf"{p:.0f}\,W", va="center", fontsize=fs)
+        ax_p.barh(yi, idle_w, height=hgt, color=lc, lw=0, zorder=2)
+        ax_p.barh(yi, p - idle_w, left=idle_w, height=hgt, color=c, lw=0, zorder=2)
+        ax_p.text(p + 20, yi, rf"{p:.0f}\,W", va="center", fontsize=fs)
+
         cpu = r["P_cpu0"] + r["P_cpu1"]
         gpu = r["P_gpu"] if k in ("gpuonly", "cuda") else 0.0
         if gpu:
-            ax_c.barh(yi, cpu, height=hgt, fc=c, ec=STRIPE[k], lw=0, hatch=HATCH)
-            ax_c.barh(yi, gpu, left=cpu, height=hgt, color=c, lw=0)
+            ax_c.barh(yi, cpu, height=hgt, fc=c, ec=STRIPE[k], lw=0, hatch=HATCH, zorder=2)
+            ax_c.barh(yi, gpu, left=cpu, height=hgt, color=c, lw=0, zorder=2)
         else:
-            ax_c.barh(yi, cpu, height=hgt, color=c, lw=0)
-        ax_c.text(cpu + gpu + 12, yi, rf"{cpu + gpu:.0f}\,W", va="center", fontsize=fs)
-        ax_e.barh(yi, e - 1e3, left=1e3, height=hgt, color=c, lw=0)
-        ax_e.text(e * 1.2, yi, kj(e), va="center", fontsize=fs)
+            ax_c.barh(yi, cpu, height=hgt, color=c, lw=0, zorder=2)
+        ax_c.text(cpu + gpu + 18, yi, rf"{cpu + gpu:.0f}\,W", va="center", fontsize=fs)
+
+        ax_e.barh(yi, e - 1e3, left=1e3, height=hgt, color=c, lw=0, zorder=2)
+        ax_e.text(e * 1.25, yi, kj(e), va="center", fontsize=fs)
+
     ax_t.set_xscale("log")
-    ax_t.set_xlim(1, 8e4)
+    ax_t.set_xlim(1, 1.2e5)
     ax_t.set_xticks([1, 100, 1e4], [r"1\,s", r"100\,s", r"10k\,s"])
     ax_t.xaxis.set_minor_formatter(NullFormatter())
     ax_t.set_title("time per tree")
-    ax_p.set_xlim(0, 1100)
-    ax_p.set_xticks([0, 400, 800], [r"0\,W", r"400\,W", r"800\,W"])
+
+    ax_p.set_xlim(0, 1450)
+    ax_p.set_xticks([0, 500, 1000], [r"0", r"500", r"1k\,W"])
     ax_p.set_title("server power")
-    ax_c.set_xlim(0, 760)
-    ax_c.set_xticks([0, 400], [r"0\,W", r"400\,W"])
+
+    ax_c.set_xlim(0, 1050)
+    ax_c.set_xticks([0, 400, 800], [r"0", r"400", r"800\,W"])
     ax_c.set_title("CPU+GPU power")
+
     joule_axis(ax_e, "x")
-    ax_e.set_xlim(1e3, 3e7)
+    ax_e.set_xlim(1e3, 4e7)
     ax_e.set_xticks([1e3, 1e5, 1e7])
     ax_e.set_title("energy per tree")
+
     for ax in axes:
         ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
         ax.set_axisbelow(True)
         ax.tick_params(axis="y", length=0)
-    ax_t.set_yticks(y, [STYLE[k][0] for k, n in cases])
-    ax_t.set_ylim(y[-1] - 0.55, y[0] + 0.55)
-    for i in range(1, len(cases)):
-        if cases[i][0] != cases[i - 1][0]:
-            for ax in axes:
-                ax.axhline(y[i] + 0.5, color=GRID, lw=0.5)
+        ax.axhline(gap_y, color=MUTED, lw=0.6, zorder=1)
+
+    ax_t.set_yticks([yi for yi, _, _ in entries], [STYLE[k][0] for _, k, _ in entries], fontsize=FS_TICK)
+    ax_t.set_ylim(mn_end + 0.55, -0.55)
+
+    fig.canvas.draw()
+    renderer = fig._get_renderer()
+    max_lbl_pt = max(t.get_window_extent(renderer).width for t in ax_t.get_yticklabels()) * 72.0 / fig.dpi
+    line_off = -(max_lbl_pt + 5.0)
+    lbl_off = line_off - 8.5
+    t_line = offset_copy(ax_t.get_yaxis_transform(), fig=fig, x=line_off, y=0, units="points")
+    t_lbl = offset_copy(ax_t.get_yaxis_transform(), fig=fig, x=lbl_off, y=0, units="points")
+    for grp_lbl, y0, y1 in [(r"\textbf{(a)} ECBDL'14" + "\n" + r"15M, $d \le 10$", 0.0, ec_end),
+                            (r"\textbf{(b)} MNIST8M" + "\n" + r"no limit", mn_start, mn_end)]:
+        ymid = 0.5 * (y0 + y1)
+        ax_t.text(0, ymid, grp_lbl, transform=t_lbl,
+                  ha="center", va="center", rotation=90, fontsize=FS_ANN, color=INK, linespacing=0.95)
+        ax_t.plot([0, 0], [y0 - 0.25, y1 + 0.25], transform=t_line, color=MUTED, lw=0.6, clip_on=False)
+
     h = [plt.Rectangle((0, 0), 1, 1, color=to_rgba("#777", 0.35), label="idle server"),
          plt.Rectangle((0, 0), 1, 1, fc=STYLE["gpuonly"][1], ec=STRIPE["gpuonly"], lw=0, hatch=HATCH,
                        label="CPU part of a GPU run")]
-    legend_below(fig, h, handlelength=2.4, handleheight=1.0)
+    legend_below(fig, h, handlelength=2.4, handleheight=1.0, gap=0.03)
     save(fig, "results-energy", final=True, copy=POWER.parent / "paper-fig-energy-ecbdl_15m")
 
 
@@ -870,93 +907,180 @@ STYLE.update({
 })
 
 
-# Section 5 colour rule: GPU green, CPU (and host RAM) blue.
+# Section 5 unified phase palette (distinct from implementation colors in STYLE).
 GPU_C, CPU_C = STYLE["gpuonly"][1], STYLE["cpu"][1]
-PHASE = [  # gpu_steps_chart bar -> (colour, legend label)
-    ("set-up", "#a3a29d", "set-up"),
-    ("upload", "#eda100", "upload"),
-    ("prepare", "#8fd6b8", "presort / binning (GPU)"),
-    ("build", GPU_C, "build (GPU)"),
-    ("CPU build", CPU_C, "small subtrees (CPU)"),
+PHASE_C = {
+    "setup": "#a3a29d",
+    "other": "#cfcec9",
+    "transfer": "#eda100",
+    "presort": "#a8bedb",
+    "search": "#6f8ab0",
+    "partition": "#3c5270",
+    "gpu": GPU_C,
+    "cpu": CPU_C,
+}
+PHASE = [  # gpu_steps_chart bar -> (colour, legend label, lane offset: -0.19 host / +0.19 GPU)
+    ("set-up", PHASE_C["setup"], "setup", -0.19),
+    ("upload", PHASE_C["transfer"], "upload", -0.19),
+    ("prepare", PHASE_C["presort"], "presort / binning (GPU)", 0.19),
+    ("build", PHASE_C["gpu"], "build (GPU)", 0.19),
+    ("CPU build", PHASE_C["cpu"], "small subtrees (CPU)", -0.19),
 ]
 
 
 def gpulibs():
-    """One CART tree on the H100, HIGGS depth <= 10 and <= 30, like bench/cluster-gpu-vs-others/chart.png:
-    a block per tool, a lane per phase at its own start and end (lanes that overlap in time ran at
-    once: ./tree's presort during the upload, Hybrid's CPU subtrees during its GPU build), its
-    duration after it, the total and the ratio to GPU-Based in the block's header. d30: the axis
-    skips the stretches where nothing ends. Source cluster-gpu-vs-others/one-tree."""
+    """One CART tree on the H100: 2+1 layout with HIGGS d<=10 and MNIST8M d<=10 on top and
+    HIGGS d<=30 full-width on bottom using a true broken axis (0..1.15 s | 1.15..38 s).
+    Each tool is a single horizontal bar; concurrent phases are hatched (matching Figs. 6b & 9)."""
     import gpu_steps_chart as G
-    panels = [("higgs", r"HIGGS, depth $\le$ 10"), ("higgs-depth30", r"HIGGS, depth $\le$ 30")]
-    names = {"tree_gpu_only": "GPU-Based", "tree_cuda": "Hybrid", "cuml": "cuML", "xgboost": "XGBoost"}
-    colour = {k: c for k, c, _ in PHASE}
-    data = []
-    for p, _ in panels:
-        order = {k: i for i, k in enumerate(names)}
-        data.append(sorted(G.load("hopper", p), key=lambda t: order[t["impl"]]))
-        USED.extend(False for _ in data[-1])
-    fig, axes = plt.subplots(1, 2, figsize=(FULL, 2.35), gridspec_kw={"wspace": 0.12})
-    for ax, tools, (p, title) in zip(axes, data, panels):
+    from matplotlib.patches import Patch
+
+    tool_order = [("tree_gpu_only", "GPU-Based"), ("tree_cuda", "Hybrid"),
+                  ("cuml", "cuML"), ("xgboost", "XGBoost")]
+    order = {k: i for i, (k, _) in enumerate(tool_order)}
+    sec_color = {
+        "set-up": PHASE_C["setup"],
+        "upload": PHASE_C["transfer"],
+        "prepare": PHASE_C["presort"],
+        "build": PHASE_C["gpu"],
+        "CPU build": PHASE_C["cpu"],
+    }
+
+    def load_panel(p):
+        tools = sorted(G.load("hopper", p), key=lambda t: order[t["impl"]])
+        USED.extend(False for _ in tools)
+        return tools
+
+    def fmt_total(t, ref):
+        m = t["mean"]
+        tt = f"{m:.2f}" if m < 10 else f"{m:.1f}"
+        if t["impl"] == "tree_gpu_only":
+            return rf"{tt}\,s"
+        r = m / ref
+        rs = f"{r:.2f}" if r < 1 else (f"{r:.0f}" if r >= 10 else f"{r:.1f}")
+        return rf"{tt}\,s ({rs}$\times$)"
+
+    def split_intervals(tool):
+        segs, pts = [], set()
+        for s in tool["sections"]:
+            for a, b in s["segments"]:
+                segs.append((a, b, s["name"]))
+                pts.add(a)
+                pts.add(b)
+        pts = sorted(pts)
+        out = []
+        for a, b in zip(pts, pts[1:]):
+            if b - a < 1e-6:
+                continue
+            mid = 0.5 * (a + b)
+            active = {name for sa, sb, name in segs if sa <= mid <= sb}
+            if active:
+                out.append((a, b, active))
+        return out
+
+    def draw_bar(ax, yi, tool, h=0.58, hatch="////"):
+        plt.rcParams["hatch.linewidth"] = 1.0
+        max_x = 0.0
+        for a, b, active in split_intervals(tool):
+            max_x = max(max_x, b)
+            w = b - a
+            if len(active) == 1:
+                name = next(iter(active))
+                ax.barh(yi, w, left=a, height=h, color=sec_color[name], lw=0, zorder=2)
+            elif "build" in active and "CPU build" in active:
+                ax.barh(yi, w, left=a, height=h, fc=PHASE_C["gpu"], ec=PHASE_C["cpu"],
+                        hatch=hatch, lw=0, zorder=2)
+            elif "upload" in active and "prepare" in active:
+                ax.barh(yi, w, left=a, height=h, fc=PHASE_C["presort"], ec=PHASE_C["transfer"],
+                        hatch=hatch, lw=0, zorder=2)
+            else:
+                name = next(iter(active))
+                ax.barh(yi, w, left=a, height=h, color=sec_color[name], lw=0, zorder=2)
+        return max_x
+
+    fig = plt.figure(figsize=(FULL, 2.02))
+    outer = fig.add_gridspec(2, 1, height_ratios=[1, 1], hspace=0.52)
+    top_gs = outer[0].subgridspec(1, 2, wspace=0.14)
+    bot_gs = outer[1].subgridspec(1, 2, width_ratios=[0.66, 0.34], wspace=0.05)
+
+    ax_h10 = fig.add_subplot(top_gs[0, 0])
+    ax_m10 = fig.add_subplot(top_gs[0, 1], sharey=ax_h10)
+    ax_bl = fig.add_subplot(bot_gs[0, 0])
+    ax_br = fig.add_subplot(bot_gs[0, 1], sharey=ax_bl)
+
+    for ax, p, title, xhi, ticks in [
+        (ax_h10, "higgs", r"\textbf{(a) HIGGS, depth $\le$ 10}", 0.82, [0, 0.2, 0.4, 0.6]),
+        (ax_m10, "mnist8m", r"\textbf{(b) MNIST8M, depth $\le$ 10}", 10.4, [0, 2, 4, 6, 8]),
+    ]:
+        tools = load_panel(p)
         ref = next(t["mean"] for t in tools if t["impl"] == "tree_gpu_only")
-        lead = max(t["mean"] for t in tools if t["impl"].startswith("tree"))
-        windows = G.windows_of(tools)
-        gaps = [(hi, lo) for (_, hi), (lo, _) in zip(windows, windows[1:])]
-        y = 0.0
-        for t in tools:
-            tt = tsec(t["mean"]) if t["mean"] < 20 else f"{t['mean']:.1f}"
-            head = rf"\textbf{{{names[t['impl']]}}}: {tt}\,s"
-            if t["impl"] != "tree_gpu_only":
-                r = t["mean"] / ref
-                head += rf" ({r:.2f}$\times$)" if r < 1 else rf" ({r:.1f}$\times$)"
-            ax.text(0, y, head, va="center", ha="left", fontsize=FS_ANN + 0.5, color=INK)
-            y += 1
-            for s in t["sections"]:
-                c = colour[s["name"]]
-                for a, b in s["segments"]:
-                    b = max(b, a + 0.004 * windows[0][1])
-                    pieces = [(a, b)]
-                    for glo, ghi in gaps:  # a bar across a cut: two pieces, dots in the gap
-                        x0, x1 = pieces[-1]
-                        if x0 < glo and x1 > ghi:
-                            pieces[-1:] = [(x0, glo), (ghi, x1)]
-                            ax.text((glo + ghi) / 2, y, r"$\cdots$", ha="center", va="center", fontsize=FS_ANN,
-                                    color=c)
-                    for x0, x1 in pieces:
-                        ax.barh(y, x1 - x0, left=x0, height=0.72, color=c, lw=0, zorder=2)
-                ms = s["end"] - s["start"]
-                lab = f"{1000 * ms:.0f}" + r"\,ms" if ms < 0.9995 else f"{ms:.2f}" + r"\,s"
-                ax.text(s["end"], y, r"\," + lab, va="center", ha="left", fontsize=FS_ANN - 0.5, color=MUTED)
-                y += 1
-            y += 0.45
-        if len(windows) > 1:
-            G.axis_scale(ax, windows, gap=0.25 * lead)
-            for txt in ax.texts:
-                if txt.get_text() == "//":
-                    txt.set_fontsize(6.5)
-            ticks = [0, 0.5, 1] + [v for v in ax.get_xticks() if v >= 2]
-            ax.set_xticks(ticks, [f"{v:g}" for v in ticks])
-        else:
-            ax.set_xlim(0, max(t["mean"] for t in tools) * 1.2)
-            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.1))
-        ax.set_xlabel("")
-        ax.set_ylim(y - 0.45 - 0.5, -0.6)
-        ax.set_yticks([])
-        ax.spines["left"].set_visible(False)
+        ax.set_xlim(0, xhi)
+        for yi, t in enumerate(tools):
+            end_x = draw_bar(ax, yi, t, h=0.58, hatch="////")
+            ax.text(end_x + 0.018 * xhi, yi, fmt_total(t, ref), va="center", ha="left",
+                    fontsize=FS_ANN - 0.2, color=INK)
+            if yi > 0:
+                ax.axhline(yi - 0.5, color=GRID, lw=0.4, zorder=0)
+        ax.set_xticks(ticks, [f"{v:g}" for v in ticks])
+        ax.set_ylim(len(tool_order) - 0.5, -0.5)
         ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
-        ax.set_title(rf"\textbf{{{title}}}", pad=2)
-    fig.supxlabel("seconds since the timer started", fontsize=FS_TEXT, y=0.0)
-    h = [plt.Rectangle((0, 0), 1, 1, color=c, label=l) for _, c, l in PHASE]
-    legend_below(fig, h, handlelength=1.0, gap=0.02)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis="y", length=0)
+        ax.set_title(title, pad=2)
+    ax_h10.set_yticks(range(len(tool_order)), [l for _, l in tool_order], fontsize=FS_TICK)
+    ax_m10.tick_params(labelleft=False)
+
+    tools = load_panel("higgs-depth30")
+    ref = next(t["mean"] for t in tools if t["impl"] == "tree_gpu_only")
+    split = 1.15
+    ax_bl.set_xlim(0, split)
+    ax_br.set_xlim(split, 38.0)
+    for yi, t in enumerate(tools):
+        draw_bar(ax_bl, yi, t, h=0.58, hatch="///")
+        draw_bar(ax_br, yi, t, h=0.58, hatch="///")
+        if t["mean"] <= split:
+            ax_bl.text(t["mean"] + 0.02, yi, fmt_total(t, ref), va="center", ha="left",
+                       fontsize=FS_ANN - 0.2, color=INK)
+        else:
+            ax_br.text(t["mean"] + 0.8, yi, fmt_total(t, ref), va="center", ha="left",
+                       fontsize=FS_ANN - 0.2, color=INK)
+        if yi > 0:
+            ax_bl.axhline(yi - 0.5, color=GRID, lw=0.4, zorder=0)
+            ax_br.axhline(yi - 0.5, color=GRID, lw=0.4, zorder=0)
+    ax_bl.set_xticks([0, 0.2, 0.4, 0.6, 0.8, 1.0], ["0", "0.2", "0.4", "0.6", "0.8", "1.0"])
+    ax_br.set_xticks([5, 15, 25], ["5", "15", "25"])
+    ax_bl.set_yticks(range(len(tool_order)), [l for _, l in tool_order], fontsize=FS_TICK)
+    ax_bl.set_ylim(len(tool_order) - 0.5, -0.5)
+    ax_br.tick_params(axis="y", length=0, labelleft=False)
+    ax_br.spines["left"].set_visible(False)
+    for ax in (ax_bl, ax_br):
+        ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
+        ax.set_axisbelow(True)
+        ax.tick_params(axis="y", length=0)
+    d = 0.015
+    ax_bl.plot([1 - d, 1 + d], [-0.05, 0.05], transform=ax_bl.transAxes, color=MUTED, lw=0.7, clip_on=False)
+    ax_br.plot([-d * 2, d * 2], [-0.05, 0.05], transform=ax_br.transAxes, color=MUTED, lw=0.7, clip_on=False)
+    ax_bl.set_title(r"\textbf{(c) HIGGS, depth $\le$ 30}", pad=2)
+    fig.supxlabel("seconds since timer started", fontsize=FS_TEXT, y=-0.02)
+
+    plt.rcParams["hatch.linewidth"] = 1.0
+    h = [
+        Patch(fc=PHASE_C["setup"], lw=0, label="setup"),
+        Patch(fc=PHASE_C["transfer"], lw=0, label="upload"),
+        Patch(fc=PHASE_C["presort"], lw=0, label="presort / binning"),
+        Patch(fc=PHASE_C["gpu"], lw=0, label="build (GPU)"),
+        Patch(fc=PHASE_C["cpu"], lw=0, label="subtrees (CPU)"),
+        Patch(fc="white", ec=MUTED, hatch="////", lw=0.4, label="concurrent"),
+    ]
+    legend_below(fig, h, handlelength=1.1, gap=0.03, ncol=3)
     save(fig, "results-gpulibs", final=True)
 
 
 def libs():
-    """Every implementation, depth <= 10, HIGGS (top) and MNIST8M (bottom): mean training time
-    (thick grey bar, log, left axis) and mean peak host RAM (blue) and VRAM (green) (thin bars, GiB,
-    right axis). Our CPU runs and the CPU libraries from cluster-cpu-vs-others/vs-epyc-<ds> (epyc,
-    co-scheduled), our CART GPU runs and the GPU libraries from cluster-gpu-vs-others/one-tree
-    (H100), our C4.5 GPU runs from cluster-<ds>, Serial Simple from cluster-<ds> (epyc)."""
+    """Every implementation, depth <= 10, CART (top) and C4.5 (bottom), four aligned horizontal
+    panels: HIGGS time (log) and peak RAM/VRAM (GiB), MNIST8M time (log) and peak RAM/VRAM (GiB).
+    Sources: cluster-cpu-vs-others/vs-epyc-<ds>, cluster-gpu-vs-others/one-tree (H100),
+    cluster-<ds> for C4.5 GPU runs and Serial Simple."""
     C, Q = "cart_depth10", "c45_depth10_unpruned"
 
     def runs(path):
@@ -974,97 +1098,161 @@ def libs():
                 statistics.mean(r["peak_rss_train_bytes"] for r in rs) / 2**30,
                 statistics.mean(vram) / 2**30 if vram else None)
 
-    groups = [  # (label, impl key, source, impl, protocol, threads)
-        ("Serial Simple", "simple", "simple", "tree_simple", C, None),
-        ("Serial Opt.", "serial", "cpu", "tree", C, 1),
-        ("Multicore", "cpu", "cpu", "tree", C, 48),
-        ("GPU-Based", "gpuonly", "gpu", "tree_gpu_only", C, None),
-        ("Hybrid", "cuda", "gpu", "tree_cuda", C, None),
-        ("scikit-learn", "sklearn", "cpu", "sklearn", C, None),
-        ("rpart", "rpart", "cpu", "rpart", C, None),
-        ("cuML", "cuml", "gpu", "cuml", C, None),
-        ("XGBoost", "xgboost", "gpu", "xgboost", C, None),
-        ("Serial Simple", "simple", "simple", "tree_simple", Q, None),
-        ("Serial Opt.", "serial", "cpu", "tree", Q, 1),
-        ("Multicore", "cpu", "cpu", "tree", Q, 48),
-        ("GPU-Based", "gpuonly", "gpuonly", "tree_gpu_only", Q, None),
-        ("Hybrid", "cuda", "cuda", "tree_cuda", Q, None),
-        ("Weka J48", "j48", "cpu", "j48", Q, None),
-        ("YaDT", "yadt", "cpu", "yadt", Q, 1),
-        ("YaDT 48T", "yadt48", "cpu", "yadt", Q, 48),
+    def fmt_mem(v, ds):
+        return f"{v:.1f}" if ds == "higgs" else f"{v:.0f}"
+
+    cart_groups = [
+        ("Serial Simple", "simple", "tree_simple", C, None),
+        ("Serial Opt.", "cpu", "tree", C, 1),
+        ("Multicore", "cpu", "tree", C, 48),
+        ("GPU-Based", "gpu", "tree_gpu_only", C, None),
+        ("Hybrid", "gpu", "tree_cuda", C, None),
+        ("scikit-learn", "cpu", "sklearn", C, None),
+        ("rpart", "cpu", "rpart", C, None),
+        ("cuML", "gpu", "cuml", C, None),
+        ("XGBoost", "gpu", "xgboost", C, None),
     ]
-    sets = [("higgs", "HIGGS", 14), ("mnist8m", "MNIST8M", 95)]
+    c45_groups = [
+        ("Serial Simple", "simple", "tree_simple", Q, None),
+        ("Serial Opt.", "cpu", "tree", Q, 1),
+        ("Multicore", "cpu", "tree", Q, 48),
+        ("GPU-Based", "gpuonly", "tree_gpu_only", Q, None),
+        ("Hybrid", "cuda", "tree_cuda", Q, None),
+        ("Weka J48", "cpu", "j48", Q, None),
+        ("YaDT", "cpu", "yadt", Q, 1),
+        ("YaDT 48T", "cpu", "yadt", Q, 48),
+    ]
+    # y positions (top to bottom): CART rows, small gap, C4.5 rows
+    rows_meta = []
+    y = 0.0
+    for g in cart_groups:
+        rows_meta.append((y, g))
+        y += 1.0
+    cart_end = y - 1.0
+    gap_y = y - 0.15
+    y += 0.7
+    c45_start = y
+    for g in c45_groups:
+        rows_meta.append((y, g))
+        y += 1.0
+    c45_end = y - 1.0
+
     TIMEC, RAMC, VRAMC = "#7e7d78", CPU_C, GPU_C
-    fig, axes = plt.subplots(2, 1, figsize=(FULL, 2.9), sharex=True, gridspec_kw={"hspace": 0.08})
-    for ax, (ds, title, mem_top) in zip(axes, sets):
+
+    fig = plt.figure(figsize=(FULL, 2.35))
+    gs = fig.add_gridspec(1, 5, width_ratios=[1.0, 1.0, 0.14, 1.0, 1.0], wspace=0.10)
+    ax_ht = fig.add_subplot(gs[0, 0])
+    ax_hm = fig.add_subplot(gs[0, 1], sharey=ax_ht)
+    ax_mt = fig.add_subplot(gs[0, 3], sharey=ax_ht)
+    ax_mm = fig.add_subplot(gs[0, 4], sharey=ax_ht)
+
+    panels = [
+        ("higgs", "HIGGS", ax_ht, ax_hm, 0.1, 7e3, [0.1, 10, 1000], 18.5, [0, 5, 10, 15]),
+        ("mnist8m", "MNIST8M", ax_mt, ax_mm, 1.0, 2e5, [1, 100, 10000], 106, [0, 40, 80]),
+    ]
+    fs_val = FS_ANN - 0.3
+
+    for ds, ds_title, ax_t, ax_m, t_lo, t_hi, t_ticks, m_hi, m_ticks in panels:
         d = DATA[ds][1]
         src = {"cpu": runs(RES / "cluster-cpu-vs-others" / f"vs-epyc-{ds}"),
                "gpu": runs(RES / "cluster-gpu-vs-others" / "one-tree" / f"vs-hopper-{ds}"),
                "simple": runs(RES / d / f"simple-epyc-{ds}"),
                "gpuonly": runs(RES / d / f"gpuonly-hopper-{ds}"),
                "cuda": runs(RES / d / f"cuda-hopper-{ds}")}
-        ax2 = ax.twinx()
-        for i, (_, k, s, impl, proto, th) in enumerate(groups):
+        for yi, (label, s, impl, proto, th) in rows_meta:
             v = pick(src[s], impl, proto, th)
             if v is None:
-                ax.text(i, 0.13, "fails", ha="center", va="bottom", fontsize=FS_ANN, color=MUTED, rotation=90)
+                ax_t.text(t_lo * 1.2, yi, r"\textit{fails}", va="center", ha="left",
+                          fontsize=fs_val, color=INK)
+                ax_m.text(0.03 * m_hi, yi, r"--", va="center", ha="left",
+                          fontsize=fs_val, color=INK)
                 continue
             t, ram, vram = v
-            ax.bar(i - 0.15, t, 0.4, color=TIMEC, lw=0, zorder=2)
-            ax.text(i - 0.15, t * 1.2, tsec(t), rotation=90, ha="center", va="bottom", fontsize=FS_ANN - 0.5)
-            ax2.bar(i + 0.12, ram, 0.14, color=RAMC, lw=0, zorder=2)
-            if vram is not None:
-                ax2.bar(i + 0.27, vram, 0.14, color=VRAMC, lw=0, zorder=2)
-        log_axis(ax, "y")
-        ax.set_ylim(0.1, 2e5 if ds == "higgs" else 2e6)
-        ax.set_yticks([0.1, 1, 10, 100, 1000, 10000])
-        ax.set_ylabel(rf"\textbf{{{title}}}: time (s)")
-        ax2.set_ylim(0, mem_top * 2.4)
-        top = 10 if ds == "higgs" else 80
-        ax2.set_yticks([0, top / 2, top])
-        ax2.spines["right"].set_visible(True)
-        ax2.spines["right"].set_bounds(0, top)
-        ax2.set_ylabel("GiB", y=0.2)
-        for x in (4.5, 13.5):
-            ax.axvline(x, color=GRID, lw=0.6, zorder=0)
-        ax.axvline(8.5, color=MUTED, lw=0.6, zorder=0)
-        ax.grid(axis="y", color=GRID, lw=0.4, zorder=0)
-        ax.set_axisbelow(True)
-        if ds == "higgs":
-            for x, txt in [(2, "this work"), (6.5, "CART libraries"), (11, "this work"), (15, "C4.5 libraries")]:
-                ax.text(x, 0.98, rf"\textit{{{txt}}}", ha="center", va="top", fontsize=FS_ANN, color=MUTED,
-                        transform=ax.get_xaxis_transform())
-            ax.text(4, 1.03, r"\textbf{CART}", ha="center", fontsize=FS_TEXT, transform=ax.get_xaxis_transform())
-            ax.text(13, 1.03, r"\textbf{C4.5}", ha="center", fontsize=FS_TEXT, transform=ax.get_xaxis_transform())
-    axes[1].set_xticks(range(len(groups)), [tex(g[0]) for g in groups], rotation=90)
-    axes[1].set_xlim(-0.55, len(groups) - 0.45)
-    axes[1].tick_params(axis="x", length=0, labelsize=FS_ANN)
-    h = [plt.Rectangle((0, 0), 1, 1, color=TIMEC, label="training time (left, log)"),
-         plt.Rectangle((0, 0), 1, 1, color=RAMC, label="peak RAM (right)"),
-         plt.Rectangle((0, 0), 1, 1, color=VRAMC, label="peak VRAM (right)")]
-    legend_below(fig, h, handlelength=1.0, gap=0.02)
+            ax_t.barh(yi, t - t_lo, left=t_lo, height=0.68, color=TIMEC, lw=0, zorder=2)
+            ax_t.text(t * 1.28, yi, tsec(t), va="center", ha="left", fontsize=fs_val, color=INK)
+            if vram is None:
+                ax_m.barh(yi, ram, height=0.68, color=RAMC, lw=0, zorder=2)
+                ax_m.text(ram + 0.025 * m_hi, yi, fmt_mem(ram, ds), va="center", ha="left",
+                          fontsize=fs_val, color=INK)
+            else:
+                ax_m.barh(yi - 0.18, ram, height=0.34, color=RAMC, lw=0, zorder=2)
+                ax_m.barh(yi + 0.18, vram, height=0.34, color=VRAMC, lw=0, zorder=2)
+                m_end = max(ram, vram)
+                lbl = f"{fmt_mem(ram, ds)}/{fmt_mem(vram, ds)}"
+                ax_m.text(m_end + 0.025 * m_hi, yi, lbl, va="center", ha="left",
+                          fontsize=fs_val, color=INK)
+
+        log_axis(ax_t, "x")
+        ax_t.set_xlim(t_lo, t_hi)
+        ax_t.set_xticks(t_ticks)
+        ax_t.set_title("time (s)", loc="left", fontsize=FS_TEXT - 0.5, pad=2)
+
+        ax_m.set_xlim(0, m_hi)
+        ax_m.set_xticks(m_ticks)
+        ax_m.set_title("memory (GiB)", loc="left", fontsize=FS_TEXT - 0.5, pad=2)
+
+        for ax in (ax_t, ax_m):
+            ax.grid(axis="x", color=GRID, lw=0.4, zorder=0)
+            ax.set_axisbelow(True)
+            ax.tick_params(axis="y", length=0)
+            ax.axhline(4.5, color=MUTED, lw=0.5, ls=(0, (3, 2)), zorder=1)
+            ax.axhline(c45_start + 4.5, color=MUTED, lw=0.5, ls=(0, (3, 2)), zorder=1)
+            ax.axhline(gap_y, color=MUTED, lw=0.6, zorder=1)
+
+    ax_ht.set_yticks([yi for yi, _ in rows_meta], [tex(g[0]) for _, g in rows_meta], fontsize=FS_TICK - 0.2)
+    ax_ht.set_ylim(c45_end + 0.55, -0.55)
+    for ax in (ax_hm, ax_mt, ax_mm):
+        ax.tick_params(labelleft=False)
+
+    # Dataset group titles centered over each (time, memory) pair
+    fig.canvas.draw()
+    for ds_title, a0, a1 in [("HIGGS", ax_ht, ax_hm), ("MNIST8M", ax_mt, ax_mm)]:
+        xmid = 0.5 * (a0.get_position().x0 + a1.get_position().x1)
+        ytop = a0.get_position().y1
+        fig.text(xmid, ytop + 0.055, rf"\textbf{{{ds_title}}}", ha="center", va="bottom", fontsize=FS_TEXT)
+
+    # Algorithm group labels computed dynamically from actual y-tick label widths
+    from matplotlib.transforms import offset_copy
+    renderer = fig._get_renderer()
+    max_lbl_pt = max(t.get_window_extent(renderer).width for t in ax_ht.get_yticklabels()) * 72.0 / fig.dpi
+    line_off = -(max_lbl_pt + 5.0)
+    lbl_off = line_off - 7.0
+    t_line = offset_copy(ax_ht.get_yaxis_transform(), fig=fig, x=line_off, y=0, units="points")
+    t_lbl = offset_copy(ax_ht.get_yaxis_transform(), fig=fig, x=lbl_off, y=0, units="points")
+    for grp_lbl, y0, y1 in [("CART", 0.0, cart_end), ("C4.5", c45_start, c45_end)]:
+        ymid = 0.5 * (y0 + y1)
+        ax_ht.text(0, ymid, rf"\textbf{{{grp_lbl}}}", transform=t_lbl,
+                   ha="center", va="center", rotation=90, fontsize=FS_TEXT - 0.5, color=INK)
+        ax_ht.plot([0, 0], [y0 - 0.25, y1 + 0.25], transform=t_line,
+                   color=MUTED, lw=0.6, clip_on=False)
+
+    h = [plt.Rectangle((0, 0), 1, 1, color=TIMEC, label="training time (log)"),
+         plt.Rectangle((0, 0), 1, 1, color=RAMC, label="peak RAM"),
+         plt.Rectangle((0, 0), 1, 1, color=VRAMC, label="peak VRAM")]
+    legend_below(fig, h, handlelength=1.0, gap=0.03)
     save(fig, "results-libs", final=True)
 
 
 def depth_ratio():
     """Hybrid against GPU-Based by depth limit: GPU-Based time / Hybrid time (above 1: Hybrid
     faster), HIGGS, MNIST8M, SOREL 4M, H100 (filled) and A100 (hollow), CART solid, C4.5 dashed;
-    below, who works during MNIST8M CART without a depth limit on the H100 (hybrid_profile_chart).
-    Each depth limit at its own swept hand-off threshold (bench/tools/handoff/RESWEEP-2026-11.md)."""
+    below, active-device breakdown during unrestricted MNIST8M CART on the H100."""
     import hybrid_profile_chart as HP
-    PARTS = [(k, n, {"gpu": GPU_C, "both": GPU_C, "cpu": CPU_C}.get(k, c)) for k, n, c in HP.PARTS]  # GPU green, CPU blue
+    PARTS = [(k, n, {"setup": PHASE_C["setup"], "gpu": PHASE_C["gpu"], "both": PHASE_C["gpu"],
+                     "cpu": PHASE_C["cpu"], "transfer": PHASE_C["transfer"],
+                     "host": PHASE_C["other"]}.get(k, c)) for k, n, c in HP.PARTS]
     root = RES / "hybrid-vs-gpu-only"
     depths = ["5", "10", "15", "20", "25", "30", "none"]
     proto = {"cart": [f"cart_depth{d}" for d in depths[:-1]] + ["cart_full_nodepth"],
              "c45": [f"c45_depth{d}_unpruned" for d in depths[:-1]] + ["c45_unpruned"]}
-    sets = [("higgs", "HIGGS"), ("mnist8m", "MNIST8M"), ("sorel_4m", "SOREL 4M")]
-    fig = plt.figure(figsize=(FULL, 1.95))
-    gs = fig.add_gridspec(2, 3, height_ratios=[1, 0.36], hspace=0.95, wspace=0.12)
+    sets = [("higgs", r"(a) HIGGS"), ("mnist8m", "MNIST8M"), ("sorel_4m", "SOREL 4M")]
+    fig = plt.figure(figsize=(FULL, 1.82))
+    gs = fig.add_gridspec(2, 3, height_ratios=[1, 0.36], hspace=0.72, wspace=0.22)
     axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
     x = np.arange(len(depths))
-    c_node = {"hopper": STYLE["cuda"][1], "ampere": "#7fcf9f"}  # both GPUs green: H100 dark, A100 light
+    c_node = {"hopper": STYLE["cuda"][1], "ampere": "#7fcf9f"}
     for ax, (ds, name) in zip(axes, sets):
-        ax.axhline(1, color=INK, lw=0.6, zorder=1)
+        ax.axhline(1, color=MUTED, lw=0.6, ls="--", zorder=1)
         for node in ("hopper", "ampere"):
             hy, go = summary(root / f"cuda-{node}-{ds}"), summary(root / f"gpuonly-{node}-{ds}")
             for algo, ls in (("cart", "-"), ("c45", "--")):
@@ -1075,21 +1263,21 @@ def depth_ratio():
                     ax.text(x[-1] + 0.25, r[-1], rf"{r[-1]:.2f}$\times$", fontsize=FS_ANN, va="center",
                             color=c_node[node])
         ax.set_xticks(x, ["5", "10", "15", "20", "25", "30", r"$\infty$"])
-        ax.set_xlim(-0.4, len(depths) - 0.1)
+        ax.set_xlim(-0.4, len(depths) + 0.15)
         ax.set_ylim(0.45, 2.05)
         ax.set_yticks([0.5, 1, 1.5, 2])
         ax.grid(axis="y", color=GRID, lw=0.3, zorder=0)
         ax.set_title(rf"\textbf{{{name}}}", pad=2)
         if ax is not axes[0]:
             ax.tick_params(labelleft=False)
-        ax.set_xlabel("depth limit", labelpad=1)
-    axes[0].set_ylabel("GPU-Based time $\\div$\nHybrid time", linespacing=1.0)
+    axes[1].set_xlabel("depth limit", labelpad=1.5)
+    axes[0].set_ylabel("Hybrid speedup")
     h = [Line2D([], [], color=c_node["hopper"], marker="o", ms=2.6, lw=0.8, label="H100"),
          Line2D([], [], color=c_node["ampere"], marker="s", mfc="white", ms=2.6, lw=0.8, label="A100"),
          Line2D([], [], color=MUTED, lw=0.8, ls="-", label="CART"),
          Line2D([], [], color=MUTED, lw=0.8, ls="--", label="C4.5")]
-    axes[1].legend(handles=h, ncol=4, loc="lower center", bbox_to_anchor=(0.5, 1.13), handlelength=1.8)
-    # who is working: MNIST8M, CART, no depth limit, H100
+    axes[1].legend(handles=h, ncol=4, loc="lower center", bbox_to_anchor=(0.5, 1.14), handlelength=1.8)
+
     cases, machine, _ = HP.load(root, "hopper", "mnist8m")
     axp = fig.add_subplot(gs[1, :])
     rows = [("cuda", "Hybrid"), ("gpuonly", "GPU-Based")]
@@ -1106,7 +1294,7 @@ def depth_ratio():
             else:
                 axp.barh(yi, v, left=left, height=0.72, color=color, lw=0)
             if v > 0.07:
-                axp.text(left + v / 2, yi, f"{100 * v:.0f}", ha="center", va="center", fontsize=FS_ANN - 0.5,
+                axp.text(left + v / 2, yi, f"{100 * v:.0f}", ha="center", va="center", fontsize=FS_ANN - 0.3,
                          color=HP.text_color(color) if key != "both" else "white")
             left += v
         axp.text(1.01, yi, rf"{case['row']['train_seconds']:.1f}\,s", va="center", fontsize=FS_ANN,
@@ -1114,33 +1302,37 @@ def depth_ratio():
     axp.set_yticks(range(len(rows)), [l for _, l in rows])
     axp.set_ylim(len(rows) - 0.5, -0.5)
     axp.set_xlim(0, 1)
-    axp.set_xticks([0, 0.25, 0.5, 0.75, 1], ["0", "25", "50", "75", r"100\,\%"])
+    axp.set_xticks([0, 0.25, 0.5, 0.75, 1], ["0", "25", "50", "75", "100"])
+    axp.set_xlabel(r"share of training time (\%)", labelpad=1.5)
     axp.tick_params(axis="y", length=0)
     axp.spines["left"].set_visible(False)
-    axp.set_title(r"\textbf{MNIST8M, CART, no depth limit, H100}: share of the training time", pad=2)
+    axp.set_title(r"\textbf{(b) MNIST8M, CART, no depth limit, H100}", pad=2)
     plt.rcParams["hatch.linewidth"] = 1.0
     hp = [plt.Rectangle((0, 0), 1, 1, fc=c, ec=CPU_C if k == "both" else c, lw=0,
                         hatch="////" if k == "both" else None,
-                        label=tex(n).replace("↔", r"$\leftrightarrow$").replace("Setup (GPU init, upload, presort)", "set-up"))
+                        label=tex(n).replace("↔", r"$\leftrightarrow$").replace("Setup (GPU init, upload, presort)", "setup"))
           for k, n, c in PARTS]
-    legend_below(fig, hp, handlelength=1.0, gap=0.02, ncol=3)
+    legend_below(fig, hp, handlelength=1.0, gap=0.03, ncol=3)
     save(fig, "results-depth", final=True)
 
 
 def chess():
-    """Chess 10^7 to 2*10^9 samples, CART, depth <= 10: two panels (Multicore CPU on epyc,
-    GPU-Based on the H100), a 100 % bar per sample count split by step, the total time above.
-    Source cluster-profiling."""
+    """Chess 10^7 to 2*10^9 samples, CART, depth <= 10: three panels (Multicore CPU on epyc,
+    GPU-Based on the H100, Hybrid on the H100), a 100 % bar per sample count split by step,
+    the total time above. Source cluster-profiling."""
     import profile_share_chart as P
     datasets = ["chess_10m", "chess_100m", "chess_1b", "chess_2b"]
     labels = [r"$10^7$", r"$10^8$", r"$10^9$", r"$2 \cdot 10^9$"]
-    modes = [("cpu-epyc", "Multicore CPU (epyc)"), ("gpuonly-hopper", "GPU-Based (H100)")]
-    steps = [("presort", "presort", "#7f4fc9"), ("search", "split search", "#eb6834"),
-             ("partition", "partition", "#8c6d31"), ("transfer", r"CPU$\leftrightarrow$GPU transfer", "#eda100"),
-             ("other", "other", "#cfcec9")]
+    modes = [("cpu-epyc", "Multicore CPU (epyc)"), ("gpuonly-hopper", "GPU-Based (H100)"),
+             ("cuda-hopper", "Hybrid (H100)")]
+    steps = [("presort", "presort", PHASE_C["presort"]),
+             ("search", "split search", PHASE_C["search"]),
+             ("partition", "partition", PHASE_C["partition"]),
+             ("transfer", r"CPU$\leftrightarrow$GPU transfer", PHASE_C["transfer"]),
+             ("other", "setup and other", PHASE_C["other"])]
     cases = P.load(RES / "cluster-profiling", datasets)
     USED.extend(c["stale"] for c in cases.values())
-    fig, axes = plt.subplots(1, 2, figsize=(FULL, 1.75), sharey=True, gridspec_kw={"wspace": 0.08})
+    fig, axes = plt.subplots(1, 3, figsize=(FULL, 1.42), sharey=True, gridspec_kw={"wspace": 0.08})
     for ax, (mode, title) in zip(axes, modes):
         for x, ds in enumerate(datasets):
             case = cases[(mode, ds, "cart_depth10")]
@@ -1149,23 +1341,24 @@ def chess():
             bottom = 0.0
             for step, _, c in steps:
                 v = 100 * sum(val for (s, _), val in parts.items() if s == step) / total
-                ax.bar(x, v, 0.66, bottom=bottom, color=c, lw=0, zorder=2)
-                if v >= 8:
-                    ax.text(x, bottom + v / 2, f"{v:.0f}", ha="center", va="center", fontsize=FS_ANN - 0.5,
+                ax.bar(x, v, 0.54, bottom=bottom, color=c, lw=0, zorder=2)
+                if v >= 10:
+                    ax.text(x, bottom + v / 2, f"{v:.0f}", ha="center", va="center", fontsize=FS_ANN - 0.3,
                             color=P.text_color(c))
                 bottom += v
-            ax.text(x, 101.5, rf"{tsec(case['row']['train_seconds'])}\,s", ha="center", va="bottom",
-                    fontsize=FS_ANN)
+            t = case["row"]["train_seconds"]
+            tlbl = f"{t:.2f}" if t < 1 else tsec(t)
+            ax.text(x, 102, tlbl, ha="center", va="bottom", fontsize=FS_ANN)
         ax.set_xticks(range(len(datasets)), labels)
         ax.set_xlim(-0.55, len(datasets) - 0.45)
         ax.set_ylim(0, 100)
         ax.set_yticks([0, 25, 50, 75, 100])
         ax.tick_params(axis="x", length=0)
-        ax.set_xlabel("samples")
-        ax.set_title(rf"\textbf{{{title}}}", pad=9)
-    axes[0].set_ylabel(r"share of training time (\%)")
+        ax.set_title(rf"\textbf{{{title}}}", pad=10)
+    axes[0].set_ylabel(r"share of time (\%)")
+    fig.supxlabel("samples", fontsize=FS_TEXT, y=-0.04)
     h = [plt.Rectangle((0, 0), 1, 1, color=c, label=n) for _, n, c in steps]
-    legend_below(fig, h, handlelength=1.0, gap=0.02)
+    legend_below(fig, h, handlelength=1.0, gap=0.03)
     save(fig, "results-chess", final=True)
 
 
