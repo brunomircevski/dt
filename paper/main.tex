@@ -8,7 +8,7 @@
 \renewcommand\UrlFont{\color{blue}\rmfamily}
 \urlstyle{rm}
 %
-\graphicspath{{../bench/}{figs/}}
+\graphicspath{{figs/}}
 \newcommand{\plan}[1]{{\color{blue}\itshape[#1]}}
 % Names of this work's implementations in the paper (one place to rename).
 \newcommand{\ImplSerialBase}{Serial Simple}
@@ -16,10 +16,6 @@
 \newcommand{\ImplParallel}{Multicore CPU}
 \newcommand{\ImplGpu}{GPU-Based}
 \newcommand{\ImplHybrid}{Hybrid}
-% A table column head that wraps onto two lines, bottom-aligned.
-\newcommand{\colhead}[1]{\multicolumn{1}{c}{\parbox[b]{16mm}{\centering\hyphenpenalty=10000 #1}}}
-% A number not measured yet on the final build (placeholder until the rerun).
-\newcommand{\tbd}{{\color{red}\textit{tbd}}}
 %
 \begin{document}
 %
