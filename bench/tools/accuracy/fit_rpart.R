@@ -8,12 +8,19 @@
 #
 # Writes OUT_JSON (two records) and PRED_PREFIX-{unpruned,pruned}.i16 (int16
 # test predictions).
-suppressMessages(library(rpart))
+# RPART_LIB: a library holding rpart built with rpart-64bit-index.patch, for
+# more than 2^31 - 1 values (stock rpart's 32-bit offsets overflow there)
+patched <- nzchar(Sys.getenv("RPART_LIB"))
+if (patched) {
+  suppressMessages(library(rpart, lib.loc = Sys.getenv("RPART_LIB")))
+} else {
+  suppressMessages(library(rpart))
+}
 a <- commandArgs(trailingOnly = TRUE)
 train_stem <- a[1]; test_stem <- a[2]
 n_train <- as.integer(a[3]); n_test <- as.integer(a[4]); n_features <- as.integer(a[5])
 depth <- as.integer(a[6]); alpha <- as.numeric(a[7]); out_json <- a[8]; prefix <- a[9]
-if (as.numeric(n_train) * n_features > .Machine$integer.max) {
+if (!patched && as.numeric(n_train) * n_features > .Machine$integer.max) {
   stop(sprintf("rpart cannot fit %d rows x %d features: over 2^31 - 1 values", n_train, n_features))
 }
 
@@ -52,7 +59,13 @@ pruned <- prune(grown, cp = cp)
 test <- read_part(test_stem, n_test)
 
 record <- function(model, is_pruned) {
-  predict_int <- function(frame) as.integer(as.character(predict(model, frame, type = "class")))
+  # in slices of 1M rows: predict() copies its rows into a matrix of doubles
+  # and an is.na() matrix (MNIST8M's training set: 51 + 25 GB at once)
+  predict_int <- function(frame) {
+    unlist(lapply(split(seq_len(nrow(frame)), (seq_len(nrow(frame)) - 1L) %/% 1000000L), function(rows)
+      as.integer(as.character(predict(model, frame[rows, , drop = FALSE], type = "class")))),
+      use.names = FALSE)
+  }
   pred <- predict_int(test)
   file <- paste0(prefix, if (is_pruned) "-pruned.i16" else "-unpruned.i16")
   con <- file(file, "wb"); writeBin(pred, con, size = 2, endian = "little"); close(con)
@@ -61,7 +74,7 @@ record <- function(model, is_pruned) {
                  '"pruned": %s, "prune": "%s", "nodes": %d, "leaves": %d, "depth": %d, ',
                  '"train_accuracy": %.9f, "test_accuracy": %.9f, "n_train": %d, "n_test": %d, ',
                  '"fit_seconds": %.3f, "pred": "%s"}'),
-          as.character(packageVersion("rpart")), depth, if (is_pruned) "true" else "false",
+          paste0(packageVersion("rpart"), if (patched) " (64-bit index patch)" else ""), depth, if (is_pruned) "true" else "false",
           if (is_pruned) sprintf("prune(cp = %.6g) = alpha %g (misclassification)", cp, alpha) else "none",
           nrow(model$frame), sum(leaf), max(floor(log2(as.numeric(rownames(model$frame))))),
           mean(predict_int(train) == as.integer(as.character(train$class))), mean(pred == test$class),

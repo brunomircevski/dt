@@ -47,6 +47,10 @@ ALPHA = B.CART_ALPHA  # 1e-5
 CF = 0.25
 GPU_PYTHON = os.environ.get("GPU_PYTHON", str(Path.home() / "gpu-dt-bench" / "venv" / "bin" / "python"))
 TOOLS_DIR = Path(os.environ.get("ACC_TOOLS", B.TOOLS))  # weka.jar, bounce.jar, yadt/
+# rpart 4.1.27 indexes its n x p arrays with 32-bit ints; over 2^31 - 1 values
+# (MNIST8M, ECBDL'14 15M, SOREL 4M) it runs from this library, built with
+# rpart-64bit-index.patch (64-bit offsets only, the same tree)
+RPART64 = TOOLS_DIR / "rpart64"
 CLASSES = HERE / ".classes"  # J48Fit + J48Acc, compiled by the job
 TREE_FLAGS = {("cart", True): ["--cart", "--prune", repr(ALPHA)], ("cart", False): ["--cart"],
               ("c45", True): ["--c45", "--prune", str(CF)], ("c45", False): ["--c45"]}
@@ -75,7 +79,7 @@ def cases(dataset, side, depths, tools):
                 out.append((f"c45-j48-d{d}", "j48", dict(d=d), 1))
             if "sklearn" in tools:
                 out.append((f"cart-sklearn-d{d}", "lib", dict(impl="sklearn", d=d), 1))
-            if "rpart" in tools and rows_x_features <= 2**31 - 1:
+            if "rpart" in tools and (rows_x_features <= 2**31 - 1 or RPART64.exists()):
                 out.append((f"cart-rpart-d{d}", "rpart", dict(d=d), 1))
         else:
             for impl in ("cuml", "xgboost"):
@@ -150,9 +154,10 @@ def do_lib(dataset, cid, p, threads, out):
 def do_rpart(dataset, cid, p, threads, out):
     m = B.meta(dataset)
     out_json = out / "tmp" / f"{cid}.json"
+    big = m["n_train"] * len(m["features"]) > 2**31 - 1
     run(["Rscript", "--vanilla", HERE / "fit_rpart.R", B.stem(dataset, "train"), B.stem(dataset, "test"),
          m["n_train"], m["n_test"], len(m["features"]), p["d"], ALPHA, out_json, out / "pred" / cid],
-        out / "logs" / f"{cid}.log")
+        out / "logs" / f"{cid}.log", env={"RPART_LIB": str(RPART64)} if big else None)
     return [{**r, "dataset": dataset} for r in json.loads(out_json.read_text())]
 
 

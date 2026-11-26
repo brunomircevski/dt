@@ -1,0 +1,41 @@
+diff -ru a/src/pred_rpart.c b/src/pred_rpart.c
+--- a/src/pred_rpart.c
++++ b/src/pred_rpart.c
+@@ -58,8 +58,8 @@
+     xmiss = (const int **) ALLOC((int) dimx[1], sizeof(int *));
+     xdata = (const double **) ALLOC((int) dimx[1], sizeof(double *));
+     for (i = 0; i < dimx[1]; i++) {
+-	xmiss[i] = &(xmiss2[i * dimx[0]]);
+-	xdata[i] = &(xdata2[i * dimx[0]]);
++	xmiss[i] = &(xmiss2[(size_t) i * dimx[0]]);
++	xdata[i] = &(xdata2[(size_t) i * dimx[0]]);
+     }
+ 
+     for (i = 0; i < n; i++) {
+diff -ru a/src/rpart.c b/src/rpart.c
+--- a/src/rpart.c
++++ b/src/rpart.c
+@@ -146,10 +146,10 @@
+      * I don't have to sort the categoricals.
+      */
+     rp.sorts = (int **) ALLOC(rp.nvar, sizeof(int *));
+-    rp.sorts[0] = (int *) ALLOC(n * rp.nvar, sizeof(int));
++    rp.sorts[0] = (int *) ALLOC((size_t) n * rp.nvar, sizeof(int));
+     maxcat = 0;
+     for (i = 0; i < rp.nvar; i++) {
+-	rp.sorts[i] = rp.sorts[0] + i * n;
++	rp.sorts[i] = rp.sorts[0] + (size_t) i * n;
+ 	for (k = 0; k < n; k++) {
+ 	    if (!R_FINITE(rp.xdata[i][k])) {
+ 		rp.tempvec[k] = -(k + 1);       /* this variable is missing */
+@@ -171,8 +171,8 @@
+      * save away a copy of the rp.sorts, if needed for xval
+      */
+     if (xvals > 1) {
+-	savesort = (int *) ALLOC(n * rp.nvar, sizeof(int));
+-	memcpy(savesort, rp.sorts[0], n * rp.nvar * sizeof(int));
++	savesort = (int *) ALLOC((size_t) n * rp.nvar, sizeof(int));
++	memcpy(savesort, rp.sorts[0], (size_t) n * rp.nvar * sizeof(int));
+     }
+ 
+     /*

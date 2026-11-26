@@ -64,20 +64,27 @@ def cuml_tree(X, y, depth):
 
 
 def xgboost_tree(X, y, depth):
-    import cupy as cp
     import xgboost as xgb
+    # ACC_XGB_DEVICE=cpu: XGBoost's CPU hist (MNIST8M at depths 15 and 20, which
+    # need ~113 GB on the GPU: a split-scan buffer of 2 x 2048 nodes x 10 classes
+    # x all bins, sized by XGBoost's fixed 1024-node batch, not by any setting)
+    device = os.environ.get("ACC_XGB_DEVICE", "cuda")
     classes = int(y.max()) + 1
     labels = y.astype(np.float32) if classes == 2 else np.eye(classes, dtype=np.float32)[y]
-    dev = cp.asarray(np.asfortranarray(X))
-    dtrain = xgb.QuantileDMatrix(dev, label=cp.asarray(labels), max_bin=256)
-    del dev  # XGBoost keeps its bins; the raw copy goes (ECBDL'14 15M: 38 GB)
-    cp.get_default_memory_pool().free_all_blocks()
+    if device == "cuda":
+        import cupy as cp
+        dev = cp.asarray(np.asfortranarray(X))
+        dtrain = xgb.QuantileDMatrix(dev, label=cp.asarray(labels), max_bin=256)
+        del dev  # XGBoost keeps its bins; the raw copy goes (ECBDL'14 15M: 38 GB)
+        cp.get_default_memory_pool().free_all_blocks()
+    else:
+        dtrain = xgb.QuantileDMatrix(X, label=labels, max_bin=256, nthread=os.cpu_count())
     # max_cached_hist_node: how many nodes' histograms XGBoost keeps (a cache:
     # speed only, the tree is the same); the default 65536 runs out of the
     # 80 GB at depth 15 (SOREL 4M: 64 GB for one level's histograms)
-    multi = ({"multi_strategy": "multi_output_tree", "max_cached_hist_node": 16} if classes > 2
-             else {"max_cached_hist_node": 128})
-    params = {"device": "cuda", "tree_method": "hist", "objective": "reg:squarederror", **multi,
+    multi = ({"multi_strategy": "multi_output_tree", "max_cached_hist_node": 16 if device == "cuda" else 1024}
+             if classes > 2 else {"max_cached_hist_node": 128})
+    params = {"device": device, "tree_method": "hist", "objective": "reg:squarederror", **multi,
               "eta": 1.0, "lambda": 0.0, "alpha": 0.0, "gamma": 0.0, "min_child_weight": 1.0,
               **({"base_score": float(y.mean())} if classes == 2 else {}), "max_bin": 256,
               "subsample": 1.0, "colsample_bytree": 1.0, "max_depth": depth, "grow_policy": "depthwise"}
@@ -92,10 +99,13 @@ def xgboost_tree(X, y, depth):
                   np.array(j["split_conditions"], dtype=np.float32).astype(np.float64), strict=True)
 
     def predict(A):
-        p = np.concatenate([cp.asnumpy(booster.inplace_predict(cp.asarray(A[i:i + 1_000_000])))
-                            for i in range(0, len(A), 1_000_000)])
+        if device == "cuda":
+            p = np.concatenate([cp.asnumpy(booster.inplace_predict(cp.asarray(A[i:i + 1_000_000])))
+                                for i in range(0, len(A), 1_000_000)])
+        else:
+            p = np.concatenate([booster.inplace_predict(A[i:i + 1_000_000]) for i in range(0, len(A), 1_000_000)])
         return p.argmax(axis=1) if p.ndim == 2 else (p > 0.5).astype(np.int64)
-    return tree, predict, f"XGBoost {xgb.__version__}"
+    return tree, predict, f"XGBoost {xgb.__version__}" + (" (CPU hist)" if device == "cpu" else "")
 
 
 def main():

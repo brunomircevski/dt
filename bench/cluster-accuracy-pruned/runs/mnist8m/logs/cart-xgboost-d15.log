@@ -1,37 +1,24 @@
-/home/bmircevski/gpu-dt-bench/venv/bin/python /home/bmircevski/dt/bench/tools/accuracy/fit_lib.py xgboost mnist8m 15 1e-05 bench/cluster-accuracy-pruned/runs/mnist8m/tmp/cart-xgboost-d15.json bench/cluster-accuracy-pruned/runs/mnist8m/pred/cart-xgboost-d15
-Traceback (most recent call last):
-  File "/home/bmircevski/dt/bench/tools/accuracy/fit_lib.py", line 135, in <module>
-    main()
-  File "/home/bmircevski/dt/bench/tools/accuracy/fit_lib.py", line 107, in main
-    tree, library_predict, version = {"sklearn": sklearn_tree, "cuml": cuml_tree,
-                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/bmircevski/dt/bench/tools/accuracy/fit_lib.py", line 84, in xgboost_tree
-    booster = xgb.train(params, dtrain, num_boost_round=1)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/core.py", line 569, in inner_f
-    return func(**kwargs)
-           ^^^^^^^^^^^^^^
-  File "/home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/training.py", line 200, in train
-    bst.update(dtrain, iteration=i, fobj=obj)
-  File "/home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/core.py", line 2223, in update
-    _check_call(
-  File "/home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/_c_api.py", line 190, in _check_call
-    raise XGBoostError(py_str(_LIB.XGBGetLastError()))
-xgboost._c_api.XGBoostError: [12:04:32] /__w/xgboost/xgboost/src/common/device_vector.cu:53: Memory allocation error on worker 0: std::bad_alloc: cudaErrorMemoryAllocation: out of memory
-- Free memory: 17.7942GB
-- Requested memory: 51.5762GB
-- Reserved by the pool: 0B
-- Used by the pool: 0B
-
-Stack trace:
-  [bt] (0) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0x21ec5c) [0x7efc7f21ec5c]
-  [bt] (1) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0xaaf3a6) [0x7efc7faaf3a6]
-  [bt] (2) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0xb14be0) [0x7efc7fb14be0]
-  [bt] (3) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0x1102df5) [0x7efc80102df5]
-  [bt] (4) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0x116caf0) [0x7efc8016caf0]
-  [bt] (5) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0x1199300) [0x7efc80199300]
-  [bt] (6) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0x119e4ca) [0x7efc8019e4ca]
-  [bt] (7) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0x640621) [0x7efc7f640621]
-  [bt] (8) /home/bmircevski/gpu-dt-bench/venv/lib/python3.12/site-packages/xgboost/lib/libxgboost.so(+0x641ff8) [0x7efc7f641ff8]
-
-
+[{"dataset": "mnist8m", "algo": "cart", "tool": "xgboost", "version": "XGBoost 3.4.1 (CPU hist)", "depth_limit": 15, "n_train": 8100000, "n_test": 10000, "fit_seconds": 136.7330105069559, "host": "dell4", "time": "2026-11-26 12:14:50", "pruned": false, "prune": "none", "nodes": 45303, "leaves": 22652, "depth": 15, "train_accuracy": 0.9245285185185185, "test_accuracy": 0.9107, "pred": "/home/bmircevski/jobs/xgbm/cpu-runs/cart-xgboost-d15-unpruned.npy", "own_predict_agreement": 0.9999}, {"dataset": "mnist8m", "algo": "cart", "tool": "xgboost", "version": "XGBoost 3.4.1 (CPU hist)", "depth_limit": 15, "n_train": 8100000, "n_test": 10000, "fit_seconds": 136.7330105069559, "host": "dell4", "time": "2026-11-26 12:14:50", "pruned": true, "prune": "ccp alpha 1e-05 (misclassification, applied to the grown tree)", "nodes": 6299, "leaves": 3150, "depth": 15, "train_accuracy": 0.8901296296296296, "test_accuracy": 0.8994, "pred": "/home/bmircevski/jobs/xgbm/cpu-runs/cart-xgboost-d15-pruned.npy"}]
+	Command being timed: "/home/bmircevski/gpu-dt-bench/venv/bin/python bench/tools/accuracy/fit_lib.py xgboost mnist8m 15 1e-05 /home/bmircevski/jobs/xgbm/cpu-runs/cart-xgboost-d15.json /home/bmircevski/jobs/xgbm/cpu-runs/cart-xgboost-d15"
+	User time (seconds): 4623.70
+	System time (seconds): 94.04
+	Percent of CPU this job got: 3005%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:36.98
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 72262156
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 24487648
+	Voluntary context switches: 60026
+	Involuntary context switches: 31240
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 112
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
