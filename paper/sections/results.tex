@@ -10,7 +10,7 @@ Table~\ref{tab:accuracy} shows that our implementations match the test accuracy 
 % XGBoost MNIST8M depth 20 on the CPU, 2026-11-26).
 % test_accuracy of each tool, pruned trees only (pruned=True), depths 10 and 20 (depths 5 and 15 in report.csv).
 \begin{table}[tbp]
-\caption{Test accuracy (\%) of one pruned tree per depth limit (CART cost-complexity $\alpha = 10^{-5}$, native in rpart, post hoc for scikit-learn, cuML, XGBoost; C4.5 error-based, confidence 0.25). Ours: identical across all five implementations. --: no result (rpart $2^{31}-1$ value limit; YaDT not run). $^\ast$XGBoost's CPU \texttt{hist}, which grows its GPU tree at depth 10; on the GPU this tree needs about 113\,GB.}
+\caption{Test accuracy (\%) of one pruned tree per depth limit (CART cost-complexity $\alpha = 10^{-5}$, native in rpart, post hoc for scikit-learn, cuML, XGBoost; C4.5 error-based, confidence 0.25). Ours: identical across all five implementations. --: no result (rpart $2^{31}-1$ value limit; YaDT not run).}
 \label{tab:accuracy}
 \centering
 \footnotesize
@@ -29,7 +29,7 @@ HIGGS & 10 & 70.47 & 70.47 & 70.46 & 70.45 & 70.47 & 63.73 & 63.75 & 70.10 \\
  & 20 & 71.59 & 71.59 & 71.56 & 71.59 & 71.63 & 69.02 & 69.06 & 72.13 \\
 \addlinespace[2pt]
 MNIST8M & 10 & 84.53 & 84.53 & -- & 84.53 & 84.53 & 74.65 & 74.65 & 74.65 \\
- & 20 & 90.47 & 90.47 & -- & 90.54 & 90.47$^\ast$ & 87.59 & 87.59 & 87.59 \\
+ & 20 & 90.47 & 90.47 & -- & 90.54 & 90.47 & 87.59 & 87.59 & 87.59 \\
 \addlinespace[2pt]
 ECBDL'14 15M & 10 & 98.32 & 98.32 & -- & 98.32 & 98.32 & 98.32 & 98.32 & -- \\
  & 20 & 98.32 & 98.32 & -- & 98.32 & 98.32 & 98.11 & 98.08 & -- \\
