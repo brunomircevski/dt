@@ -1235,20 +1235,13 @@ def libs():
 
 def depth_ratio():
     """Hybrid against GPU-Based by depth limit: GPU-Based time / Hybrid time (above 1: Hybrid
-    faster), HIGGS, MNIST8M, SOREL 4M, H100 (filled) and A100 (hollow), CART solid, C4.5 dashed;
-    below, active-device breakdown during unrestricted MNIST8M CART on the H100."""
-    import hybrid_profile_chart as HP
-    PARTS = [(k, n, {"setup": PHASE_C["setup"], "gpu": PHASE_C["gpu"], "both": PHASE_C["gpu"],
-                     "cpu": PHASE_C["cpu"], "transfer": PHASE_C["transfer"],
-                     "host": PHASE_C["other"]}.get(k, c)) for k, n, c in HP.PARTS]
+    faster), HIGGS, MNIST8M, SOREL 4M, H100 (filled) and A100 (hollow), CART solid, C4.5 dashed."""
     root = RES / "hybrid-vs-gpu-only"
     depths = ["5", "10", "15", "20", "25", "30", "none"]
     proto = {"cart": [f"cart_depth{d}" for d in depths[:-1]] + ["cart_full_nodepth"],
              "c45": [f"c45_depth{d}_unpruned" for d in depths[:-1]] + ["c45_unpruned"]}
-    sets = [("higgs", r"(a) HIGGS"), ("mnist8m", "MNIST8M"), ("sorel_4m", "SOREL 4M")]
-    fig = plt.figure(figsize=(FULL, 1.82))
-    gs = fig.add_gridspec(2, 3, height_ratios=[1, 0.36], hspace=0.72, wspace=0.22)
-    axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
+    sets = [("higgs", "HIGGS"), ("mnist8m", "MNIST8M"), ("sorel_4m", "SOREL 4M")]
+    fig, axes = plt.subplots(1, 3, figsize=(FULL, 1.32), sharey=True, gridspec_kw={"wspace": 0.22})
     x = np.arange(len(depths))
     c_node = {"hopper": STYLE["cuda"][1], "ampere": "#7fcf9f"}
     for ax, (ds, name) in zip(axes, sets):
@@ -1267,52 +1260,14 @@ def depth_ratio():
         ax.set_ylim(0.45, 2.05)
         ax.set_yticks([0.5, 1, 1.5, 2])
         ax.grid(axis="y", color=GRID, lw=0.3, zorder=0)
-        ax.set_title(rf"\textbf{{{name}}}", pad=2)
-        if ax is not axes[0]:
-            ax.tick_params(labelleft=False)
+        ax.set_title(rf"\textbf{{{name}}}", pad=3)
     axes[1].set_xlabel("depth limit", labelpad=1.5)
     axes[0].set_ylabel("Hybrid speedup")
     h = [Line2D([], [], color=c_node["hopper"], marker="o", ms=2.6, lw=0.8, label="H100"),
          Line2D([], [], color=c_node["ampere"], marker="s", mfc="white", ms=2.6, lw=0.8, label="A100"),
          Line2D([], [], color=MUTED, lw=0.8, ls="-", label="CART"),
          Line2D([], [], color=MUTED, lw=0.8, ls="--", label="C4.5")]
-    axes[1].legend(handles=h, ncol=4, loc="lower center", bbox_to_anchor=(0.5, 1.14), handlelength=1.8)
-
-    cases, machine, _ = HP.load(root, "hopper", "mnist8m")
-    axp = fig.add_subplot(gs[1, :])
-    rows = [("cuda", "Hybrid"), ("gpuonly", "GPU-Based")]
-    for yi, (mode, lbl) in enumerate(rows):
-        case = cases[(mode, "cart_full_nodepth")]
-        USED.append(case["stale"])
-        parts = case["parts"]
-        total = sum(parts.values())
-        left = 0.0
-        for key, _, color in PARTS:
-            v = parts[key] / total
-            if key == "both":
-                axp.barh(yi, v, left=left, height=0.72, fc=color, ec=CPU_C, lw=0, hatch="////")
-            else:
-                axp.barh(yi, v, left=left, height=0.72, color=color, lw=0)
-            if v > 0.07:
-                axp.text(left + v / 2, yi, f"{100 * v:.0f}", ha="center", va="center", fontsize=FS_ANN - 0.3,
-                         color=HP.text_color(color) if key != "both" else "white")
-            left += v
-        axp.text(1.01, yi, rf"{case['row']['train_seconds']:.1f}\,s", va="center", fontsize=FS_ANN,
-                 transform=axp.get_yaxis_transform())
-    axp.set_yticks(range(len(rows)), [l for _, l in rows])
-    axp.set_ylim(len(rows) - 0.5, -0.5)
-    axp.set_xlim(0, 1)
-    axp.set_xticks([0, 0.25, 0.5, 0.75, 1], ["0", "25", "50", "75", "100"])
-    axp.set_xlabel(r"share of training time (\%)", labelpad=1.5)
-    axp.tick_params(axis="y", length=0)
-    axp.spines["left"].set_visible(False)
-    axp.set_title(r"\textbf{(b) MNIST8M, CART, no depth limit, H100}", pad=2)
-    plt.rcParams["hatch.linewidth"] = 1.0
-    hp = [plt.Rectangle((0, 0), 1, 1, fc=c, ec=CPU_C if k == "both" else c, lw=0,
-                        hatch="////" if k == "both" else None,
-                        label=tex(n).replace("↔", r"$\leftrightarrow$").replace("Setup (GPU init, upload, presort)", "setup"))
-          for k, n, c in PARTS]
-    legend_below(fig, hp, handlelength=1.0, gap=0.03, ncol=3)
+    legend_below(fig, h, handlelength=1.8, gap=0.03)
     save(fig, "results-depth", final=True)
 
 
@@ -1375,7 +1330,6 @@ def scaling_final():
 
 
 if __name__ == "__main__":
-    which = sys.argv[1:] or ["bars", "gpulibs", "libs", "depth_ratio", "chess", "scaling_final", "energy",
-                             "energy_deep"]
+    which = sys.argv[1:] or ["gpulibs", "libs", "depth_ratio", "chess", "scaling_final", "energy"]
     for name in which:
         globals()[name]()

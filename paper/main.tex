@@ -37,7 +37,7 @@ Bialystok, Poland}
 \begin{abstract}
 Exact CART and C4.5 induction is expensive on large datasets, whereas most GPU learners rely on histogram binning that changes the resulting trees. We present five exact implementations spanning single-core CPU, multicore CPU, GPU, and heterogeneous CPU--GPU architectures, all producing identical trees. In our hybrid scheme, the GPU grows large nodes breadth-first while smaller subtrees are asynchronously offloaded to CPU threads, letting both devices grow one tree concurrently. On datasets up to 32 million samples, our optimized single-threaded implementation is up to 27$\times$ faster than scikit-learn and 147$\times$ faster than Weka J48, our multicore implementation is up to 40$\times$ faster still on 48 CPU cores, and our GPU implementation is up to 1.7$\times$ faster than the multicore one on an H100. \plan{Add deep-tree hybrid, GPU library, and energy highlights.}
 
-\keywords{Decision trees \and CART \and C4.5 \and Parallel computing \and Heterogeneous CPU--GPU architectures}
+\keywords{Decision trees \and CART \and C4.5 \and Parallel computing}
 \end{abstract}
 %
 \input{sections/introduction}

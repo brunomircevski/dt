@@ -8,7 +8,7 @@ SUSY and HIGGS~\cite{baldi2014higgs} contain simulated particle collision events
 
 Our GPU implementations need about twice the size of the training set in GPU memory, so the full training sets of ECBDL'14 and SOREL-20M do not fit into the 80\,GiB of our GPUs. To include them in the GPU experiments, we train on their first 15 million and 4 million samples, respectively.
 
-Chess is a synthetic $3 \times 3$ checkerboard: two attributes drawn uniformly from $[0, 3]$ and two classes alternating between the unit squares, without noise. Its exact tree has only nine leaves, so the training time reflects the cost per sample rather than tree growth. We generate sizes ranging from $10^6$ to $2 \cdot 10^9$ samples and use them for timing measurements only.
+CHESS is a synthetic $3 \times 3$ checkerboard: two attributes drawn uniformly from $[0, 3]$ and two classes alternating between the unit squares, without noise. Its exact tree has only nine leaves, so the training time reflects the cost per sample rather than tree growth. We generate sizes ranging from $10^6$ to $2 \cdot 10^9$ samples and use them for timing measurements only.
 
 Except for YaDT, all implementations read each dataset from the same binary format: attribute values stored as a row-major matrix of little-endian 32-bit floats, class labels as 32-bit integers, and dataset dimensions in a companion metadata file.
 
@@ -27,7 +27,7 @@ ECBDL'14~\cite{triguero2015ecbdl}   & 631  & 2  & 31,992,921 & 2,897,917 & 75.2\
 MNIST8M~\cite{loosli2007mnist8m}    & 784  & 10 & 8,100,000  & 10,000    & 23.7\,GiB \\
 SOREL-20M~\cite{harang2020sorel}    & 2,381 & 2  & 12,699,013 & 4,195,042 & 112.6\,GiB \\
 \quad GPU subsample                 & 2,381 & 2  & 4,000,000  & 4,195,042 & 35.5\,GiB \\
-Chess 3$\times$3                    & 2    & 2  & $10^6$--$2 \cdot 10^9$ & \multicolumn{1}{c}{--} & 7.6\,MiB--14.9\,GiB \\
+CHESS 3$\times$3                    & 2    & 2  & $10^6$--$2 \cdot 10^9$ & \multicolumn{1}{c}{--} & 7.6\,MiB--14.9\,GiB \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -56,7 +56,7 @@ Node & CPU & Cores & Clock & RAM & GPU \\
 \subsection{Compared Implementations}
 \label{sec:compared}
 
-We evaluate our five implementations described in Section~\ref{sec:impl}, each for CART and C4.5. Rather than using the default rule of Section~\ref{sec:impl-hybrid}, we set the handoff threshold $m$ of \ImplHybrid{} to the fastest value found in a preliminary sweep for each combination of dataset, GPU server, and depth limit from 10 up, showing \ImplHybrid{} at its best. At depth 5 and on the chess datasets, almost no node falls below $m$ (at most three handed-off subtrees per tree at depth 5, none on chess), so $m$ cannot change their times; they use the depth-10 value and the default rule, respectively.
+We evaluate our five implementations described in Section~\ref{sec:impl}, each for CART and C4.5. Rather than using the default rule of Section~\ref{sec:impl-hybrid}, we set the handoff threshold $m$ of \ImplHybrid{} to the fastest value found in a preliminary sweep for each combination of dataset, GPU server, and depth limit from 10 up, showing \ImplHybrid{} at its best. At depth 5 and on the CHESS datasets, almost no node falls below $m$ (at most three handed-off subtrees per tree at depth 5, none on CHESS), so $m$ cannot change their times; they use the depth-10 value and the default rule, respectively.
 
 We also compare our implementations with existing libraries (Table~\ref{tab:compared}) on HIGGS and MNIST8M. On the CPU, scikit-learn~\cite{pedregosa2011sklearn} and rpart~\cite{therneau2023rpart} grow CART trees, and Weka J48~\cite{hall2009weka} and YaDT~\cite{ruggieri2004yadt} (single-core and multicore) grow C4.5 trees. Aside from disabling pruning and setting the depth limit to 10 with the same minimum leaf size as ours, all libraries keep their default settings. For rpart, we also disable surrogate splits, competing splits, and cross-validation, which do not affect the resulting tree. Because J48 provides no depth-limit option, we modified its tree builder to stop at depth 10.
 
