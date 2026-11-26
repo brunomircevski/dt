@@ -9,8 +9,8 @@ This benchmark measures test accuracy, not time. For each tool it grows one tree
 
 Every tool's unpruned tree is reported too.
 
-**Data:** one run per case, 2026-11-24/25. ./tree is at 4de42544967b; its tree code is unchanged since 7f98876f. Time is recorded (`fit_seconds`) but not benchmarked, so the nodes were shared. The jobs ran on:
-- epyc2, dell2 and dell3: the long CPU jobs (J48, scikit-learn, rpart)
+**Data:** one run per case, 2026-11-24/25; rpart on MNIST8M, ECBDL'14 and SOREL and XGBoost on MNIST8M at depths 15 and 20 on 2026-11-26. ./tree is at 4de42544967b; its tree code is unchanged since 7f98876f. Time is recorded (`fit_seconds`) but not benchmarked, so the nodes were shared. The jobs ran on:
+- epyc2, dell2 and dell3: the long CPU jobs (J48, scikit-learn, rpart; also epyc1 for rpart on SOREL)
 - dell1 and dell4: jobs of under an hour (./tree and YaDT)
 - turing, hopper and ampere: the GPU tools only
 
@@ -38,7 +38,8 @@ All the numbers are in [report.md](report.md): one table per dataset, algorithm 
 ### CART
 
 - **Exact CART:** scikit-learn's tree, pruned by the same rule, is ./tree's tree, node for node, on SUSY, HIGGS, MNIST8M and ECBDL'14. That is 100.00% agreement on every test row at every depth.
-- **rpart's tree** is the same at depths 5 and 10 on SUSY and depth 5 on HIGGS. Deeper it has 2–4% fewer nodes: even at `cp=0` it never grows a split that leaves the training errors unchanged, so some subtrees the cost-complexity rule keeps never exist. It agrees with ./tree on 99.7–100% of rows and is within 0.03 pp. rpart cannot fit MNIST8M, ECBDL'14 or SOREL: more than 2³¹ values.
+- **rpart's tree** is the same at depths 5 and 10 on SUSY and depth 5 on HIGGS. Deeper it has 2–4% fewer nodes: even at `cp=0` it never grows a split that leaves the training errors unchanged, so some subtrees the cost-complexity rule keeps never exist. It agrees with ./tree on 99.7–100% of rows and is within 0.03 pp.
+- **rpart on MNIST8M, ECBDL'14 and SOREL** runs with a 64-bit index patch: stock rpart 4.1.27 stops at 2³¹ − 1 values, as it computes offsets into its n × p arrays as 32-bit ints. [rpart-64bit-index.patch](../tools/accuracy/rpart-64bit-index.patch) makes four of those offsets 64-bit (the sort indices and `predict`; cross-validation's copies stay 32-bit, as `xval=0`). Nothing else changes, and on HIGGS at depth 10 the patched build gives the stock result exactly, prediction for prediction. Its pruned trees are ./tree's at depths 5 and 10 on MNIST8M and SOREL (and the single leaf on ECBDL'14 at every depth). Deeper, it again has a few fewer nodes (MNIST8M at depth 20: 6,923 against 7,059 pruned) and stays within 0.05 pp, agreeing on 99.9–100% of rows. Unpruned, on ECBDL'14 at depth 5 its tree is one leaf (./tree: 63 nodes) because no subtree there cuts training errors. **On SOREL, rpart finds ./tree's splits that scikit-learn cannot:** it agrees with ./tree on at least 99.99% of rows at every depth, against scikit-learn's 87–96%. This confirms that ./tree's split is the exact CART split there.
 - **cuML and XGBoost (binned):** their trees agree with ./tree's on 94–100% of rows. On SUSY, HIGGS and MNIST8M their accuracy is within ±0.1 pp of ./tree's; the one exception is cuML on MNIST8M at depth 5, at −0.61 pp. On SOREL 4M they are 0.05–0.66 pp better at depths 5–15, as the binned trees happen to generalise better there.
 - **scikit-learn is not exact CART on SOREL 4M:** its trees agree with ./tree's on only 87–96% of rows. scikit-learn never splits between two values closer than 1e-7 (`FEATURE_THRESHOLD`), and SOREL has many tiny feature values. Below the root (a split both tools choose), ./tree splits on f589 at 0.0034087 with weighted Gini 0.38728, between two values 5.8e-9 apart. scikit-learn cannot use that gap and picks f572 instead, with Gini 0.38814 (checked with `~/jobs/acc/sorel_left.py`, a one-off script outside the repository). ./tree's is the greedy CART split. scikit-learn's tree scores 0.59 pp higher at depth 5 and 0.20 pp at 10, and is level with ./tree at 15 and 20.
 - **Effect of pruning (α = 1e-5):**
@@ -67,7 +68,7 @@ All the numbers are in [report.md](report.md): one table per dataset, algorithm 
 | ./tree `--multicore --threads 8` (pruned and unpruned), `--serial` (pruned) | 4de42544967b | epyc2 (SUSY), dell4 (HIGGS, MNIST8M), dell1 (ECBDL'14), dell1 and dell4 (SOREL) | every dataset, CART and C4.5 |
 | ./tree `--gpu`, `--hybrid` (pruned) | 4de42544967b | turing (HIGGS), hopper (the rest) | every dataset |
 | scikit-learn `DecisionTreeClassifier` | 1.9.1 | epyc2 (SUSY, HIGGS, MNIST8M), dell2 (ECBDL'14), dell3 (SOREL) | CART |
-| rpart | 4.1.27 | epyc2 | CART, SUSY and HIGGS |
+| rpart | 4.1.27; 64-bit index patch over 2³¹ values | epyc2 (SUSY, HIGGS, MNIST8M), dell2 (ECBDL'14), epyc1 (SOREL) | CART |
 | cuML `RandomForestClassifier` (1 tree, no bootstrap) | 26.10 | turing (HIGGS), hopper (the rest) | CART |
 | XGBoost `hist` on CUDA, 1 round | 3.4.1 | turing (SUSY, HIGGS), ampere (the rest); dell4 on the CPU (MNIST8M at depths 15 and 20) | CART |
 | Weka J48 (with J48Fit's depth limit) | weka.jar of the timing benchmarks | dell4 (SUSY), epyc2 (HIGGS, MNIST8M), dell2 (ECBDL'14), dell3 (SOREL) | C4.5 |
@@ -76,7 +77,7 @@ All the numbers are in [report.md](report.md): one table per dataset, algorithm 
 **Slowest fits:**
 - **J48, the most:** 3.5–19.1 h a tree on MNIST8M, ECBDL'14 and SOREL.
 - **scikit-learn:** up to 1.3 h.
-- **rpart on HIGGS at depth 20:** 23 min.
+- **rpart:** 23 min on HIGGS at depth 20, 67–74 min a tree on MNIST8M, ECBDL'14 and SOREL at depth 20.
 - **Each tool on the GPU:** 1–4 min.
 
 ## Commands
@@ -92,6 +93,8 @@ bench/tools/.venv/bin/python bench/tools/accuracy/accuracy_chart.py \
 ```
 
 **Re-submitted cases:**
+- **rpart on MNIST8M, ECBDL'14 and SOREL (jobs 992, 994–996, 2026-11-26):** first run with the 64-bit index patch. Before that, `acc.py` skipped these datasets.
+- **XGBoost on MNIST8M at depths 15 and 20 (2026-11-26, dell4):** on the CPU, as described above. On the GPU, `max_cached_hist_node` at 1 and 16 and RMM managed memory were tried; every attempt hit the same 51.6 GB allocation.
 - **J48 on ECBDL'14 at depths 10 and 20 (job 934):** the depth-20 run was killed for running out of memory, and I stopped the depth-10 run to protect the runs beside it. The cause: Java's G1 collector keeps its heap at the largest size it has reached, up to `-Xmx`, which was 200 GB for 77 GB of live data. J48 now runs with `-XX:MinHeapFreeRatio=5 -XX:MaxHeapFreeRatio=15`.
 - **Every XGBoost case (jobs 961–965, turing and ampere):** rerun after the float32 threshold fix described above. The accuracies moved by at most 0.07 pp; the first run's records are kept on mordor3.
 - **XGBoost on MNIST8M and SOREL at depths 15 and 20 (jobs 941 and 942):** the first runs ran out of GPU memory. They were rerun with `max_cached_hist_node` at 128 (16 on MNIST8M): a cache, so speed only, not the tree. [cache-check/](cache-check) shows SOREL at depth 10 again with the cap: the same predictions on all 4,195,042 test rows.
