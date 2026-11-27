@@ -4,7 +4,7 @@
 (a) HIGGS, CART, depth <= 30: each level's samples by the size of their node
     (measured, data/higgs-cart-d30-levels.json, made by tree_levels.py);
 (b) the share of each level's nodes and samples that Hybrid grows on the CPU
-    (nodes below m = 512, the default --handoff-rows for HIGGS; measured, same file);
+    (nodes below m = 512, the swept --handoff-rows for HIGGS at depth 30 on hopper; measured, same file);
 (c) a schematic Hybrid timeline: GPU levels, hand-offs, CPU subtree tasks.
 
   python3 paper/tools/diagrams/small_nodes.py   # writes paper/figs/diagram-small-nodes.pdf

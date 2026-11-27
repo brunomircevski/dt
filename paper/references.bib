@@ -1,5 +1,5 @@
-% References for main.tex. Entries were written from memory: check every
-% field (pages, volumes, DOIs) against the publisher before submission.
+% References for main.tex. Checked against Crossref, CRAN, arXiv and Google
+% Patents on 2026-11-27, except the page ranges of the NIPS and VLDB papers.
 
 @book{breiman1984cart,
   author    = {Breiman, Leo and Friedman, Jerome H. and Olshen, Richard A. and Stone, Charles J.},
@@ -7,6 +7,17 @@
   publisher = {Wadsworth},
   address   = {Belmont, CA},
   year      = {1984}
+}
+
+@article{breiman2001rf,
+  author  = {Breiman, Leo},
+  title   = {Random Forests},
+  journal = {Machine Learning},
+  volume  = {45},
+  number  = {1},
+  pages   = {5--32},
+  year    = {2001},
+  doi     = {10.1023/A:1010933404324}
 }
 
 @book{quinlan1993c45,
@@ -25,7 +36,8 @@
   volume    = {1057},
   pages     = {18--32},
   publisher = {Springer},
-  year      = {1996}
+  year      = {1996},
+  doi       = {10.1007/BFb0014141}
 }
 
 @inproceedings{shafer1996sprint,
@@ -43,7 +55,8 @@
   volume  = {14},
   number  = {2},
   pages   = {438--444},
-  year    = {2002}
+  year    = {2002},
+  doi     = {10.1109/69.991727}
 }
 
 @inproceedings{ruggieri2004yadt,
@@ -51,7 +64,8 @@
   title     = {{YaDT}: Yet another Decision Tree builder},
   booktitle = {Proceedings of the 16th IEEE International Conference on Tools with Artificial Intelligence (ICTAI)},
   pages     = {260--265},
-  year      = {2004}
+  year      = {2004},
+  doi       = {10.1109/ICTAI.2004.123}
 }
 
 @article{fayyad1992continuous,
@@ -59,8 +73,10 @@
   title   = {On the Handling of Continuous-Valued Attributes in Decision Tree Generation},
   journal = {Machine Learning},
   volume  = {8},
+  number  = {1},
   pages   = {87--102},
-  year    = {1992}
+  year    = {1992},
+  doi     = {10.1007/BF00994007}
 }
 
 @article{pedregosa2011sklearn,
@@ -79,13 +95,15 @@
   volume  = {11},
   number  = {1},
   pages   = {10--18},
-  year    = {2009}
+  year    = {2009},
+  doi     = {10.1145/1656274.1656278}
 }
 
-@misc{therneau2023rpart,
+@misc{therneau2026rpart,
   author = {Therneau, Terry and Atkinson, Beth},
   title  = {rpart: Recursive Partitioning and Regression Trees},
-  note   = {R package},
+  note   = {{R} package version 4.1.27},
+  year   = {2026},
   url    = {https://CRAN.R-project.org/package=rpart}
 }
 
@@ -93,7 +111,8 @@
   author    = {Liao, Yisheng and Rubinsteyn, Alex and Power, Russell and Li, Jinyang},
   title     = {Learning Random Forests on the {GPU}},
   booktitle = {Big Learning Workshop, NIPS},
-  year      = {2013}
+  year      = {2013},
+  note      = {\plan{Add a URL or proceedings link; the original link is dead.}}
 }
 
 @article{raschka2020cuml,
@@ -103,7 +122,8 @@
   volume  = {11},
   number  = {4},
   pages   = {193},
-  year    = {2020}
+  year    = {2020},
+  doi     = {10.3390/info11040193}
 }
 
 @inproceedings{chen2016xgboost,
@@ -111,7 +131,9 @@
   title     = {{XGBoost}: A Scalable Tree Boosting System},
   booktitle = {Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
   pages     = {785--794},
-  year      = {2016}
+  publisher = {ACM},
+  year      = {2016},
+  doi       = {10.1145/2939672.2939785}
 }
 
 @inproceedings{ke2017lightgbm,
@@ -128,22 +150,25 @@
   journal = {Nature Communications},
   volume  = {5},
   pages   = {4308},
-  year    = {2014}
+  year    = {2014},
+  doi     = {10.1038/ncomms5308}
 }
 
 @article{triguero2015ecbdl,
   author  = {Triguero, Isaac and del R{\'i}o, Sara and L{\'o}pez, Victoria and Bacardit, Jaume and Ben{\'i}tez, Jos{\'e} M. and Herrera, Francisco},
-  title   = {{ROSEFW-RF}: The Winner Algorithm for the {ECBDL'14} Big Data Competition},
+  title   = {{ROSEFW-RF}: The Winner Algorithm for the {ECBDL'14} Big Data Competition: An Extremely Imbalanced Big Data Bioinformatics Problem},
   journal = {Knowledge-Based Systems},
   volume  = {87},
   pages   = {69--79},
-  year    = {2015}
+  year    = {2015},
+  doi     = {10.1016/j.knosys.2015.05.027}
 }
 
 @incollection{loosli2007mnist8m,
   author    = {Loosli, Ga{\"e}lle and Canu, St{\'e}phane and Bottou, L{\'e}on},
   title     = {Training Invariant Support Vector Machines Using Selective Sampling},
   booktitle = {Large Scale Kernel Machines},
+  editor    = {Bottou, L{\'e}on and Chapelle, Olivier and DeCoste, Dennis and Weston, Jason},
   pages     = {301--320},
   publisher = {MIT Press},
   year      = {2007}
@@ -237,4 +262,20 @@
   pages     = {4765--4800},
   year      = {2023},
   doi       = {10.1007/s10462-022-10275-5}
+}
+
+@misc{ioannou2025patent,
+  author       = {Ioannou, Nikolas and Parnell, Thomas and Anghel, Andreea and Papandreou, Nikolaos and Pozidis, Charalampos},
+  title        = {Training Decision Tree-Based Predictive Models},
+  howpublished = {US Patent 12,423,589 B2},
+  note         = {Filed 2020-12-04},
+  year         = {2025},
+  url          = {https://patents.google.com/patent/US12423589B2}
+}
+
+@misc{anghel2019bfdn,
+  author = {Anghel, Andreea and Ioannou, Nikolas and Parnell, Thomas and Papandreou, Nikolaos and Mendler-D{\"u}nner, Celestine and Pozidis, Haris},
+  title  = {Breadth-first, Depth-next Training of Random Forests},
+  note   = {arXiv:1910.06853},
+  year   = {2019}
 }

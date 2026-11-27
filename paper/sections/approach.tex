@@ -3,9 +3,9 @@
 
 Table~\ref{tab:impl} lists our implementations in the order in which they build on each other, from the textbook algorithm to \ImplHybrid{}, and summarizes how they differ. For simplicity, all of them support numeric attributes without missing values, omitting nominal attributes and multiway splits.
 
-All implementations share the same data layout and split rules. Attribute values are stored as 32-bit floats and class labels as integers. Candidate thresholds lie between adjacent distinct values of an attribute, and the same double-precision routine computes their gains on CPU and GPU. On small datasets across several CART and C4.5 settings, all our implementations produce identical trees. Compared node by node with scikit-learn and Release~8 of Quinlan's C4.5, our trees differ only where scikit-learn skips thresholds between values closer than $10^{-7}$ and, for C4.5, where Release~8's single-precision arithmetic rounds a gain.
+All implementations share the same input format and split rules. Attribute values are stored as 32-bit floats and class labels as integers. Candidate thresholds lie between adjacent distinct values of an attribute, and the same double-precision routine computes their gains on CPU and GPU. On small datasets across several CART and C4.5 settings, all our implementations produce identical trees. Compared node by node with scikit-learn and Release~8 of Quinlan's C4.5, our trees differ only when splits tie exactly, when scikit-learn skips thresholds between values closer than $10^{-7}$, and, for C4.5, when Release~8's single-precision arithmetic rounds a gain.
 
-Pruning runs after tree growth in CPU code shared by all implementations. CART with a fixed cost-complexity parameter $\alpha$ does not split a node when pruning would provably remove its subtree.
+Pruning runs after tree growth and makes the same decisions in all implementations. CART with a fixed cost-complexity parameter $\alpha$ does not split a node when pruning would provably remove its subtree.
 
 \begin{table}
 \caption{Comparison of our implementations. \emph{Presorted}: sorted once before growth and kept sorted by stable partitioning. \emph{Selective}: provably suboptimal thresholds are skipped.}
@@ -36,7 +36,7 @@ Pruning runs after tree growth in CPU code shared by all implementations. CART w
 
 \emph{Sort once.} Before growth, every attribute is sorted once. Each 8-byte entry stores the value, sample index, and class label together, so sweeping an attribute reads memory sequentially without separate label lookups. After a split, every attribute other than the split attribute is stably partitioned so that both children remain sorted, as in SLIQ and SPRINT~\cite{mehta1996sliq,shafer1996sprint}. Any attribute that is constant within a node is omitted for its entire subtree.
 
-\emph{Skip suboptimal thresholds.} During each sweep, three rules skip thresholds that provably cannot improve on the best split found so far. First, a threshold between two values whose samples all share the same class is never optimal~\cite{fayyad1992continuous}. Second, for two classes, the gain is convex in the class counts, so an upper bound can rule out an entire block of consecutive thresholds. Third, for any number of classes, moving one sample changes the gain by a bounded amount; when a threshold's gain falls well below the current best, the immediately following thresholds can also be skipped.
+\emph{Skip suboptimal thresholds.} During each sweep, three rules skip thresholds that provably cannot improve on the best split found so far. First, a threshold between two adjacent samples of the same class, each the only sample with its value, cannot be the best~\cite{fayyad1992continuous}. Second, for two classes, the gain is convex in the class counts, so an upper bound can rule out an entire block of consecutive thresholds. Third, for any number of classes, moving one sample changes the gain by a bounded amount; when a threshold's gain falls well below the current best, the immediately following thresholds can also be skipped.
 
 \subsection{\ImplParallel}
 \label{sec:impl-parallel}
@@ -55,9 +55,9 @@ Because large nodes are limited by memory bandwidth, the implementation minimize
 \subsection{\ImplGpu}
 \label{sec:impl-gpu}
 
-\ImplGpu{} adapts \ImplSerialOpt{} to the GPU, using the same sorted-entry format. Unlike the CPU implementations, it grows the tree breadth-first, processing all nodes of a level together so that deep levels with many small nodes still keep the GPU utilized. Data is uploaded one attribute at a time through page-locked staging buffers on the GPU's NUMA node, and each attribute is presorted as soon as it arrives while subsequent attributes are still being copied, hiding most of the presorting cost behind the upload.
+\ImplGpu{} adapts \ImplSerialOpt{} to the GPU, using the same sorted-entry format. Unlike the CPU implementations, it grows the tree breadth-first, processing all nodes of a level together so that deep levels with many small nodes still keep the GPU utilized. Data is uploaded attribute by attribute through page-locked staging buffers on the GPU's NUMA node, and each attribute is presorted as soon as it arrives while subsequent attributes are still being copied, hiding most of the presorting cost behind the upload.
 
-At each level, the GPU divides every node's attributes into tiles, finds the best threshold in each tile, and reduces these to the best threshold per node and attribute. It uses the first two skipping rules of \ImplSerialOpt{}: a tile with no candidate threshold left after the first rule is skipped, as is, for two classes, a tile whose upper bound is below the best gain found elsewhere. Small nodes, which dominate deep levels, are processed by a single warp rather than a full thread block. Only the per-attribute best splits are transferred to the CPU, which applies the shared CART or C4.5 rule. The GPU then partitions the split nodes and computes the class counts of every tile of the next level in the same pass, so each level requires only a single CPU--GPU round trip.
+At each level, the GPU divides every node's attributes into tiles, finds the best threshold in each tile, and reduces these to the best threshold per node and attribute. It uses the first two skipping rules of \ImplSerialOpt{}: the first within each tile, and, for two classes, the second to skip any tile whose upper bound is below the best gain already found. Tiles without any threshold, such as long runs of equal values, are skipped as well. Small nodes, which dominate deep levels, are processed by a single warp rather than a full thread block. Only the per-attribute best splits are transferred to the CPU, which applies the shared CART or C4.5 rule. The GPU then partitions the split nodes and computes the class counts of every tile of the next level in the same pass, so each level requires only a single CPU--GPU round trip.
 
 \subsection{\ImplHybrid}
 \label{sec:impl-hybrid}
@@ -69,6 +69,6 @@ Handoffs are asynchronous. At each level, the GPU gathers the remaining attribut
 % paper/tools/diagrams/small_nodes.py (HIGGS level statistics; panel c schematic)
 \begin{figure}
 \includegraphics[width=\textwidth]{diagram-small-nodes.pdf}
-\caption{Small nodes in a deep tree (HIGGS, CART)}
+\caption{Small nodes in a deep tree (HIGGS, CART, depth $\le 30$, $m = 512$)}
 \label{fig:small-nodes}
 \end{figure}
