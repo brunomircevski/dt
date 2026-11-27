@@ -1,21 +1,22 @@
-\section{Results}
+\section{Results and Discussion}
 \label{sec:results}
+
+We first compare the accuracy of our trees with that of established tools and then follow the path to the hybrid scheme: where the speedup comes from, how our GPU implementation compares with existing libraries, and when CPU--GPU cooperation is faster than the GPU alone. We then examine scaling and energy and close with the implications and limitations of our approach.
 
 \subsection{Accuracy}
 \label{sec:accuracy}
 % Numbers: bench/cluster-accuracy-pruned/report.csv and BENCHMARK.md (scikit-learn SOREL split, rpart/J48/YaDT notes). Depths 5 and 15 are in the same report.
-Table~\ref{tab:accuracy} shows that our implementations match the test accuracy of established libraries at depth limits of 10 and 20. For CART, our trees match scikit-learn on four of the five datasets, stay within 0.20 percentage points (pp) of it on SOREL 4M, and stay within 0.15\,pp of cuML and XGBoost. For C4.5, our trees stay within 0.04\,pp of Weka J48, whereas YaDT matches ours on MNIST8M and scores 3.1--6.4\,pp higher on HIGGS. On ECBDL'14 15M, the fixed $\alpha$ prunes every CART tree to a single majority-class leaf.
+All our implementations grow the same tree, so Table~\ref{tab:accuracy} shows one accuracy for them, next to those of other tools. For CART, our trees match scikit-learn on four of the five datasets. On SOREL 4M, which has many nearly equal attribute values, scikit-learn does not split between values closer than $10^{-7}$ (Section~\ref{sec:impl}) and differs from ours by at most 0.20 percentage points (pp). The histogram-based cuML and XGBoost stay within 0.15\,pp. On ECBDL'14 15M, the fixed $\alpha$ prunes every CART tree to a single majority-class leaf. On these datasets, binning thus barely affects test accuracy; the benefit of searching every threshold lies in obtaining the trees that CART and C4.5 define, which can be reproduced and compared across tools. For C4.5, our trees stay within 0.04\,pp of Weka J48. YaDT matches them on MNIST8M and ECBDL'14 15M and is more accurate elsewhere, by up to 1.7\,pp on SUSY and SOREL 4M and by several points on HIGGS, where it picks a different root threshold than C4.5's rule and grows a tree closer to CART's, which is also more accurate there.
 
 % bench/cluster-accuracy-pruned/report.csv (one run per case, 2026-11-24/25, ./tree 4de42544, tree code as 7f98876f;
 % XGBoost MNIST8M depth 20 on the CPU, YaDT ECBDL/SOREL with 48 threads, 2026-11-26).
 % test_accuracy of each tool, pruned trees only (pruned=True), depths 10 and 20 (depths 5 and 15 in report.csv).
 \begin{table}[tbp]
-\caption{Test accuracy (\%) of one pruned tree per depth limit (CART cost-complexity $\alpha = 10^{-5}$, native in rpart, post hoc for scikit-learn, cuML, XGBoost; C4.5 error-based, confidence 0.25). Ours: identical across all five implementations. --: no result (rpart $2^{31}-1$ value limit).}
+\caption{Test accuracy (\%) of one pruned tree per depth limit (CART cost-complexity $\alpha = 10^{-5}$, native in rpart, post hoc for scikit-learn, cuML, XGBoost; C4.5 error-based, confidence 0.25). Ours: identical across all our implementations. --: no result (rpart $2^{31}-1$ value limit).}
 \label{tab:accuracy}
 \centering
 \footnotesize
 \setlength{\tabcolsep}{2.2pt}
-\renewcommand{\arraystretch}{0.95}
 \begin{tabular}{@{}lr*{5}{c}@{\hspace{6pt}}*{3}{c}@{}}
 \toprule
  & Max & \multicolumn{5}{c@{\hspace{6pt}}}{CART} & \multicolumn{3}{c}{C4.5} \\
@@ -40,10 +41,10 @@ SOREL 4M & 10 & 92.54 & 92.74 & -- & 92.59 & 92.65 & 78.30 & 78.30 & 78.66 \\
 \end{tabular}
 \end{table}
 
-\subsection{Training Time}
+\subsection{Where the Speedup Comes From}
 \label{sec:time}
 
-Table~\ref{tab:time} summarizes the training times of our five implementations at depth 10. Most of the speedup comes from algorithmic optimizations and multicore parallelism, with GPU execution adding a smaller factor on top. On \texttt{epyc}, \ImplSerialOpt{} is 16--35$\times$ faster than \ImplSerialBase{} because it presorts each attribute once and skips provably suboptimal thresholds (Section~\ref{sec:impl-serial}). Adding 48-core parallelism in \ImplParallel{} yields another 14--40$\times$ speedup, with the largest gains on wide datasets. On the H100, \ImplGpu{} is a further 1.1--1.7$\times$ faster on the real-world datasets and 2.2--2.5$\times$ faster on CHESS~$10^9$. On SUSY, about 0.13\,s of fixed GPU setup leaves little room for further speedup. At depth 10, \ImplHybrid{} is slower than \ImplGpu{} on every dataset. Allocating its handoff buffers adds roughly 0.1\,s of setup that shallow trees cannot amortize, making it 2--6\,\% slower on the large real-world datasets and up to 70\,\% slower on SUSY and HIGGS.
+The speedup from the textbook algorithm to the GPU comes in uneven steps (Table~\ref{tab:time}), and the largest ones happen on the CPU. Sorting each attribute once instead of at every node and skipping thresholds that cannot win make \ImplSerialOpt{} 16--35$\times$ faster than \ImplSerialBase{} on a single core. Spreading this work over 48 cores in \ImplParallel{} adds up to another 40$\times$, with the largest gains on wide datasets, which offer many attributes to sweep concurrently. The GPU then adds a smaller factor of 1.1--1.7$\times$ on the real-world datasets. As Section~\ref{sec:scaling} shows, once the split search is efficient, most of the remaining time goes into partitioning and moving data, which the GPU speeds up less than computation. On small datasets, the GPU also pays a fixed setup cost of about a tenth of a second, which leaves little to gain on SUSY. A fixed cost also makes \ImplHybrid{} slower than \ImplGpu{} at depth 10 on every dataset: a shallow tree has too few small nodes to hand off, so the time spent preparing the handoff is never recovered.
 
 % Cells of this work: the final runs, means of bench/cluster-<data>/
 % {simple,serial,cpu}-epyc-<data> (epyc; 8fe0c73d/82745fb5 2026-11-17, long
@@ -76,10 +77,10 @@ CHESS $10^9$  & 922      & 1,039    & 39.0 & 42.2 & 1.63  & 1.98  & 0.741 & 0.79
 \end{tabular}
 \end{table}
 
-Across servers, memory bandwidth accounts for most of the performance gap on the CPU. Single-threaded \ImplSerialBase{} runs within 16\,\% of the same speed on \texttt{dell} and \texttt{epyc}, whereas 48-thread \ImplParallel{} takes up to 3$\times$ longer on \texttt{dell} on the large datasets because only half of its memory channels are populated. Between the two GPUs, the H100 is 1.4--1.6$\times$ faster than the A100 on the large datasets. On SUSY, the A100 is slightly faster due to shorter fixed setup.
+Across servers, memory bandwidth accounts for most of the performance gap on the CPU. Single-threaded \ImplSerialBase{} runs within 16\,\% of the same speed on \texttt{dell} and \texttt{epyc}, whereas 48-thread \ImplParallel{} takes up to 3$\times$ longer on \texttt{dell} on the large datasets because only half of its memory channels are populated. Between the two GPUs, the H100 is 1.4--1.5$\times$ faster than the A100 on the large datasets. On SUSY, \ImplGpu{} is slightly faster on the A100 due to shorter fixed setup.
 
-\paragraph{Comparison with existing libraries.}
-Figure~\ref{fig:libs} compares training time and peak memory usage on HIGGS and MNIST8M against established CPU and GPU libraries. On one thread, \ImplSerialOpt{} trains the same CART trees 27$\times$ faster than scikit-learn on HIGGS and 8.8$\times$ faster on MNIST8M, and C4.5 trees 103--147$\times$ faster than Weka J48. On 48 threads, \ImplParallel{} is 2.8$\times$ faster than YaDT on MNIST8M and 49$\times$ faster on HIGGS. On the H100, \ImplGpu{} outperforms the histogram-based GPU libraries cuML (128 bins) and XGBoost (256 bins) by 2.4--3.3$\times$, even though it evaluates every distinct threshold. Presorting does require more memory: on the large datasets, \ImplSerialOpt{} and \ImplParallel{} use about three times the dataset size in RAM, and \ImplGpu{} uses about twice the dataset size in VRAM.
+\paragraph{Comparison with Existing Libraries.}
+Fig.~\ref{fig:libs} shows that how the split search is organized matters more than how many candidate thresholds it considers. On a single core, \ImplSerialOpt{} grows the same CART trees as scikit-learn 8.8--27$\times$ faster, and C4.5 trees about two orders of magnitude faster than Weka J48; since these libraries consider the same candidate thresholds, the difference lies in how the search is carried out, including which thresholds it can skip. On the GPU, \ImplGpu{} is 2.4--3.3$\times$ faster than the histogram-based cuML and XGBoost, although it considers every distinct threshold where they consider at most 128 or 256 bin edges. The price is memory: keeping every attribute sorted needs about three times the dataset size in RAM on the CPU and twice the dataset size in VRAM on the GPU.
 
 % CPU: bench/cluster-cpu-vs-others/vs-epyc-{higgs,mnist8m} (ours and the libraries in one job);
 % GPU CART: cluster-gpu-vs-others/one-tree/vs-hopper-{higgs,mnist8m}; GPU C4.5 and Serial Simple:
@@ -91,33 +92,35 @@ Figure~\ref{fig:libs} compares training time and peak memory usage on HIGGS and 
 \label{fig:libs}
 \end{figure}
 
-Figure~\ref{fig:gpulibs} breaks down the GPU training phases on HIGGS and MNIST8M. Our presort overlaps with the host-to-device upload, whereas cuML and XGBoost prepare inputs or build bins only after the upload finishes. Tree construction is also faster (65\,ms vs.\ 253--303\,ms on HIGGS at depth 10). At depth 30, the histogram libraries must build per-node histograms across a much larger tree, widening \ImplGpu{}'s lead to 4.2$\times$ over cuML and 24$\times$ over XGBoost. At this depth, \ImplHybrid{} finishes 1.2$\times$ faster than \ImplGpu{} by offloading small subtrees to the CPU.
+The runtime breakdown in Fig.~\ref{fig:gpulibs} shows where this advantage comes from. \ImplGpu{} sorts each attribute while the next one is still being uploaded, so data preparation is largely hidden behind the transfer, whereas cuML and XGBoost prepare their data or bins only after the upload has finished. Tree growth is also shorter. Both approaches read every sample at every level, but a histogram-based method also builds and scans a histogram of every attribute for every node, a cost that grows with the number of nodes. A sweep over sorted values, in contrast, costs time in proportion to the number of samples and skips whole blocks of thresholds that cannot win. In the much larger HIGGS tree at depth 30, \ImplGpu{}'s lead therefore widens to 4.2$\times$ over cuML and 24$\times$ over XGBoost, and \ImplHybrid{} gains another 1.2$\times$ by moving small subtrees to the CPU.
 
 % bench/cluster-gpu-vs-others/one-tree/vs-hopper-{higgs,mnist8m,higgs-depth30}/results.jsonl
 % (job 789, 2026-11-23, ./tree 7f98876f, 10 runs a tool); paper/tools/charts.py gpulibs
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{results-gpulibs.pdf}
-\caption{Training phases of one CART tree on the H100. Hatched spans mark concurrent phases; ratios are relative to \ImplGpu{}.}
+\caption{Runtime breakdown of one CART tree on the H100. Hatched spans mark concurrent phases; ratios are relative to \ImplGpu{}.}
 \label{fig:gpulibs}
 \end{figure}
 
-\paragraph{Deep trees.}
-To see when hybrid execution pays off, Fig.~\ref{fig:depth} compares \ImplGpu{} and \ImplHybrid{} across depth limits on three datasets and both GPUs. At depths 5 and 10, \ImplGpu{} wins everywhere, because few nodes are small enough to hand off. \ImplHybrid{} (CART) breaks even around depth 15 on MNIST8M and SOREL 4M, and at depths 20--25 on HIGGS. Without a depth limit, \ImplHybrid{} is faster in every configuration on both GPUs, reaching up to 1.61$\times$ on MNIST8M and up to 1.83$\times$ on HIGGS. On unrestricted MNIST8M CART (H100), CPU and GPU overlap for 61\,\% of training time and host launch/synchronization overhead drops from 14\,\% to 1\,\%. Speedup also depends on tree shape: bushy trees such as HIGGS (2.86 million CART nodes) offload many small subtrees, whereas narrow trees such as SOREL 4M (CART depth 231) keep most work on the GPU (1.07--1.18$\times$).
+\subsection{CPU--GPU Cooperation on Deep Trees}
+\label{sec:deep}
+
+The hybrid scheme targets the first difficulty named in the introduction: deep levels consist of many nodes that are too small to keep the GPU busy. Fig.~\ref{fig:depth} shows that it becomes faster than \ImplGpu{} once such nodes dominate. At depths 5 and 10, few nodes fall below the handoff threshold and \ImplGpu{} is faster everywhere. \ImplHybrid{} breaks even around depth 15 on MNIST8M and for CART on SOREL 4M and at depths 20--25 on HIGGS, while C4.5 on SOREL 4M stays near parity up to depth 30; without a depth limit, it is faster in every configuration on both GPUs, by up to 1.8$\times$. A profile of unrestricted MNIST8M CART on the H100 confirms the mechanism: CPU and GPU work concurrently for 61\,\% of the training time, and host launch and synchronization overhead falls from 14\,\% to 1\,\%, because the deep levels, each costing a CPU--GPU round trip, no longer run on the GPU. The gain depends on the shape of the tree as well as on its depth: bushy trees such as HIGGS produce many small subtrees to hand off, whereas narrow, deep trees such as SOREL 4M keep most samples in a few large branches on the GPU and gain much less.
 
 % bench/hybrid-vs-gpu-only/{cuda,gpuonly}-{hopper,ampere}-{higgs,mnist8m,sorel_4m} (10 runs a case);
 % paper/tools/charts.py depth_ratio
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{results-depth.pdf}
-\caption{Speedup of \ImplHybrid{} over \ImplGpu{} by depth limit ($>1$: \ImplHybrid{} faster).}
+\caption{Speedup of \ImplHybrid{} over \ImplGpu{} by depth limit ($>1$: \ImplHybrid{} faster)}
 \label{fig:depth}
 \end{figure}
 
 \subsection{Scaling in Threads and Samples}
 \label{sec:scaling}
 
-Figure~\ref{fig:scaling} shows how \ImplParallel{} scales up to 48 threads relative to single-threaded \ImplSerialOpt{}. Scaling improves with the number of attributes: on MNIST8M (784 attributes), \texttt{epyc} stays above 90\,\% efficiency up to 16 threads and reaches 34.9$\times$ for CART (32.8$\times$ for C4.5) at 48 threads. On HIGGS (28 attributes, 0.35\,s at 48 threads), shorter runtime and fewer attributes limit speedup to 22.8$\times$. On \texttt{dell}, scaling falls behind from 8 threads onward because of its lower memory bandwidth.
+Multicore scaling depends on how much independent work a dataset offers and on memory bandwidth (Fig.~\ref{fig:scaling}). MNIST8M, with 784 attributes, keeps 48 threads busy and reaches a 33--35$\times$ speedup on \texttt{epyc}. HIGGS has only 28 attributes and finishes in a third of a second on 48 threads, so there is less work to share and the speedup stops at 19--23$\times$. On \texttt{dell}, scaling falls behind from 8 threads onward, consistent with its lower memory bandwidth.
 
 % bench/cluster-cpu-scaling/cpu-{epyc,dell}-{higgs,mnist8m}/scaling.csv; paper/tools/charts.py scaling_final
 \begin{figure}[tbp]
@@ -127,28 +130,35 @@ Figure~\ref{fig:scaling} shows how \ImplParallel{} scales up to 48 threads relat
 \label{fig:scaling}
 \end{figure}
 
-To isolate sample-count scaling and phase costs from tree growth, Fig.~\ref{fig:chess} profiles the artificial CHESS dataset. On small datasets, using the GPU is not worthwhile: at $10^7$ samples, setup accounts for 89\,\% of \ImplGpu{}'s runtime, leaving it slower than \ImplParallel{}. As sample count grows, setup shrinks to 6\,\% at $2 \cdot 10^9$ samples, where partitioning (46\,\%) and host--device transfers (30\,\%) dominate on the H100, whereas partitioning (51\,\%) and presorting (34\,\%) dominate on \texttt{epyc}; split search takes only 4\,\% and 12\,\%, respectively.
+The runtime breakdowns on CHESS in Fig.~\ref{fig:chess} explain why the GPU adds less than its raw computing power would suggest. Because the CHESS tree stays small at any size, they isolate the cost per sample. At $10^7$ samples, setup dominates \ImplGpu{}'s time and the GPU is slower than \ImplParallel{}; the GPU is worth using only once the data is large enough to amortize this fixed cost. At $2 \cdot 10^9$ samples, setup accounts for under a tenth of the time, yet the split search, the part one might expect the GPU to accelerate most, takes only 4\,\% of the GPU time and 12\,\% of the CPU time. Most of the rest is data movement: partitioning, host--device transfers, and presorting on the H100, and partitioning and presorting on \texttt{epyc}. At this scale, training is limited by memory traffic, which is why the reductions in data movement described in Section~\ref{sec:impl} matter more than faster arithmetic.
 
 % bench/cluster-profiling/{cpu-epyc,gpuonly-hopper,cuda-hopper}-chess_{10m,100m,1b,2b} (profiled runs, CART);
 % paper/tools/charts.py chess
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{results-chess.pdf}
-\caption{Training time by phase on CHESS (CART, profiled runs); totals in seconds above the bars.}
+\caption{Runtime breakdown on CHESS (CART, profiled runs); totals in seconds above the bars}
 \label{fig:chess}
 \end{figure}
 
 \subsection{Energy Consumption}
 \label{sec:energy}
 
-Figure~\ref{fig:energy} reports whole-server energy per tree. The numbers below refer to C4.5; CART follows the same trends and uses up to 18\,\% less on MNIST8M. Energy consumption is driven primarily by training time. On ECBDL'14 15M at depth 10, mean server power varies only from 264 to 716\,W across implementations, while energy per tree drops by 340$\times$, from 685 to 2.03\,kJ. \ImplSerialOpt{} cuts energy in proportion to runtime (17$\times$). \ImplParallel{} increases power 2.3$\times$ but still uses 14$\times$ less energy than \ImplSerialOpt{}. \ImplGpu{} on \texttt{hopper} achieves the lowest energy at 2.03\,kJ, or 29\,\% less than \ImplParallel{} on \texttt{epyc}, because it trains 1.7$\times$ faster while drawing only 19\,\% more power. \ImplHybrid{} draws similar power and uses 3\,\% more energy due to its extra setup time.
+Energy per tree follows training time, because power varies much less than runtime (Fig.~\ref{fig:energy}; we report C4.5, and CART behaves the same way). On ECBDL'14 15M at depth 10, mean server power differs by little more than a factor of two across implementations, while energy per tree falls by more than 400$\times$ from \ImplSerialBase{} to \ImplGpu{}. Because a server has a substantial base load even with one busy core, finishing sooner saves energy: \ImplParallel{} more than doubles power but uses 14$\times$ less energy than \ImplSerialOpt{}. The two implementations that use the GPU are the most efficient. \ImplGpu{} uses 45\,\% less energy than \ImplParallel{}, because it trains faster while \texttt{hopper} draws about as much power as \texttt{epyc} with all 48 cores busy; at this depth, \ImplHybrid{} uses slightly more energy than \ImplGpu{}, as its extra setup lengthens training.
 
-On unrestricted MNIST8M trees, where all three runs execute on \texttt{hopper}, \ImplHybrid{} also lowers energy. Although keeping the CPUs active alongside the GPU raises mean power by 1.4$\times$ over \ImplGpu{}, \ImplHybrid{} trains 1.58$\times$ faster for C4.5 and reduces energy per tree by 10.5\,\% (and by 4\,\% for CART).
+On deep trees, the hybrid scheme trades power for time. On unrestricted MNIST8M, keeping the CPU cores busy alongside the GPU raises mean power by about half, but training finishes 1.58$\times$ sooner, so the energy per tree stays close to that of \ImplGpu{}, and both use less than a third of the energy of \ImplParallel{} on the same server. \ImplHybrid{} thus shortens training at roughly the same energy cost.
 
 % paper/tools/charts.py energy (bench/cluster-power)
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\textwidth]{results-energy.pdf}
-\caption{Whole-server time, power, and energy per C4.5 tree at the power supply (idle included). CPU runs in (a) use \texttt{epyc}; all other runs use \texttt{hopper}.}
+\caption{Whole-server time, power, and energy per C4.5 tree at the power supply (idle included, \texttt{hopper}'s three unused GPUs excluded). CPU runs in (a) use \texttt{epyc}; all other runs use \texttt{hopper}.}
 \label{fig:energy}
 \end{figure}
+
+\subsection{Implications and Limitations}
+\label{sec:implications}
+
+Three lessons follow from these experiments. First, tree induction on large data is limited by memory traffic rather than by arithmetic. Once each attribute is sorted only once and hopeless thresholds are skipped, the split search takes only a small share of the time at scale, and most of what remains is partitioning and moving data (Fig.~\ref{fig:chess}). Further speedups should therefore target partitioning and data movement. Second, the best device for a node depends on its size. The GPU is efficient on the large nodes near the root, but fixed costs make it a poor fit for small datasets and for the many small nodes of deep trees, which the CPU handles better. Shallow trees are thus best grown on the GPU alone, whereas deep trees benefit from handing their small subtrees to the CPU, on MNIST8M at about the same energy. Third, for a single tree, a GPU implementation that considers every threshold can be faster than histogram-based ones, because sorted sweeps hide their preparation behind the upload and their cost does not grow with the number of nodes. Since test accuracy is nearly the same on our datasets, the choice between the two depends on whether the trees CART and C4.5 define are needed and on the available memory.
+
+Our approach also has clear limits. Keeping every attribute sorted costs memory, so the full ECBDL'14 and SOREL-20M training sets had to be subsampled to fit into 80\,GiB of VRAM, and larger data would require several GPUs or out-of-core processing. Our implementations handle only numeric attributes without missing values. We also study single trees; in ensembles, where data stays on the device and bins are built once for many trees, the balance between the two kinds of search may differ. Finally, the hybrid results use a handoff threshold chosen by a preliminary sweep for each dataset, GPU server, and depth limit; other datasets and servers may need a new sweep.

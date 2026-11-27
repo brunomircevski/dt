@@ -3,15 +3,25 @@
 \usepackage{amsmath}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,calc,positioning,decorations.pathreplacing,patterns,fit,backgrounds}
-\definecolor{gpu}{HTML}{2a78d6}
-\definecolor{xfer}{HTML}{eb6834}
-\definecolor{tA}{HTML}{1baf7a}
-\definecolor{tB}{HTML}{eda100}
-\definecolor{tC}{HTML}{e87ba4}
-\definecolor{tD}{HTML}{6250d6}
-\definecolor{ink}{HTML}{3d3d3a}
-\definecolor{muted}{HTML}{8a897f}
-\definecolor{sA}{HTML}{0d366b}
-\definecolor{sB}{HTML}{1c5cab}
-\definecolor{sC}{HTML}{3987e5}
-\definecolor{sD}{HTML}{86b6ef}
+% Paper palette (same hex values as paper/tools/charts.py); grey levels kept apart for grayscale print
+\definecolor{cpu}{HTML}{00609A}     % CPU, Multicore CPU, CPU subtrees
+\definecolor{cpulight}{HTML}{7AB8E0}
+\definecolor{gpu}{HTML}{22AD7A}     % GPU, GPU-Based, GPU levels
+\definecolor{hybrid}{HTML}{003832}
+\definecolor{xfer}{HTML}{EB9614}    % transfers, hand-offs
+% four CPU threads: one blue ramp (dark to light)
+\definecolor{thA}{HTML}{08306B}
+\definecolor{thB}{HTML}{1A75B8}
+\definecolor{thC}{HTML}{56B4E9}
+\definecolor{thD}{HTML}{B8DFF5}
+\definecolor{root}{HTML}{7F7F7F}    % node split by all threads together
+% neutral ramp (dark to light), for classes that are not a device
+\definecolor{gA}{HTML}{595959}
+\definecolor{gB}{HTML}{8C8C8C}
+\definecolor{gC}{HTML}{BDBDBD}
+\definecolor{gD}{HTML}{E3E3E3}
+\definecolor{ink}{HTML}{1A1A1A}
+\definecolor{muted}{HTML}{666666}
+\definecolor{lane}{HTML}{F2F2F2}
+\newcommand{\sixpt}{\fontsize{6}{7}\selectfont}
+\newcommand{\legendfont}{\fontsize{6.5}{7.5}\selectfont}

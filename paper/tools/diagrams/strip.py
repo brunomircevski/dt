@@ -8,21 +8,21 @@ class Strip:
     def title(s,i,t,y=3.2): s.o.append(rf'\node[font=\scriptsize,anchor=south west,inner sep=0] at ({s.px(i)}mm,{y}mm) {{{t}}};')
     def note(s,i,t,y=None):
         y=s.NY if y is None else y
-        s.o.append(rf'\node[font=\tiny,anchor=north west,inner sep=0,text width={s.PW}mm,align=flush left] at ({s.px(i)}mm,{y}mm) {{{t}}};')
+        s.o.append(rf'\node[font=\sixpt,anchor=north west,inner sep=0,text width={s.PW}mm,align=flush left] at ({s.px(i)}mm,{y}mm) {{{t}}};')
     def lanes(s,i,cpu,gpu,y=-11.3):
-        for k,(lab,txt,col) in enumerate([('CPU',cpu,'tA'),('GPU',gpu,'gpu')]):
+        for k,(lab,txt,col) in enumerate([('CPU',cpu,'cpu'),('GPU',gpu,'gpu')]):
             if txt is None: continue
             yy=y-k*1.8
-            s.o.append(rf'\node[font=\tiny,anchor=west,inner sep=0,text={col}] at ({s.px(i)}mm,{yy}mm) {{\textbf{{{lab}}}}};')
-            s.o.append(rf'\node[font=\tiny,anchor=west,inner sep=0] at ({s.px(i)+6.3}mm,{yy}mm) {{{txt}}};')
+            s.o.append(rf'\node[font=\sixpt,anchor=west,inner sep=0,text={col}] at ({s.px(i)}mm,{yy}mm) {{\textbf{{{lab}}}}};')
+            s.o.append(rf'\node[font=\sixpt,anchor=west,inner sep=0] at ({s.px(i)+6.3}mm,{yy}mm) {{{txt}}};')
     def add(s,x):
         if isinstance(x,str): s.o.append(x)
         else: s.o+=x
-    def write(s,name):
+    def write(s,name,out=None):
         """Build name.pdf with pdflatex in a temporary directory, then copy it to paper/figs/."""
         import os, shutil, tempfile
         here=os.path.dirname(os.path.abspath(__file__))
-        out=os.path.join(here,'..','..','figs')
+        out=out or os.path.join(here,'..','..','figs')
         tex=r"""\documentclass[border=1pt]{standalone}
 \input{common}
 \begin{document}\footnotesize
@@ -39,5 +39,5 @@ class Strip:
         print('wrote', os.path.normpath(os.path.join(out,name+'.pdf')))
 def rect(x,y,w,h,col,extra=''):
     return rf'\fill[{col}{extra}] ({x:.2f}mm,{y:.2f}mm) rectangle ++({w:.2f}mm,{-h:.2f}mm);'
-def txt(x,y,t,font=r'\tiny',anchor='center',extra=''):
+def txt(x,y,t,font=r'\sixpt',anchor='center',extra=''):
     return rf'\node[font={font},anchor={anchor},inner sep=0{extra}] at ({x:.2f}mm,{y:.2f}mm) {{{t}}};'

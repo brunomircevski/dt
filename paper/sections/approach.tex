@@ -1,14 +1,14 @@
 \section{Our Approach}
 \label{sec:impl}
 
-To measure the effects of algorithmic optimization, CPU parallelism, and GPU execution on training time, we developed five implementations of CART and C4.5: \ImplSerialBase{}, \ImplSerialOpt{}, \ImplParallel{}, \ImplGpu{}, and \ImplHybrid{}. They differ in how a node's samples are sorted, which thresholds are evaluated, the hardware used, and the order in which nodes are processed (Table~\ref{tab:impl}). For simplicity, our implementations support numeric attributes without missing values, omitting nominal attributes and multiway splits.
+Table~\ref{tab:impl} lists our implementations in the order in which they build on each other, from the textbook algorithm to \ImplHybrid{}, and summarizes how they differ. For simplicity, all of them support numeric attributes without missing values, omitting nominal attributes and multiway splits.
 
-All implementations share the same data layout and split rules. Attribute values are stored as 32-bit floats and class labels as integers. Candidate thresholds lie between adjacent distinct values of an attribute, and the same double-precision routine computes their gains on CPU and GPU. Because rounding can still differ slightly between devices, gains within $10^{-12}$ are treated as equal; ties are broken in favor of the lower threshold and then the lower attribute index. On small datasets across several CART and C4.5 settings, all five implementations produce identical trees. Compared node by node with scikit-learn and Release~8 of Quinlan's C4.5, our trees differ only at exact ties, where scikit-learn skips thresholds between values closer than $10^{-7}$, and, for C4.5, where Release~8's single-precision arithmetic rounds a gain.
+All implementations share the same data layout and split rules. Attribute values are stored as 32-bit floats and class labels as integers. Candidate thresholds lie between adjacent distinct values of an attribute, and the same double-precision routine computes their gains on CPU and GPU. On small datasets across several CART and C4.5 settings, all our implementations produce identical trees. Compared node by node with scikit-learn and Release~8 of Quinlan's C4.5, our trees differ only where scikit-learn skips thresholds between values closer than $10^{-7}$ and, for C4.5, where Release~8's single-precision arithmetic rounds a gain.
 
 Pruning runs after tree growth in CPU code shared by all implementations. CART with a fixed cost-complexity parameter $\alpha$ does not split a node when pruning would provably remove its subtree.
 
 \begin{table}
-\caption{Our five implementations. \emph{Presorted}: sorted once before growth and kept sorted by stable partitioning. \emph{Selective}: provably suboptimal thresholds are skipped. \emph{Mixed}: breadth-first on the GPU, depth-first on the CPU.}
+\caption{Comparison of our implementations. \emph{Presorted}: sorted once before growth and kept sorted by stable partitioning. \emph{Selective}: provably suboptimal thresholds are skipped.}
 \label{tab:impl}
 \centering
 \begin{tabular}{@{}llllll@{}}
@@ -19,7 +19,7 @@ Pruning runs after tree growth in CPU code shared by all implementations. CART w
 \ImplSerialOpt{}  & presorted & selective  & single-core CPU & --         & depth-first \\
 \ImplParallel{}   & presorted & selective  & multicore CPU   & data, task & depth-first \\
 \ImplGpu{}        & presorted & selective  & GPU             & data       & breadth-first \\
-\ImplHybrid{}     & presorted & selective  & CPU--GPU        & data, task & mixed \\
+\ImplHybrid{}     & presorted & selective  & multicore CPU and GPU        & data, task & mixed \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -27,52 +27,48 @@ Pruning runs after tree growth in CPU code shared by all implementations. CART w
 \subsection{\ImplSerialBase}
 \label{sec:impl-simple}
 
-\ImplSerialBase{} is the textbook algorithm and the baseline for the others. At each node, it sorts the node's samples by every attribute and evaluates every threshold. It then selects the best split using the shared rule and recurses on the two children.
+\ImplSerialBase{} is our textbook implementation and the baseline for others. At each node, it sorts the node's samples by every attribute and evaluates every threshold. It then selects the best split using the shared rule and recurses on the two children. \plan{Combine 3.1 and 3.2 into "Serial"?}
 
 \subsection{\ImplSerialOpt}
 \label{sec:impl-serial}
 
 \ImplSerialOpt{} grows the same tree on a single thread using two algorithmic optimizations.
 
-\emph{Sort once.} Before growth, every attribute is sorted once with a stable radix sort. Each entry stores the value, sample index, and class label together, so sweeping an attribute reads memory sequentially without separate label lookups. Across all sorted attribute lists, a node's samples occupy the same index range. After a split, the split attribute already places the left child's samples first; every other attribute is stably partitioned in the same way so both children remain sorted, as in SLIQ and SPRINT~\cite{mehta1996sliq,shafer1996sprint}. Any attribute that is constant within a node is omitted for its entire subtree. Memory is allocated once, along with one spare buffer for out-of-place partitioning of large nodes.
+\emph{Sort once.} Before growth, every attribute is sorted once. Each 8-byte entry stores the value, sample index, and class label together, so sweeping an attribute reads memory sequentially without separate label lookups. After a split, every attribute other than the split attribute is stably partitioned so that both children remain sorted, as in SLIQ and SPRINT~\cite{mehta1996sliq,shafer1996sprint}. Any attribute that is constant within a node is omitted for its entire subtree.
 
-\emph{Skip suboptimal thresholds.} During each sweep, three rules skip thresholds that provably cannot improve on the best split found so far. First, a threshold between two values whose samples all share the same class is never optimal~\cite{fayyad1992continuous}. Second, for two classes, the gain is convex in the class counts, so an upper bound can rule out an entire block of consecutive thresholds. Third, for any number of classes, moving one sample changes the gain by a bounded amount; when a threshold's gain falls well below the current best, the immediately following thresholds can also be skipped. All remaining thresholds are evaluated exactly.
+\emph{Skip suboptimal thresholds.} During each sweep, three rules skip thresholds that provably cannot improve on the best split found so far. First, a threshold between two values whose samples all share the same class is never optimal~\cite{fayyad1992continuous}. Second, for two classes, the gain is convex in the class counts, so an upper bound can rule out an entire block of consecutive thresholds. Third, for any number of classes, moving one sample changes the gain by a bounded amount; when a threshold's gain falls well below the current best, the immediately following thresholds can also be skipped.
 
 \subsection{\ImplParallel}
 \label{sec:impl-parallel}
 
-\ImplParallel{} parallelizes \ImplSerialOpt{} using a thread pool, combining data and task parallelism similarly to the NAP strategy of Aldinucci et al.~\cite{aldinucci2014fastflow}. For nodes with at least 32,768 samples, attribute sweeps and partitioning run in parallel. When a node with at least 4,096 samples is split, one child is queued as a new task while the current thread continues with the other (Fig.~\ref{fig:task-parallel}). Data parallelism handles the few large nodes near the root, and task parallelism handles the many small subtrees below. Initial presorting is also parallelized: attributes with at least one million samples are sorted in cache-sized buckets so that only a single pass streams through main memory.
+\ImplParallel{} parallelizes \ImplSerialOpt{} using a thread pool, combining data and task parallelism similarly to the NAP strategy of Aldinucci et al.~\cite{aldinucci2014fastflow}. For large nodes, attribute sweeps and partitioning run in parallel. When a split node is still large enough to justify the task overhead, one child is queued as a new task while the current thread continues with the other (Fig.~\ref{fig:task-parallel}). Data parallelism handles the few large nodes near the root, and task parallelism handles the many small subtrees below. Initial presorting is also parallelized: large attributes are sorted in cache-sized buckets, so that most of the sorting work stays in cache.
 
-Because large nodes are limited by memory bandwidth, the implementation minimizes extra memory traffic. Each thread marks samples going to the left child in a private bitmap. For large nodes, partitioning a parent and sweeping its children are fused into a single pass, so each level reads the parent's data only once. When a large two-class node has fewer attributes than threads, each attribute's sweep is divided across threads and combined in order to guarantee the exact same threshold as a single sweep. Because threads create nodes in nondeterministic order, nodes are renumbered in preorder at the end so the resulting tree matches \ImplSerialOpt{}. Threads are not pinned to cores, and memory is not explicitly placed on NUMA nodes.
+Because large nodes are limited by memory bandwidth, the implementation minimizes extra memory traffic. For large nodes, partitioning a parent and sweeping its children are fused into a single pass, so each level reads the parent's data only once. When a large two-class node has fewer attributes than threads, each attribute's sweep is divided across threads.
 
 % paper/tools/diagrams/task_parallel.py (schematic)
 \begin{figure}
 \includegraphics[width=\textwidth]{diagram-task-parallel.pdf}
-\caption{Task parallelism in \ImplParallel{} (schematic). Box width is proportional to the number of samples. All threads split the dark node together; arrows mark children passed to an idle thread.}
+\caption{Task parallelism in \ImplParallel{} (schematic). Color marks the thread that splits each node; node size and block length grow with the number of samples. All threads split the grey node together; dashed arrows mark children passed to an idle thread.}
 \label{fig:task-parallel}
 \end{figure}
 
 \subsection{\ImplGpu}
 \label{sec:impl-gpu}
 
-\ImplGpu{} adapts \ImplSerialOpt{} to the GPU, using the same sorted-entry format and gain routine. Unlike the CPU implementations, it grows the tree breadth-first, processing all nodes of a level together so that deep levels with many small nodes still keep the GPU utilized.
+\ImplGpu{} adapts \ImplSerialOpt{} to the GPU, using the same sorted-entry format. Unlike the CPU implementations, it grows the tree breadth-first, processing all nodes of a level together so that deep levels with many small nodes still keep the GPU utilized. Data is uploaded one attribute at a time through page-locked staging buffers on the GPU's NUMA node, and each attribute is presorted as soon as it arrives while subsequent attributes are still being copied, hiding most of the presorting cost behind the upload.
 
-At each level, the GPU divides every node's attributes into tiles of 2,048 samples, finds the best threshold in each tile, and reduces these to the best threshold per node and attribute. Only these per-attribute best splits are transferred to the CPU, which applies the shared CART or C4.5 rule. The GPU then partitions the split nodes and computes the class counts of every child in the same pass, so each level requires only a single CPU--GPU round trip.
-
-The GPU uses the first two skipping rules of \ImplSerialOpt{}, but not the third: a tile with no candidate threshold left after the first rule is skipped, as is, for two classes, a tile whose upper bound is below the best gain found elsewhere. Nodes with at most 256 samples, which dominate deep levels, are processed by a single warp (32 threads) rather than a 256-thread block. Data is uploaded one attribute at a time through page-locked staging buffers on the GPU's NUMA node, and each attribute is presorted as soon as it arrives while subsequent attributes are still being copied, hiding most of the presorting cost behind the upload.
+At each level, the GPU divides every node's attributes into tiles, finds the best threshold in each tile, and reduces these to the best threshold per node and attribute. It uses the first two skipping rules of \ImplSerialOpt{}: a tile with no candidate threshold left after the first rule is skipped, as is, for two classes, a tile whose upper bound is below the best gain found elsewhere. Small nodes, which dominate deep levels, are processed by a single warp rather than a full thread block. Only the per-attribute best splits are transferred to the CPU, which applies the shared CART or C4.5 rule. The GPU then partitions the split nodes and computes the class counts of every tile of the next level in the same pass, so each level requires only a single CPU--GPU round trip.
 
 \subsection{\ImplHybrid}
 \label{sec:impl-hybrid}
 
-\ImplHybrid{} combines \ImplGpu{} with \ImplParallel{}. The GPU grows large nodes breadth-first, as in \ImplGpu{}, while each child with fewer than $m$ samples is handed off to \ImplParallel{}, which grows its subtree depth-first on the CPU (Fig.~\ref{fig:small-nodes}). The threshold $m$ balances the two devices: on wide datasets each GPU level costs more, so handing off larger nodes pays off, whereas on narrow datasets or under a depth limit $D$, at which the GPU stops anyway, a smaller $m$ keeps more work on the faster GPU. By default, \[ m = \max\bigl(1024,\ \min(10F,\ c)\bigr) \] for $F$ attributes, where $c = \min(2^{D}, 4096)$ with a depth limit $D$ and $c = 16{,}384$ without one. Across the 40 combinations of dataset, GPU server, and depth limit in our handoff sweeps, this rule is on average 0.3\,\% and at most 4.2\,\% slower than the fastest $m$.
+\ImplHybrid{} combines \ImplGpu{} with \ImplParallel{}. The GPU grows large nodes breadth-first, while each child with fewer than $m$ samples is handed off to \ImplParallel{}, which grows its subtree depth-first on the CPU. The threshold $m$ balances the work between the two devices. Fig.~\ref{fig:small-nodes} illustrates this on a deep tree: as depth grows, the samples shift into ever smaller nodes~(a), so the CPU takes over most of the nodes and eventually most of the samples~(b), while the GPU continues with the remaining large ones~(c).
 
-Handoffs are asynchronous. At each level, the GPU gathers the remaining attributes of the handed-off children and copies them to host memory in the background. Once the copy completes, CPU tasks begin growing those subtrees while the GPU continues to the next level without waiting. As in \ImplParallel{}, the nodes are renumbered in preorder at the end.
+Handoffs are asynchronous. At each level, the GPU gathers the remaining attributes of the handed-off children and copies them in the background into a reusable host buffer. Once the copy completes, CPU tasks grow those subtrees while the GPU continues with the next level, and each subtree's space in the buffer is reused as soon as the subtree is finished. The page-locked staging buffers used for these copies add a fixed setup cost that only deep trees recover. Once the GPU has presorted all attributes, the host copy of the raw training values is freed unless C4.5 pruning needs it, so \ImplHybrid{}'s peak host memory stays near the size of the training set.
 
 % paper/tools/diagrams/small_nodes.py (HIGGS level statistics; panel c schematic)
 \begin{figure}
 \includegraphics[width=\textwidth]{diagram-small-nodes.pdf}
-\caption{Small nodes in a deep tree (HIGGS, CART, depth $\le$ 30, $m = 512$).}
+\caption{Small nodes in a deep tree (HIGGS, CART)}
 \label{fig:small-nodes}
 \end{figure}
-
-Handed-off attributes are copied into a reusable host buffer whose space is returned as soon as a CPU subtree finishes, so host memory holds only the subtrees still being grown. Because the threads writing those copies run next to the GPU, the buffer is interleaved across both sockets so the other socket does not read all subtrees remotely. Once the GPU has presorted all attributes, the host copy of the raw training values is freed unless C4.5 pruning needs it, keeping \ImplHybrid{}'s peak host memory near the size of the training set (24.3\,GiB for unpruned C4.5 on MNIST8M's 23.7\,GiB without a depth limit).

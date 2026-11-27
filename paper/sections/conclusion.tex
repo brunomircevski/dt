@@ -1,2 +1,6 @@
 \section{Conclusion}
 \label{sec:conclusion}
+
+We presented a hybrid CPU--GPU implementation of CART and C4.5 in which both devices grow the same tree. Reducing the work on a single core and using all CPU cores provide most of the speedup, the GPU accelerates the large nodes near the root, and handing small subtrees to CPU threads lets the CPU work while the GPU continues. On shallow trees, there are too few small nodes to repay the cost of the handoff; on trees grown without a depth limit, \ImplHybrid{} is up to 1.8$\times$ faster than the GPU alone, at about the same energy on MNIST8M. The GPU-based implementations need the least energy per tree.
+
+Natural next steps are support for nominal attributes and missing values, datasets that exceed the memory of a single GPU, and ensembles, where the cost of presorting can be shared across many trees.

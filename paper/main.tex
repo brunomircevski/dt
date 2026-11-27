@@ -9,6 +9,17 @@
 \urlstyle{rm}
 %
 \graphicspath{{figs/}}
+% Float placement: fill pages with text around figures and tables instead of leaving
+% half-empty float pages. Only LaTeX's float-placement limits are changed; the float
+% gaps (\textfloatsep, \floatsep, \intextsep) stay at llncs's values, because the
+% llncs docs ask authors not to change spacing and Springer's typesetters undo it.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\floatpagefraction}{0.85}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{4}
 \newcommand{\plan}[1]{{\color{blue}\itshape[#1]}}
 % Names of this work's implementations in the paper (one place to rename).
 \newcommand{\ImplSerialBase}{Serial Simple}
@@ -19,7 +30,7 @@
 %
 \begin{document}
 %
-\title{Accelerating Large-Scale Decision Tree Induction on Heterogeneous CPU--GPU Architectures}
+\title{Large-Scale Decision Tree Induction on Heterogeneous CPU--GPU Architectures}
 \titlerunning{Decision Tree Induction on Heterogeneous CPU--GPU Architectures}
 %
 \author{Bruno Mirčevski\orcidID{0009-0007-1008-6708} \and Krzysztof Jurczuk\orcidID{0000-0001-6469-1769}}
@@ -31,7 +42,7 @@ Bialystok, Poland}
 %
 
 \begin{abstract}
-Exact CART and C4.5 induction is costly on large datasets, whereas most GPU learners rely on histogram binning that alters the resulting trees. We present five exact implementations spanning single-core CPU, multicore CPU, GPU, and heterogeneous CPU--GPU architectures, all producing identical trees. In our hybrid scheme, the GPU grows large nodes breadth-first while smaller subtrees are asynchronously offloaded to CPU threads, letting both devices grow one tree concurrently. On real-world datasets up to 32 million samples, our optimized single-threaded implementation is up to 27$\times$ faster than scikit-learn and 147$\times$ faster than Weka J48, our 48-core implementation is up to 40$\times$ faster still, and our H100 GPU implementation is up to 1.7$\times$ faster than the multicore version while outperforming histogram-based cuML and XGBoost by 2.4--3.3$\times$ at depth 10. On unrestricted deep trees, hybrid execution adds up to a 1.8$\times$ speedup over GPU-only execution. Whole-server energy follows runtime closely, dropping by up to 340$\times$ over the baseline, with hybrid execution further improving energy efficiency on deep trees.
+Top-down decision tree induction is generally considered inexpensive. On millions of samples, however, even one run is costly, and tuning, cross-validation, and random forests repeat it many times. Because the work per node shrinks with depth, no single device suits every level of a tree. We propose a hybrid CPU--GPU implementation of CART and C4.5 in which both devices grow the same tree together. The GPU processes the large nodes near the root, while CPU threads grow the many small subtrees below. We reach it by iteratively improving a simple textbook implementation, keeping each step as a baseline. We evaluate all versions on five real-world datasets with 4.5--32 million samples and one artificial dataset with up to 2 billion. On a single core, algorithmic improvements give a up to 35$\times$ speedup over the textbook implementation, and 48 CPU cores add up to another 40$\times$. An H100 GPU provides a further up to 1.7$\times$ on real-world data. On trees without a depth limit, the hybrid approach is up to 1.8$\times$ faster than the GPU alone. We measure training time and whole-server energy. The GPU-based implementations are the most energy-efficient, using over 400$\times$ less energy per tree than the initial textbook implementation.
 
 \keywords{Decision trees \and CART \and C4.5 \and Parallel computing}
 \end{abstract}
@@ -41,7 +52,6 @@ Exact CART and C4.5 induction is costly on large datasets, whereas most GPU lear
 \input{sections/approach}
 \input{sections/experiment-design}
 \input{sections/results}
-\input{sections/discussion}
 \input{sections/conclusion}
 
 \bibliographystyle{splncs04}

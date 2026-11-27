@@ -14,7 +14,7 @@ def icicle(x0,y0,W,H,colour,extra=None):
         if col=='STRIPE':
             o[-1]=''
             w=(b-a)/4
-            for i,c in enumerate(['tA','tB','tC','tD']):
+            for i,c in enumerate(['thA','thB','thC','thD']):
                 o.append(rf'\fill[{c}] ({a+i*w:.2f}mm,{y:.2f}mm) rectangle ({a+(i+1)*w:.2f}mm,{y-H:.2f}mm);')
         o.append(rf'\draw[white,line width=0.6pt] ({a:.2f}mm,{y:.2f}mm) rectangle ({b:.2f}mm,{y-H:.2f}mm);')
         if extra: o+=extra(p,n,d,a,b,y,H)
