@@ -6,7 +6,7 @@ We evaluate the implementations on five real-world datasets and one artificial d
 
 SUSY and HIGGS~\cite{baldi2014higgs} contain simulated particle collisions labeled as signal or background; as in the UCI repository, their last 500,000 samples form the test set. ECBDL'14~\cite{triguero2015ecbdl} comes from the protein structure prediction task of the ECBDL'14 Big Data Competition, with nominal attributes encoded as integers. MNIST8M~\cite{loosli2007mnist8m} contains 8.1 million handwritten digits (the MNIST training images and deformed copies of them), and SOREL-20M~\cite{harang2020sorel} is a malware detection benchmark of Windows executables; these three use their official test sets.
 
-Our GPU implementations need about twice the size of the training set in GPU memory, so the full training sets of ECBDL'14 and SOREL-20M do not fit into the 80\,GB of our GPUs. To include them in the GPU experiments, we train on their first 15 million and 4 million samples, respectively.
+Our GPU implementations need about twice the size of the training set in GPU memory, so the full training sets of ECBDL'14 and SOREL-20M do not fit into the 80\,GiB of our GPUs. To include them in the GPU experiments, we train on their first 15 million and 4 million samples, respectively.
 
 CHESS is an artificial $3 \times 3$ checkerboard: two attributes drawn uniformly from $[0, 3]$ and two classes alternating between the unit squares, without noise. A tree that separates its classes needs only nine leaves, so the training time reflects the cost per sample rather than tree growth. We generate sizes ranging from $10^6$ to $2 \cdot 10^9$ samples (the $10^9$ set is the $10^8$ set repeated ten times) and use them for timing measurements only.
 
@@ -32,7 +32,7 @@ CHESS 3$\times$3                    & 2    & 2  & $10^6$--$2 \cdot 10^9$ & \mult
 \end{table}
 
 \subsection{Hardware}
-The experiments run on four servers (Table~\ref{tab:hardware}). The CPU implementations run on \texttt{epyc} (AMD) and \texttt{dell} (Intel). \ImplGpu{} and \ImplHybrid{} run on \texttt{hopper} and \texttt{ampere}, each using one GPU with 80\,GB of memory: an NVIDIA H100 attached over PCIe~5.0 x16, or an A100 over PCIe~4.0 x16. The GPU libraries run on \texttt{hopper}.
+The experiments run on four servers (Table~\ref{tab:hardware}). The CPU implementations run on \texttt{epyc} (AMD) and \texttt{dell} (Intel). \ImplGpu{} and \ImplHybrid{} run on \texttt{hopper} and \texttt{ampere}, each using one GPU with 80\,GiB of memory: an NVIDIA H100 attached over PCIe~5.0 x16, or an A100 over PCIe~4.0 x16. The GPU libraries run on \texttt{hopper}.
 
 Every job has exclusive use of its server. \ImplParallel{} uses all cores of both sockets (48 on \texttt{epyc} and \texttt{dell}), and GPU runs may use all CPU cores of their server. Apart from the NUMA placement described in Section~\ref{sec:impl-gpu}, memory follows the default first-touch policy, and individual threads are not pinned to cores; thread-scaling runs with $t$ threads are restricted to the first $t$ cores, filling one socket before the other. Our code is compiled with g++ 13.3 (\texttt{-O3}) and CUDA 12.9 on Ubuntu 24.04.
 
