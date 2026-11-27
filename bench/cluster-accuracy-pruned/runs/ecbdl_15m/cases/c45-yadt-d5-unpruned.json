@@ -1,0 +1,22 @@
+[
+ {
+  "dataset": "ecbdl_15m",
+  "algo": "c45",
+  "tool": "yadt",
+  "version": "YaDT 2.3.0",
+  "depth_limit": 5,
+  "pruned": false,
+  "prune": "-np -m 2",
+  "nodes": 11,
+  "leaves": 6,
+  "depth": 5,
+  "train_accuracy": 0.9790753333333333,
+  "test_accuracy": 0.9832165655538099,
+  "n_train": 15000000,
+  "n_test": 2897917,
+  "threads": 48,
+  "pred": "bench/cluster-accuracy-pruned/runs/ecbdl_15m/pred/c45-yadt-d5-unpruned.npy",
+  "host": "dell2",
+  "case": "c45-yadt-d5-unpruned"
+ }
+]

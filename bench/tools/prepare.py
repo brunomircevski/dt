@@ -7,6 +7,7 @@ input format (see benchlib.py for the layout), plus the tiny synthetic
   bench/tools/.venv/bin/python bench/tools/prepare.py covertype_10k susy_50k
   bench/tools/.venv/bin/python bench/tools/prepare.py --force susy # rebuild
   bench/tools/.venv/bin/python bench/tools/prepare.py --yadt higgs # add YaDT's files to a prepared set
+  bench/tools/.venv/bin/python bench/tools/prepare.py --yadt sorel_4m  # a prefix set's: in sorel/sorel_4m.yadt/
 
 Each dataset's folder (bench/tools/data/<name>/) holds its prepared files next to
 its originals (the CSVs prepare.py reads, the downloads): rebuilding replaces
@@ -28,7 +29,7 @@ import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
 from benchlib import (BASELINE, BENCH, DATA, PREPARED_FILES, ROOT, check_csv, folder, load, meta,
-                      meta_path)
+                      meta_path, yadt_folder)
 
 
 def install(tmp, out, name=None):
@@ -230,12 +231,14 @@ def write_prefix(name, spec, specs):
 
 def write_yadt(name):
     """YaDT's files of a prepared set, from its binary files (which stay as they
-    are): yadt.names and the headerless train/test CSVs, every row checked."""
+    are): yadt.names and the headerless train/test CSVs, every row checked. A
+    prefix_of set's go to their own folder, yadt_folder(): its first n_train
+    training rows and the whole test set."""
     m = meta(name)
-    if "prefix_of" in m or meta_path(name).name != "meta.json":
-        raise ValueError(f"{name}: only a set in a folder of its own can have YaDT files "
-                         "(YaDT reads whole files)")
-    out = folder(name)
+    if "prefix_of" not in m and meta_path(name).name != "meta.json":
+        raise ValueError(f"{name}: a set in a shared folder has no YaDT files")
+    out = yadt_folder(name)
+    out.mkdir(exist_ok=True)
     F = len(m["features"])
     labels = pa.array(m["classes"], pa.large_string())
     for part in ("train", "test"):

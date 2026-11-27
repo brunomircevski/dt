@@ -9,9 +9,10 @@ This benchmark measures test accuracy, not time. For each tool it grows one tree
 
 Every tool's unpruned tree is reported too.
 
-**Data:** one run per case, 2026-11-24/25; rpart on MNIST8M, ECBDL'14 and SOREL and XGBoost on MNIST8M at depths 15 and 20 on 2026-11-26. ./tree is at 4de42544967b; its tree code is unchanged since 7f98876f. Time is recorded (`fit_seconds`) but not benchmarked, so the nodes were shared. The jobs ran on:
+**Data:** one run per case, 2026-11-24/25; rpart on MNIST8M, ECBDL'14 and SOREL and XGBoost on MNIST8M at depths 15 and 20 on 2026-11-26, as was YaDT on ECBDL'14 15M and SOREL 4M. ./tree is at 4de42544967b; its tree code is unchanged since 7f98876f. Time is recorded (`fit_seconds`) but not benchmarked, so the nodes were shared. The jobs ran on:
 - epyc2, dell2 and dell3: the long CPU jobs (J48, scikit-learn, rpart; also epyc1 for rpart on SOREL)
 - dell1 and dell4: jobs of under an hour (./tree and YaDT)
+- dell2, dell3 and dell4: YaDT on ECBDL'14 15M and SOREL 4M (2026-11-26)
 - turing, hopper and ampere: the GPU tools only
 
 ![Test accuracy of each tool's pruned tree against the depth limit; ./tree's 95% interval as a band, its unpruned tree dashed](chart-accuracy.png)
@@ -53,9 +54,9 @@ All the numbers are in [report.md](report.md): one table per dataset, algorithm 
 - **Weka J48 grows ./tree's tree on MNIST8M and SOREL 4M:** the same unpruned trees at every depth, and 100.00% agreement pruned. On SOREL at depth 20, J48's pruning cuts 20 more nodes (1,395 against 1,415), which changes the prediction of 5 of the 4.2M test rows.
 - **J48 on SUSY and HIGGS:** within 0.04 pp of ./tree, with 97.5–100% agreement; almost all of these differences are not significant (p ≥ 0.1).
 - **J48 on ECBDL'14:** the unpruned trees differ from depth 10 on: 711 nodes for J48 against 725 for ./tree at depth 10, and 3,929 against 4,017 at depth 15. Pruned, they are the same at depths 5 and 10. At 15 and 20, J48's pruned trees agree with ./tree's on 99.9% of rows and are 0.02–0.03 pp lower. ./tree's C4.5 matches Quinlan's C4.5 Release 8 node by node ([docs/ALGORITHMS.md](../../docs/ALGORITHMS.md)); why J48 departs from it here was not investigated.
-- **YaDT grows ./tree's tree on MNIST8M** at every depth, with 100.00% agreement.
+- **YaDT grows ./tree's tree on MNIST8M** at every depth, with 100.00% agreement. On ECBDL'14 15M it is ./tree's size at every depth (161 nodes pruned at depth 10, 6,937 at 20), with 100.00% agreement pruned; unpruned, 2 test rows differ at depth 15 and 142 at depth 20 (99.995%, −0.004 pp, McNemar p = 9e-23). J48 is 0.02 pp below both pruned at depths 15 and 20.
 - **YaDT on SUSY and HIGGS:** its trees differ. On SUSY it is −0.36 pp at depth 5 and +0.12 to +0.25 pp deeper. On HIGGS it is +3.1 to +6.4 pp. This is known from [cluster-cpu-vs-others](../cluster-cpu-vs-others/BENCHMARK.md): YaDT picks a different root threshold on HIGGS than C4.5's rule (Quinlan's C4.5, which ./tree and nearly J48 follow), and grows a more CART-like tree. It is a C4.5-family tool, not a reference for C4.5's trees.
-- **YaDT has no ECBDL'14 or SOREL results:** it has no input files for those datasets (only SUSY, HIGGS and MNIST8M have `yadt.names`).
+- **YaDT on SOREL 4M differs from ./tree and J48, which grow the same tree:** at depth 5 it has the same 55 nodes but 99.88% agreement and is 0.03 pp lower (p = 2e-87). From depth 10 its trees are larger (pruned: 331 nodes against 299 at depth 10, 877 against 761 at 15, 1,633 against 1,415 at 20) and more accurate: +0.36 pp at depth 10, +3.32 pp at 15 and +1.66 pp at 20, with 99.34%, 93.61% and 96.24% agreement (McNemar p = 0 in double precision each). YaDT's pruned and unpruned trees are within 0.001 pp of each other at every depth.
 - **Effect of pruning (CF 0.25):** it changes accuracy by at most 0.54 pp: HIGGS at depth 5, 61.0% against 60.5%. How many nodes it removes depends on the dataset:
   - MNIST8M and SOREL: 0–10%.
   - SUSY and HIGGS: 17–35%.
@@ -72,7 +73,7 @@ All the numbers are in [report.md](report.md): one table per dataset, algorithm 
 | cuML `RandomForestClassifier` (1 tree, no bootstrap) | 26.10 | turing (HIGGS), hopper (the rest) | CART |
 | XGBoost `hist` on CUDA, 1 round | 3.4.1 | turing (SUSY, HIGGS), ampere (the rest); dell4 on the CPU (MNIST8M at depths 15 and 20) | CART |
 | Weka J48 (with J48Fit's depth limit) | weka.jar of the timing benchmarks | dell4 (SUSY), epyc2 (HIGGS, MNIST8M), dell2 (ECBDL'14), dell3 (SOREL) | C4.5 |
-| YaDT `dTcmd` | 2.3.0 | epyc2 (SUSY), dell4 (HIGGS, MNIST8M) | C4.5, SUSY, HIGGS, MNIST8M |
+| YaDT `dTcmd` | 2.3.0 | epyc2 (SUSY), dell4 (HIGGS, MNIST8M, SOREL at depth 5), dell2 (ECBDL'14), dell3 (SOREL) | C4.5 |
 
 **Slowest fits:**
 - **J48, the most:** 3.5–19.1 h a tree on MNIST8M, ECBDL'14 and SOREL.
@@ -85,12 +86,23 @@ All the numbers are in [report.md](report.md): one table per dataset, algorithm 
 ```bash
 bench/tools/accuracy/job.sh susy cpu ...         # SUSY ran first, by hand (sbatch lines in job.sh)
 AFTER_HOPPER=909 AFTER_AMPERE=910 bench/tools/accuracy/submit_all.sh   # every other job
+bench/tools/.venv/bin/python bench/tools/prepare.py --yadt ecbdl_15m sorel_4m   # YaDT's files of the prefix sets
+sbatch -p dell -c 48 -t 12:00:00 bench/tools/accuracy/job.sh sorel_4m cpu --tools yadt --yadt-threads 48 --jobs 1
 # re-submitting a job resumes it: a case whose runs/<dataset>/cases/<case>.json exists is skipped
 bench/tools/.venv/bin/python bench/tools/accuracy/report.py bench/cluster-accuracy-pruned/runs \
   --md bench/cluster-accuracy-pruned/report.md --csv bench/cluster-accuracy-pruned/report.csv
 bench/tools/.venv/bin/python bench/tools/accuracy/accuracy_chart.py \
   bench/cluster-accuracy-pruned/report.csv bench/cluster-accuracy-pruned
 ```
+
+**YaDT on ECBDL'14 15M and SOREL 4M (2026-11-26):**
+- **Input files:** YaDT reads whole text files, so a prefix set gets its own: `prepare.py --yadt ecbdl_15m sorel_4m` writes `yadt.names`, `train.yadt.csv` (the first 15M / 4M training rows) and `test.yadt.csv` (the whole test set) to `ecbdl/ecbdl_15m.yadt/` and `sorel/sorel_4m.yadt/` in the data folder (`benchlib.yadt_folder`). It uses the same writer and the same check of every row against the binary files as the other sets. Jobs 973 (dell2, 15 min) and 974 (dell3, 25 min); 32 GB and 83 GB of CSV.
+- **48 threads:** these runs use `--yadt-threads 48` (`-tt 48`; the other datasets ran with 4). Check first (jobs 975 and 976, dell4 and dell1): MNIST8M and HIGGS at depth 10, pruned and unpruned, with 48 threads give the same nodes, depth, training and test accuracy and the same prediction on every test row as the 4-thread records.
+- **Jobs:**
+  - 977 (dell2): ECBDL'14, 8 cases in 1.9 h. dTcmd peaks at 21 GB.
+  - 978 (dell3): SOREL depths 10–20, 11.0 h.
+  - 1001 (dell4): SOREL depth 5, 3.6 h. It ran beside 978 to stay within the 12 h limit.
+  - On SOREL a case takes 1.8 h: about 16 min to load and fit (dTcmd peaks at 120 GB), then 80 min for dTcmd to read and score the training and test CSVs (43 GB and 45 GB).
 
 **Re-submitted cases:**
 - **rpart on MNIST8M, ECBDL'14 and SOREL (jobs 992, 994–996, 2026-11-26):** first run with the 64-bit index patch. Before that, `acc.py` skipped these datasets.

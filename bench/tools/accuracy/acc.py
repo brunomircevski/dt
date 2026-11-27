@@ -4,7 +4,7 @@ limit), pruned and unpruned, scored on the test set. Time is not measured:
 the cases run side by side (--jobs), each one process.
 
   acc.py DATASET --out DIR --side cpu|gpu [--depths 5,10,15,20] [--jobs N]
-         [--tools tree,sklearn,...] [--threads T] [--dry-run]
+         [--tools tree,sklearn,...] [--threads T] [--yadt-threads T] [--dry-run]
 
 Pruning, the same for every tool of an algorithm (one fixed setting, nothing
 tuned; benchlib.CART_ALPHA and the C4.5 programs' default confidence):
@@ -56,11 +56,11 @@ TREE_FLAGS = {("cart", True): ["--cart", "--prune", repr(ALPHA)], ("cart", False
               ("c45", True): ["--c45", "--prune", str(CF)], ("c45", False): ["--c45"]}
 
 
-def cases(dataset, side, depths, tools):
+def cases(dataset, side, depths, tools, yadt_threads=4):
     """-> [(case id, kind, params, threads)]"""
     m = B.meta(dataset)
     rows_x_features = m["n_train"] * len(m["features"])
-    yadt = (B.DATA / dataset / "yadt.names").exists() and "prefix_of" not in m
+    yadt = (B.yadt_folder(dataset) / "yadt.names").exists()  # a prefix set's: prepare.py --yadt
     out = []
     for d in depths:
         if side == "cpu":
@@ -74,7 +74,7 @@ def cases(dataset, side, depths, tools):
                             out.append((f"{algo}-tree_serial-d{d}-{tag}", "tree",
                                         dict(algo=algo, d=d, pruned=pruned, backend="serial"), 1))
                     if algo == "c45" and "yadt" in tools and yadt:
-                        out.append((f"c45-yadt-d{d}-{tag}", "yadt", dict(d=d, pruned=pruned), 4))
+                        out.append((f"c45-yadt-d{d}-{tag}", "yadt", dict(d=d, pruned=pruned), yadt_threads))
             if "j48" in tools:  # one fit: the unpruned tree, then the pruned one
                 out.append((f"c45-j48-d{d}", "j48", dict(d=d), 1))
             if "sklearn" in tools:
@@ -192,7 +192,7 @@ def do_yadt(dataset, cid, p, threads, out):
     m = B.meta(dataset)
     yadt = TOOLS_DIR / "yadt" / "dTcmd"
     env = {"LD_LIBRARY_PATH": str(yadt.parent)}
-    data = B.DATA / dataset
+    data = B.yadt_folder(dataset)
     saved = out / "tmp" / f"{cid}.yadt"
     flags = ["-ebpg", "-c", str(CF), "-m", "2"] if p["pruned"] else ["-np", "-m", "2"]
     stdout = run([yadt, "-fm", data / "yadt.names", "-fd", data / "train.yadt.csv", "-tt", threads]
@@ -215,7 +215,7 @@ def do_yadt(dataset, cid, p, threads, out):
     return [{"dataset": dataset, "algo": "c45", "tool": "yadt", "version": "YaDT 2.3.0", "depth_limit": p["d"],
              "pruned": p["pruned"], "prune": " ".join(flags), "nodes": nodes, "leaves": (nodes + 1) // 2,
              "depth": depth, "train_accuracy": accuracy["train"], "test_accuracy": accuracy["test"],
-             "n_train": m["n_train"], "n_test": m["n_test"], "pred": str(pred_file)}]
+             "n_train": m["n_train"], "n_test": m["n_test"], "threads": threads, "pred": str(pred_file)}]
 
 
 def mem_gb(dataset, kind, params):
@@ -243,6 +243,7 @@ def main():
     ap.add_argument("--tools", default="tree,sklearn,rpart,j48,yadt,cuml,xgboost")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--threads", type=int, default=8, help="./tree's threads")
+    ap.add_argument("--yadt-threads", type=int, default=4, help="YaDT's threads (-tt)")
     ap.add_argument("--only", help="regex on case ids")
     ap.add_argument("--mem-gb", type=float, default=400, help="memory budget of the cases running at once")
     ap.add_argument("--dry-run", action="store_true")
@@ -250,7 +251,8 @@ def main():
     out = a.out / a.dataset
     for sub in ("cases", "pred", "logs", "tmp", "trees"):
         (out / sub).mkdir(parents=True, exist_ok=True)
-    todo = [c for c in cases(a.dataset, a.side, [int(d) for d in a.depths.split(",")], a.tools.split(","))
+    todo = [c for c in cases(a.dataset, a.side, [int(d) for d in a.depths.split(",")], a.tools.split(","),
+                       a.yadt_threads)
             if not (out / "cases" / f"{c[0]}.json").exists() and (not a.only or re.search(a.only, c[0]))]
     print(f"{socket.gethostname()}: {len(todo)} cases for {a.dataset} ({a.side}), {a.jobs} at a time", flush=True)
     if a.dry_run:

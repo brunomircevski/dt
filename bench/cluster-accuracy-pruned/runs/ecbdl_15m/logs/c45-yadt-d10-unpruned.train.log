@@ -1,0 +1,5 @@
+/home/bmircevski/dt-final/bench/tools/.tools/yadt/dTcmd -bt bench/cluster-accuracy-pruned/runs/ecbdl_15m/tmp/c45-yadt-d10-unpruned.yadt -fs /home/bmircevski/dt-yadt/bench/tools/data/ecbdl/ecbdl_15m.yadt/train.yadt.csv -s bench/cluster-accuracy-pruned/runs/ecbdl_15m/tmp/c45-yadt-d10-unpruned.train.score
+YaDT version 2.3.0 (c) S. Ruggieri 2002-2020
+Tree loaded
+Scoring data
+ + rows: 15000000 time: 639.723 secs (23.44 K rows/s)

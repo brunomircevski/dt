@@ -270,6 +270,15 @@ def folder(dataset):
     return stem(dataset, "train").parent
 
 
+def yadt_folder(dataset):
+    """The folder of a dataset's YaDT files (yadt.names, train.yadt.csv,
+    test.yadt.csv): its own; a prefix_of set's is <name>.yadt/ in its parent's
+    folder, with its own rows written out (YaDT reads whole files)."""
+    if "prefix_of" in meta(dataset):
+        return folder(dataset) / f"{dataset}.yadt"
+    return folder(dataset)
+
+
 def binary_meta(path):
     """The meta.json ./tree reads for <stem>.f32: <stem>.meta.json if there is
     one, else the folder's meta.json (src/core/dataset.cpp, loadBinary)."""

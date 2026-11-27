@@ -7,10 +7,10 @@
 Table~\ref{tab:accuracy} shows that our implementations match the test accuracy of established libraries at depth limits of 10 and 20. For CART, our trees match scikit-learn on four of the five datasets, stay within 0.20 percentage points (pp) of it on SOREL 4M, and stay within 0.15\,pp of cuML and XGBoost. For C4.5, our trees stay within 0.04\,pp of Weka J48, whereas YaDT matches ours on MNIST8M and scores 3.1--6.4\,pp higher on HIGGS. On ECBDL'14 15M, the fixed $\alpha$ prunes every CART tree to a single majority-class leaf.
 
 % bench/cluster-accuracy-pruned/report.csv (one run per case, 2026-11-24/25, ./tree 4de42544, tree code as 7f98876f;
-% XGBoost MNIST8M depth 20 on the CPU, 2026-11-26).
+% XGBoost MNIST8M depth 20 on the CPU, YaDT ECBDL/SOREL with 48 threads, 2026-11-26).
 % test_accuracy of each tool, pruned trees only (pruned=True), depths 10 and 20 (depths 5 and 15 in report.csv).
 \begin{table}[tbp]
-\caption{Test accuracy (\%) of one pruned tree per depth limit (CART cost-complexity $\alpha = 10^{-5}$, native in rpart, post hoc for scikit-learn, cuML, XGBoost; C4.5 error-based, confidence 0.25). Ours: identical across all five implementations. --: no result (rpart $2^{31}-1$ value limit; YaDT not run).}
+\caption{Test accuracy (\%) of one pruned tree per depth limit (CART cost-complexity $\alpha = 10^{-5}$, native in rpart, post hoc for scikit-learn, cuML, XGBoost; C4.5 error-based, confidence 0.25). Ours: identical across all five implementations. --: no result (rpart $2^{31}-1$ value limit).}
 \label{tab:accuracy}
 \centering
 \footnotesize
@@ -31,11 +31,11 @@ HIGGS & 10 & 70.47 & 70.47 & 70.46 & 70.45 & 70.47 & 63.73 & 63.75 & 70.10 \\
 MNIST8M & 10 & 84.53 & 84.53 & -- & 84.53 & 84.53 & 74.65 & 74.65 & 74.65 \\
  & 20 & 90.47 & 90.47 & -- & 90.54 & 90.47 & 87.59 & 87.59 & 87.59 \\
 \addlinespace[2pt]
-ECBDL'14 15M & 10 & 98.32 & 98.32 & -- & 98.32 & 98.32 & 98.32 & 98.32 & -- \\
- & 20 & 98.32 & 98.32 & -- & 98.32 & 98.32 & 98.11 & 98.08 & -- \\
+ECBDL'14 15M & 10 & 98.32 & 98.32 & -- & 98.32 & 98.32 & 98.32 & 98.32 & 98.32 \\
+ & 20 & 98.32 & 98.32 & -- & 98.32 & 98.32 & 98.11 & 98.08 & 98.11 \\
 \addlinespace[2pt]
-SOREL 4M & 10 & 92.54 & 92.74 & -- & 92.59 & 92.65 & 78.30 & 78.30 & -- \\
- & 20 & 96.12 & 96.10 & -- & 96.09 & 96.26 & 83.17 & 83.17 & -- \\
+SOREL 4M & 10 & 92.54 & 92.74 & -- & 92.59 & 92.65 & 78.30 & 78.30 & 78.66 \\
+ & 20 & 96.12 & 96.10 & -- & 96.09 & 96.26 & 83.17 & 83.17 & 84.82 \\
 \bottomrule
 \end{tabular}
 \end{table}

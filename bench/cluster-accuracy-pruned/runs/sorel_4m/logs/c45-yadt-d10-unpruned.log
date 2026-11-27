@@ -1,0 +1,17 @@
+/home/bmircevski/dt-final/bench/tools/.tools/yadt/dTcmd -fm /home/bmircevski/dt-yadt/bench/tools/data/sorel/sorel_4m.yadt/yadt.names -fd /home/bmircevski/dt-yadt/bench/tools/data/sorel/sorel_4m.yadt/train.yadt.csv -tt 48 -np -m 2 -depth 10 -tb bench/cluster-accuracy-pruned/runs/sorel_4m/tmp/c45-yadt-d10-unpruned.yadt
+YaDT version 2.3.0 (c) S. Ruggieri 2002-2020
+Reading text data
+  3149080
+  3249169
+  3349169
+  3449169
+  3648421
+  3748421
+ + pred. atts: 2381 classes: 2 weight col: - rows: 4000000
+ + load time: 443.443 secs (92.85 MiB/s, 9.02 K rows/s)
+ + indexing ... done
+ + total time: 457.91 secs (89.91 MiB/s, 8.73 K rows/s)
+Building 1 tree(s) on 4000000 cases
+ + tree(s) built
+ + size: 335 depth: 10 nf: 132 time: 362.269 secs
+Tree saved

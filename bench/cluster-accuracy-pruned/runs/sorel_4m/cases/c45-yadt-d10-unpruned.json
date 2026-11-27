@@ -1,0 +1,22 @@
+[
+ {
+  "dataset": "sorel_4m",
+  "algo": "c45",
+  "tool": "yadt",
+  "version": "YaDT 2.3.0",
+  "depth_limit": 10,
+  "pruned": false,
+  "prune": "-np -m 2",
+  "nodes": 335,
+  "leaves": 168,
+  "depth": 10,
+  "train_accuracy": 0.82295225,
+  "test_accuracy": 0.7866150088604595,
+  "n_train": 4000000,
+  "n_test": 4195042,
+  "threads": 48,
+  "pred": "bench/cluster-accuracy-pruned/runs/sorel_4m/pred/c45-yadt-d10-unpruned.npy",
+  "host": "dell3",
+  "case": "c45-yadt-d10-unpruned"
+ }
+]
